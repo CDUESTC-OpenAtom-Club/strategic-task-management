@@ -104,7 +104,7 @@ function getStatusTagType(status: 'history' | 'current' | 'future') {
       effect="dark"
     >
       <el-icon><Lock /></el-icon>
-      历史快照
+      只读
     </el-tag>
   </div>
 </template>
@@ -183,16 +183,22 @@ function getStatusTagType(status: 'history' | 'current' | 'future') {
 
 /* 只读标识 */
 .readonly-tag {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   margin-left: 4px;
+  padding: 0 8px;
+  height: 24px;
+  line-height: 1;
   background: rgba(230, 162, 60, 0.9);
   border-color: rgba(230, 162, 60, 0.9);
 }
 
 .readonly-tag :deep(.el-icon) {
   font-size: 12px;
+  vertical-align: middle;
+  margin-top: -1px;
 }
 
 /* 响应式 */
