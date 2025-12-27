@@ -181,7 +181,29 @@ export const useStrategicStore = defineStore('strategic', () => {
       status: 'active',
       isStrategic: false,
       ownerDept: '就业创业指导中心',
-      parentIndicatorId: '101'
+      parentIndicatorId: '101',
+      statusAudit: [
+        {
+          id: 'audit-101-1-1',
+          timestamp: new Date('2025-12-01'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'distribute',
+          comment: '下发子指标'
+        },
+        {
+          id: 'audit-101-1-2',
+          timestamp: new Date('2025-12-15'),
+          operator: 'zhao-dean',
+          operatorName: '赵院长',
+          operatorDept: '计算机学院',
+          action: 'submit',
+          comment: '提交进度72%',
+          previousProgress: 0,
+          newProgress: 72
+        }
+      ]
     },
     {
       id: '101-2',
@@ -208,7 +230,38 @@ export const useStrategicStore = defineStore('strategic', () => {
       status: 'active',
       isStrategic: false,
       ownerDept: '就业创业指导中心',
-      parentIndicatorId: '101'
+      parentIndicatorId: '101',
+      statusAudit: [
+        {
+          id: 'audit-101-2-1',
+          timestamp: new Date('2025-12-01'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'distribute',
+          comment: '下发子指标'
+        },
+        {
+          id: 'audit-101-2-2',
+          timestamp: new Date('2025-12-10'),
+          operator: 'qian-dean',
+          operatorName: '钱院长',
+          operatorDept: '商学院',
+          action: 'submit',
+          comment: '提交进度58%',
+          previousProgress: 0,
+          newProgress: 58
+        },
+        {
+          id: 'audit-101-2-3',
+          timestamp: new Date('2025-12-12'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'approve',
+          comment: '审批通过，进度达标'
+        }
+      ]
     },
     {
       id: '101-3',
@@ -235,7 +288,18 @@ export const useStrategicStore = defineStore('strategic', () => {
       status: 'active',
       isStrategic: false,
       ownerDept: '就业创业指导中心',
-      parentIndicatorId: '101'
+      parentIndicatorId: '101',
+      statusAudit: [
+        {
+          id: 'audit-101-3-1',
+          timestamp: new Date('2025-12-01'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'distribute',
+          comment: '下发子指标'
+        }
+      ]
     },
     {
       id: '101-4',
@@ -262,7 +326,38 @@ export const useStrategicStore = defineStore('strategic', () => {
       status: 'active',
       isStrategic: false,
       ownerDept: '就业创业指导中心',
-      parentIndicatorId: '101'
+      parentIndicatorId: '101',
+      statusAudit: [
+        {
+          id: 'audit-101-4-1',
+          timestamp: new Date('2025-12-01'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'distribute',
+          comment: '下发子指标'
+        },
+        {
+          id: 'audit-101-4-2',
+          timestamp: new Date('2025-12-08'),
+          operator: 'li-dean',
+          operatorName: '李院长',
+          operatorDept: '工学院',
+          action: 'submit',
+          comment: '提交进度50%',
+          previousProgress: 0,
+          newProgress: 50
+        },
+        {
+          id: 'audit-101-4-3',
+          timestamp: new Date('2025-12-10'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'reject',
+          comment: '进度偏低，请加强跟进'
+        }
+      ]
     },
     {
       id: '101-5',
@@ -289,7 +384,29 @@ export const useStrategicStore = defineStore('strategic', () => {
       status: 'active',
       isStrategic: false,
       ownerDept: '就业创业指导中心',
-      parentIndicatorId: '101'
+      parentIndicatorId: '101',
+      statusAudit: [
+        {
+          id: 'audit-101-5-1',
+          timestamp: new Date('2025-12-01'),
+          operator: 'jyc-admin',
+          operatorName: '就业中心管理员',
+          operatorDept: '就业创业指导中心',
+          action: 'distribute',
+          comment: '下发子指标'
+        },
+        {
+          id: 'audit-101-5-2',
+          timestamp: new Date('2025-12-20'),
+          operator: 'zhou-dean',
+          operatorName: '周院长',
+          operatorDept: '航空学院',
+          action: 'submit',
+          comment: '提交进度82%',
+          previousProgress: 0,
+          newProgress: 82
+        }
+      ]
     },
     {
       id: '102-1',

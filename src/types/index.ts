@@ -95,7 +95,7 @@ export interface StatusAuditEntry {
   operator: string           // 操作人用户名
   operatorName: string       // 操作人姓名
   operatorDept: string       // 操作人部门
-  action: 'submit' | 'approve' | 'reject' | 'revoke' | 'update'
+  action: 'submit' | 'approve' | 'reject' | 'revoke' | 'update' | 'distribute'  // distribute: 下发
   comment?: string           // 操作备注
   previousStatus?: string    // 变更前状态
   newStatus?: string         // 变更后状态

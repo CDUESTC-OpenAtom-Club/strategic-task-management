@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
  * 指标下发与审批页面（职能部门专用）
- * 功能：接收战略指标 → 拆分子指标 → 下发给学院 → 审批学院提交
+ * 功能：接收战略任务 → 查看战略指标 → 拆分子指标 → 下发给学院 → 审批学院提交
  */
-import { ref, computed } from 'vue'
+import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Plus, Promotion, Check, Close, View, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { StrategicIndicator } from '@/types'
+import type { StrategicIndicator, StrategicTask } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
@@ -21,14 +21,28 @@ const timeContext = useTimeContextStore()
 // 当前用户部门
 const currentDept = computed(() => authStore.userDepartment || '')
 
-// 只读模式
-const isReadOnly = computed(() => timeContext.isReadOnly)
+// 判断是否为战略发展部（只能查看，不能编辑）
+const isStrategicDept = computed(() => {
+  return authStore.userRole === 'strategic_dept' || currentDept.value === '战略发展部'
+})
+
+// 判断是否为职能部门（可以编辑子指标）
+const isFunctionalDept = computed(() => {
+  return authStore.userRole === 'functional_dept' || 
+         (!isStrategicDept.value && currentDept.value !== '')
+})
+
+// 只读模式：战略发展部或者历史快照模式
+const isReadOnly = computed(() => timeContext.isReadOnly || isStrategicDept.value)
+
+// 是否可以编辑子指标（只有职能部门可以）
+const canEditChild = computed(() => isFunctionalDept.value && !timeContext.isReadOnly)
 
 // 获取所有学院
 const colleges = getAllColleges()
 
-// 当前选中的战略指标
-const selectedStrategicIndicator = ref<StrategicIndicator | null>(null)
+// 当前选中的战略任务
+const selectedTask = ref<StrategicTask | null>(null)
 
 // 搜索关键词
 const searchKeyword = ref('')
@@ -37,134 +51,341 @@ const searchKeyword = ref('')
 const auditLogVisible = ref(false)
 const currentAuditIndicator = ref<StrategicIndicator | null>(null)
 
-// 下发弹窗
-const distributeDialogVisible = ref(false)
-const distributeForm = ref({
-  name: '',
-  targetColleges: [] as string[],
-  weight: 10,
-  targetValue: 100,
-  unit: '%',
-  remark: ''
+// ================== 数据获取 ==================
+
+// 获取战略任务列表（从战略发展部下发的）
+const strategicTasks = computed(() => {
+  return strategicStore.tasks.filter(t => t.status === 'active')
 })
 
-// 获取分配给当前部门的战略指标（一级指标）
-const strategicIndicators = computed(() => {
+// 筛选后的战略任务
+const filteredTasks = computed(() => {
+  if (!searchKeyword.value) return strategicTasks.value
+  const keyword = searchKeyword.value.toLowerCase()
+  return strategicTasks.value.filter(t =>
+    t.title.toLowerCase().includes(keyword) ||
+    t.desc.toLowerCase().includes(keyword)
+  )
+})
+
+// 计算任务进度（基于其下属指标的平均进度）
+const getTaskProgress = (task: StrategicTask) => {
+  const taskIndicators = strategicStore.indicators.filter(i => 
+    i.taskContent === task.title && i.isStrategic
+  )
+  if (taskIndicators.length === 0) return 0
+  const total = taskIndicators.reduce((sum, i) => sum + (i.progress || 0), 0)
+  return Math.round(total / taskIndicators.length)
+}
+
+// 获取选中任务下的战略指标（一级指标）
+const taskIndicators = computed(() => {
+  if (!selectedTask.value) return []
   return strategicStore.indicators.filter(i =>
     i.isStrategic &&
-    i.ownerDept === '战略发展部' &&
-    (i.responsibleDept === currentDept.value || !i.responsibleDept)
+    i.taskContent === selectedTask.value!.title
   )
 })
-
-// 当前部门下发的子指标（二级指标）
-const distributedIndicators = computed(() => {
-  return strategicStore.indicators.filter(i =>
-    !i.isStrategic &&
-    i.ownerDept === currentDept.value
-  )
-})
-
-// 按父指标分组的子指标
-const groupedDistributedIndicators = computed(() => {
-  const groups: Record<string, StrategicIndicator[]> = {}
-  distributedIndicators.value.forEach(i => {
-    const parentId = i.parentIndicatorId || 'unknown'
-    if (!groups[parentId]) groups[parentId] = []
-    groups[parentId].push(i)
-  })
-  return groups
-})
-
-// 待审批的学院提交
-const pendingApprovals = computed(() => {
-  return distributedIndicators.value.filter(i => {
-    const audit = i.statusAudit || []
-    if (audit.length === 0) return false
-    return audit[audit.length - 1].action === 'submit'
-  })
-})
-
-// 筛选后的战略指标
-const filteredStrategicIndicators = computed(() => {
-  if (!searchKeyword.value) return strategicIndicators.value
-  const keyword = searchKeyword.value.toLowerCase()
-  return strategicIndicators.value.filter(i =>
-    i.name.toLowerCase().includes(keyword) ||
-    (i.taskContent && i.taskContent.toLowerCase().includes(keyword))
-  )
-})
-
-// 选择战略指标
-const selectStrategicIndicator = (indicator: StrategicIndicator) => {
-  selectedStrategicIndicator.value = indicator
-}
 
 // 获取指标的子指标
 const getChildIndicators = (parentId: string) => {
-  return distributedIndicators.value.filter(i => i.parentIndicatorId === parentId)
+  return strategicStore.indicators.filter(i => 
+    i.parentIndicatorId === parentId && !i.isStrategic
+  )
 }
 
-// 打开下发弹窗
-const openDistributeDialog = () => {
-  if (!selectedStrategicIndicator.value) {
-    ElMessage.warning('请先选择要下发的战略指标')
+// ================== 子指标新增相关 ==================
+
+// 里程碑接口
+// 本地里程碑接口（用于编辑）
+interface LocalMilestone {
+  id: string
+  name: string
+  expectedDate: string
+  progress: number  // 0-100
+}
+
+// 新增子指标的临时存储（按父指标ID分组）
+interface NewChildIndicator {
+  id: string
+  name: string
+  college: string[]  // 改为数组支持多选
+  targetValue: number
+  unit: string
+  weight: number
+  remark: string
+  type1: '定量' | '定性'  // 指标类型
+  targetProgress: number  // 定量指标目标进度 0-100
+  milestones: LocalMilestone[]  // 定性指标里程碑列表
+  isNew: boolean  // 标记是否为新增的未保存行
+}
+
+// 导出供模板使用
+type NewChild = NewChildIndicator
+
+const newChildIndicators = reactive<Record<string, NewChildIndicator[]>>({})
+
+// 正在添加子指标的父指标ID
+const addingParentId = ref<string | null>(null)
+
+// 添加新的子指标行
+const addNewChildRow = (parentIndicatorId: string) => {
+  if (!canEditChild.value) {
+    ElMessage.warning('您没有权限添加子指标')
     return
   }
-  distributeForm.value = {
-    name: '',
-    targetColleges: [],
-    weight: 10,
+  
+  // 获取父指标信息
+  const parentIndicator = taskIndicators.value.find(i => i.id.toString() === parentIndicatorId)
+  
+  if (!newChildIndicators[parentIndicatorId]) {
+    newChildIndicators[parentIndicatorId] = []
+  }
+  
+  newChildIndicators[parentIndicatorId].push({
+    id: `new-${Date.now()}`,
+    name: parentIndicator?.name || '',  // 继承父指标名称
+    college: [],
     targetValue: 100,
     unit: '%',
-    remark: ''
-  }
-  distributeDialogVisible.value = true
-}
-
-// 确认下发
-const confirmDistribute = () => {
-  if (!distributeForm.value.name) {
-    ElMessage.warning('请输入子指标名称')
-    return
-  }
-  if (distributeForm.value.targetColleges.length === 0) {
-    ElMessage.warning('请选择下发目标学院')
-    return
-  }
-
-  // 为每个学院创建子指标
-  distributeForm.value.targetColleges.forEach(college => {
-    const newIndicator: StrategicIndicator = {
-      id: `${Date.now()}-${college}`,
-      name: `${college}${distributeForm.value.name}`,
-      isQualitative: selectedStrategicIndicator.value!.isQualitative,
-      type1: selectedStrategicIndicator.value!.type1,
-      type2: selectedStrategicIndicator.value!.type2,
-      progress: 0,
-      createTime: new Date().toLocaleDateString('zh-CN'),
-      weight: distributeForm.value.weight,
-      remark: distributeForm.value.remark,
-      canWithdraw: false,
-      taskContent: selectedStrategicIndicator.value!.taskContent,
-      milestones: [],
-      targetValue: distributeForm.value.targetValue,
-      unit: distributeForm.value.unit,
-      responsibleDept: college,
-      responsiblePerson: '',
-      status: 'active',
-      isStrategic: false,
-      ownerDept: currentDept.value,
-      parentIndicatorId: selectedStrategicIndicator.value!.id.toString(),
-      year: timeContext.currentYear,
-      statusAudit: []
-    }
-    strategicStore.addIndicator(newIndicator)
+    weight: 10,
+    remark: parentIndicator?.remark || '',  // 继承父指标说明
+    type1: '定量',  // 默认定量指标
+    targetProgress: 100,  // 定量指标默认目标进度100%
+    milestones: [],  // 定性指标里程碑列表
+    isNew: true
   })
-
-  ElMessage.success(`已成功下发到 ${distributeForm.value.targetColleges.length} 个学院`)
-  distributeDialogVisible.value = false
+  
+  addingParentId.value = parentIndicatorId
 }
+
+// 删除临时子指标行
+const removeNewChildRow = (parentId: string, index: number) => {
+  if (newChildIndicators[parentId]) {
+    newChildIndicators[parentId].splice(index, 1)
+    if (newChildIndicators[parentId].length === 0) {
+      delete newChildIndicators[parentId]
+    }
+  }
+}
+
+// 获取所有待下发的子指标数量
+const getPendingChildCount = (parentId: string) => {
+  return (newChildIndicators[parentId] || []).length
+}
+
+// 下发所有新增的子指标
+const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
+  const parentId = parentIndicator.id.toString()
+  const children = newChildIndicators[parentId] || []
+  
+  if (children.length === 0) {
+    ElMessage.warning('没有待下发的子指标')
+    return
+  }
+  
+  // 验证所有子指标数据
+  for (const child of children) {
+    if (!child.name) {
+      ElMessage.warning('请填写子指标名称')
+      return
+    }
+    if (!child.college || child.college.length === 0) {
+      ElMessage.warning('请选择下发学院')
+      return
+    }
+  }
+  
+  ElMessageBox.confirm(
+    `确认下发 ${children.length} 个子指标到对应学院？`,
+    '下发确认',
+    {
+      confirmButtonText: '确认下发',
+      cancelButtonText: '取消',
+      type: 'info'
+    }
+  ).then(() => {
+    // 创建子指标
+    children.forEach(child => {
+      const newIndicator: StrategicIndicator = {
+        id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
+        name: child.name,
+        isQualitative: child.type1 === '定性',
+        type1: child.type1,
+        type2: parentIndicator.type2,
+        progress: 0,
+        createTime: new Date().toLocaleDateString('zh-CN'),
+        weight: child.weight,
+        remark: child.remark,
+        canWithdraw: false,
+        taskContent: parentIndicator.taskContent,
+        milestones: child.type1 === '定性' ? child.milestones.map(m => ({
+          id: m.id,
+          name: m.name,
+          targetProgress: m.progress,
+          deadline: m.expectedDate,
+          status: 'pending' as const
+        })) : [],
+        targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
+        unit: child.type1 === '定量' ? '%' : '个里程碑',
+        responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
+        responsiblePerson: '',
+        status: 'active',
+        isStrategic: false,
+        ownerDept: currentDept.value,
+        parentIndicatorId: parentId,
+        year: timeContext.currentYear,
+        statusAudit: [{
+          id: `audit-${Date.now()}`,
+          timestamp: new Date(),
+          operator: authStore.user?.id || 'admin',
+          operatorName: authStore.user?.name || '管理员',
+          operatorDept: currentDept.value,
+          action: 'distribute',
+          comment: '下发子指标'
+        }]
+      }
+      strategicStore.addIndicator(newIndicator)
+    })
+    
+    // 清空临时数据
+    delete newChildIndicators[parentId]
+    addingParentId.value = null
+    
+    ElMessage.success(`已成功下发 ${children.length} 个子指标`)
+  })
+}
+
+// ================== 子指标编辑相关 ==================
+
+// 当前编辑的子指标
+const editingChildId = ref<string | null>(null)
+const editingChildField = ref<string | null>(null)
+const editingChildValue = ref<any>(null)
+
+// 学院下拉菜单是否打开
+const collegeDropdownVisible = ref(false)
+// 是否正在与学院选择器交互（点击 select 或其 dropdown）
+const isInteractingWithCollegeSelect = ref(false)
+
+// 全局 mousedown 监听器
+const handleGlobalMousedown = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  // 检查是否点击了编辑中的 select 或其 dropdown
+  const isInSelect = !!target.closest('.college-select-editing')
+  const isInDropdown = !!target.closest('.el-select-dropdown')
+  isInteractingWithCollegeSelect.value = isInSelect || isInDropdown
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleGlobalMousedown, true)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleGlobalMousedown, true)
+})
+
+// 双击编辑子指标
+const handleChildDblClick = (child: StrategicIndicator, field: string) => {
+  if (!canEditChild.value) return
+  
+  editingChildId.value = child.id.toString()
+  editingChildField.value = field
+  
+  // 如果编辑学院字段，需要将字符串解析为数组
+  if (field === 'responsibleDept') {
+    editingChildValue.value = parseColleges(child.responsibleDept)
+  } else {
+    editingChildValue.value = child[field as keyof StrategicIndicator]
+  }
+  
+  // 自动聚焦到编辑元素
+  nextTick(() => {
+    const editingEl = document.querySelector('.editing-field') as HTMLElement
+    if (editingEl) {
+      // 处理不同类型的输入元素
+      const input = editingEl.querySelector('input, textarea') as HTMLInputElement | HTMLTextAreaElement
+      if (input) {
+        input.focus()
+        // 如果是文本输入框，选中所有文本
+        if (input.select) {
+          input.select()
+        }
+      }
+    }
+  })
+}
+
+// 保存子指标编辑
+const saveChildEdit = (child: StrategicIndicator, field: string) => {
+  if (editingChildId.value === null) return
+  
+  let valueToSave = editingChildValue.value
+  
+  // 如果是学院字段，需要验证至少有一个学院
+  if (field === 'responsibleDept') {
+    if (!Array.isArray(valueToSave) || valueToSave.length === 0) {
+      ElMessage.warning('至少选择一个学院')
+      return
+    }
+    // 将数组转换为逗号分隔的字符串
+    valueToSave = valueToSave.join(',')
+  }
+  
+  const updates: Partial<StrategicIndicator> = {
+    [field]: valueToSave
+  }
+  
+  strategicStore.updateIndicator(child.id.toString(), updates)
+  
+  cancelChildEdit()
+}
+
+// 学院选择器下拉框可见性变化
+const handleCollegeSelectClose = (visible: boolean) => {
+  collegeDropdownVisible.value = visible
+}
+
+// 学院选择器失焦处理
+const handleCollegeSelectBlur = (child: StrategicIndicator) => {
+  // 延迟检查，确保 mousedown 事件先处理完成
+  setTimeout(() => {
+    // 如果正在与 select 或 dropdown 交互，不保存
+    if (isInteractingWithCollegeSelect.value) {
+      isInteractingWithCollegeSelect.value = false
+      return
+    }
+    // 如果下拉菜单还开着，不保存
+    if (collegeDropdownVisible.value) {
+      return
+    }
+    // 确认当前仍在编辑学院字段
+    if (editingChildId.value === child.id.toString() && 
+        editingChildField.value === 'responsibleDept') {
+      saveChildEdit(child, 'responsibleDept')
+    }
+  }, 100)
+}
+
+// 取消子指标编辑
+const cancelChildEdit = () => {
+  editingChildId.value = null
+  editingChildField.value = null
+  editingChildValue.value = null
+}
+
+// ================== 任务选择 ==================
+
+const selectTask = (task: StrategicTask) => {
+  selectedTask.value = task
+  // 清空之前的临时数据
+  Object.keys(newChildIndicators).forEach(key => {
+    delete newChildIndicators[key]
+  })
+  addingParentId.value = null
+}
+
+// ================== 审批相关 ==================
 
 // 审批通过
 const handleApprove = (indicator: StrategicIndicator) => {
@@ -184,32 +405,349 @@ const handleApprove = (indicator: StrategicIndicator) => {
   })
 }
 
-// 审批驳回
+// 打回（退回给下级部门重新提交）
 const handleReject = (indicator: StrategicIndicator) => {
-  ElMessageBox.prompt('请输入驳回原因', '驳回确认', {
-    confirmButtonText: '驳回',
+  ElMessageBox.prompt('请输入打回原因', '打回确认', {
+    confirmButtonText: '确认打回',
     cancelButtonText: '取消',
     type: 'warning',
-    inputValidator: (value) => {
-      if (!value || !value.trim()) return '请输入驳回原因'
-      return true
-    }
+    inputType: 'textarea',
+    inputPlaceholder: '请输入打回原因（选填）'
   }).then(({ value }) => {
     strategicStore.addStatusAuditEntry(indicator.id.toString(), {
       operator: authStore.user?.id || 'admin',
       operatorName: authStore.user?.name || '管理员',
       operatorDept: currentDept.value,
       action: 'reject',
-      comment: value
+      comment: value || '打回重新提交'
     })
-    ElMessage.warning('已驳回')
+    ElMessage.success('已打回，等待下级部门重新提交')
   })
 }
 
-// 查看审计日志
-const handleViewAuditLog = (indicator: StrategicIndicator) => {
+// 查看详情
+const handleViewDetail = (indicator: StrategicIndicator) => {
   currentAuditIndicator.value = indicator
   auditLogVisible.value = true
+}
+
+// 获取子指标状态
+// 状态流转：distributed(已下发) → pending(待审批，下级提交后) → approved(已通过)
+// 打回后回到 distributed 状态
+const getChildStatus = (child: StrategicIndicator) => {
+  const audit = child.statusAudit || []
+  if (audit.length === 0) return 'distributed'
+  const lastAudit = audit[audit.length - 1]
+  if (!lastAudit) return 'distributed'
+  const lastAction = lastAudit.action
+  // 下级部门提交后变为待审批
+  if (lastAction === 'submit') return 'pending'
+  // 审批通过
+  if (lastAction === 'approve') return 'approved'
+  // 打回后回到已下发状态，等待重新提交
+  if (lastAction === 'reject') return 'distributed'
+  // 初始下发状态
+  if (lastAction === 'distribute') return 'distributed'
+  return 'distributed'
+}
+
+// 获取状态标签类型
+const getStatusTagType = (status: string) => {
+  switch (status) {
+    case 'distributed': return 'info'      // 已下发 - 蓝色
+    case 'pending': return 'warning'       // 待审批 - 橙色
+    case 'approved': return 'success'      // 已通过 - 绿色
+    default: return 'info'
+  }
+}
+
+// 获取状态文本
+const getStatusText = (status: string) => {
+  switch (status) {
+    case 'distributed': return '已下发'
+    case 'pending': return '待审批'
+    case 'approved': return '已通过'
+    default: return '已下发'
+  }
+}
+
+// 格式化学院显示（完整列表）
+const formatColleges = (depts: string | string[] | undefined): string => {
+  if (!depts) return '-'
+  if (Array.isArray(depts)) return depts.join('、')
+  return depts.split(',').join('、')
+}
+
+// 格式化学院显示（简短版，超过2个显示+N）
+const formatCollegesShort = (depts: string | string[] | undefined): string => {
+  if (!depts) return '-'
+  const arr = Array.isArray(depts) ? depts : depts.split(',')
+  if (arr.length <= 2) return arr.join('、')
+  return `${arr.slice(0, 2).join('、')} +${arr.length - 2}`
+}
+
+// 解析学院字符串为数组（用于编辑时）
+const parseColleges = (depts: string | string[] | undefined): string[] => {
+  if (!depts) return []
+  if (Array.isArray(depts)) return depts
+  return depts.split(',')
+}
+
+// 获取任务类型对应的颜色（基于指标的type2：发展性/基础性）
+const getTaskTypeColor = (type2: string) => {
+  return type2 === '发展性' ? '#409EFF' : '#67C23A'
+}
+
+// 获取指标类型颜色（定性/定量）
+const getIndicatorTypeColor = (type1: string) => {
+  return type1 === '定性' ? 'var(--color-qualitative, #9333ea)' : 'var(--color-quantitative, #0891b2)'
+}
+
+// 处理子指标类型变更
+const handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, newType: '定量' | '定性') => {
+  if ('isNew' in child && child.isNew) {
+    // 新增的子指标
+    child.type1 = newType
+    if (newType === '定量') {
+      child.targetProgress = 100
+      child.milestones = []
+    } else {
+      child.targetProgress = 0
+      child.milestones = []
+    }
+  } else {
+    // 已有的子指标
+    const updates: Partial<StrategicIndicator> = {
+      type1: newType,
+      isQualitative: newType === '定性',
+      targetValue: newType === '定量' ? 100 : 0,
+      milestones: []
+    }
+    strategicStore.updateIndicator((child as StrategicIndicator).id.toString(), updates)
+    cancelChildEdit()
+  }
+}
+
+// 里程碑弹窗相关
+const milestonesDialogVisible = ref(false)
+const editingMilestonesChild = ref<NewChildIndicator | StrategicIndicator | null>(null)
+const editingMilestones = ref<LocalMilestone[]>([])
+
+// 打开里程碑编辑弹窗
+const openMilestonesDialog = (child: NewChildIndicator | StrategicIndicator) => {
+  editingMilestonesChild.value = child
+  if ('isNew' in child && child.isNew) {
+    editingMilestones.value = JSON.parse(JSON.stringify(child.milestones || []))
+  } else {
+    // 从已有子指标的milestones转换
+    const existing = (child as StrategicIndicator).milestones || []
+    editingMilestones.value = existing.map(m => ({
+      id: m.id || `ms-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: m.name,
+      expectedDate: m.deadline || '',
+      progress: m.targetProgress || 0
+    }))
+  }
+  milestonesDialogVisible.value = true
+}
+
+// 添加里程碑
+const addMilestone = () => {
+  const lastProgress = editingMilestones.value.length > 0 
+    ? editingMilestones.value[editingMilestones.value.length - 1]?.progress ?? 0
+    : 0
+  editingMilestones.value.push({
+    id: `ms-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    name: '',
+    expectedDate: '',
+    progress: lastProgress
+  })
+}
+
+// 删除里程碑
+const removeMilestone = (index: number) => {
+  editingMilestones.value.splice(index, 1)
+}
+
+// 验证里程碑进度（后面的不能小于前面的）
+const validateMilestoneProgress = (index: number) => {
+  const current = editingMilestones.value[index]
+  if (!current) return
+  
+  // 检查是否小于前一个里程碑的进度
+  if (index > 0) {
+    const prev = editingMilestones.value[index - 1]
+    if (prev && current.progress < prev.progress) {
+      ElMessage.warning(`第 ${index + 1} 个里程碑的进度不能小于第 ${index} 个里程碑的进度 (${prev.progress}%)`)
+      current.progress = prev.progress
+      return
+    }
+  }
+  
+  // 检查是否大于后一个里程碑的进度
+  if (index < editingMilestones.value.length - 1) {
+    const next = editingMilestones.value[index + 1]
+    if (next && current.progress > next.progress) {
+      ElMessage.warning(`第 ${index + 1} 个里程碑的进度不能大于第 ${index + 2} 个里程碑的进度 (${next.progress}%)`)
+      current.progress = next.progress
+      return
+    }
+  }
+}
+
+// 保存里程碑
+const saveMilestones = () => {
+  if (!editingMilestonesChild.value) return
+  
+  const child = editingMilestonesChild.value
+  if ('isNew' in child && child.isNew) {
+    child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
+  } else {
+    const updates: Partial<StrategicIndicator> = {
+      targetValue: editingMilestones.value.length,
+      milestones: editingMilestones.value.map(m => ({
+        id: m.id,
+        name: m.name,
+        targetProgress: m.progress,
+        deadline: m.expectedDate,
+        status: 'pending' as const
+      }))
+    }
+    strategicStore.updateIndicator((child as StrategicIndicator).id.toString(), updates)
+  }
+  
+  milestonesDialogVisible.value = false
+  editingMilestonesChild.value = null
+  editingMilestones.value = []
+}
+
+// 格式化里程碑显示
+const formatMilestones = (child: StrategicIndicator | NewChildIndicator): string => {
+  if ('isNew' in child && child.isNew) {
+    return `${child.milestones?.length || 0} 个里程碑`
+  }
+  const indicator = child as StrategicIndicator
+  return `${indicator.milestones?.length || 0} 个里程碑`
+}
+
+// 获取里程碑列表用于tooltip显示
+const getMilestonesTooltip = (child: StrategicIndicator | NewChildIndicator): LocalMilestone[] => {
+  if ('isNew' in child && child.isNew) {
+    return child.milestones || []
+  }
+  const indicator = child as StrategicIndicator
+  return (indicator.milestones || []).map(m => ({
+    id: m.id || '',
+    name: m.name,
+    expectedDate: m.deadline || '',
+    progress: m.targetProgress || 0
+  }))
+}
+
+// ================== 表格数据处理 ==================
+
+// 构建扁平化表格数据（用于单元格合并）
+// 每一行代表一个子指标（或待添加的子指标），父指标信息作为属性存储
+interface TableRowData {
+  type: 'child' | 'new-child' | 'indicator-only'  // indicator-only 表示没有子指标的父指标
+  taskTitle: string
+  indicator: StrategicIndicator  // 父指标
+  child?: StrategicIndicator | NewChildIndicator  // 子指标
+  parentIndicatorId: string
+  rowIndex?: number  // 新增子指标的索引
+}
+
+// 扁平化表格数据
+const flatTableData = computed(() => {
+  if (!selectedTask.value) return []
+  
+  const data: TableRowData[] = []
+  const indicators = taskIndicators.value
+  
+  indicators.forEach((indicator) => {
+    const indicatorId = indicator.id.toString()
+    
+    // 获取已有子指标
+    const children = getChildIndicators(indicatorId)
+    // 获取新增的子指标
+    const newChildren = newChildIndicators[indicatorId] || []
+    
+    // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
+    if (children.length === 0 && newChildren.length === 0) {
+      data.push({
+        type: 'indicator-only',
+        taskTitle: selectedTask.value!.title,
+        indicator,
+        parentIndicatorId: indicatorId
+      })
+    } else {
+      // 添加已有子指标行
+      children.forEach(child => {
+        data.push({
+          type: 'child',
+          taskTitle: selectedTask.value!.title,
+          indicator,
+          child,
+          parentIndicatorId: indicatorId
+        })
+      })
+      
+      // 添加新增的子指标行
+      newChildren.forEach((newChild, newIdx) => {
+        data.push({
+          type: 'new-child',
+          taskTitle: selectedTask.value!.title,
+          indicator,
+          child: newChild,
+          parentIndicatorId: indicatorId,
+          rowIndex: newIdx
+        })
+      })
+    }
+  })
+  
+  return data
+})
+
+// 单元格合并方法
+const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData; column: any; rowIndex: number; columnIndex: number }) => {
+  const dataList = flatTableData.value
+  
+  // 第一列（战略任务列）合并
+  if (columnIndex === 0) {
+    // 检查是否是第一行
+    if (rowIndex === 0) {
+      // 合并所有行
+      return { rowspan: dataList.length, colspan: 1 }
+    } else {
+      return { rowspan: 0, colspan: 0 }
+    }
+  }
+  
+  // 第二列（父指标列）和第三列（添加按钮列）合并 - 同一个父指标的行合并
+  if (columnIndex === 1 || columnIndex === 2) {
+    const currentIndicatorId = row.parentIndicatorId
+    
+    // 检查是否是该父指标的第一行
+    const isFirstRowOfIndicator = rowIndex === 0 || dataList[rowIndex - 1]?.parentIndicatorId !== currentIndicatorId
+    
+    if (isFirstRowOfIndicator) {
+      // 计算该父指标下的所有行数
+      let rowspan = 1
+      for (let i = rowIndex + 1; i < dataList.length; i++) {
+        if (dataList[i]?.parentIndicatorId === currentIndicatorId) {
+          rowspan++
+        } else {
+          break
+        }
+      }
+      return { rowspan, colspan: 1 }
+    } else {
+      return { rowspan: 0, colspan: 0 }
+    }
+  }
+  
+  return { rowspan: 1, colspan: 1 }
 }
 </script>
 
@@ -217,7 +755,16 @@ const handleViewAuditLog = (indicator: StrategicIndicator) => {
   <div class="distribution-view">
     <!-- 只读提示 -->
     <el-alert
-      v-if="isReadOnly"
+      v-if="isStrategicDept"
+      type="info"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 16px"
+    >
+      当前以战略发展部身份查看，数据为只读状态
+    </el-alert>
+    <el-alert
+      v-else-if="timeContext.isReadOnly"
       type="warning"
       :closable="false"
       show-icon
@@ -227,179 +774,612 @@ const handleViewAuditLog = (indicator: StrategicIndicator) => {
     </el-alert>
 
     <div class="distribution-layout">
-      <!-- 左侧：战略指标列表 -->
+      <!-- 左侧：战略任务列表 -->
       <div class="strategic-panel">
         <div class="panel-header">
-          <h3>战略指标</h3>
+          <h3>战略任务</h3>
           <el-input
             v-model="searchKeyword"
-            placeholder="搜索指标..."
+            placeholder="搜索任务..."
             :prefix-icon="Search"
             clearable
             size="small"
-            style="width: 180px"
+            style="width: 140px"
           />
         </div>
 
         <div class="indicator-list">
           <div
-            v-for="indicator in filteredStrategicIndicators"
-            :key="indicator.id"
-            :class="['indicator-item', { selected: selectedStrategicIndicator?.id === indicator.id }]"
-            @click="selectStrategicIndicator(indicator)"
+            v-for="task in filteredTasks"
+            :key="task.id"
+            :class="['task-card', { selected: selectedTask?.id === task.id }]"
+            @click="selectTask(task)"
           >
-            <div class="item-header">
-              <el-tag :type="indicator.type2 === '发展性' ? 'primary' : 'success'" size="small">
-                {{ indicator.type2 }}
-              </el-tag>
-              <span class="child-count">
-                {{ getChildIndicators(indicator.id.toString()).length }} 个子指标
+            <div class="task-card-header">
+              <el-tag type="primary" size="small">{{ task.cycle }}</el-tag>
+              <span class="indicator-count-badge">
+                {{ strategicStore.indicators.filter(i => i.taskContent === task.title && i.isStrategic).length }} 个指标
               </span>
             </div>
-            <div class="item-name">{{ indicator.name }}</div>
-            <div class="item-task">{{ indicator.taskContent }}</div>
-            <el-progress
-              :percentage="indicator.progress || 0"
-              :stroke-width="6"
-              :show-text="false"
-              style="margin-top: 8px"
-            />
+            <div class="task-card-title">{{ task.title }}</div>
+            <div class="task-card-desc">{{ task.desc }}</div>
+            <div class="task-card-progress">
+              <el-progress
+                :percentage="getTaskProgress(task)"
+                :stroke-width="8"
+                :show-text="false"
+              />
+              <span class="progress-label">{{ getTaskProgress(task) }}%</span>
+            </div>
           </div>
 
-          <el-empty v-if="filteredStrategicIndicators.length === 0" description="暂无指标" />
+          <el-empty v-if="filteredTasks.length === 0" description="暂无任务" />
         </div>
       </div>
 
-      <!-- 右侧：下发配置与审批 -->
+      <!-- 右侧：指标表格 -->
       <div class="distribution-panel">
-        <!-- 选中指标详情 -->
-        <div v-if="selectedStrategicIndicator" class="selected-indicator">
-          <div class="detail-header">
-            <h3>{{ selectedStrategicIndicator.name }}</h3>
-            <el-button type="primary" :icon="Promotion" @click="openDistributeDialog" :disabled="isReadOnly">
-              下发子指标
-            </el-button>
+        <div v-if="selectedTask" class="table-card card-base">
+          <!-- 表头 -->
+          <div class="card-header">
+            <div class="header-left">
+              <span class="card-title">{{ selectedTask.title }}</span>
+              <span class="indicator-count">共 {{ taskIndicators.length }} 个指标</span>
+            </div>
+            <div class="header-actions" v-if="canEditChild">
+              <el-button 
+                type="primary" 
+                :icon="Promotion" 
+                @click="() => {
+                  const parentId = Object.keys(newChildIndicators).find(k => newChildIndicators[k]?.length > 0)
+                  if (parentId) {
+                    const parent = taskIndicators.find(i => i.id.toString() === parentId)
+                    if (parent) distributeNewChildren(parent)
+                  } else {
+                    ElMessage.warning('请先添加待下发的子指标')
+                  }
+                }"
+              >
+                下发子指标
+              </el-button>
+            </div>
           </div>
 
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="战略任务">
-              {{ selectedStrategicIndicator.taskContent }}
-            </el-descriptions-item>
-            <el-descriptions-item label="目标值">
-              {{ selectedStrategicIndicator.targetValue }}{{ selectedStrategicIndicator.unit }}
-            </el-descriptions-item>
-            <el-descriptions-item label="权重">
-              {{ selectedStrategicIndicator.weight }}
-            </el-descriptions-item>
-            <el-descriptions-item label="当前进度">
-              {{ selectedStrategicIndicator.progress || 0 }}%
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <!-- 已下发的子指标 -->
-          <div class="child-indicators">
-            <h4>已下发子指标（{{ getChildIndicators(selectedStrategicIndicator.id.toString()).length }}）</h4>
-            <el-table
-              :data="getChildIndicators(selectedStrategicIndicator.id.toString())"
-              size="small"
-              border
-              style="margin-top: 12px"
-            >
-              <el-table-column prop="responsibleDept" label="学院" width="140" />
-              <el-table-column prop="name" label="指标名称" min-width="200" />
-              <el-table-column prop="progress" label="进度" width="100" align="center">
-                <template #default="{ row }">
-                  <el-progress :percentage="row.progress || 0" :stroke-width="6" />
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" width="80" align="center">
-                <template #default="{ row }">
-                  <el-tag
-                    v-if="row.statusAudit?.length && row.statusAudit[row.statusAudit.length - 1].action === 'submit'"
-                    type="warning"
-                    size="small"
-                  >
-                    待审批
-                  </el-tag>
-                  <el-tag v-else type="info" size="small">正常</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="150" align="center">
-                <template #default="{ row }">
-                  <el-button link type="primary" size="small" @click="handleViewAuditLog(row)">日志</el-button>
-                  <template v-if="row.statusAudit?.length && row.statusAudit[row.statusAudit.length - 1].action === 'submit'">
-                    <el-button link type="success" size="small" @click="handleApprove(row)" :disabled="isReadOnly">通过</el-button>
-                    <el-button link type="danger" size="small" @click="handleReject(row)" :disabled="isReadOnly">驳回</el-button>
+          <!-- 表格主体 -->
+          <div class="card-body table-body">
+            <div class="table-container">
+              <el-table
+                :data="flatTableData"
+                border
+                :span-method="spanMethod"
+                class="unified-table distribution-table"
+              >
+                <!-- 战略任务列 -->
+                <el-table-column label="战略任务" width="160">
+                  <template #default="{ row }">
+                    <el-tooltip 
+                      :content="row.indicator?.type2 === '发展性' ? '发展性任务' : '基础性任务'" 
+                      placement="top"
+                    >
+                      <span 
+                        class="task-content-colored"
+                        :style="{ color: getTaskTypeColor(row.indicator?.type2 || '发展性') }"
+                      >{{ row.taskTitle }}</span>
+                    </el-tooltip>
                   </template>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-        </div>
+                </el-table-column>
 
-        <el-empty v-else description="请选择左侧战略指标" />
+                <!-- 父指标列 -->
+                <el-table-column label="战略指标" min-width="200">
+                  <template #default="{ row }">
+                    <div class="indicator-name-cell">
+                      <el-tooltip 
+                        :content="row.indicator?.type1 === '定性' ? '定性指标' : '定量指标'" 
+                        placement="top"
+                      >
+                        <span 
+                          class="indicator-name-text"
+                          :class="row.indicator?.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
+                        >{{ row.indicator?.name }}</span>
+                      </el-tooltip>
+                    </div>
+                  </template>
+                </el-table-column>
 
-        <!-- 待审批汇总 -->
-        <div v-if="pendingApprovals.length > 0" class="pending-section">
-          <h4>
-            <el-icon color="#E6A23C"><Check /></el-icon>
-            待审批提交（{{ pendingApprovals.length }}）
-          </h4>
-          <div class="pending-list">
-            <div v-for="item in pendingApprovals" :key="item.id" class="pending-item">
-              <div class="pending-info">
-                <span class="dept">{{ item.responsibleDept }}</span>
-                <span class="name">{{ item.name }}</span>
-              </div>
-              <div class="pending-actions">
-                <el-button type="success" size="small" @click="handleApprove(item)" :disabled="isReadOnly">通过</el-button>
-                <el-button type="danger" size="small" @click="handleReject(item)" :disabled="isReadOnly">驳回</el-button>
-              </div>
+                <!-- 添加子指标按钮列（合并单元格） -->
+                <el-table-column label="" width="50" align="center" class-name="add-btn-column">
+                  <template #default="{ row }">
+                    <div 
+                      class="add-btn-cell"
+                      @click="canEditChild && addNewChildRow(row.parentIndicatorId)"
+                      :class="{ 'can-add': canEditChild }"
+                    >
+                      <el-tooltip content="添加子指标" placement="top" v-if="canEditChild">
+                        <el-icon class="add-icon"><Plus /></el-icon>
+                      </el-tooltip>
+                    </div>
+                  </template>
+                </el-table-column>
+
+                <!-- 子指标名称列 -->
+                <el-table-column label="子指标名称" min-width="180">
+                  <template #default="{ row }">
+                    <!-- 没有子指标的父指标 -->
+                    <template v-if="row.type === 'indicator-only'">
+                      <div class="add-child-hint">
+                        <el-button 
+                          v-if="canEditChild"
+                          type="primary" 
+                          :icon="Plus" 
+                          size="small"
+                          @click="addNewChildRow(row.parentIndicatorId)"
+                        >
+                          添加子指标
+                        </el-button>
+                        <span v-else class="no-child-text">暂无子指标</span>
+                      </div>
+                    </template>
+                    <!-- 已有子指标 -->
+                    <template v-else-if="row.type === 'child'">
+                      <div 
+                        class="child-name-cell"
+                        @dblclick="handleChildDblClick(row.child, 'name')"
+                      >
+                        <el-input
+                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'name'"
+                          v-model="editingChildValue"
+                          type="textarea"
+                          :autosize="{ minRows: 2 }"
+                          resize="vertical"
+                          class="textarea-cell editing-field"
+                          @blur="saveChildEdit(row.child, 'name')"
+                        />
+                        <span 
+                          v-else 
+                          class="child-text"
+                        >{{ row.child?.name }}</span>
+                      </div>
+                    </template>
+                    <!-- 新增子指标行 -->
+                    <template v-else-if="row.type === 'new-child'">
+                      <div class="new-child-cell">
+                        <el-input
+                          v-model="row.child.name"
+                          type="textarea"
+                          :autosize="{ minRows: 2 }"
+                          resize="vertical"
+                          class="textarea-cell"
+                          placeholder="子指标名称"
+                        />
+                      </div>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 说明列 -->
+                <el-table-column label="说明" width="140">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="remark-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <div 
+                        class="child-remark-cell"
+                        @dblclick="handleChildDblClick(row.child, 'remark')"
+                      >
+                        <el-input
+                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'remark'"
+                          v-model="editingChildValue"
+                          type="textarea"
+                          :autosize="{ minRows: 2 }"
+                          resize="vertical"
+                          class="textarea-cell editing-field"
+                          @blur="saveChildEdit(row.child, 'remark')"
+                        />
+                        <span v-else class="remark-text">{{ row.child?.remark || '-' }}</span>
+                      </div>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <el-input
+                        v-model="row.child.remark"
+                        type="textarea"
+                        :autosize="{ minRows: 2 }"
+                        resize="vertical"
+                        class="textarea-cell"
+                        placeholder="说明"
+                      />
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 指标类型列 -->
+                <el-table-column label="类型" align="center" class-name="type-column">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="type-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <el-select
+                        v-if="canEditChild"
+                        :model-value="row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量')"
+                        size="small"
+                        style="width: 80px"
+                        @change="(val: '定量' | '定性') => handleChildTypeChange(row.child, val)"
+                      >
+                        <el-option label="定量" value="定量" />
+                        <el-option label="定性" value="定性" />
+                      </el-select>
+                      <span 
+                        v-else 
+                        class="type-text"
+                        :style="{ color: getIndicatorTypeColor(row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量')) }"
+                      >
+                        {{ row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量') }}
+                      </span>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <el-select
+                        v-model="row.child.type1"
+                        size="small"
+                        style="width: 80px"
+                        @change="(val: '定量' | '定性') => handleChildTypeChange(row.child, val)"
+                      >
+                        <el-option label="定量" value="定量" />
+                        <el-option label="定性" value="定性" />
+                      </el-select>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 学院列（支持多选） -->
+                <el-table-column label="学院" width="180">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="dept-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <div 
+                        class="college-cell"
+                        @dblclick="handleChildDblClick(row.child, 'responsibleDept')"
+                      >
+                        <el-select
+                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'responsibleDept'"
+                          v-model="editingChildValue"
+                          multiple
+                          collapse-tags
+                          collapse-tags-tooltip
+                          size="small"
+                          placeholder="选择学院"
+                          style="width: 100%"
+                          class="editing-field college-select-editing"
+                          @blur="handleCollegeSelectBlur(row.child)"
+                          @visible-change="handleCollegeSelectClose"
+                        >
+                          <el-option
+                            v-for="college in colleges"
+                            :key="college"
+                            :label="college"
+                            :value="college"
+                          />
+                        </el-select>
+                        <template v-else>
+                          <el-tooltip 
+                            :content="formatColleges(row.child?.responsibleDept)" 
+                            placement="top"
+                            :disabled="!row.child?.responsibleDept"
+                          >
+                            <span class="dept-text college-tags">
+                              {{ formatCollegesShort(row.child?.responsibleDept) }}
+                            </span>
+                          </el-tooltip>
+                        </template>
+                      </div>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <el-select
+                        v-model="row.child.college"
+                        multiple
+                        collapse-tags
+                        collapse-tags-tooltip
+                        size="small"
+                        placeholder="选择学院"
+                        style="width: 100%"
+                      >
+                        <el-option
+                          v-for="college in colleges"
+                          :key="college"
+                          :label="college"
+                          :value="college"
+                        />
+                      </el-select>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 目标进度列 -->
+                <el-table-column label="目标进度" width="120" align="center">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="target-progress-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <!-- 定量指标 -->
+                      <template v-if="(row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量')) === '定量'">
+                        <div 
+                          class="target-progress-cell"
+                          @dblclick="handleChildDblClick(row.child, 'targetValue')"
+                        >
+                          <el-input-number
+                            v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'targetValue'"
+                            v-model="editingChildValue"
+                            :min="0"
+                            :max="100"
+                            :step="5"
+                            size="small"
+                            controls-position="right"
+                            style="width: 80px"
+                            class="editing-field"
+                            @blur="saveChildEdit(row.child, 'targetValue')"
+                          />
+                          <span v-else class="target-progress-text editable">{{ row.child?.targetValue || 100 }}%</span>
+                        </div>
+                      </template>
+                      <!-- 定性指标 -->
+                      <template v-else>
+                        <el-popover
+                          placement="left"
+                          :width="320"
+                          trigger="hover"
+                          :disabled="!row.child?.milestones?.length"
+                        >
+                          <template #reference>
+                            <div 
+                              class="milestone-cell"
+                              @click="canEditChild && openMilestonesDialog(row.child)"
+                            >
+                              <span class="milestone-count" :class="{ editable: canEditChild }">
+                                {{ row.child?.milestones?.length || 0 }} 个里程碑
+                              </span>
+                            </div>
+                          </template>
+                          <div class="milestone-popover">
+                            <div class="milestone-popover-title">里程碑列表</div>
+                            <div 
+                              v-for="(ms, idx) in getMilestonesTooltip(row.child)" 
+                              :key="ms.id"
+                              class="milestone-item"
+                            >
+                              <div class="milestone-item-header">
+                                <span class="milestone-index">{{ idx + 1 }}.</span>
+                                <span class="milestone-name">{{ ms.name || '未命名' }}</span>
+                              </div>
+                              <div class="milestone-item-info">
+                                <span>预期: {{ ms.expectedDate || '未设置' }}</span>
+                                <span>进度: {{ ms.progress }}%</span>
+                              </div>
+                            </div>
+                            <div v-if="!row.child?.milestones?.length" class="milestone-empty">
+                              暂无里程碑
+                            </div>
+                          </div>
+                        </el-popover>
+                      </template>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <!-- 新增子指标 - 定量 -->
+                      <template v-if="row.child.type1 === '定量'">
+                        <el-input-number
+                          v-model="row.child.targetProgress"
+                          :min="0"
+                          :max="100"
+                          :step="5"
+                          size="small"
+                          controls-position="right"
+                          style="width: 80px"
+                        />
+                      </template>
+                      <!-- 新增子指标 - 定性 -->
+                      <template v-else>
+                        <div 
+                          class="milestone-cell"
+                          @click="openMilestonesDialog(row.child)"
+                        >
+                          <span class="milestone-count editable">
+                            {{ row.child.milestones?.length || 0 }} 个里程碑
+                          </span>
+                        </div>
+                      </template>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 进度列 -->
+                <el-table-column label="进度" width="100" align="center">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="progress-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <div class="progress-cell">
+                        <el-progress
+                          :percentage="row.child?.progress || 0"
+                          :stroke-width="6"
+                          :show-text="false"
+                          style="width: 50px;"
+                        />
+                        <span class="progress-text">{{ row.child?.progress || 0 }}%</span>
+                      </div>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <span class="progress-text">-</span>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 状态列 -->
+                <el-table-column label="状态" width="85" align="center">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="status-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <el-tag 
+                        :type="getStatusTagType(getChildStatus(row.child))" 
+                        size="small"
+                      >
+                        {{ getStatusText(getChildStatus(row.child)) }}
+                      </el-tag>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <el-tag type="warning" size="small">待下发</el-tag>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 操作列 -->
+                <el-table-column label="操作" width="180" align="center">
+                  <template #default="{ row }">
+                    <!-- 没有子指标的父指标 - 无操作 -->
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="action-placeholder">-</span>
+                    </template>
+                    <!-- 子指标操作 -->
+                    <template v-else-if="row.type === 'child'">
+                      <div class="action-cell">
+                        <el-button link type="primary" size="small" @click="handleViewDetail(row.child)">
+                          <el-icon><View /></el-icon>查看
+                        </el-button>
+                        <el-button 
+                          v-if="getChildStatus(row.child) === 'pending' && canEditChild"
+                          link 
+                          type="success" 
+                          size="small" 
+                          @click="handleApprove(row.child)"
+                        >
+                          <el-icon><Check /></el-icon>通过
+                        </el-button>
+                        <el-button 
+                          v-if="getChildStatus(row.child) === 'pending' && canEditChild"
+                          link 
+                          type="danger" 
+                          size="small" 
+                          @click="handleReject(row.child)"
+                        >
+                          <el-icon><Close /></el-icon>打回
+                        </el-button>
+                      </div>
+                    </template>
+                    <!-- 新增子指标操作：删除 -->
+                    <template v-else-if="row.type === 'new-child'">
+                      <el-button 
+                        type="danger" 
+                        :icon="Close" 
+                        size="small"
+                        circle
+                        @click="removeNewChildRow(row.parentIndicatorId, row.rowIndex)"
+                      />
+                    </template>
+                  </template>
+                </el-table-column>
+
+              </el-table>
+            </div>
+
+            <!-- 空状态 -->
+            <div v-if="taskIndicators.length === 0" class="empty-state">
+              <el-empty description="该任务下暂无指标" />
             </div>
           </div>
         </div>
+
+        <el-empty v-else description="请选择左侧战略任务" class="empty-placeholder" />
       </div>
     </div>
 
-    <!-- 下发弹窗 -->
-    <el-dialog v-model="distributeDialogVisible" title="下发子指标" width="500px">
-      <el-form :model="distributeForm" label-width="100px">
-        <el-form-item label="父级指标">
-          <el-input :value="selectedStrategicIndicator?.name" disabled />
-        </el-form-item>
-        <el-form-item label="子指标名称" required>
-          <el-input v-model="distributeForm.name" placeholder="例如：就业率达标" />
-        </el-form-item>
-        <el-form-item label="目标学院" required>
-          <el-checkbox-group v-model="distributeForm.targetColleges">
-            <el-checkbox v-for="college in colleges" :key="college" :label="college">
-              {{ college }}
-            </el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-        <el-form-item label="目标值">
-          <el-input-number v-model="distributeForm.targetValue" :min="0" />
-          <el-input v-model="distributeForm.unit" style="width: 80px; margin-left: 8px" placeholder="单位" />
-        </el-form-item>
-        <el-form-item label="权重">
-          <el-input-number v-model="distributeForm.weight" :min="0" :max="100" />
-        </el-form-item>
-        <el-form-item label="说明">
-          <el-input v-model="distributeForm.remark" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="distributeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmDistribute">确认下发</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 审计日志 -->
+    <!-- 审计日志抽屉 -->
     <AuditLogDrawer
       v-model:visible="auditLogVisible"
       :indicator="currentAuditIndicator"
       @close="auditLogVisible = false"
     />
+
+    <!-- 里程碑编辑弹窗 -->
+    <el-dialog
+      v-model="milestonesDialogVisible"
+      title="编辑里程碑"
+      width="600px"
+      :close-on-click-modal="false"
+    >
+      <div class="milestones-editor">
+        <div class="milestones-header">
+          <span class="milestones-tip">设置里程碑节点，后续节点进度不能小于前面节点</span>
+          <el-button type="primary" size="small" :icon="Plus" @click="addMilestone">
+            添加里程碑
+          </el-button>
+        </div>
+        
+        <div class="milestones-list" v-if="editingMilestones.length > 0">
+          <div 
+            v-for="(milestone, index) in editingMilestones" 
+            :key="milestone.id"
+            class="milestone-edit-item"
+          >
+            <div class="milestone-edit-header">
+              <span class="milestone-edit-index">{{ index + 1 }}</span>
+              <el-button 
+                type="danger" 
+                :icon="Close" 
+                size="small" 
+                circle 
+                @click="removeMilestone(index)"
+              />
+            </div>
+            <div class="milestone-edit-body">
+              <el-form-item label="节点名称" label-width="80px">
+                <el-input 
+                  v-model="milestone.name" 
+                  placeholder="请输入节点名称"
+                  size="small"
+                />
+              </el-form-item>
+              <el-form-item label="预期完成" label-width="80px">
+                <el-date-picker
+                  v-model="milestone.expectedDate"
+                  type="date"
+                  placeholder="选择日期"
+                  size="small"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  style="width: 100%"
+                />
+              </el-form-item>
+              <el-form-item label="节点进度" label-width="80px">
+                <div class="milestone-progress-row">
+                  <el-input-number
+                    v-model="milestone.progress"
+                    :min="0"
+                    :max="100"
+                    :step="5"
+                    size="small"
+                    controls-position="right"
+                    style="width: 120px;"
+                    @change="validateMilestoneProgress(index)"
+                  />
+                  <span class="milestone-progress-unit">%</span>
+                </div>
+              </el-form-item>
+            </div>
+          </div>
+        </div>
+        
+        <el-empty v-else description="暂无里程碑，点击上方按钮添加" :image-size="60" />
+      </div>
+      
+      <template #footer>
+        <el-button @click="milestonesDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveMilestones">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -417,9 +1397,11 @@ const handleViewAuditLog = (indicator: StrategicIndicator) => {
   overflow: hidden;
 }
 
-/* 左侧面板 */
+/* ========================================
+   左侧面板 - 任务卡片列表
+   ======================================== */
 .strategic-panel {
-  width: 360px;
+  width: 320px;
   flex-shrink: 0;
   background: var(--bg-white, #fff);
   border-radius: 8px;
@@ -441,6 +1423,7 @@ const handleViewAuditLog = (indicator: StrategicIndicator) => {
 .panel-header h3 {
   margin: 0;
   font-size: 16px;
+  font-weight: 600;
   color: var(--text-main, #1e293b);
 }
 
@@ -450,137 +1433,621 @@ const handleViewAuditLog = (indicator: StrategicIndicator) => {
   padding: 12px;
 }
 
-.indicator-item {
-  padding: 12px;
+/* 任务卡片样式 */
+.task-card {
+  padding: 14px;
   border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 6px;
-  margin-bottom: 8px;
+  border-radius: 8px;
+  margin-bottom: 10px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  background: var(--bg-white, #fff);
 }
 
-.indicator-item:hover {
+.task-card:hover {
   border-color: var(--color-primary, #2c5282);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 12px rgba(44, 82, 130, 0.12);
+  transform: translateY(-1px);
 }
 
-.indicator-item.selected {
+.task-card.selected {
   border-color: var(--color-primary, #2c5282);
-  background: rgba(44, 82, 130, 0.05);
+  background: linear-gradient(135deg, rgba(44, 82, 130, 0.03) 0%, rgba(44, 82, 130, 0.08) 100%);
+  box-shadow: 0 2px 8px rgba(44, 82, 130, 0.15);
 }
 
-.item-header {
+.task-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
-.child-count {
+.indicator-count-badge {
   font-size: 12px;
   color: var(--text-placeholder, #94a3b8);
 }
 
-.item-name {
+.task-card-title {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-main, #1e293b);
-  line-height: 1.4;
+  line-height: 1.5;
+  margin-bottom: 6px;
 }
 
-.item-task {
+.task-card-desc {
   font-size: 12px;
   color: var(--text-secondary, #64748b);
-  margin-top: 4px;
+  line-height: 1.4;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-/* 右侧面板 */
+.task-card-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.task-card-progress :deep(.el-progress) {
+  flex: 1;
+}
+
+.task-card-progress .progress-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-main, #1e293b);
+  min-width: 36px;
+}
+
+/* ========================================
+   右侧面板 - 指标表格
+   ======================================== */
 .distribution-panel {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.empty-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--bg-white, #fff);
   border-radius: 8px;
   border: 1px solid var(--border-color, #e2e8f0);
-  padding: 20px;
-  overflow-y: auto;
 }
 
-.selected-indicator {
-  margin-bottom: 24px;
-}
-
-.detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.detail-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: var(--text-main, #1e293b);
-}
-
-.child-indicators {
-  margin-top: 24px;
-}
-
-.child-indicators h4 {
-  margin: 0 0 12px 0;
-  font-size: 15px;
-  color: var(--text-main, #1e293b);
-}
-
-/* 待审批区域 */
-.pending-section {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border-color, #e2e8f0);
-}
-
-.pending-section h4 {
-  margin: 0 0 12px 0;
-  font-size: 15px;
-  color: var(--text-main, #1e293b);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pending-list {
+/* 表格卡片 */
+.table-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  background: var(--bg-white, #fff);
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  overflow: hidden;
 }
 
-.pending-item {
+.table-card .card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  background: var(--bg-page, #f8fafc);
-  border-radius: 6px;
-  border-left: 3px solid var(--el-color-warning);
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
-.pending-info {
+.card-header .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.pending-info .dept {
-  font-weight: 500;
+.card-header .card-title {
+  font-size: 16px;
+  font-weight: 600;
   color: var(--text-main, #1e293b);
 }
 
-.pending-info .name {
+.card-header .indicator-count {
+  font-size: 13px;
   color: var(--text-secondary, #64748b);
+}
+
+.card-header .header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.table-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-container {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+/* ========================================
+   表格样式
+   ======================================== */
+.unified-table {
+  width: 100%;
+}
+
+.distribution-table :deep(.el-table__header th) {
+  background: #f8fafc !important;
+  color: var(--text-main, #1e293b);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 12px 8px;
+}
+
+.distribution-table :deep(.el-table__body td) {
+  padding: 10px 8px;
+  vertical-align: middle;
+}
+
+.distribution-table :deep(.el-table__row--striped td) {
+  background: #fafbfc !important;
+}
+
+.distribution-table :deep(.el-table__body tr:hover > td) {
+  background: #f1f5f9 !important;
+}
+
+/* 任务内容文本（带颜色） */
+.task-content-text {
+  font-weight: 500;
+  color: var(--color-primary, #2c5282);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* 战略任务带颜色样式（发展性/基础性） */
+.task-content-colored {
+  font-weight: 500;
+  cursor: default;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: block;
   font-size: 13px;
 }
 
-.pending-actions {
+/* 指标名称单元格 */
+.indicator-name-cell {
   display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.indicator-name-text {
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: default;
+}
+
+/* 定性指标颜色（紫色） */
+.indicator-qualitative {
+  color: var(--color-qualitative, #9333ea);
+  font-weight: 500;
+}
+
+/* 定量指标颜色（青色） */
+.indicator-quantitative {
+  color: var(--color-quantitative, #0891b2);
+  font-weight: 500;
+}
+
+/* 子指标名称 */
+.child-name-cell,
+.child-remark-cell {
+  cursor: pointer;
+}
+
+.child-name-cell:hover,
+.child-remark-cell:hover {
+  background: rgba(44, 82, 130, 0.05);
+  border-radius: 4px;
+}
+
+.child-text {
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: default;
+}
+
+/* 子指标继承定性/定量颜色 */
+.child-text.indicator-qualitative {
+  color: var(--color-qualitative, #9333ea);
+  font-weight: 500;
+}
+
+.child-text.indicator-quantitative {
+  color: var(--color-quantitative, #0891b2);
+  font-weight: 500;
+}
+
+.new-child-cell {
+  width: 100%;
+}
+
+.new-child-cell :deep(.el-input) {
+  width: 100%;
+}
+
+/* 添加子指标提示 */
+.add-child-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.no-child-text {
+  font-size: 12px;
+  color: var(--text-placeholder, #94a3b8);
+}
+
+/* 状态文本 */
+.status-text {
+  font-size: 12px;
+  color: var(--text-placeholder, #94a3b8);
+}
+
+/* 合并单元格垂直居中 */
+.distribution-table :deep(td[rowspan]) {
+  vertical-align: middle;
+}
+
+/* 添加按钮列样式 */
+.distribution-table :deep(.add-btn-column) {
+  padding: 0 !important;
+}
+
+.distribution-table :deep(.add-btn-column .cell) {
+  padding: 0 !important;
+  height: 100%;
+}
+
+.add-btn-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 40px;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  margin: 2px;
+}
+
+.add-btn-cell.can-add {
+  cursor: pointer;
+}
+
+.add-btn-cell.can-add:hover {
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, rgba(64, 158, 255, 0.2) 100%);
+  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.3);
+}
+
+.add-btn-cell .add-icon {
+  font-size: 18px;
+  color: var(--color-primary, #409EFF);
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.add-btn-cell.can-add:hover .add-icon {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+/* 学院单元格样式 */
+.college-cell {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.college-cell:hover {
+  background: rgba(44, 82, 130, 0.05);
+}
+
+.college-tags {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 备注文本 */
+.remark-text {
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
+}
+
+/* 部门文本 */
+.dept-text {
+  font-size: 12px;
+  color: var(--text-main, #1e293b);
+}
+
+/* 进度单元格 */
+.progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--text-main, #1e293b);
+  font-weight: 500;
+  min-width: 32px;
+}
+
+/* 目标进度文本 */
+.target-progress-text {
+  font-size: 12px;
+  color: var(--color-primary, #409EFF);
+  font-weight: 500;
+}
+
+.target-progress-text.editable {
+  cursor: pointer;
+}
+
+.target-progress-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.target-progress-cell:hover {
+  background: rgba(44, 82, 130, 0.05);
+}
+
+/* Textarea 样式 - 只允许垂直拖动 */
+.textarea-cell {
+  width: 100%;
+}
+
+.textarea-cell :deep(.el-textarea__inner) {
+  min-height: 36px !important;
+  resize: vertical !important;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 操作单元格 */
+.action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.action-placeholder {
+  color: var(--text-placeholder, #94a3b8);
+}
+
+/* 空状态 */
+.empty-state {
+  padding: 40px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 指标类型文本 */
+.type-text {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* 类型列自适应宽度 */
+.distribution-table .type-column {
+  width: fit-content;
+  white-space: nowrap;
+}
+
+/* 里程碑单元格 */
+.milestone-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.milestone-cell:hover {
+  background: rgba(44, 82, 130, 0.05);
+}
+
+.milestone-count {
+  font-size: 12px;
+  color: var(--color-qualitative, #9333ea);
+  font-weight: 500;
+}
+
+.milestone-count.editable {
+  cursor: pointer;
+}
+
+/* 里程碑弹出层 */
+.milestone-popover {
+  padding: 4px 0;
+}
+
+.milestone-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main, #1e293b);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+}
+
+.milestone-item {
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--border-light, #f1f5f9);
+}
+
+.milestone-item:last-child {
+  border-bottom: none;
+}
+
+.milestone-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.milestone-index {
+  font-size: 12px;
+  color: var(--text-placeholder, #94a3b8);
+  font-weight: 500;
+}
+
+.milestone-name {
+  font-size: 13px;
+  color: var(--text-main, #1e293b);
+  font-weight: 500;
+}
+
+.milestone-item-info {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
+  padding-left: 18px;
+}
+
+.milestone-empty {
+  font-size: 12px;
+  color: var(--text-placeholder, #94a3b8);
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* 里程碑编辑弹窗 */
+.milestones-editor {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.milestones-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+}
+
+.milestones-tip {
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
+}
+
+.milestones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.milestone-edit-item {
+  background: #f8fafc;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.milestone-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.milestone-edit-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--color-qualitative, #9333ea);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.milestone-edit-body {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+}
+
+.milestone-edit-body :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.milestone-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.milestone-progress-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #64748b);
+}
+
+/* ========================================
+   响应式适配
+   ======================================== */
+@media (max-width: 1200px) {
+  .strategic-panel {
+    width: 280px;
+  }
+}
+
+@media (max-width: 992px) {
+  .distribution-layout {
+    flex-direction: column;
+  }
+  
+  .strategic-panel {
+    width: 100%;
+    max-height: 300px;
+  }
+  
+  .distribution-panel {
+    flex: 1;
+    min-height: 400px;
+  }
 }
 </style>
