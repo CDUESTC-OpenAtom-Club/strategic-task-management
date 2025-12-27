@@ -3,106 +3,112 @@
  * 审计日志抽屉组件
  * 显示指标的审批历史时间线
  */
-import { computed } from 'vue'
+import { computed } from "vue";
 import {
-  Check, Close, Upload, Edit, Refresh,
-  User, Clock, ChatDotRound
-} from '@element-plus/icons-vue'
-import type { StrategicIndicator, StatusAuditEntry } from '@/types'
+  Check,
+  Close,
+  Upload,
+  Edit,
+  Refresh,
+  User,
+  Clock,
+  ChatDotRound,
+} from "@element-plus/icons-vue";
+import type { StrategicIndicator, StatusAuditEntry } from "@/types";
 
 const props = defineProps<{
-  visible: boolean
-  indicator: StrategicIndicator | null
-}>()
+  visible: boolean;
+  indicator: StrategicIndicator | null;
+}>();
 
 const emit = defineEmits<{
-  (e: 'update:visible', value: boolean): void
-  (e: 'close'): void
-}>()
+  (e: "update:visible", value: boolean): void;
+  (e: "close"): void;
+}>();
 
 // 计算 drawer 可见性
 const drawerVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val)
-})
+  set: (val) => emit("update:visible", val),
+});
 
 // 获取审计日志（按时间倒序）
 const auditLogs = computed(() => {
-  if (!props.indicator?.statusAudit) return []
-  return [...props.indicator.statusAudit].sort((a, b) =>
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  )
-})
+  if (!props.indicator?.statusAudit) return [];
+  return [...props.indicator.statusAudit].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+});
 
 // 获取操作类型配置
-const getActionConfig = (action: StatusAuditEntry['action']) => {
+const getActionConfig = (action: StatusAuditEntry["action"]) => {
   const configs = {
     submit: {
       icon: Upload,
-      color: '#409EFF',
-      label: '提交进度',
-      type: 'primary'
+      color: "#409EFF",
+      label: "提交进度",
+      type: "primary",
     },
     approve: {
       icon: Check,
-      color: '#67C23A',
-      label: '审批通过',
-      type: 'success'
+      color: "#67C23A",
+      label: "审批通过",
+      type: "success",
     },
     reject: {
       icon: Close,
-      color: '#F56C6C',
-      label: '审批驳回',
-      type: 'danger'
+      color: "#F56C6C",
+      label: "审批驳回",
+      type: "danger",
     },
     revoke: {
       icon: Refresh,
-      color: '#E6A23C',
-      label: '撤回提交',
-      type: 'warning'
+      color: "#E6A23C",
+      label: "撤回提交",
+      type: "warning",
     },
     update: {
       icon: Edit,
-      color: '#909399',
-      label: '更新进度',
-      type: 'info'
-    }
-  }
-  return configs[action] || configs.update
-}
+      color: "#909399",
+      label: "更新进度",
+      type: "info",
+    },
+  };
+  return configs[action] || configs.update;
+};
 
 // 格式化时间
 const formatTime = (timestamp: Date | string) => {
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+  const date = new Date(timestamp);
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 // 格式化相对时间
 const formatRelativeTime = (timestamp: Date | string) => {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 1) return '刚刚'
-  if (diffMins < 60) return `${diffMins}分钟前`
-  if (diffHours < 24) return `${diffHours}小时前`
-  if (diffDays < 30) return `${diffDays}天前`
-  return formatTime(timestamp)
-}
+  if (diffMins < 1) return "刚刚";
+  if (diffMins < 60) return `${diffMins}分钟前`;
+  if (diffHours < 24) return `${diffHours}小时前`;
+  if (diffDays < 30) return `${diffDays}天前`;
+  return formatTime(timestamp);
+};
 
 // 关闭抽屉
 const handleClose = () => {
-  emit('close')
-}
+  emit("close");
+};
 </script>
 
 <template>
@@ -152,8 +158,12 @@ const handleClose = () => {
                 size="small"
                 effect="dark"
               >
-                <el-icon><component :is="getActionConfig(log.action).icon" /></el-icon>
-                {{ getActionConfig(log.action).label }}
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <el-icon
+                    ><component :is="getActionConfig(log.action).icon"
+                  /></el-icon>
+                  {{ getActionConfig(log.action).label }}
+                </div>
               </el-tag>
               <span class="log-time">{{ formatTime(log.timestamp) }}</span>
             </div>
@@ -167,7 +177,10 @@ const handleClose = () => {
 
             <!-- 进度变化 -->
             <div
-              v-if="log.previousProgress !== undefined && log.newProgress !== undefined"
+              v-if="
+                log.previousProgress !== undefined &&
+                log.newProgress !== undefined
+              "
               class="log-progress"
             >
               <span class="progress-label">进度变化:</span>
@@ -247,9 +260,7 @@ const handleClose = () => {
 }
 
 .log-header .el-tag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  width: fit-content;
 }
 
 .log-time {
@@ -280,7 +291,7 @@ const handleClose = () => {
 }
 
 .operator-dept::before {
-  content: '·';
+  content: "·";
   margin: 0 4px;
 }
 
