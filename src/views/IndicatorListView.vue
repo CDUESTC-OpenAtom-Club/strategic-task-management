@@ -31,11 +31,12 @@ const props = defineProps<{
 
 // 判断当前是否为战略发展部角色
 const isStrategicDept = computed(() => {
-  return props.viewingRole === '战略发展部' || props.viewingRole === 'strategic_dept' || !props.viewingRole
+  // 只有明确是战略发展部角色时才返回 true
+  return props.viewingRole === '战略发展部' || props.viewingRole === 'strategic_dept'
 })
 
-// 判断是否可以编辑（只有战略发展部可以编辑）
-const canEdit = computed(() => authStore.userRole === 'strategic_dept' || isStrategicDept.value)
+// 判断是否可以编辑（只有战略发展部可以编辑，职能部门不能新增指标）
+const canEdit = computed(() => authStore.userRole === 'strategic_dept' && isStrategicDept.value)
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
@@ -151,11 +152,11 @@ const indicators = computed(() => {
 const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
   const dataList = indicators.value
 
-  // 批量操作列的索引：添加了说明列后，如果显示责任部门列则是9，否则是8
-  const batchColumnIndex = showResponsibleDeptColumn.value ? 9 : 8
+  // 批量操作列的索引：添加了说明列后，如果显示责任部门列则是8，否则是7
+  const batchColumnIndex = showResponsibleDeptColumn.value ? 8 : 7
 
-  // 战略任务列（第1列，index=1，选择框后面）和批量操作列合并
-  if (columnIndex === 1 || columnIndex === batchColumnIndex) {
+  // 战略任务列（第0列）和批量操作列合并
+  if (columnIndex === 0 || columnIndex === batchColumnIndex) {
     const currentTask = row.taskContent || '未关联任务'
 
     // 计算当前任务在列表中的起始位置
@@ -744,7 +745,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
               @selection-change="handleSelectionChange"
               class="unified-table"
             >
-              <el-table-column type="selection" width="45" />
+
               <el-table-column prop="taskContent" label="战略任务" width="200">
                 <template #default="{ row }">
                   <el-tooltip :content="row.type2 === '发展性' ? '发展性任务' : '基础性任务'" placement="top">

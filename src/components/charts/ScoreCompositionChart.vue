@@ -3,10 +3,10 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent } from 'echarts/components'
+import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-use([PieChart, TooltipComponent, LegendComponent, CanvasRenderer])
+use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
 const props = withDefaults(defineProps<{
   basicScore: number

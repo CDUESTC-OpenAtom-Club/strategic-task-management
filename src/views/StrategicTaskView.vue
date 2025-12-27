@@ -131,8 +131,8 @@
   const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
     const dataList = indicators.value
   
-    // 战略任务列（第1列）和批量操作列（第7列，删除类型列后）
-    if (columnIndex === 1 || columnIndex === 7) {
+    // 战略任务列（第0列）和批量操作列（第7列）
+    if (columnIndex === 0 || columnIndex === 7) {
       const currentTask = row.taskContent || '未关联任务'
   
       let startIndex = rowIndex
@@ -184,11 +184,12 @@
   const groupedDevelopmentIndicators = computed(() => groupIndicatorsByTask(developmentIndicators.value))
   const groupedBasicIndicators = computed(() => groupIndicatorsByTask(basicIndicators.value))
   
-  // 获取已有的任务名称列表（去重）
+  // 获取已有的任务名称列表（去重，只包含未下发的任务）
   const existingTaskNames = computed(() => {
     const taskSet = new Set<string>()
     indicators.value.forEach(i => {
-      if (i.taskContent && i.taskContent !== '未命名任务') {
+      // 只添加未下发的任务（canWithdraw 为 true）
+      if (i.taskContent && i.taskContent !== '未命名任务' && i.canWithdraw) {
         taskSet.add(i.taskContent)
       }
     })
@@ -238,9 +239,6 @@
     remark: '',
     milestones: [] as Milestone[]
   })
-  
-  // 里程碑输入状态
-  const showMilestoneInput = ref(false)
   
   // 任务下发相关状态
   const showAssignmentDialog = ref(false)
@@ -358,6 +356,12 @@
     } else {
         (updates as any)[field] = editingIndicatorValue.value
     }
+
+    // 如果编辑的是核心指标名称，且当前没有指标类型，则设置默认类型为"定性"
+    if (field === 'name' && !row.type1) {
+        updates.type1 = '定性'
+        updates.isQualitative = true
+    }
     
     strategicStore.updateIndicator(row.id.toString(), updates)
     cancelIndicatorEdit()
@@ -409,7 +413,7 @@
     isAddingOrEditing.value = true
   }
 
-  // 为指定任务新增指标
+  // 为指定任务新增指标（点击单元格右下角加号）
   const handleAddIndicatorToTask = (row: StrategicIndicator) => {
     newRow.value.taskContent = row.taskContent || ''
     newRow.value.type2 = row.type2 || '发展性'
@@ -435,7 +439,7 @@
       type1: newRow.value.type1,
       type2: newRow.value.type2,
       progress: 0,
-      createTime: currentDate,
+      createTime: new Date().toLocaleDateString('zh-CN'),
       weight: Number(newRow.value.weight) || 0,
       remark: newRow.value.remark || '无备注',
       canWithdraw: true,
@@ -750,8 +754,32 @@
           type: 'info'
         }
       ).then(() => {
+        // 为每个目标部门创建指标副本
         pendingRows.forEach(row => {
+          // 更新原指标状态
           strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
+          
+          // 为每个额外的目标部门创建副本（第一个部门使用原指标）
+          distributeTarget.value.forEach((dept, index) => {
+            if (index === 0) {
+              // 第一个部门更新原指标的责任部门
+              strategicStore.updateIndicator(row.id.toString(), { 
+                responsibleDept: dept,
+                ownerDept: dept
+              })
+            } else {
+              // 其他部门创建新的指标副本
+              strategicStore.addIndicator({
+                ...row,
+                id: `${Date.now()}-${index}-${row.id}`,
+                responsibleDept: dept,
+                ownerDept: dept,
+                canWithdraw: false,
+                progress: 0,
+                statusAudit: []
+              })
+            }
+          })
         })
         ElMessage.success(`已成功下发 ${pendingRows.length} 个指标到 ${distributeTarget.value.length} 个部门`)
         closeDistributeDialog()
@@ -772,7 +800,31 @@
         type: 'info'
       }
     ).then(() => {
-      strategicStore.updateIndicator(currentDistributeItem.value!.id.toString(), { canWithdraw: false })
+      const row = currentDistributeItem.value!
+      // 更新原指标状态
+      strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
+      
+      // 为每个目标部门处理
+      distributeTarget.value.forEach((dept, index) => {
+        if (index === 0) {
+          // 第一个部门更新原指标的责任部门
+          strategicStore.updateIndicator(row.id.toString(), { 
+            responsibleDept: dept,
+            ownerDept: dept
+          })
+        } else {
+          // 其他部门创建新的指标副本
+          strategicStore.addIndicator({
+            ...row,
+            id: `${Date.now()}-${index}-${row.id}`,
+            responsibleDept: dept,
+            ownerDept: dept,
+            canWithdraw: false,
+            progress: 0,
+            statusAudit: []
+          })
+        }
+      })
       ElMessage.success(`指标已成功下发到 ${distributeTarget.value.length} 个部门`)
       closeDistributeDialog()
       updateEditTime()
@@ -800,6 +852,31 @@
     ).then(() => {
       strategicStore.updateIndicator(row.id.toString(), { canWithdraw: true })
       ElMessage.info('指标已撤回')
+      updateEditTime()
+    })
+  }
+
+  // 全部下发（下发当前界面所有未下发的指标）
+  const handleDistributeAll = () => {
+    const pendingRows = indicators.value.filter(r => r.canWithdraw && r.name) // 只下发有核心指标的记录
+    if (pendingRows.length === 0) {
+      ElMessage.warning('当前没有待下发的指标')
+      return
+    }
+    
+    ElMessageBox.confirm(
+      `确认下发当前部门的全部 ${pendingRows.length} 个待下发指标？`,
+      '全部下发确认',
+      {
+        confirmButtonText: '确认下发',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    ).then(() => {
+      pendingRows.forEach(row => {
+        strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
+      })
+      ElMessage.success(`已成功下发 ${pendingRows.length} 个指标`)
       updateEditTime()
     })
   }
@@ -974,7 +1051,7 @@
         <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span class="toggle-hint">部门</span>
+        <span class="toggle-hint">{{ selectedDepartment || '部门' }}</span>
       </div>
   
       <!-- 右侧详情区域 - Excel风格 -->
@@ -987,9 +1064,13 @@
         <!-- Excel工具栏 -->
         <div class="excel-toolbar">
           <div class="toolbar-left">
-            <el-button type="primary" size="small" :disabled="isReadOnly" @click="addNewRow">
+            <el-button type="primary" size="small" :disabled="isReadOnly" @click.stop="addNewRow">
               <el-icon><Plus /></el-icon>
               新增行
+            </el-button>
+            <el-button type="success" size="small" :disabled="isReadOnly" @click.stop="handleDistributeAll">
+              <el-icon><Promotion /></el-icon>
+              下发
             </el-button>
             <el-button size="small">
               <el-icon><Download /></el-icon>
@@ -1016,7 +1097,7 @@
               @selection-change="handleSelectionChange"
               class="unified-table"
             >
-              <el-table-column type="selection" width="50" />
+
               <el-table-column prop="taskContent" label="战略任务" width="150">
                 <template #default="{ row }">
                   <div class="task-cell-wrapper">
@@ -1059,12 +1140,15 @@
                       :autosize="{ minRows: 2, maxRows: 6 }"
                       @blur="saveIndicatorEdit(row, 'name')"
                     />
-                    <el-tooltip v-else :content="row.type1 === '定性' ? '定性指标' : '定量指标'" placement="top">
-                      <span
-                        class="indicator-name-text"
-                        :class="row.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
-                      >{{ row.name }}</span>
-                    </el-tooltip>
+                    <template v-else>
+                      <el-tooltip v-if="row.name && row.type1" :content="row.type1 === '定性' ? '定性指标' : '定量指标'" placement="top">
+                        <span
+                          class="indicator-name-text"
+                          :class="row.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
+                        >{{ row.name }}</span>
+                      </el-tooltip>
+                      <span v-else class="indicator-name-text placeholder-text">双击编辑指标，如：党员发展质量达标率95%以上</span>
+                    </template>
                   </div>
                 </template>
               </el-table-column>
@@ -1080,40 +1164,43 @@
                       @blur="saveIndicatorEdit(row, 'remark')"
                       @keyup.esc="cancelIndicatorEdit"
                     />
-                    <span v-else class="indicator-name-text remark-text-wrap">{{ row.remark }}</span>
+                    <span v-else class="indicator-name-text remark-text-wrap">{{ row.remark || '样例：双击编辑说明' }}</span>
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="weight" label="权重" width="90" align="center">
-                <template #default="{ row }">
-                  <span @dblclick="handleIndicatorDblClick(row, 'weight')">
-                    <el-input
-                      v-if="editingIndicatorId === row.id && editingIndicatorField === 'weight'"
-                      v-model="editingIndicatorValue"
-                      v-focus
-                      size="small"
-                      style="width: 50px"
-                      @blur="saveIndicatorEdit(row, 'weight')"
-                    />
-                    <span v-else>{{ row.weight }}</span>
-                  </span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="progress" label="进度" width="100" align="center">
-                <template #default="{ row }">
-                  <span @dblclick="handleIndicatorDblClick(row, 'progress')">
-                    <el-input
-                      v-if="editingIndicatorId === row.id && editingIndicatorField === 'progress'"
-                      v-model="editingIndicatorValue"
-                      v-focus
-                      size="small"
-                      type="number"
-                      :min="0"
-                      :max="100"
-                      style="width: 50px"
-                      @blur="saveIndicatorEdit(row, 'progress')"
-                    />
-                    <el-tooltip v-else :content="`当前进度: ${row.progress || 0}%`" placement="top">
+                <el-table-column prop="weight" label="权重" width="90" align="center">
+                  <template #default="{ row }">
+                    <span @dblclick="handleIndicatorDblClick(row, 'weight')">
+                      <el-input-number
+                        v-if="editingIndicatorId === row.id && editingIndicatorField === 'weight'"
+                        v-model="editingIndicatorValue"
+                        v-focus
+                        size="small"
+                        :controls="false"
+                        style="width: 50px"
+                        @blur="saveIndicatorEdit(row, 'weight')"
+                        @keyup.enter="saveIndicatorEdit(row, 'weight')"
+                      />
+                      <span v-else>{{ row.weight }}</span>
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="progress" label="进度" width="100" align="center">
+                  <template #default="{ row }">
+                    <span @dblclick="handleIndicatorDblClick(row, 'progress')">
+                      <el-input-number
+                        v-if="editingIndicatorId === row.id && editingIndicatorField === 'progress'"
+                        v-model="editingIndicatorValue"
+                        v-focus
+                        size="small"
+                        :min="0"
+                        :max="100"
+                        :controls="false"
+                        style="width: 50px"
+                        @blur="saveIndicatorEdit(row, 'progress')"
+                        @keyup.enter="saveIndicatorEdit(row, 'progress')"
+                      />
+                      <el-tooltip v-else :content="`当前进度: ${row.progress || 0}%`" placement="top">
                       <el-progress
                         :percentage="row.progress || 0"
                         :stroke-width="8"
@@ -1155,7 +1242,7 @@
               </el-table-column>
               <el-table-column label="批量" width="120" align="center" class-name="batch-column">
                 <template #default="{ row }">
-                  <div class="batch-buttons">
+                  <div class="batch-buttons"> 
                     <el-button 
                       v-if="getTaskGroup(row).rows.some(r => r.canWithdraw)" 
                       type="primary" 
@@ -1220,8 +1307,11 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="4">
-                  <el-form-item label="权重">
-                    <el-input v-model="newRow.weight" placeholder="权重" />
+                  <el-form-item label="指标类型">
+                    <el-select v-model="newRow.type1" style="width: 100%" @change="(val: string) => { if (val === '定量') generateMonthlyMilestones() }">
+                      <el-option label="定性" value="定性" />
+                      <el-option label="定量" value="定量" />
+                    </el-select>
                   </el-form-item>
                 </el-col>
                 <el-col :span="8">
@@ -1231,15 +1321,19 @@
                 </el-col>
               </el-row>
               <el-row :gutter="16">
-                <el-col :span="4">
-                  <el-form-item label="指标类型">
-                    <el-select v-model="newRow.type1" style="width: 100%" @change="(val: string) => { if (val === '定量') generateMonthlyMilestones() }">
-                      <el-option label="定性" value="定性" />
-                      <el-option label="定量" value="定量" />
-                    </el-select>
+                <el-col :span="16">
+                  <el-form-item label="说明">
+                    <el-input v-model="newRow.remark" placeholder="输入指标说明" />
                   </el-form-item>
                 </el-col>
-                <el-col :span="20">
+                  <el-col :span="4">
+                    <el-form-item label="权重">
+                      <el-input-number v-model="newRow.weight" :min="0" placeholder="权重" :controls="false" style="width: 100%" />
+                    </el-form-item>
+                  </el-col>
+              </el-row>
+              <el-row :gutter="16">
+                <el-col :span="24">
                   <el-form-item label="里程碑">
                     <div class="milestone-form-area">
                       <el-button v-if="newRow.type1 === '定性'" size="small" type="primary" plain @click="addMilestone">
@@ -1434,7 +1528,12 @@
       </el-drawer>
   
       <!-- 下发弹窗（支持单个和整体下发） -->
-      <el-dialog v-model="distributeDialogVisible" :title="currentDistributeGroup ? '整体下发' : '指标下发'" width="500px">
+      <el-dialog 
+        v-model="distributeDialogVisible" 
+        :title="currentDistributeGroup ? '整体下发' : '指标下发'" 
+        width="500px"
+        :close-on-click-modal="false"
+      >
         <div class="distribute-dialog">
           <!-- 单个指标下发 -->
           <div v-if="currentDistributeItem" class="indicator-info">
@@ -1455,7 +1554,12 @@
           </div>
           <el-form label-width="100px" style="margin-top: 20px;">
             <el-form-item label="下发目标">
-              <el-select v-model="distributeTarget" multiple placeholder="选择下发目标部门（可多选）" style="width: 100%;">
+              <el-select 
+                v-model="distributeTarget" 
+                multiple 
+                placeholder="选择下发目标部门（可多选）" 
+                style="width: 100%;"
+              >
                 <el-option v-for="dept in functionalDepartments" :key="dept" :label="dept" :value="dept" />
               </el-select>
             </el-form-item>
@@ -1636,7 +1740,9 @@
     align-items: center;
     justify-content: center;
     width: 28px;
-    height: 72px;
+    min-height: 72px;
+    height: auto;
+    padding: 8px 4px;
     background: linear-gradient(135deg, var(--color-primary, #409EFF) 0%, #2c5282 100%);
     color: #fff;
     border-radius: 0 14px 14px 0;
@@ -1669,13 +1775,15 @@
   }
 
   .toggle-hint {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 500;
     writing-mode: vertical-rl;
     text-orientation: mixed;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     margin-top: 4px;
-    opacity: 0.9;
+    opacity: 0.95;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 
   /* 侧边栏主体 - 默认完全隐藏 */
@@ -2414,6 +2522,40 @@
     margin: 0 0 var(--spacing-lg) 0;
   }
 
+  /* 多指标输入区域 */
+  .indicators-input-area {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .indicator-input-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--bg-white);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+  }
+
+  .indicator-input-item:hover {
+    border-color: var(--color-primary-light);
+  }
+
+  .indicator-index {
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-width: 20px;
+    padding-top: 8px;
+  }
+
+  .indicator-input-item :deep(.el-textarea__inner) {
+    resize: none;
+    line-height: 1.5;
+  }
+
   /* 里程碑表单区域 */
   .milestone-form-area {
     display: flex;
@@ -2833,6 +2975,11 @@
     white-space: pre-wrap;
     word-break: break-word;
     display: block;
+  }
+
+  .placeholder-text {
+    color: var(--text-placeholder);
+    font-style: italic;
   }
   
   /* 战略任务带颜色样式 */

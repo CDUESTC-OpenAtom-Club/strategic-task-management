@@ -13,12 +13,15 @@ const { Client } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import dotenv from 'dotenv';
+dotenv.config();
+
 const config = {
-  host: 'localhost',
-  port: 5432,
-  database: 'strategic',
-  user: 'postgres',
-  password: '64378561huaW'
+  host: process.env.DB_HOST || '175.24.139.148',
+  port: parseInt(process.env.DB_PORT) || 8386,
+  database: process.env.DB_NAME || 'strategic',
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD || ''
 };
 
 async function run() {

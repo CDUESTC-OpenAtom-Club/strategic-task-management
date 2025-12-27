@@ -6,10 +6,7 @@ Learn more about the recommended Project Setup and IDE Support in the [Vue Docs 
  - 战略发展部: 用户名 zhanlue 密码 123456
  - 职能部门: 用户名 jiaowu 密码 123456 (教务处)
  - 二级学院: 用户名 computer 密码 123456 (计算机学院)
- 我理解你的数据库连接信息：
 
-主机：localhost
-端口：5432
-数据库：strategic
-用户名：postgres
-密码：64378561huaW
+## 数据库配置
+
+数据库连接信息请参考 `.env.example` 文件，复制为 `.env` 并填入实际密码。

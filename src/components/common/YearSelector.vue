@@ -103,8 +103,10 @@ function getStatusTagType(status: 'history' | 'current' | 'future') {
       class="readonly-tag"
       effect="dark"
     >
-      <el-icon><Lock /></el-icon>
-      只读
+      <span class="readonly-content">
+        <el-icon><Lock /></el-icon>
+        <span>只读</span>
+      </span>
     </el-tag>
   </div>
 </template>
@@ -183,22 +185,29 @@ function getStatusTagType(status: 'history' | 'current' | 'future') {
 
 /* 只读标识 */
 .readonly-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
   margin-left: 4px;
-  padding: 0 8px;
-  height: 24px;
-  line-height: 1;
+  padding: 0 10px;
+  height: 28px;
   background: rgba(230, 162, 60, 0.9);
   border-color: rgba(230, 162, 60, 0.9);
 }
 
-.readonly-tag :deep(.el-icon) {
+.readonly-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.readonly-content .el-icon {
   font-size: 12px;
-  vertical-align: middle;
-  margin-top: -1px;
+}
+
+.selector-icon {
+  display: flex;
+  align-items: center;
 }
 
 /* 响应式 */

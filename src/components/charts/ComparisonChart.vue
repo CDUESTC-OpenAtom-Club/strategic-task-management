@@ -3,12 +3,12 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ComparisonItem } from '@/types'
 import { getProgressColor } from '@/utils/colors'
 
-use([BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
+use([BarChart, GridComponent, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
 // Props
 interface Props {

@@ -3,11 +3,11 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { SankeyChart } from 'echarts/charts'
-import { TooltipComponent, TitleComponent } from 'echarts/components'
+import { TooltipComponent, TitleComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { SankeyData } from '@/types'
 
-use([SankeyChart, TooltipComponent, TitleComponent, CanvasRenderer])
+use([SankeyChart, TooltipComponent, TitleComponent, GraphicComponent, CanvasRenderer])
 
 // Props
 interface Props {

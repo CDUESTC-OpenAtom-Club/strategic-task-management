@@ -3,12 +3,12 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent, TitleComponent } from 'echarts/components'
+import { TooltipComponent, LegendComponent, TitleComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { SourcePieData } from '@/types'
 import { getColorByIndex } from '@/utils/colors'
 
-use([PieChart, TooltipComponent, LegendComponent, TitleComponent, CanvasRenderer])
+use([PieChart, TooltipComponent, LegendComponent, TitleComponent, GraphicComponent, CanvasRenderer])
 
 // Props
 interface Props {

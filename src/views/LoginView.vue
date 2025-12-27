@@ -327,21 +327,29 @@ const emit = defineEmits<{
 }>()
 
 const handleLogin = async () => {
-  if (!loginFormRef.value) {
-    console.error('loginFormRef is null')
-    return
-  }
-
   if (isLoginLocked.value) {
     ElMessage.error('账户已锁定，请稍后再试')
     return
   }
 
-  try {
-    await loginFormRef.value.validate()
-  } catch (err) {
-    console.log('Form validation failed:', err)
-    return
+  // 修复P1: 增强表单验证逻辑，处理 loginFormRef 为 null 的情况
+  if (loginFormRef.value) {
+    try {
+      await loginFormRef.value.validate()
+    } catch (err) {
+      console.log('Form validation failed:', err)
+      return
+    }
+  } else {
+    // 备用验证：直接检查表单数据
+    if (!loginForm.username || loginForm.username.length < 3) {
+      ElMessage.warning('请输入有效的用户名（至少3个字符）')
+      return
+    }
+    if (!loginForm.password || loginForm.password.length < 6) {
+      ElMessage.warning('请输入有效的密码（至少6个字符）')
+      return
+    }
   }
 
   loading.value = true

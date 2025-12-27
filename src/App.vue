@@ -227,13 +227,18 @@ onMounted(() => {
 
     <!-- 主内容区 -->
     <main class="app-main">
-      <!-- 标签页导航 -->
+      <!-- 标签页导航 - 修复P3: 增强点击事件处理 -->
       <div class="tab-nav">
         <div
           v-for="tab in tabs"
           :key="tab.id"
           :class="['tab-item', { active: activeTab === tab.id }]"
-          @click="activeTab = tab.id"
+          @click.stop.prevent="activeTab = tab.id"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
+          tabindex="0"
+          @keydown.enter="activeTab = tab.id"
+          @keydown.space.prevent="activeTab = tab.id"
         >
           <el-icon :size="20"><component :is="tab.icon" /></el-icon>
           <span>{{ tab.label }}</span>
@@ -454,6 +459,8 @@ onMounted(() => {
   color: var(--text-regular);
   font-weight: 500;
   font-size: 14px;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tab-item:hover {
