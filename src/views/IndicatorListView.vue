@@ -821,34 +821,50 @@ const submitProgressReport = () => {
   closeReportDialog()
 }
 
-// 撤回进度填报
-const handleRevokeReport = (row: StrategicIndicator) => {
+
+// 一键提交所有指标（职能部门/二级学院专用）
+const handleSubmitAll = () => {
+  if (indicators.value.length === 0) {
+    ElMessage.warning('没有可提交的指标')
+    return
+  }
+
+  const indicatorNames = indicators.value.map(ind => ind.name).join('、')
+
   ElMessageBox.confirm(
-    `确认撤回进度填报？\n\n指标：${row.name}\n待审批进度：${row.pendingProgress}%\n\n撤回后可重新填报`,
-    '撤回确认',
+    `确认一键提交所有 ${indicators.value.length} 个指标？\n\n${indicatorNames}\n\n注意：这将提交所有指标的当前进度数据。`,
+    '一键提交确认',
     {
-      confirmButtonText: '确认撤回',
+      confirmButtonText: '确定提交',
       cancelButtonText: '取消',
       type: 'warning'
     }
   ).then(() => {
-    // 清除待审批状态
-    strategicStore.updateIndicator(row.id.toString(), {
-      progressApprovalStatus: 'none'
+    indicators.value.forEach(row => {
+      // 提交：将状态改为 pending，使用当前进度数据
+      strategicStore.updateIndicator(row.id.toString(), {
+        progressApprovalStatus: 'pending',
+        // 如果有待提交的进度数据就用待提交的，否则用当前进度
+        progress: row.pendingProgress || row.progress || 0,
+        progressComment: row.pendingProgressComment || row.progressComment || ''
+      })
+
+      // 添加审计日志
+      strategicStore.addStatusAuditEntry(row.id.toString(), {
+        operator: authStore.userName || 'unknown',
+        operatorName: authStore.userName || '未知用户',
+        operatorDept: authStore.userDepartment || '未知部门',
+        action: 'submit',
+        comment: '一键提交所有指标进度',
+        previousStatus: row.progressApprovalStatus,
+        newStatus: 'pending',
+        previousProgress: row.progress,
+        newProgress: row.pendingProgress || row.progress,
+        progressComment: row.pendingProgressComment || row.progressComment
+      })
     })
 
-    // 添加审计日志
-    strategicStore.addStatusAuditEntry(row.id.toString(), {
-      operator: authStore.userName || 'unknown',
-      operatorName: authStore.userName || '未知用户',
-      operatorDept: authStore.userDepartment || '未知部门',
-      action: 'revoke',
-      comment: '撤回进度填报',
-      previousStatus: 'pending',
-      newStatus: 'none'
-    })
-
-    ElMessage.info('已撤回进度填报')
+    ElMessage.success(`成功提交所有${indicators.value.length}项指标进度`)
   })
 }
 </script>
@@ -906,6 +922,16 @@ const handleRevokeReport = (row: StrategicIndicator) => {
             <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
             <!-- 职能部门/二级学院的批量操作按钮 -->
             <template v-if="!isStrategicDept">
+              <!-- 一键提交所有指标 -->
+              <el-button 
+                type="primary" 
+                size="small" 
+                :disabled="timeContext.isReadOnly || indicators.length === 0"
+                @click="handleSubmitAll"
+              >
+                <el-icon><Upload /></el-icon>
+                一键提交
+              </el-button>
               <!-- 如果有待审批的指标，显示撤回按钮 -->
               <el-button 
                 v-if="indicators.some(r => r.progressApprovalStatus === 'pending')"
@@ -917,17 +943,6 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                 <el-icon><RefreshLeft /></el-icon>
                 批量撤回
               </el-button>
-              <!-- 否则显示提交按钮 -->
-              <el-button 
-                v-else
-                type="success" 
-                size="small" 
-                :disabled="timeContext.isReadOnly || !indicators.some(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')"
-                @click="handleBatchSubmitAll"
-              >
-                  <el-icon><Upload /></el-icon>
-                  提交
-                </el-button>
             </template>
           </div>
         </div>
@@ -1048,14 +1063,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                       :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
                       @click="handleOpenReportDialog(row)"
                     >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
-                    <!-- 职能部门/二级学院在待审批状态下可撤回 -->
-                    <el-button 
-                      v-if="!isStrategicDept && row.progressApprovalStatus === 'pending'" 
-                      link 
-                      type="warning" 
-                      size="small" 
-                      @click="handleRevokeReport(row)"
-                    >撤回</el-button>
+
                     <el-button link type="danger" size="small" @click="handleDeleteIndicator(row)" v-if="canEdit">删除</el-button>
                   </div>
                 </template>
