@@ -41,8 +41,15 @@ const canEditChild = computed(() => isFunctionalDept.value && !timeContext.isRea
 // 获取所有学院
 const colleges = getAllColleges()
 
+// ================== 侧边栏模式切换 ==================
+// 侧边栏模式：'task' = 按战略任务查看，'college' = 按学院查看
+const sidebarMode = ref<'task' | 'college'>('task')
+
 // 当前选中的战略任务
 const selectedTask = ref<StrategicTask | null>(null)
+
+// 当前选中的学院
+const selectedCollege = ref<string | null>(null)
 
 // 搜索关键词
 const searchKeyword = ref('')
@@ -85,6 +92,48 @@ const taskIndicators = computed(() => {
     i.isStrategic &&
     i.taskContent === selectedTask.value!.title
   )
+})
+
+// 筛选后的学院列表（用于侧边栏搜索）
+const filteredColleges = computed(() => {
+  if (!searchKeyword.value) return colleges
+  const keyword = searchKeyword.value.toLowerCase()
+  return colleges.filter(c => c.toLowerCase().includes(keyword))
+})
+
+// 获取学院的子指标数量
+const getCollegeChildCount = (college: string) => {
+  return strategicStore.indicators.filter(i => {
+    if (i.isStrategic) return false
+    // 支持字符串或数组格式的 responsibleDept
+    if (Array.isArray(i.responsibleDept)) {
+      return i.responsibleDept.includes(college)
+    }
+    return i.responsibleDept === college
+  }).length
+}
+
+// 获取选中学院的所有子指标（按父指标分组）
+const collegeIndicators = computed(() => {
+  if (!selectedCollege.value) return []
+  
+  // 获取所有下发给该学院的子指标
+  const childIndicators = strategicStore.indicators.filter(i => {
+    if (i.isStrategic) return false
+    // 支持字符串或数组格式的 responsibleDept
+    if (Array.isArray(i.responsibleDept)) {
+      return i.responsibleDept.includes(selectedCollege.value!)
+    }
+    return i.responsibleDept === selectedCollege.value
+  })
+  
+  // 获取这些子指标的父指标
+  const parentIds = new Set(childIndicators.map(c => c.parentIndicatorId).filter(Boolean))
+  const parentIndicators = strategicStore.indicators.filter(i =>
+    i.isStrategic && parentIds.has(i.id.toString())
+  )
+  
+  return parentIndicators
 })
 
 // 获取指标的子指标
@@ -173,8 +222,10 @@ const addNewChildRow = (parentIndicatorId: string) => {
     validateAndSaveNewChild(addingParentId.value, editingNewChildId.value)
   }
   
-  // 获取父指标信息
-  const parentIndicator = taskIndicators.value.find(i => i.id.toString() === parentIndicatorId)
+  // 获取父指标信息（从任务模式或学院模式）
+  const parentIndicator = sidebarMode.value === 'task'
+    ? taskIndicators.value.find(i => i.id.toString() === parentIndicatorId)
+    : collegeIndicators.value.find(i => i.id.toString() === parentIndicatorId)
   
   if (!newChildIndicators[parentIndicatorId]) {
     newChildIndicators[parentIndicatorId] = []
@@ -182,10 +233,15 @@ const addNewChildRow = (parentIndicatorId: string) => {
   
   const newChildId = `new-${Date.now()}`
   
+  // 在学院模式下，自动设置当前选中的学院
+  const defaultCollege = sidebarMode.value === 'college' && selectedCollege.value 
+    ? [selectedCollege.value] 
+    : []
+  
   newChildIndicators[parentIndicatorId].push({
     id: newChildId,
     name: parentIndicator?.name || '',  // 继承父指标名称
-    college: [],
+    college: defaultCollege,
     targetValue: 100,
     unit: '%',
     weight: 10,
@@ -718,6 +774,15 @@ const getMilestonesTooltip = (child: StrategicIndicator | NewChildIndicator): Lo
   }))
 }
 
+// 判断里程碑是否已完成（指标当前进度 >= 里程碑目标进度）
+const isMilestoneCompleted = (child: StrategicIndicator | NewChildIndicator, milestoneProgress: number): boolean => {
+  if ('isNew' in child && child.isNew) {
+    return false // 新增的子指标还没有进度
+  }
+  const indicator = child as StrategicIndicator
+  return (indicator.progress || 0) >= milestoneProgress
+}
+
 // ================== 表格数据处理 ==================
 
 // 构建扁平化表格数据（用于单元格合并）
@@ -824,6 +889,125 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
   return { rowspan: 1, colspan: 1 }
 }
 
+// ================== 学院视图数据 ==================
+
+// 学院视图表格数据
+const collegeTableData = computed(() => {
+  if (!selectedCollege.value) return []
+  
+  const data: TableRowData[] = []
+  const indicators = collegeIndicators.value
+  
+  indicators.forEach((indicator) => {
+    const indicatorId = indicator.id.toString()
+    
+    // 获取下发给该学院的子指标（支持字符串或数组格式）
+    const children = strategicStore.indicators.filter(i => {
+      if (i.parentIndicatorId !== indicatorId || i.isStrategic) return false
+      // 支持字符串或数组格式的 responsibleDept
+      if (Array.isArray(i.responsibleDept)) {
+        return i.responsibleDept.includes(selectedCollege.value!)
+      }
+      return i.responsibleDept === selectedCollege.value
+    })
+    
+    // 获取新增的子指标（只显示分配给当前学院的）
+    const newChildren = (newChildIndicators[indicatorId] || []).filter(
+      nc => nc.college.includes(selectedCollege.value!)
+    )
+    
+    // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
+    if (children.length === 0 && newChildren.length === 0) {
+      data.push({
+        type: 'indicator-only',
+        taskTitle: indicator.taskContent || '',
+        indicator,
+        parentIndicatorId: indicatorId
+      })
+    } else {
+      // 添加已有子指标行
+      children.forEach(child => {
+        data.push({
+          type: 'child',
+          taskTitle: indicator.taskContent || '',
+          indicator,
+          child,
+          parentIndicatorId: indicatorId
+        })
+      })
+      
+      // 添加新增的子指标行
+      newChildren.forEach((newChild, newIdx) => {
+        // 查找原始索引
+        const originalIdx = (newChildIndicators[indicatorId] || []).findIndex(nc => nc.id === newChild.id)
+        data.push({
+          type: 'new-child',
+          taskTitle: indicator.taskContent || '',
+          indicator,
+          child: newChild,
+          parentIndicatorId: indicatorId,
+          rowIndex: originalIdx >= 0 ? originalIdx : newIdx
+        })
+      })
+    }
+  })
+  
+  return data
+})
+
+// 学院视图单元格合并方法
+const collegeSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData; column: any; rowIndex: number; columnIndex: number }) => {
+  const dataList = collegeTableData.value
+  
+  // 第一列（战略任务列）合并 - 同一个任务的行合并
+  if (columnIndex === 0) {
+    const currentTaskTitle = row.taskTitle
+    
+    // 检查是否是该任务的第一行
+    const isFirstRowOfTask = rowIndex === 0 || dataList[rowIndex - 1]?.taskTitle !== currentTaskTitle
+    
+    if (isFirstRowOfTask) {
+      // 计算该任务下的所有行数
+      let rowspan = 1
+      for (let i = rowIndex + 1; i < dataList.length; i++) {
+        if (dataList[i]?.taskTitle === currentTaskTitle) {
+          rowspan++
+        } else {
+          break
+        }
+      }
+      return { rowspan, colspan: 1 }
+    } else {
+      return { rowspan: 0, colspan: 0 }
+    }
+  }
+  
+  // 第二列（父指标列）合并 - 同一个父指标的行合并
+  if (columnIndex === 1) {
+    const currentIndicatorId = row.parentIndicatorId
+    
+    // 检查是否是该父指标的第一行
+    const isFirstRowOfIndicator = rowIndex === 0 || dataList[rowIndex - 1]?.parentIndicatorId !== currentIndicatorId
+    
+    if (isFirstRowOfIndicator) {
+      // 计算该父指标下的所有行数
+      let rowspan = 1
+      for (let i = rowIndex + 1; i < dataList.length; i++) {
+        if (dataList[i]?.parentIndicatorId === currentIndicatorId) {
+          rowspan++
+        } else {
+          break
+        }
+      }
+      return { rowspan, colspan: 1 }
+    } else {
+      return { rowspan: 0, colspan: 0 }
+    }
+  }
+  
+  return { rowspan: 1, colspan: 1 }
+}
+
 // 获取行的 class 名称（用于标识新增子指标行）
 const getRowClassName = ({ row }: { row: TableRowData }) => {
   if (row.type === 'new-child') {
@@ -856,21 +1040,25 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
     </el-alert>
 
     <div class="distribution-layout">
-      <!-- 左侧：战略任务列表 -->
+      <!-- 左侧：侧边栏（战略任务/学院切换） -->
       <div class="strategic-panel">
         <div class="panel-header">
-          <h3>战略任务</h3>
+          <el-radio-group v-model="sidebarMode" size="small" @change="() => { selectedTask = null; selectedCollege = null; searchKeyword = '' }">
+            <el-radio-button value="task">战略任务</el-radio-button>
+            <el-radio-button value="college">学院</el-radio-button>
+          </el-radio-group>
           <el-input
             v-model="searchKeyword"
-            placeholder="搜索任务..."
+            :placeholder="sidebarMode === 'task' ? '搜索任务...' : '搜索学院...'"
             :prefix-icon="Search"
             clearable
             size="small"
-            style="width: 140px"
+            style="width: 120px"
           />
         </div>
 
-        <div class="indicator-list">
+        <!-- 战略任务列表 -->
+        <div v-if="sidebarMode === 'task'" class="indicator-list">
           <div
             v-for="task in filteredTasks"
             :key="task.id"
@@ -897,34 +1085,34 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
           <el-empty v-if="filteredTasks.length === 0" description="暂无任务" />
         </div>
+
+        <!-- 学院列表 -->
+        <div v-else class="indicator-list">
+          <div
+            v-for="college in filteredColleges"
+            :key="college"
+            :class="['college-card', { selected: selectedCollege === college }]"
+            @click="selectedCollege = college"
+          >
+            <span class="college-card-name">{{ college }}</span>
+            <span class="college-card-count">{{ getCollegeChildCount(college) }} 个子指标</span>
+          </div>
+
+          <el-empty v-if="filteredColleges.length === 0" description="暂无学院" />
+        </div>
       </div>
 
       <!-- 右侧：指标表格 -->
       <div class="distribution-panel">
-        <div v-if="selectedTask" class="table-card card-base">
+        <!-- 战略任务模式：选中任务时显示 -->
+        <div v-if="sidebarMode === 'task' && selectedTask" class="table-card card-base">
           <!-- 表头 -->
           <div class="card-header">
             <div class="header-left">
               <span class="card-title">{{ selectedTask.title }}</span>
               <span class="indicator-count">共 {{ taskIndicators.length }} 个指标</span>
             </div>
-            <div class="header-actions" v-if="canEditChild">
-              <el-button 
-                type="primary" 
-                :icon="Promotion" 
-                @click="() => {
-                  const parentId = Object.keys(newChildIndicators).find(k => newChildIndicators[k]?.length > 0)
-                  if (parentId) {
-                    const parent = taskIndicators.find(i => i.id.toString() === parentId)
-                    if (parent) distributeNewChildren(parent)
-                  } else {
-                    ElMessage.warning('请先添加待下发的子指标')
-                  }
-                }"
-              >
-                下发子指标
-              </el-button>
-            </div>
+            <!-- 战略任务模式下不显示下发按钮 -->
           </div>
 
           <!-- 表格主体 -->
@@ -967,14 +1155,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           >{{ row.indicator?.name }}</span>
                         </el-tooltip>
                       </div>
-                      <!-- 右下角三角形添加子指标按钮 -->
-                      <div 
-                        v-if="canEditChild" 
-                        class="add-child-trigger"
-                        @click.stop="addNewChildRow(row.parentIndicatorId)"
-                      >
-                        <span class="trigger-icon">+</span>
-                      </div>
+                      <!-- 战略任务模式下不显示添加按钮 -->
                     </div>
                   </template>
                 </el-table-column>
@@ -1220,10 +1401,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                               v-for="(ms, idx) in getMilestonesTooltip(row.child)" 
                               :key="ms.id"
                               class="milestone-item"
+                              :class="{ 'milestone-completed': isMilestoneCompleted(row.child, ms.progress) }"
                             >
                               <div class="milestone-item-header">
                                 <span class="milestone-index">{{ idx + 1 }}.</span>
                                 <span class="milestone-name">{{ ms.name || '未命名' }}</span>
+                                <el-icon v-if="isMilestoneCompleted(row.child, ms.progress)" class="milestone-check-icon"><Check /></el-icon>
                               </div>
                               <div class="milestone-item-info">
                                 <span>预期: {{ ms.expectedDate || '未设置' }}</span>
@@ -1387,7 +1570,419 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           </div>
         </div>
 
-        <el-empty v-else description="请选择左侧战略任务" class="empty-placeholder" />
+        <!-- 学院模式：选中学院时显示 -->
+        <div v-else-if="sidebarMode === 'college' && selectedCollege" class="table-card card-base">
+          <!-- 表头 -->
+          <div class="card-header">
+            <div class="header-left">
+              <span class="card-title">{{ selectedCollege }}</span>
+              <span class="indicator-count">共 {{ collegeIndicators.length }} 个父指标</span>
+            </div>
+            <div class="header-actions" v-if="canEditChild">
+              <el-button 
+                type="primary" 
+                :icon="Promotion" 
+                @click="() => {
+                  const parentId = Object.keys(newChildIndicators).find(k => newChildIndicators[k]?.length > 0)
+                  if (parentId) {
+                    const parent = collegeIndicators.find(i => i.id.toString() === parentId)
+                    if (parent) distributeNewChildren(parent)
+                  } else {
+                    ElMessage.warning('请先添加待下发的子指标')
+                  }
+                }"
+              >
+                下发子指标
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 表格主体 -->
+          <div class="card-body table-body">
+            <div class="table-container">
+              <el-table
+                :data="collegeTableData"
+                border
+                :span-method="collegeSpanMethod"
+                :row-class-name="getRowClassName"
+                class="unified-table distribution-table"
+              >
+                <!-- 战略任务列 -->
+                <el-table-column label="战略任务" width="160">
+                  <template #default="{ row }">
+                    <el-tooltip 
+                      :content="row.indicator?.type2 === '发展性' ? '发展性任务' : '基础性任务'" 
+                      placement="top"
+                    >
+                      <span 
+                        class="task-content-colored"
+                        :style="{ color: getTaskTypeColor(row.indicator?.type2 || '发展性') }"
+                      >{{ row.taskTitle }}</span>
+                    </el-tooltip>
+                  </template>
+                </el-table-column>
+
+                <!-- 父指标列 -->
+                <el-table-column label="战略指标" min-width="200">
+                  <template #default="{ row }">
+                    <div class="indicator-name-wrapper">
+                      <div class="indicator-name-cell">
+                        <el-tooltip 
+                          :content="row.indicator?.type1 === '定性' ? '定性指标' : '定量指标'" 
+                          placement="top"
+                        >
+                          <span 
+                            class="indicator-name-text"
+                            :class="row.indicator?.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
+                          >{{ row.indicator?.name }}</span>
+                        </el-tooltip>
+                      </div>
+                      <!-- 右下角三角形添加子指标按钮 -->
+                      <div 
+                        v-if="canEditChild" 
+                        class="add-child-trigger"
+                        @click.stop="addNewChildRow(row.parentIndicatorId)"
+                      >
+                        <span class="trigger-icon">+</span>
+                      </div>
+                    </div>
+                  </template>
+                </el-table-column>
+
+                <!-- 子指标名称列 -->
+                <el-table-column label="子指标名称" min-width="180">
+                  <template #default="{ row }">
+                    <!-- 没有子指标的父指标 -->
+                    <template v-if="row.type === 'indicator-only'">
+                      <div class="add-child-hint">
+                        <span class="no-child-text">暂无子指标</span>
+                      </div>
+                    </template>
+                    <!-- 已有子指标 -->
+                    <template v-else-if="row.type === 'child'">
+                      <div 
+                        class="child-name-cell"
+                        @dblclick="handleChildDblClick(row.child, 'name')"
+                      >
+                        <el-input
+                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'name'"
+                          v-model="editingChildValue"
+                          type="textarea"
+                          :rows="1"
+                          autosize
+                          class="editing-field textarea-cell"
+                          @blur="saveChildEdit(row.child, 'name')"
+                        />
+                        <el-tooltip v-else :content="row.child?.name" placement="top" :disabled="!row.child?.name || row.child?.name.length < 15">
+                          <span 
+                            class="child-text"
+                            :class="row.child?.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
+                          >{{ row.child?.name || '未命名' }}</span>
+                        </el-tooltip>
+                      </div>
+                    </template>
+                    <!-- 新增子指标行 -->
+                    <template v-else-if="row.type === 'new-child'">
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
+                      >
+                        <el-input
+                          v-if="editingNewChildId === row.child.id"
+                          v-model="row.child.name"
+                          type="textarea"
+                          :rows="1"
+                          autosize
+                          placeholder="输入子指标名称"
+                          class="new-child-editing textarea-cell"
+                          @blur="validateAndSaveNewChild(row.child, row.parentIndicatorId)"
+                        />
+                        <span 
+                          v-else 
+                          class="new-child-text"
+                          :class="{ 'placeholder-text': !row.child.name }"
+                        >{{ row.child.name || '点击输入名称' }}</span>
+                      </div>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 说明列 -->
+                <el-table-column label="说明" width="140">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="remark-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <div 
+                        class="child-remark-cell"
+                        @dblclick="handleChildDblClick(row.child, 'remark')"
+                      >
+                        <el-input
+                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'remark'"
+                          v-model="editingChildValue"
+                          type="textarea"
+                          :rows="1"
+                          autosize
+                          class="editing-field textarea-cell"
+                          @blur="saveChildEdit(row.child, 'remark')"
+                        />
+                        <span v-else class="remark-text">{{ row.child?.remark || '-' }}</span>
+                      </div>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
+                      >
+                        <el-input
+                          v-if="editingNewChildId === row.child.id"
+                          v-model="row.child.remark"
+                          type="textarea"
+                          :rows="1"
+                          autosize
+                          placeholder="输入说明（选填）"
+                          class="new-child-editing textarea-cell"
+                        />
+                        <span 
+                          v-else 
+                          class="remark-text new-child-text"
+                          :class="{ 'placeholder-text': !row.child.remark }"
+                        >{{ row.child.remark || '-' }}</span>
+                      </div>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 学院模式下不显示学院列 -->
+
+                <!-- 目标进度列 -->
+                <el-table-column label="目标进度" width="120" align="center">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="target-progress-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <!-- 定量指标 -->
+                      <template v-if="(row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量')) === '定量'">
+                        <div 
+                          class="target-progress-cell"
+                          @dblclick="handleChildDblClick(row.child, 'targetValue')"
+                        >
+                          <el-input-number
+                            v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'targetValue'"
+                            v-model="editingChildValue"
+                            :min="0"
+                            :max="100"
+                            :step="5"
+                            size="small"
+                            controls-position="right"
+                            style="width: 80px"
+                            class="editing-field"
+                            @blur="saveChildEdit(row.child, 'targetValue')"
+                          />
+                          <span v-else class="target-progress-text editable">{{ row.child?.targetValue || 100 }}%</span>
+                        </div>
+                      </template>
+                      <!-- 定性指标 -->
+                      <template v-else>
+                        <el-popover
+                          placement="left"
+                          :width="320"
+                          trigger="hover"
+                          :disabled="!row.child?.milestones?.length"
+                        >
+                          <template #reference>
+                            <div 
+                              class="milestone-cell"
+                              @click="canEditChild && openMilestonesDialog(row.child)"
+                            >
+                              <span class="milestone-count" :class="{ editable: canEditChild }">
+                                {{ row.child?.milestones?.length || 0 }} 个里程碑
+                              </span>
+                            </div>
+                          </template>
+                          <div class="milestone-popover">
+                            <div class="milestone-popover-title">里程碑列表</div>
+                            <div 
+                              v-for="(ms, idx) in getMilestonesTooltip(row.child)" 
+                              :key="ms.id"
+                              class="milestone-item"
+                              :class="{ 'milestone-completed': isMilestoneCompleted(row.child, ms.progress) }"
+                            >
+                              <div class="milestone-item-header">
+                                <span class="milestone-index">{{ idx + 1 }}.</span>
+                                <span class="milestone-name">{{ ms.name || '未命名' }}</span>
+                                <el-icon v-if="isMilestoneCompleted(row.child, ms.progress)" class="milestone-check-icon"><Check /></el-icon>
+                              </div>
+                              <div class="milestone-item-info">
+                                <span>预期: {{ ms.expectedDate || '未设置' }}</span>
+                                <span>进度: {{ ms.progress }}%</span>
+                              </div>
+                            </div>
+                            <div v-if="!row.child?.milestones?.length" class="milestone-empty">
+                              暂无里程碑
+                            </div>
+                          </div>
+                        </el-popover>
+                      </template>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
+                      >
+                        <!-- 新增子指标 - 定量 -->
+                        <template v-if="row.child.type1 === '定量'">
+                          <el-input-number
+                            v-if="editingNewChildId === row.child.id"
+                            v-model="row.child.targetProgress"
+                            :min="0"
+                            :max="100"
+                            :step="5"
+                            size="small"
+                            controls-position="right"
+                            style="width: 80px"
+                            class="new-child-editing"
+                          />
+                          <span 
+                            v-else 
+                            class="target-progress-text new-child-text"
+                          >{{ row.child.targetProgress || 100 }}%</span>
+                        </template>
+                        <!-- 新增子指标 - 定性 -->
+                        <template v-else>
+                          <div 
+                            class="milestone-cell"
+                            @click.stop="openMilestonesDialog(row.child)"
+                          >
+                            <span class="milestone-count editable">
+                              {{ row.child.milestones?.length || 0 }} 个里程碑
+                            </span>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 进度列 -->
+                <el-table-column label="进度" width="100" align="center">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="progress-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <div class="progress-cell">
+                        <el-progress
+                          :percentage="row.child?.progress || 0"
+                          :stroke-width="6"
+                          :show-text="false"
+                          style="width: 50px;"
+                        />
+                        <span class="progress-text">{{ row.child?.progress || 0 }}%</span>
+                      </div>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <span class="progress-text">-</span>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 状态列 -->
+                <el-table-column label="状态" width="85" align="center">
+                  <template #default="{ row }">
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="status-text">-</span>
+                    </template>
+                    <template v-else-if="row.type === 'child'">
+                      <el-tag 
+                        :type="getStatusTagType(getChildStatus(row.child))" 
+                        size="small"
+                      >
+                        {{ getStatusText(getChildStatus(row.child)) }}
+                      </el-tag>
+                    </template>
+                    <template v-else-if="row.type === 'new-child'">
+                      <el-tag class="status-tag-pending-distribute" size="small">待下发</el-tag>
+                    </template>
+                  </template>
+                </el-table-column>
+
+                <!-- 操作列 -->
+                <el-table-column label="操作" width="180" align="center">
+                  <template #default="{ row }">
+                    <!-- 没有子指标的父指标 - 无操作 -->
+                    <template v-if="row.type === 'indicator-only'">
+                      <span class="action-placeholder">-</span>
+                    </template>
+                    <!-- 子指标操作 -->
+                    <template v-else-if="row.type === 'child'">
+                      <div class="action-cell">
+                        <el-button link type="primary" size="small" @click="handleViewDetail(row.child)">
+                          <el-icon><View /></el-icon>查看
+                        </el-button>
+                        <el-button 
+                          v-if="getChildStatus(row.child) === 'pending' && canEditChild"
+                          link 
+                          type="success" 
+                          size="small" 
+                          @click="handleApprove(row.child)"
+                        >
+                          <el-icon><Check /></el-icon>通过
+                        </el-button>
+                        <el-button 
+                          v-if="getChildStatus(row.child) === 'pending' && canEditChild"
+                          link 
+                          type="danger" 
+                          size="small" 
+                          @click="handleReject(row.child)"
+                        >
+                          <el-icon><Close /></el-icon>打回
+                        </el-button>
+                        <el-button 
+                          v-if="canEditChild"
+                          link 
+                          type="danger" 
+                          size="small" 
+                          @click="removeChildIndicator(row.child)"
+                        >
+                          <el-icon><Close /></el-icon>删除
+                        </el-button>
+                      </div>
+                    </template>
+                    <!-- 新增子指标操作：删除 -->
+                    <template v-else-if="row.type === 'new-child'">
+                      <div class="action-cell">
+                        <el-button 
+                          link 
+                          type="danger" 
+                          size="small" 
+                          @click="removeNewChildRow(row.parentIndicatorId, row.rowIndex)"
+                        >
+                          <el-icon><Close /></el-icon>删除
+                        </el-button>
+                      </div>
+                    </template>
+                  </template>
+                </el-table-column>
+
+              </el-table>
+            </div>
+
+            <!-- 空状态 -->
+            <div v-if="collegeIndicators.length === 0" class="empty-state">
+              <el-empty description="该学院暂无子指标" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 空状态：未选择任务或学院 -->
+        <el-empty 
+          v-else 
+          :description="sidebarMode === 'task' ? '请选择左侧战略任务' : '请选择左侧学院'" 
+          class="empty-placeholder" 
+        />
       </div>
     </div>
 
@@ -1597,6 +2192,43 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   font-weight: 500;
   color: var(--text-main, #1e293b);
   min-width: 36px;
+}
+
+/* 学院卡片样式 - 简化版 */
+.college-card {
+  padding: 12px 16px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--bg-white, #fff);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.college-card:hover {
+  border-color: var(--color-primary, #2c5282);
+  box-shadow: 0 2px 8px rgba(44, 82, 130, 0.1);
+  transform: translateY(-1px);
+}
+
+.college-card.selected {
+  border-color: var(--color-primary, #2c5282);
+  background: linear-gradient(135deg, rgba(44, 82, 130, 0.03) 0%, rgba(44, 82, 130, 0.08) 100%);
+  box-shadow: 0 2px 6px rgba(44, 82, 130, 0.12);
+}
+
+.college-card-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main, #1e293b);
+}
+
+.college-card-count {
+  font-size: 12px;
+  color: var(--text-placeholder, #94a3b8);
 }
 
 /* ========================================
@@ -2058,12 +2690,36 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 }
 
 .milestone-item {
-  padding: 8px 0;
+  padding: 8px 10px;
   border-bottom: 1px dashed var(--border-light, #f1f5f9);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  transition: background-color 0.2s ease;
 }
 
 .milestone-item:last-child {
   border-bottom: none;
+  margin-bottom: 0;
+}
+
+/* 里程碑完成状态样式 */
+.milestone-item.milestone-completed {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.15) 100%);
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.milestone-item.milestone-completed .milestone-index {
+  color: var(--el-color-success, #67c23a);
+}
+
+.milestone-item.milestone-completed .milestone-name {
+  color: var(--el-color-success-dark-2, #529b2e);
+}
+
+.milestone-check-icon {
+  color: var(--el-color-success, #67c23a);
+  font-size: 14px;
+  margin-left: 4px;
 }
 
 .milestone-item-header {
