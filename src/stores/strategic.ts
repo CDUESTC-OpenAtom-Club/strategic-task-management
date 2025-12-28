@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import type { StrategicTask, StrategicIndicator, Milestone, StatusAuditEntry } from '@/types'
 import { useTimeContextStore } from './timeContext'
+import { allHistoricalIndicators } from '@/data/historicalIndicators'
 
 export const useStrategicStore = defineStore('strategic', () => {
   // State
@@ -126,7 +127,8 @@ export const useStrategicStore = defineStore('strategic', () => {
       responsiblePerson: '李老师',
       status: 'active',
       isStrategic: true,
-      ownerDept: '战略发展部'
+      ownerDept: '战略发展部',
+      year: 2025
     },
     {
       id: '103',
@@ -1266,8 +1268,12 @@ export const useStrategicStore = defineStore('strategic', () => {
       responsiblePerson: '钱处长',
       status: 'active',
       isStrategic: true,
-      ownerDept: '战略发展部'
-    }
+      ownerDept: '战略发展部',
+      year: 2025,
+      statusAudit: []
+    },
+    // 合并历史数据
+    ...allHistoricalIndicators
   ])
 
   // Getters

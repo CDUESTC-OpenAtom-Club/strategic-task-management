@@ -125,10 +125,22 @@ watch(tabs, (newTabs) => {
   }
 }, { immediate: true })
 
-// 切换视角时重置到第一个标签页
-watch(viewingDept, () => {
+// 切换视角时重置到第一个标签页，并更新 authStore 的视角状态
+watch(viewingDept, (newDept) => {
   activeTab.value = 'dashboard'
-})
+  
+  // 更新 authStore 的视角状态
+  if (newDept === STRATEGIC_DEPT) {
+    // 切换回战略发展部，重置视角
+    authStore.resetViewingAs()
+  } else {
+    // 切换到其他部门视角
+    const dept = deptOptions.value.find(d => d.value === newDept)
+    if (dept) {
+      authStore.setViewingAs(dept.role as any, newDept)
+    }
+  }
+}, { immediate: true })
 
 // 处理登录成功
 const handleLoginSuccess = (user: any) => {

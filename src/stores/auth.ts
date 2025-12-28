@@ -7,12 +7,20 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const token = ref<string | null>(localStorage.getItem('auth_token'))
   const loading = ref(false)
+  
+  // 视角切换状态（用于战略发展部查看其他部门视角）
+  const viewingAsRole = ref<UserRole | null>(null)
+  const viewingAsDepartment = ref<string | null>(null)
 
   // Getters
   const isAuthenticated = computed(() => !!token.value && !!user.value)
   const userRole = computed(() => user.value?.role || null)
   const userName = computed(() => user.value?.name || '')
   const userDepartment = computed(() => user.value?.department || '')
+  
+  // 当前有效角色（考虑视角切换）
+  const effectiveRole = computed(() => viewingAsRole.value || user.value?.role || null)
+  const effectiveDepartment = computed(() => viewingAsDepartment.value || user.value?.department || '')
 
   // Actions
   const login = async (credentials: { username: string; password: string }) => {
@@ -130,22 +138,40 @@ export const useAuthStore = defineStore('auth', () => {
     logout()
   }
 
+  // 切换视角（仅战略发展部可用）
+  const setViewingAs = (role: UserRole | null, department: string | null) => {
+    viewingAsRole.value = role
+    viewingAsDepartment.value = department
+  }
+  
+  // 重置视角到实际用户
+  const resetViewingAs = () => {
+    viewingAsRole.value = null
+    viewingAsDepartment.value = null
+  }
+
   return {
     // State
     user,
     token,
     loading,
+    viewingAsRole,
+    viewingAsDepartment,
 
     // Getters
     isAuthenticated,
     userRole,
     userName,
     userDepartment,
+    effectiveRole,
+    effectiveDepartment,
 
     // Actions
     login,
     logout,
     fetchUser,
     hasPermission,
+    setViewingAs,
+    resetViewingAs,
   }
 })

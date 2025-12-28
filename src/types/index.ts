@@ -79,8 +79,8 @@ export interface StrategicIndicator {
   ownerDept?: string // 发布方部门 (对应数据库 owner_org_id)
   parentIndicatorId?: string // 父指标ID (对应数据库 parent_indicator_id)
   // 时间维度字段
-  year: number                        // 年份，如 2025
-  statusAudit: StatusAuditEntry[]     // 审批/操作历史JSON
+  year?: number                        // 年份，如 2025（可选，默认当前年）
+  statusAudit?: StatusAuditEntry[]     // 审批/操作历史JSON（可选，默认空数组）
   // 进度填报审批相关字段
   progressApprovalStatus?: ProgressApprovalStatus  // 进度审批状态：none-无待审批, pending-待审批, approved-已通过, rejected-已驳回
   pendingProgress?: number             // 待审批的进度值

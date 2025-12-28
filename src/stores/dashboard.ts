@@ -19,6 +19,7 @@ import type {
 } from '@/types'
 import { useStrategicStore } from './strategic'
 import { useAuthStore } from './auth'
+import { useTimeContextStore } from './timeContext'
 import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
 import { getAllDepartments, getAllFunctionalDepartments, getAllColleges } from '@/config/departments'
 
@@ -53,7 +54,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 筛选后的指标列表
   const filteredIndicators = computed<StrategicIndicator[]>(() => {
     const strategicStore = useStrategicStore()
+    const timeContext = useTimeContextStore()
     let result = [...strategicStore.indicators]
+    
+    // 按当前年份过滤
+    // 没有 year 字段的指标默认为当前真实年份（2025）
+    const currentYear = timeContext.currentYear
+    const realYear = timeContext.realCurrentYear
+    result = result.filter(i => {
+      const indicatorYear = i.year || realYear
+      return indicatorYear === currentYear
+    })
     
     // 按部门筛选
     if (filters.value.department) {
@@ -113,8 +124,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
         // 战略发展部看所有部门
         getAllDepartments().forEach(d => targetDepartments.add(d))
       } else if (role === 'functional_dept') {
-        // 职能部门看所有学院（它们可能下发任务的对象）
-        getAllColleges().forEach(d => targetDepartments.add(d))
+        // 职能部门只看它实际下发任务的目标部门（二级学院）
+        // 筛选该职能部门下发的指标，获取实际的目标部门
+        const deptIndicators = indicators.filter(i => i.ownerDept === userDept && !i.canWithdraw)
+        deptIndicators.forEach(i => {
+          if (i.responsibleDept && i.responsibleDept !== userDept) {
+            targetDepartments.add(i.responsibleDept)
+          }
+        })
+        targetIndicators = deptIndicators
       } else {
         // 二级学院只看自己
         if (userDept) targetDepartments.add(userDept)
@@ -195,9 +213,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const visibleIndicators = computed<StrategicIndicator[]>(() => {
     const authStore = useAuthStore()
     const strategicStore = useStrategicStore()
-    const role = authStore.user?.role
-    const dept = authStore.user?.department
+    const timeContext = useTimeContextStore()
+    // 使用有效角色（考虑视角切换）
+    const role = authStore.effectiveRole
+    const dept = authStore.effectiveDepartment
     let indicators = [...strategicStore.indicators]
+
+    // 按当前年份过滤
+    // 没有 year 字段的指标默认为当前真实年份（2025）
+    const currentYear = timeContext.currentYear
+    const realYear = timeContext.realCurrentYear
+    indicators = indicators.filter(i => {
+      const indicatorYear = i.year || realYear
+      return indicatorYear === currentYear
+    })
 
     // 角色过滤
     if (role === 'functional_dept') {

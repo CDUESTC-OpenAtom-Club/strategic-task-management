@@ -41,11 +41,15 @@ const chartOption = computed(() => ({
     triggerOn: 'mousemove',
     formatter: (params: any) => {
       if (params.dataType === 'edge') {
-        // 链接tooltip
+        // 链接tooltip - 根据源节点判断显示任务数还是指标数
+        // 战略发展部 -> 职能部门 显示"任务数"
+        // 职能部门 -> 二级学院 显示"指标数"
+        const isFromStrategic = params.data.source === '战略发展部'
+        const label = isFromStrategic ? '任务数' : '指标数'
         return `
           <div style="padding: 8px;">
             <div style="font-weight: bold; margin-bottom: 4px;">${params.data.source} → ${params.data.target}</div>
-            <div>指标数: <strong>${params.data.value}</strong></div>
+            <div>${label}: <strong>${params.data.value}</strong></div>
           </div>
         `
       } else {

@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Plus, View, Download, Delete, ArrowDown, Promotion, RefreshLeft } from '@element-plus/icons-vue'
+import { Plus, View, Download, Delete, ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 import type { StrategicTask, StrategicIndicator, Milestone } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
+import { useTimeContextStore } from '@/stores/timeContext'
 import { getProgressStatus, getProgressColor, getStatusTagType } from '@/utils'
+import type { StatusAuditEntry } from '@/types'
+import { FUNCTIONAL_DEPARTMENTS } from '@/config/departments'
 
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
@@ -20,9 +23,51 @@ const vFocus = {
   }
 }
 
+// 获取操作类型配置（与 AuditLogDrawer 保持一致）
+const getActionConfig = (action: StatusAuditEntry['action']) => {
+  const configs = {
+    submit: { icon: Upload, label: '提交进度', type: 'primary' },
+    approve: { icon: Check, label: '审批通过', type: 'success' },
+    reject: { icon: Close, label: '审批驳回', type: 'danger' },
+    revoke: { icon: Refresh, label: '撤回提交', type: 'warning' },
+    update: { icon: Edit, label: '更新进度', type: 'info' },
+    distribute: { icon: Promotion, label: '下发指标', type: 'primary' }
+  }
+  return configs[action] || configs.update
+}
+
+// 格式化时间
+const formatAuditTime = (timestamp: Date | string) => {
+  const date = new Date(timestamp)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// 格式化相对时间
+const formatRelativeTime = (timestamp: Date | string) => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffMins < 1) return '刚刚'
+  if (diffMins < 60) return `${diffMins}分钟前`
+  if (diffHours < 24) return `${diffHours}小时前`
+  if (diffDays < 30) return `${diffDays}天前`
+  return formatAuditTime(timestamp)
+}
+
 // 使用共享 Store
 const strategicStore = useStrategicStore()
 const authStore = useAuthStore()
+const timeContext = useTimeContextStore()
 
 // 接收父组件传递的选中角色
 const props = defineProps<{
@@ -35,8 +80,8 @@ const isStrategicDept = computed(() => {
   return props.viewingRole === '战略发展部' || props.viewingRole === 'strategic_dept'
 })
 
-// 判断是否可以编辑（只有战略发展部可以编辑，职能部门不能新增指标）
-const canEdit = computed(() => authStore.userRole === 'strategic_dept' && isStrategicDept.value)
+// 判断是否可以编辑（只有战略发展部可以编辑，职能部门不能新增指标，历史年份只读）
+const canEdit = computed(() => authStore.userRole === 'strategic_dept' && isStrategicDept.value && !timeContext.isReadOnly)
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
@@ -60,27 +105,8 @@ const resetFilters = () => {
   filterDept.value = ''
 }
 
-// 职能部门列表
-const functionalDepartments = [
-  '党委办公室 | 党委统战部',
-  '纪委办公室 | 监察处',
-  '党委宣传部 | 宣传策划部',
-  '党委组织部 | 党委教师工作部 | 人力资源部',
-  '党委学工部 | 学生工作处',
-  '党委保卫部 | 保卫处',
-  '学校综合办公室',
-  '教务处',
-  '科技处',
-  '财务部',
-  '招生工作处',
-  '就业创业指导中心',
-  '实验室建设管理处',
-  '数字校园建设办公室',
-  '图书馆 | 档案馆',
-  '后勤资产处',
-  '继续教育部',
-  '国际合作与交流处'
-]
+// 职能部门列表（从配置文件导入）
+const functionalDepartments = [...FUNCTIONAL_DEPARTMENTS]
 
 // 表格引用和选中的指标
 const tableRef = ref<InstanceType<typeof ElTable>>()
@@ -110,6 +136,15 @@ const indicators = computed(() => {
     ...i,
     id: Number(i.id)
   }))
+
+  // 按当前年份过滤
+  // 没有 year 字段的指标默认为当前真实年份（2025）
+  const currentYear = timeContext.currentYear
+  const realYear = timeContext.realCurrentYear
+  list = list.filter(i => {
+    const indicatorYear = i.year || realYear
+    return indicatorYear === currentYear
+  })
 
   // 根据当前角色过滤数据
   // 如果不是战略发展部，只显示下发给当前部门的指标（responsibleDept 或 ownerDept 匹配）
@@ -842,13 +877,13 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                 <template #default="{ row }">
                   <div class="action-cell">
                     <el-button link type="primary" size="small" @click="handleViewDetail(row)">查看</el-button>
-                    <!-- 职能部门/二级学院显示填报按钮 -->
+                    <!-- 职能部门/二级学院显示填报按钮（历史年份禁用） -->
                     <el-button 
                       v-if="!isStrategicDept" 
                       link 
                       type="success" 
                       size="small" 
-                      :disabled="row.progressApprovalStatus === 'pending'"
+                      :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
                       @click="handleOpenReportDialog(row)"
                     >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
                     <!-- 职能部门/二级学院在待审批状态下可撤回 -->
@@ -873,11 +908,12 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                       size="small" 
                       @click="handleBatchDistributeByTask(getTaskGroup(row))"
                     >分解</el-button>
-                    <!-- 职能部门/二级学院显示填报按钮 -->
+                    <!-- 职能部门/二级学院显示填报按钮（历史年份禁用） -->
                     <el-button 
                       v-else 
                       type="success" 
                       size="small" 
+                      :disabled="timeContext.isReadOnly"
                       @click="handleBatchFillByTask(getTaskGroup(row))"
                     >提交</el-button>
                   </div>
@@ -1009,7 +1045,10 @@ const handleRevokeReport = (row: StrategicIndicator) => {
         <div class="audit-log-section">
           <div class="divider"></div>
           <div class="audit-log-header">
-            <h4>审计日志</h4>
+            <div class="audit-log-title">
+              <el-icon><ChatDotRound /></el-icon>
+              <h4>审计日志</h4>
+            </div>
             <span v-if="currentDetail.statusAudit && currentDetail.statusAudit.length > 0" class="log-count">
               共 {{ currentDetail.statusAudit.length }} 条记录
             </span>
@@ -1019,32 +1058,41 @@ const handleRevokeReport = (row: StrategicIndicator) => {
           <div v-if="currentDetail.statusAudit && currentDetail.statusAudit.length > 0" class="audit-log-timeline">
             <el-timeline>
               <el-timeline-item
-                v-for="log in [...currentDetail.statusAudit].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())"
+                v-for="(log, index) in [...currentDetail.statusAudit].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())"
                 :key="log.id"
-                :type="log.action === 'approve' ? 'success' : log.action === 'reject' ? 'danger' : log.action === 'submit' ? 'primary' : 'warning'"
-                :hollow="false"
+                :timestamp="formatRelativeTime(log.timestamp)"
+                :type="getActionConfig(log.action).type"
+                :hollow="index !== 0"
                 placement="top"
               >
                 <div class="log-card">
                   <div class="log-header">
                     <el-tag
-                      :type="log.action === 'approve' ? 'success' : log.action === 'reject' ? 'danger' : log.action === 'submit' ? 'primary' : 'warning'"
+                      :type="getActionConfig(log.action).type"
                       size="small"
                       effect="dark"
                     >
-                      {{ log.action === 'submit' ? '提交进度' : log.action === 'approve' ? '审批通过' : log.action === 'reject' ? '审批驳回' : log.action === 'revoke' ? '撤回提交' : '更新进度' }}
+                      <div style="display: flex; align-items: center; gap: 4px;">
+                        <el-icon><component :is="getActionConfig(log.action).icon" /></el-icon>
+                        {{ getActionConfig(log.action).label }}
+                      </div>
                     </el-tag>
-                    <span class="log-time">{{ new Date(log.timestamp).toLocaleString('zh-CN') }}</span>
+                    <span class="log-time">{{ formatAuditTime(log.timestamp) }}</span>
                   </div>
                   <div class="log-operator">
+                    <el-icon><User /></el-icon>
                     <span class="operator-name">{{ log.operatorName }}</span>
-                    <span class="operator-dept">· {{ log.operatorDept }}</span>
+                    <span class="operator-dept">{{ log.operatorDept }}</span>
                   </div>
                   <div v-if="log.previousProgress !== undefined && log.newProgress !== undefined" class="log-progress">
-                    <span>进度: {{ log.previousProgress }}% → {{ log.newProgress }}%</span>
+                    <span class="progress-label">进度变化:</span>
+                    <span class="progress-from">{{ log.previousProgress }}%</span>
+                    <el-icon class="progress-arrow"><Right /></el-icon>
+                    <span class="progress-to">{{ log.newProgress }}%</span>
                   </div>
                   <div v-if="log.comment" class="log-comment">
-                    {{ log.comment }}
+                    <el-icon><ChatDotRound /></el-icon>
+                    <span>{{ log.comment }}</span>
                   </div>
                 </div>
               </el-timeline-item>
@@ -1052,7 +1100,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
           </div>
           
           <div v-else class="audit-log-empty">
-            <span>暂无审计记录</span>
+            <el-empty description="暂无审计日志" :image-size="60" />
           </div>
         </div>
       </div>
@@ -1599,7 +1647,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
   font-size: 13px;
 }
 
-/* 审计日志区域样式 */
+/* 审计日志区域样式 - 与 AuditLogDrawer 保持一致 */
 .audit-log-section {
   margin-top: var(--spacing-lg);
 }
@@ -1611,10 +1659,22 @@ const handleRevokeReport = (row: StrategicIndicator) => {
   margin-bottom: var(--spacing-md);
 }
 
-.audit-log-header h4 {
+.audit-log-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-log-title .el-icon {
+  color: var(--color-primary, #2c5282);
+  font-size: 18px;
+}
+
+.audit-log-title h4 {
   font-size: 16px;
   color: var(--text-main);
   margin: 0;
+  font-weight: 600;
 }
 
 .audit-log-header .log-count {
@@ -1629,7 +1689,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
 }
 
 .audit-log-timeline::-webkit-scrollbar {
-  width: 5px;
+  width: 6px;
 }
 
 .audit-log-timeline::-webkit-scrollbar-track {
@@ -1641,28 +1701,45 @@ const handleRevokeReport = (row: StrategicIndicator) => {
   border-radius: 3px;
 }
 
+.audit-log-timeline::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color, #cbd5e1);
+}
+
 .audit-log-timeline .log-card {
-  background: var(--bg-page);
+  background: var(--bg-page, #f8fafc);
   padding: 12px;
   border-radius: 8px;
+  margin-bottom: 4px;
 }
 
 .audit-log-timeline .log-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+}
+
+.audit-log-timeline .log-header .el-tag {
+  width: fit-content;
 }
 
 .audit-log-timeline .log-time {
   font-size: 12px;
-  color: var(--text-placeholder);
+  color: var(--text-placeholder, #94a3b8);
 }
 
 .audit-log-timeline .log-operator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
-  color: var(--text-regular);
-  margin-bottom: 6px;
+  color: var(--text-regular, #475569);
+  margin-bottom: 8px;
+}
+
+.audit-log-timeline .log-operator .el-icon {
+  color: var(--text-placeholder, #94a3b8);
+  font-size: 14px;
 }
 
 .audit-log-timeline .operator-name {
@@ -1670,34 +1747,64 @@ const handleRevokeReport = (row: StrategicIndicator) => {
 }
 
 .audit-log-timeline .operator-dept {
-  color: var(--text-secondary);
+  color: var(--text-secondary, #64748b);
+}
+
+.audit-log-timeline .operator-dept::before {
+  content: "·";
+  margin: 0 4px;
 }
 
 .audit-log-timeline .log-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
-  color: var(--color-primary);
-  background: var(--bg-white);
-  padding: 6px 10px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: var(--bg-white, #fff);
   border-radius: 4px;
-  margin-bottom: 6px;
+}
+
+.audit-log-timeline .progress-label {
+  color: var(--text-secondary, #64748b);
+}
+
+.audit-log-timeline .progress-from {
+  color: var(--text-placeholder, #94a3b8);
+}
+
+.audit-log-timeline .progress-arrow {
+  color: var(--text-placeholder, #94a3b8);
+  font-size: 12px;
+}
+
+.audit-log-timeline .progress-to {
+  color: var(--color-primary, #2c5282);
+  font-weight: 600;
 }
 
 .audit-log-timeline .log-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
   font-size: 13px;
-  color: var(--text-regular);
-  background: var(--bg-white);
+  color: var(--text-regular, #475569);
   padding: 8px 10px;
+  background: var(--bg-white, #fff);
   border-radius: 4px;
   border-left: 3px solid var(--color-primary-light, #93c5fd);
 }
 
+.audit-log-timeline .log-comment .el-icon {
+  color: var(--color-primary, #2c5282);
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 .audit-log-empty {
-  background: var(--bg-page);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-sm);
-  text-align: center;
-  color: var(--text-placeholder);
-  font-size: 13px;
+  padding: var(--spacing-lg);
 }
 
 /* ========================================

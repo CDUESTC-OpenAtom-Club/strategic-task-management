@@ -128,11 +128,49 @@ const newChildIndicators = reactive<Record<string, NewChildIndicator[]>>({})
 // 正在添加子指标的父指标ID
 const addingParentId = ref<string | null>(null)
 
+// 当前正在编辑的新增子指标ID（用于点击外部保存）
+const editingNewChildId = ref<string | null>(null)
+
+// 验证并保存新增子指标（点击外部时调用）
+const validateAndSaveNewChild = (parentId: string, childId: string) => {
+  const children = newChildIndicators[parentId]
+  if (!children) return
+  
+  const childIndex = children.findIndex(c => c.id === childId)
+  if (childIndex === -1) return
+  
+  const child = children[childIndex]
+  
+  // 如果名称和学院都为空，删除该行
+  if (!child.name && (!child.college || child.college.length === 0)) {
+    children.splice(childIndex, 1)
+    if (children.length === 0) {
+      delete newChildIndicators[parentId]
+    }
+    editingNewChildId.value = null
+    return
+  }
+  
+  // 数据有效，保持该行，退出编辑状态
+  editingNewChildId.value = null
+}
+
+// 点击新增子指标行时进入编辑状态
+const handleNewChildRowClick = (childId: string, parentId: string) => {
+  editingNewChildId.value = childId
+  addingParentId.value = parentId
+}
+
 // 添加新的子指标行
 const addNewChildRow = (parentIndicatorId: string) => {
   if (!canEditChild.value) {
     ElMessage.warning('您没有权限添加子指标')
     return
+  }
+  
+  // 如果有正在编辑的新增子指标，先保存它
+  if (editingNewChildId.value && addingParentId.value) {
+    validateAndSaveNewChild(addingParentId.value, editingNewChildId.value)
   }
   
   // 获取父指标信息
@@ -142,8 +180,10 @@ const addNewChildRow = (parentIndicatorId: string) => {
     newChildIndicators[parentIndicatorId] = []
   }
   
+  const newChildId = `new-${Date.now()}`
+  
   newChildIndicators[parentIndicatorId].push({
-    id: `new-${Date.now()}`,
+    id: newChildId,
     name: parentIndicator?.name || '',  // 继承父指标名称
     college: [],
     targetValue: 100,
@@ -157,6 +197,7 @@ const addNewChildRow = (parentIndicatorId: string) => {
   })
   
   addingParentId.value = parentIndicatorId
+  editingNewChildId.value = newChildId  // 设置当前编辑的新增子指标
 }
 
 // 删除临时子指标行
@@ -167,6 +208,24 @@ const removeNewChildRow = (parentId: string, index: number) => {
       delete newChildIndicators[parentId]
     }
   }
+}
+
+// 删除已有子指标
+const removeChildIndicator = (child: StrategicIndicator) => {
+  ElMessageBox.confirm(
+    `确认删除子指标"${child.name}"？此操作不可恢复。`,
+    '删除确认',
+    {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    strategicStore.removeIndicator(child.id.toString())
+    ElMessage.success('已删除子指标')
+  }).catch(() => {
+    // 取消删除
+  })
 }
 
 // 获取所有待下发的子指标数量
@@ -275,6 +334,21 @@ const handleGlobalMousedown = (e: MouseEvent) => {
   const isInSelect = !!target.closest('.college-select-editing')
   const isInDropdown = !!target.closest('.el-select-dropdown')
   isInteractingWithCollegeSelect.value = isInSelect || isInDropdown
+  
+  // 处理新增子指标行的点击外部保存
+  if (editingNewChildId.value && addingParentId.value) {
+    // 检查是否点击在新增子指标行内
+    const isInNewChildRow = !!target.closest('.new-child-row')
+    // 检查是否点击在下拉菜单内
+    const isInPopper = !!target.closest('.el-popper') || !!target.closest('.el-select-dropdown')
+    // 检查是否点击在三角形添加按钮上
+    const isInAddTrigger = !!target.closest('.add-child-trigger')
+    
+    if (!isInNewChildRow && !isInPopper && !isInAddTrigger) {
+      // 点击在新增行外部，保存并退出编辑
+      validateAndSaveNewChild(addingParentId.value, editingNewChildId.value)
+    }
+  }
 }
 
 onMounted(() => {
@@ -724,8 +798,8 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
     }
   }
   
-  // 第二列（父指标列）和第三列（添加按钮列）合并 - 同一个父指标的行合并
-  if (columnIndex === 1 || columnIndex === 2) {
+  // 第二列（父指标列）合并 - 同一个父指标的行合并
+  if (columnIndex === 1) {
     const currentIndicatorId = row.parentIndicatorId
     
     // 检查是否是该父指标的第一行
@@ -748,6 +822,14 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
   }
   
   return { rowspan: 1, colspan: 1 }
+}
+
+// 获取行的 class 名称（用于标识新增子指标行）
+const getRowClassName = ({ row }: { row: TableRowData }) => {
+  if (row.type === 'new-child') {
+    return 'new-child-row'
+  }
+  return ''
 }
 </script>
 
@@ -852,6 +934,7 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                 :data="flatTableData"
                 border
                 :span-method="spanMethod"
+                :row-class-name="getRowClassName"
                 class="unified-table distribution-table"
               >
                 <!-- 战略任务列 -->
@@ -872,31 +955,26 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                 <!-- 父指标列 -->
                 <el-table-column label="战略指标" min-width="200">
                   <template #default="{ row }">
-                    <div class="indicator-name-cell">
-                      <el-tooltip 
-                        :content="row.indicator?.type1 === '定性' ? '定性指标' : '定量指标'" 
-                        placement="top"
+                    <div class="indicator-name-wrapper">
+                      <div class="indicator-name-cell">
+                        <el-tooltip 
+                          :content="row.indicator?.type1 === '定性' ? '定性指标' : '定量指标'" 
+                          placement="top"
+                        >
+                          <span 
+                            class="indicator-name-text"
+                            :class="row.indicator?.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
+                          >{{ row.indicator?.name }}</span>
+                        </el-tooltip>
+                      </div>
+                      <!-- 右下角三角形添加子指标按钮 -->
+                      <div 
+                        v-if="canEditChild" 
+                        class="add-child-trigger"
+                        @click.stop="addNewChildRow(row.parentIndicatorId)"
                       >
-                        <span 
-                          class="indicator-name-text"
-                          :class="row.indicator?.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
-                        >{{ row.indicator?.name }}</span>
-                      </el-tooltip>
-                    </div>
-                  </template>
-                </el-table-column>
-
-                <!-- 添加子指标按钮列（合并单元格） -->
-                <el-table-column label="" width="50" align="center" class-name="add-btn-column">
-                  <template #default="{ row }">
-                    <div 
-                      class="add-btn-cell"
-                      @click="canEditChild && addNewChildRow(row.parentIndicatorId)"
-                      :class="{ 'can-add': canEditChild }"
-                    >
-                      <el-tooltip content="添加子指标" placement="top" v-if="canEditChild">
-                        <el-icon class="add-icon"><Plus /></el-icon>
-                      </el-tooltip>
+                        <span class="trigger-icon">+</span>
+                      </div>
                     </div>
                   </template>
                 </el-table-column>
@@ -907,16 +985,7 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                     <!-- 没有子指标的父指标 -->
                     <template v-if="row.type === 'indicator-only'">
                       <div class="add-child-hint">
-                        <el-button 
-                          v-if="canEditChild"
-                          type="primary" 
-                          :icon="Plus" 
-                          size="small"
-                          @click="addNewChildRow(row.parentIndicatorId)"
-                        >
-                          添加子指标
-                        </el-button>
-                        <span v-else class="no-child-text">暂无子指标</span>
+                        <span class="no-child-text">暂无子指标</span>
                       </div>
                     </template>
                     <!-- 已有子指标 -->
@@ -942,15 +1011,24 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                     </template>
                     <!-- 新增子指标行 -->
                     <template v-else-if="row.type === 'new-child'">
-                      <div class="new-child-cell">
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
+                      >
                         <el-input
+                          v-if="editingNewChildId === row.child.id"
                           v-model="row.child.name"
                           type="textarea"
                           :autosize="{ minRows: 2 }"
                           resize="vertical"
-                          class="textarea-cell"
+                          class="textarea-cell new-child-editing"
                           placeholder="子指标名称"
                         />
+                        <span 
+                          v-else 
+                          class="child-text new-child-text"
+                          :class="{ 'placeholder-text': !row.child.name }"
+                        >{{ row.child.name || '点击编辑子指标名称' }}</span>
                       </div>
                     </template>
                   </template>
@@ -980,53 +1058,25 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                       </div>
                     </template>
                     <template v-else-if="row.type === 'new-child'">
-                      <el-input
-                        v-model="row.child.remark"
-                        type="textarea"
-                        :autosize="{ minRows: 2 }"
-                        resize="vertical"
-                        class="textarea-cell"
-                        placeholder="说明"
-                      />
-                    </template>
-                  </template>
-                </el-table-column>
-
-                <!-- 指标类型列 -->
-                <el-table-column label="类型" align="center" class-name="type-column">
-                  <template #default="{ row }">
-                    <template v-if="row.type === 'indicator-only'">
-                      <span class="type-text">-</span>
-                    </template>
-                    <template v-else-if="row.type === 'child'">
-                      <el-select
-                        v-if="canEditChild"
-                        :model-value="row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量')"
-                        size="small"
-                        style="width: 80px"
-                        @change="(val: '定量' | '定性') => handleChildTypeChange(row.child, val)"
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
                       >
-                        <el-option label="定量" value="定量" />
-                        <el-option label="定性" value="定性" />
-                      </el-select>
-                      <span 
-                        v-else 
-                        class="type-text"
-                        :style="{ color: getIndicatorTypeColor(row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量')) }"
-                      >
-                        {{ row.child?.type1 || (row.child?.isQualitative ? '定性' : '定量') }}
-                      </span>
-                    </template>
-                    <template v-else-if="row.type === 'new-child'">
-                      <el-select
-                        v-model="row.child.type1"
-                        size="small"
-                        style="width: 80px"
-                        @change="(val: '定量' | '定性') => handleChildTypeChange(row.child, val)"
-                      >
-                        <el-option label="定量" value="定量" />
-                        <el-option label="定性" value="定性" />
-                      </el-select>
+                        <el-input
+                          v-if="editingNewChildId === row.child.id"
+                          v-model="row.child.remark"
+                          type="textarea"
+                          :autosize="{ minRows: 2 }"
+                          resize="vertical"
+                          class="textarea-cell new-child-editing"
+                          placeholder="说明"
+                        />
+                        <span 
+                          v-else 
+                          class="remark-text new-child-text"
+                          :class="{ 'placeholder-text': !row.child.remark }"
+                        >{{ row.child.remark || '点击编辑' }}</span>
+                      </div>
                     </template>
                   </template>
                 </el-table-column>
@@ -1076,22 +1126,44 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                       </div>
                     </template>
                     <template v-else-if="row.type === 'new-child'">
-                      <el-select
-                        v-model="row.child.college"
-                        multiple
-                        collapse-tags
-                        collapse-tags-tooltip
-                        size="small"
-                        placeholder="选择学院"
-                        style="width: 100%"
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
                       >
-                        <el-option
-                          v-for="college in colleges"
-                          :key="college"
-                          :label="college"
-                          :value="college"
-                        />
-                      </el-select>
+                        <template v-if="editingNewChildId === row.child.id">
+                          <el-select
+                            v-model="row.child.college"
+                            multiple
+                            collapse-tags
+                            collapse-tags-tooltip
+                            size="small"
+                            placeholder="选择学院"
+                            style="width: 100%"
+                            class="new-child-editing"
+                          >
+                            <el-option
+                              v-for="college in colleges"
+                              :key="college"
+                              :label="college"
+                              :value="college"
+                            />
+                          </el-select>
+                        </template>
+                        <template v-else>
+                          <el-tooltip 
+                            :content="formatColleges(row.child.college)" 
+                            placement="top"
+                            :disabled="!row.child.college?.length"
+                          >
+                            <span 
+                              class="dept-text college-tags new-child-text"
+                              :class="{ 'placeholder-text': !row.child.college?.length }"
+                            >
+                              {{ row.child.college?.length ? formatCollegesShort(row.child.college) : '点击选择学院' }}
+                            </span>
+                          </el-tooltip>
+                        </template>
+                      </div>
                     </template>
                   </template>
                 </el-table-column>
@@ -1166,29 +1238,40 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                       </template>
                     </template>
                     <template v-else-if="row.type === 'new-child'">
-                      <!-- 新增子指标 - 定量 -->
-                      <template v-if="row.child.type1 === '定量'">
-                        <el-input-number
-                          v-model="row.child.targetProgress"
-                          :min="0"
-                          :max="100"
-                          :step="5"
-                          size="small"
-                          controls-position="right"
-                          style="width: 80px"
-                        />
-                      </template>
-                      <!-- 新增子指标 - 定性 -->
-                      <template v-else>
-                        <div 
-                          class="milestone-cell"
-                          @click="openMilestonesDialog(row.child)"
-                        >
-                          <span class="milestone-count editable">
-                            {{ row.child.milestones?.length || 0 }} 个里程碑
-                          </span>
-                        </div>
-                      </template>
+                      <div 
+                        class="new-child-cell"
+                        @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
+                      >
+                        <!-- 新增子指标 - 定量 -->
+                        <template v-if="row.child.type1 === '定量'">
+                          <el-input-number
+                            v-if="editingNewChildId === row.child.id"
+                            v-model="row.child.targetProgress"
+                            :min="0"
+                            :max="100"
+                            :step="5"
+                            size="small"
+                            controls-position="right"
+                            style="width: 80px"
+                            class="new-child-editing"
+                          />
+                          <span 
+                            v-else 
+                            class="target-progress-text new-child-text"
+                          >{{ row.child.targetProgress || 100 }}%</span>
+                        </template>
+                        <!-- 新增子指标 - 定性 -->
+                        <template v-else>
+                          <div 
+                            class="milestone-cell"
+                            @click.stop="openMilestonesDialog(row.child)"
+                          >
+                            <span class="milestone-count editable">
+                              {{ row.child.milestones?.length || 0 }} 个里程碑
+                            </span>
+                          </div>
+                        </template>
+                      </div>
                     </template>
                   </template>
                 </el-table-column>
@@ -1231,7 +1314,7 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                       </el-tag>
                     </template>
                     <template v-else-if="row.type === 'new-child'">
-                      <el-tag type="warning" size="small">待下发</el-tag>
+                      <el-tag class="status-tag-pending-distribute" size="small">待下发</el-tag>
                     </template>
                   </template>
                 </el-table-column>
@@ -1267,17 +1350,29 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
                         >
                           <el-icon><Close /></el-icon>打回
                         </el-button>
+                        <el-button 
+                          v-if="canEditChild"
+                          link 
+                          type="danger" 
+                          size="small" 
+                          @click="removeChildIndicator(row.child)"
+                        >
+                          <el-icon><Close /></el-icon>删除
+                        </el-button>
                       </div>
                     </template>
                     <!-- 新增子指标操作：删除 -->
                     <template v-else-if="row.type === 'new-child'">
-                      <el-button 
-                        type="danger" 
-                        :icon="Close" 
-                        size="small"
-                        circle
-                        @click="removeNewChildRow(row.parentIndicatorId, row.rowIndex)"
-                      />
+                      <div class="action-cell">
+                        <el-button 
+                          link 
+                          type="danger" 
+                          size="small" 
+                          @click="removeNewChildRow(row.parentIndicatorId, row.rowIndex)"
+                        >
+                          <el-icon><Close /></el-icon>删除
+                        </el-button>
+                      </div>
                     </template>
                   </template>
                 </el-table-column>
@@ -1599,6 +1694,11 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
   vertical-align: middle;
 }
 
+/* 战略指标列（第2列）单元格支持相对定位 */
+.distribution-table :deep(.el-table__body td:nth-child(2)) {
+  position: relative;
+}
+
 .distribution-table :deep(.el-table__row--striped td) {
   background: #fafbfc !important;
 }
@@ -1626,17 +1726,66 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
   font-size: 13px;
 }
 
+/* 指标名称包装器 */
+.indicator-name-wrapper {
+  position: static;
+}
+
 /* 指标名称单元格 */
 .indicator-name-cell {
   display: flex;
   align-items: flex-start;
   gap: 4px;
+  flex: 1;
 }
 
 .indicator-name-text {
   font-size: 13px;
   line-height: 1.5;
   cursor: default;
+}
+
+/* 右下角三角形添加子指标按钮 */
+.add-child-trigger {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 20px 20px;
+  border-color: transparent transparent rgba(64, 158, 255, 0.15) transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 5;
+}
+
+.add-child-trigger .trigger-icon {
+  position: absolute;
+  right: 2px;
+  bottom: -18px;
+  font-size: 11px;
+  font-weight: 700;
+  color: transparent;
+  transition: color 0.2s ease;
+  line-height: 1;
+  user-select: none;
+}
+
+.add-child-trigger:hover {
+  border-color: transparent transparent var(--color-primary, #409eff) transparent;
+  border-width: 0 0 24px 24px;
+}
+
+.add-child-trigger:hover .trigger-icon {
+  color: #fff;
+  right: 3px;
+  bottom: -21px;
+  font-size: 12px;
+}
+
+.add-child-trigger:active {
+  border-color: transparent transparent var(--color-primary-dark, #337ecc) transparent;
 }
 
 /* 定性指标颜色（紫色） */
@@ -2024,6 +2173,57 @@ const spanMethod = ({ row, column, rowIndex, columnIndex }: { row: TableRowData;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary, #64748b);
+}
+
+/* ========================================
+   新增子指标行样式
+   ======================================== */
+
+/* 新增子指标行的单元格 */
+.new-child-cell {
+  cursor: pointer;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+/* 新增子指标行的文本显示 */
+.new-child-text {
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+  width: 100%;
+}
+
+.new-child-text:hover {
+  background: rgba(64, 158, 255, 0.08);
+}
+
+/* 占位文本样式 */
+.placeholder-text {
+  color: var(--text-placeholder, #94a3b8) !important;
+  font-style: italic;
+}
+
+/* 新增子指标行高亮 */
+.distribution-table :deep(.new-child-row) {
+  background-color: rgba(64, 158, 255, 0.04);
+}
+
+.distribution-table :deep(.new-child-row:hover) > td {
+  background-color: rgba(64, 158, 255, 0.08) !important;
+}
+
+/* 编辑状态的输入框样式 */
+.new-child-editing {
+  border-color: var(--color-primary, #409EFF);
+}
+
+/* 待下发状态标签样式（青色，区别于待审批的橙色） */
+.status-tag-pending-distribute {
+  background-color: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.3);
+  color: #0891b2;
 }
 
 /* ========================================

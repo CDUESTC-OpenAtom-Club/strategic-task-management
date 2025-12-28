@@ -5,6 +5,7 @@ import type { DashboardData, UserRole } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
+import { useTimeContextStore } from '@/stores/timeContext'
 import BreadcrumbNav from '@/components/dashboard/BreadcrumbNav.vue'
 import ScoreCompositionChart from '@/components/charts/ScoreCompositionChart.vue'
 import AlertDistributionChart from '@/components/charts/AlertDistributionChart.vue'
@@ -38,6 +39,7 @@ const props = defineProps<{
 const strategicStore = useStrategicStore()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
+const timeContext = useTimeContextStore()
 
 // 当前视角角色（优先使用父组件传递的，否则使用用户实际角色）
 const currentRole = computed<UserRole>(() => 
@@ -85,9 +87,8 @@ const departmentOptions = computed(() => {
 
 // 从 store 计算仪表盘数据
 const dashboardData = computed<DashboardData>(() => {
-  const indicators = dashboardStore.filteredIndicators.length > 0 
-    ? dashboardStore.filteredIndicators 
-    : strategicStore.indicators
+  // 使用 visibleIndicators（已按角色和年份过滤）
+  const indicators = dashboardStore.visibleIndicators
   const totalIndicators = indicators.length
   const completedIndicators = indicators.filter(i => i.progress >= 100).length
   
@@ -274,6 +275,22 @@ const handleExport = () => {
 
 // 桑基图节点点击
 const handleSankeyNodeClick = (nodeName: string) => {
+  const authStore = useAuthStore()
+  const userRole = authStore.user?.role
+  
+  // 职能部门不能点击上级部门（战略发展部）
+  if (userRole === 'functional_dept' && nodeName === '战略发展部') {
+    return
+  }
+  
+  // 二级学院不能点击上级部门（战略发展部和职能部门）
+  if (userRole === 'secondary_college') {
+    const functionalDepts = getAllFunctionalDepartments()
+    if (nodeName === '战略发展部' || functionalDepts.includes(nodeName)) {
+      return
+    }
+  }
+  
   const isCollege = isSecondaryCollege(nodeName)
   dashboardStore.drillDownToDepartment(nodeName, isCollege ? 'college' : 'functional')
 }
