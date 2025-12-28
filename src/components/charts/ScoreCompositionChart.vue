@@ -5,6 +5,7 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { getColorByIndex, getGradientColor } from '@/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
@@ -63,10 +64,22 @@ const chartOption = computed(() => ({
         }
       },
       labelLine: { show: false },
-      data: [
-        { value: props.basicScore, name: '基础性指标', itemStyle: { color: '#409EFF' } },
-        { value: props.developmentScore, name: '发展性指标', itemStyle: { color: '#67C23A' } }
-      ]
+        data: [
+          { 
+            value: props.basicScore, 
+            name: '基础性指标', 
+            itemStyle: { 
+              color: getGradientColor('#409EFF', '#409EFFCC') 
+            } 
+          },
+          { 
+            value: props.developmentScore, 
+            name: '发展性指标', 
+            itemStyle: { 
+              color: getGradientColor('#67C23A', '#67C23ACC') 
+            } 
+          }
+        ]
     }
   ],
   graphic: {

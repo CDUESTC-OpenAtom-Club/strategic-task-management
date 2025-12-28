@@ -6,6 +6,8 @@ import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
+import { getColorByIndex, getGradientColor } from '@/utils/colors'
+
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
 const props = defineProps<{
@@ -66,11 +68,29 @@ const chartOption = computed(() => ({
         }
       },
       labelLine: { show: false },
-      data: [
-        { value: props.severe, name: '严重预警', itemStyle: { color: '#F56C6C' } },
-        { value: props.moderate, name: '中度预警', itemStyle: { color: '#E6A23C' } },
-        { value: props.normal, name: '正常', itemStyle: { color: '#67C23A' } }
-      ]
+        data: [
+          { 
+            value: props.severe, 
+            name: '严重预警', 
+            itemStyle: { 
+              color: getGradientColor('#F56C6C', '#F56C6CCC') 
+            } 
+          },
+          { 
+            value: props.moderate, 
+            name: '中度预警', 
+            itemStyle: { 
+              color: getGradientColor('#E6A23C', '#E6A23CCC') 
+            } 
+          },
+          { 
+            value: props.normal, 
+            name: '正常', 
+            itemStyle: { 
+              color: getGradientColor('#67C23A', '#67C23ACC') 
+            } 
+          }
+        ]
     }
   ],
   graphic: {

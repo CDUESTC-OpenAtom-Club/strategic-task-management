@@ -6,7 +6,7 @@ import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, TitleComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { SourcePieData } from '@/types'
-import { getColorByIndex } from '@/utils/colors'
+import { getColorByIndex, getGradientColor } from '@/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, TitleComponent, GraphicComponent, CanvasRenderer])
 
@@ -101,13 +101,16 @@ const chartOption = computed(() => ({
     labelLine: {
       show: false
     },
-    data: props.data.map((item, index) => ({
-      value: item.value,
-      name: item.name,
-      itemStyle: {
-        color: getColorByIndex(index)
+    data: props.data.map((item, index) => {
+      const color = getColorByIndex(index)
+      return {
+        value: item.value,
+        name: item.name,
+        itemStyle: {
+          color: getGradientColor(color, `${color}CC`) // 使用渐变色提升质感
+        }
       }
-    }))
+    })
   }],
   graphic: {
     type: 'group',
@@ -137,8 +140,7 @@ const chartOption = computed(() => ({
       }
     ]
   }
-})),
-
+})
 
 // 处理图表点击事件
 const handleChartClick = (params: any) => {
