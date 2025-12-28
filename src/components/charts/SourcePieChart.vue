@@ -135,12 +135,12 @@ const chartOption = computed(() => ({
         style: {
           fill: '#303133',
           text: totalTasks.value,
-          font: 'bold 30px "DIN Alternate", "Helvetica Neue", sans-serif'
+            font: 'bold 24px "DIN Alternate", "Helvetica Neue", sans-serif'
         }
       }
     ]
   }
-})
+}))
 
 // 处理图表点击事件
 const handleChartClick = (params: any) => {

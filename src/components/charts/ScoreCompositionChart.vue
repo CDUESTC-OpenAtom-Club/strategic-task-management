@@ -105,7 +105,7 @@ const chartOption = computed(() => ({
         style: {
           fill: '#303133',
           text: totalScore.value,
-          font: 'bold 30px "DIN Alternate", "Helvetica Neue", sans-serif'
+            font: 'bold 24px "DIN Alternate", "Helvetica Neue", sans-serif'
         }
       }
     ]
