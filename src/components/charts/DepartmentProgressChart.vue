@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import type { DepartmentProgress } from '@/types'
+import { isCollege } from '@/config/departments'
 
 const props = defineProps<{
   departments: DepartmentProgress[]
@@ -64,6 +65,11 @@ const getStatusColor = (status: string) => {
     default: return '#409EFF'
   }
 }
+
+// 根据部门类型获取显示文字（职能部门显示"任务"，学院显示"指标"）
+const getItemLabel = (deptName: string) => {
+  return isCollege(deptName) ? '个指标' : '个任务'
+}
 </script>
 
 <template>
@@ -88,7 +94,7 @@ const getStatusColor = (status: string) => {
         <span class="dept-name">{{ item.dept }}</span>
         <div class="dept-stats">
           <el-tag size="small" :type="item.alertCount > 0 ? 'danger' : 'info'" effect="plain">
-            {{ item.totalIndicators }}个指标
+            {{ item.totalIndicators }}{{ getItemLabel(item.dept) }}
           </el-tag>
           <span class="dept-score" :style="{ color: getStatusColor(item.status) }">
             {{ item.score }}分
