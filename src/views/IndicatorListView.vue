@@ -187,11 +187,8 @@ const indicators = computed(() => {
 const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
   const dataList = indicators.value
 
-  // 批量操作列的索引：添加了说明列后，如果显示责任部门列则是8，否则是7
-  const batchColumnIndex = showResponsibleDeptColumn.value ? 8 : 7
-
-  // 战略任务列（第0列）和批量操作列合并
-  if (columnIndex === 0 || columnIndex === batchColumnIndex) {
+  // 只有战略任务列（第0列）需要合并
+  if (columnIndex === 0) {
     const currentTask = row.taskContent || '未关联任务'
 
     // 计算当前任务在列表中的起始位置
@@ -311,6 +308,97 @@ const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIn
       // 或者改回 draft？用户说“撤回”，通常是回到可编辑状态。
       // 在这里我们改回 none，但保留 pendingProgress 等字段，这样“填报”按钮会显示这些值。
       // 实际上 updateIndicator 会合并对象。
+      strategicStore.updateIndicator(row.id.toString(), {
+        progressApprovalStatus: 'none'
+      })
+
+      // 添加审计日志
+      strategicStore.addStatusAuditEntry(row.id.toString(), {
+        operator: authStore.userName || 'unknown',
+        operatorName: authStore.userName || '未知用户',
+        operatorDept: authStore.userDepartment || '未知部门',
+        action: 'revoke',
+        comment: '批量撤回进度填报',
+        previousStatus: 'pending',
+        newStatus: 'none'
+      })
+    })
+
+    ElMessage.info(`已撤回${pendingRows.length}项指标提交`)
+  })
+}
+
+// 全局批量提交（职能部门/二级学院专用）
+const handleBatchSubmitAll = () => {
+  // 找出所有待提交（draft）或已驳回（rejected）的指标
+  const pendingRows = indicators.value.filter(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')
+  
+  if (pendingRows.length === 0) {
+    ElMessage.warning('没有可提交的指标')
+    return
+  }
+
+  const indicatorNames = pendingRows.map(ind => ind.name).join('、')
+
+  ElMessageBox.confirm(
+    `确认批量提交 ${pendingRows.length} 个指标的进度填报？\n\n${indicatorNames}`,
+    '批量提交确认',
+    {
+      confirmButtonText: '确定提交',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    pendingRows.forEach(row => {
+      // 提交：将状态改为 pending，并将 pendingProgress 等数据提交审批
+      strategicStore.updateIndicator(row.id.toString(), {
+        progressApprovalStatus: 'pending',
+        progress: row.pendingProgress || row.progress || 0,
+        progressComment: row.pendingProgressComment || row.progressComment || ''
+      })
+
+      // 添加审计日志
+      strategicStore.addStatusAuditEntry(row.id.toString(), {
+        operator: authStore.userName || 'unknown',
+        operatorName: authStore.userName || '未知用户',
+        operatorDept: authStore.userDepartment || '未知部门',
+        action: 'submit',
+        comment: '批量提交进度填报',
+        previousStatus: row.progressApprovalStatus,
+        newStatus: 'pending',
+        previousProgress: row.progress,
+        newProgress: row.pendingProgress,
+        progressComment: row.pendingProgressComment
+      })
+    })
+
+    ElMessage.success(`成功提交${pendingRows.length}项指标进度`)
+  })
+}
+
+// 全局批量撤回（职能部门/二级学院专用）
+const handleBatchRevokeAll = () => {
+  // 找出所有待审批（pending）的指标
+  const pendingRows = indicators.value.filter(r => r.progressApprovalStatus === 'pending')
+  
+  if (pendingRows.length === 0) {
+    ElMessage.warning('没有待审批的指标')
+    return
+  }
+
+  const indicatorNames = pendingRows.map(ind => ind.name).join('、')
+
+  ElMessageBox.confirm(
+    `确认批量撤回 ${pendingRows.length} 个待审批指标？\n\n${indicatorNames}`,
+    '批量撤回确认',
+    {
+      confirmButtonText: '确认撤回',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    pendingRows.forEach(row => {
+      // 撤回：将状态改回 none
       strategicStore.updateIndicator(row.id.toString(), {
         progressApprovalStatus: 'none'
       })
@@ -814,7 +902,34 @@ const handleRevokeReport = (row: StrategicIndicator) => {
       <div class="table-card card-base card-animate" style="animation-delay: 0.1s;">
         <div class="card-header">
           <span class="card-title">指标列表</span>
-          <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
+          <div class="header-actions">
+            <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
+            <!-- 职能部门/二级学院的批量操作按钮 -->
+            <template v-if="!isStrategicDept">
+              <!-- 如果有待审批的指标，显示撤回按钮 -->
+              <el-button 
+                v-if="indicators.some(r => r.progressApprovalStatus === 'pending')"
+                type="warning" 
+                size="small" 
+                :disabled="timeContext.isReadOnly"
+                @click="handleBatchRevokeAll"
+              >
+                <el-icon><RefreshLeft /></el-icon>
+                批量撤回
+              </el-button>
+              <!-- 否则显示提交按钮 -->
+              <el-button 
+                v-else
+                type="success" 
+                size="small" 
+                :disabled="timeContext.isReadOnly || !indicators.some(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')"
+                @click="handleBatchSubmitAll"
+              >
+                  <el-icon><Upload /></el-icon>
+                  提交
+                </el-button>
+            </template>
+          </div>
         </div>
         <div class="card-body table-body">
           <div class="table-container">
@@ -945,38 +1060,6 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                   </div>
                 </template>
               </el-table-column>
-                <el-table-column label="批量" width="75" align="center" class-name="batch-column">
-                  <template #default="{ row }">
-                    <div class="batch-cell">
-                      <!-- 战略发展部显示分解按钮 -->
-                      <el-button 
-                        v-if="isStrategicDept" 
-                        type="primary" 
-                        size="small" 
-                        @click="handleBatchDistributeByTask(getTaskGroup(row))"
-                      >分解</el-button>
-                      <!-- 职能部门/二级学院显示提交/撤回按钮 -->
-                      <template v-else>
-                        <!-- 如果该组下有待审批的指标，且没有待提交或被驳回的指标，则显示撤回 -->
-                        <el-button 
-                          v-if="getTaskGroup(row).rows.some(r => r.progressApprovalStatus === 'pending') && !getTaskGroup(row).rows.some(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')"
-                          type="warning" 
-                          size="small" 
-                          :disabled="timeContext.isReadOnly"
-                          @click="handleBatchRevokeByTask(getTaskGroup(row))"
-                        >撤回</el-button>
-                        <!-- 否则显示提交 -->
-                        <el-button 
-                          v-else 
-                          type="success" 
-                          size="small" 
-                          :disabled="timeContext.isReadOnly || !getTaskGroup(row).rows.some(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')"
-                          @click="handleBatchFillByTask(getTaskGroup(row))"
-                        >提交</el-button>
-                      </template>
-                    </div>
-                  </template>
-                </el-table-column>
 
             </el-table>
           </div>
@@ -1358,6 +1441,12 @@ const handleRevokeReport = (row: StrategicIndicator) => {
   color: var(--text-main);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
 .indicator-count {
   font-size: 13px;
   color: var(--text-secondary);
@@ -1385,15 +1474,6 @@ const handleRevokeReport = (row: StrategicIndicator) => {
 /* 确保表格单元格内容不被截断 */
 .unified-table :deep(.el-table__cell .cell) {
   overflow: visible;
-}
-
-/* 批量操作列样式 */
-.unified-table :deep(.batch-column) {
-  background-color: var(--bg-page) !important;
-}
-
-.unified-table :deep(.batch-column) .el-button {
-  font-size: 12px;
 }
 
 /* ========================================
@@ -1527,14 +1607,6 @@ const handleRevokeReport = (row: StrategicIndicator) => {
   gap: 8px;
   width: 100%;
   white-space: nowrap;
-}
-
-/* 批量单元格样式 */
-.batch-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
 }
 
 /* ========================================
