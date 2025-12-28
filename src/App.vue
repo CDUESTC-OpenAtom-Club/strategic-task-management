@@ -12,7 +12,6 @@ import {
 import YearSelector from '@/components/common/YearSelector.vue'
 import DashboardView from './views/DashboardView.vue'
 import IndicatorListView from './views/IndicatorListView.vue'
-import ReportingView from './views/ReportingView.vue'
 import StrategicTaskView from './views/StrategicTaskView.vue'
 import IndicatorDistributionView from './views/IndicatorDistributionView.vue'
 import LoginView from './views/LoginView.vue'
