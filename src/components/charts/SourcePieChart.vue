@@ -76,26 +76,28 @@ const chartOption = computed(() => ({
     radius: ['40%', '65%'],
     center: ['40%', '50%'],
     avoidLabelOverlap: false,
-    itemStyle: {
-      borderRadius: 6,
-      borderColor: '#fff',
-      borderWidth: 2
-    },
-    label: {
-      show: false
-    },
-    emphasis: {
-      label: {
-        show: true,
-        fontSize: 14,
-        fontWeight: 'bold'
-      },
       itemStyle: {
+        borderRadius: 8,
+        borderColor: '#fff',
+        borderWidth: 4,
         shadowBlur: 10,
-        shadowOffsetX: 0,
-        shadowColor: 'rgba(0, 0, 0, 0.3)'
-      }
-    },
+        shadowColor: 'rgba(0, 0, 0, 0.05)'
+      },
+      label: {
+        show: false,
+        position: 'center'
+      },
+      emphasis: {
+        scale: true,
+        scaleSize: 10,
+        itemStyle: {
+          shadowBlur: 20,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.2)',
+          borderRadius: 12
+        }
+      },
+
     labelLine: {
       show: false
     },
@@ -108,20 +110,35 @@ const chartOption = computed(() => ({
     }))
   }],
   graphic: {
-    type: 'text',
-    left: 'center',
-    top: 'center',
-    style: {
-      text: `总计\n${totalTasks.value}`,
-      textAlign: 'center',
-      fill: '#333',
-      fontSize: 18,
-      fontWeight: 'bold',
-      lineHeight: 24
-    },
-    z: 100
+    type: 'group',
+    left: '40%',
+    top: '50%',
+    bounding: 'raw',
+    children: [
+      {
+        type: 'text',
+        left: 'center',
+        top: -20,
+        style: {
+          fill: '#909399',
+          text: '总计',
+          font: '14px "Microsoft YaHei", sans-serif'
+        }
+      },
+      {
+        type: 'text',
+        left: 'center',
+        top: 5,
+        style: {
+          fill: '#303133',
+          text: totalTasks.value,
+          font: 'bold 30px "DIN Alternate", "Helvetica Neue", sans-serif'
+        }
+      }
+    ]
   }
-}))
+})),
+
 
 // 处理图表点击事件
 const handleChartClick = (params: any) => {

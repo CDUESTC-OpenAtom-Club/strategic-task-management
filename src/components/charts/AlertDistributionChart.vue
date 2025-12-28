@@ -48,14 +48,22 @@ const chartOption = computed(() => ({
       center: ['35%', '50%'],
       avoidLabelOverlap: false,
       itemStyle: {
-        borderRadius: 4,
+        borderRadius: 8,
         borderColor: '#fff',
-        borderWidth: 2
+        borderWidth: 4,
+        shadowBlur: 10,
+        shadowColor: 'rgba(0, 0, 0, 0.05)'
       },
       label: { show: false },
       emphasis: {
-        label: { show: true, fontSize: 12, fontWeight: 'bold' },
-        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.2)' }
+        scale: true,
+        scaleSize: 10,
+        itemStyle: {
+          shadowBlur: 20,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.2)',
+          borderRadius: 12
+        }
       },
       labelLine: { show: false },
       data: [
@@ -64,7 +72,35 @@ const chartOption = computed(() => ({
         { value: props.normal, name: '正常', itemStyle: { color: '#67C23A' } }
       ]
     }
-  ]
+  ],
+  graphic: {
+    type: 'group',
+    left: '35%',
+    top: '50%',
+    bounding: 'raw',
+    children: [
+      {
+        type: 'text',
+        left: 'center',
+        top: -20,
+        style: {
+          fill: '#909399',
+          text: '总计',
+          font: '14px "Microsoft YaHei", sans-serif'
+        }
+      },
+      {
+        type: 'text',
+        left: 'center',
+        top: 5,
+        style: {
+          fill: '#303133',
+          text: total.value,
+          font: 'bold 30px "DIN Alternate", "Helvetica Neue", sans-serif'
+        }
+      }
+    ]
+  }
 }))
 
 const handleChartClick = (params: any) => {
@@ -86,9 +122,6 @@ const handleChartClick = (params: any) => {
       style="height: 200px" 
       @click="handleChartClick"
     />
-    <div class="chart-summary">
-      <span class="total-label">共 {{ total }} 个指标</span>
-    </div>
   </div>
 </template>
 
@@ -96,15 +129,5 @@ const handleChartClick = (params: any) => {
 .alert-distribution-chart {
   width: 100%;
   position: relative;
-}
-
-.chart-summary {
-  text-align: center;
-  margin-top: -8px;
-}
-
-.total-label {
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 </style>

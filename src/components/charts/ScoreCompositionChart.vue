@@ -45,14 +45,22 @@ const chartOption = computed(() => ({
       center: ['35%', '50%'],
       avoidLabelOverlap: false,
       itemStyle: {
-        borderRadius: 4,
+        borderRadius: 8,
         borderColor: '#fff',
-        borderWidth: 2
+        borderWidth: 4,
+        shadowBlur: 10,
+        shadowColor: 'rgba(0, 0, 0, 0.05)'
       },
       label: { show: false },
       emphasis: {
-        label: { show: true, fontSize: 12, fontWeight: 'bold' },
-        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.2)' }
+        scale: true,
+        scaleSize: 10,
+        itemStyle: {
+          shadowBlur: 20,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.2)',
+          borderRadius: 12
+        }
       },
       labelLine: { show: false },
       data: [
@@ -60,16 +68,41 @@ const chartOption = computed(() => ({
         { value: props.developmentScore, name: '发展性指标', itemStyle: { color: '#67C23A' } }
       ]
     }
-  ]
+  ],
+  graphic: {
+    type: 'group',
+    left: '35%',
+    top: '50%',
+    bounding: 'raw',
+    children: [
+      {
+        type: 'text',
+        left: 'center',
+        top: -20,
+        style: {
+          fill: '#909399',
+          text: '总分',
+          font: '14px "Microsoft YaHei", sans-serif'
+        }
+      },
+      {
+        type: 'text',
+        left: 'center',
+        top: 5,
+        style: {
+          fill: '#303133',
+          text: totalScore.value,
+          font: 'bold 30px "DIN Alternate", "Helvetica Neue", sans-serif'
+        }
+      }
+    ]
+  }
 }))
 </script>
 
 <template>
   <div class="score-composition-chart">
     <v-chart :option="chartOption" autoresize style="height: 200px" />
-    <div class="chart-summary">
-      <span class="total-label">总得分 {{ totalScore }} / {{ maxTotalScore }} 分</span>
-    </div>
   </div>
 </template>
 
@@ -77,15 +110,5 @@ const chartOption = computed(() => ({
 .score-composition-chart {
   width: 100%;
   position: relative;
-}
-
-.chart-summary {
-  text-align: center;
-  margin-top: -8px;
-}
-
-.total-label {
-  font-size: 12px;
-  color: var(--text-secondary);
 }
 </style>
