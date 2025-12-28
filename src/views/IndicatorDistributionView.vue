@@ -1018,7 +1018,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 </script>
 
 <template>
-  <div class="distribution-view">
+  <div class="distribution-view page-fade-enter">
     <!-- 只读提示 -->
     <el-alert
       v-if="isStrategicDept"
@@ -1041,7 +1041,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
     <div class="distribution-layout">
       <!-- 左侧：侧边栏（战略任务/学院切换） -->
-      <div class="strategic-panel">
+      <div class="strategic-panel card-animate">
         <div class="panel-header">
           <el-radio-group v-model="sidebarMode" size="small" @change="() => { selectedTask = null; selectedCollege = null; searchKeyword = '' }">
             <el-radio-button value="task">战略任务</el-radio-button>
@@ -1105,7 +1105,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       <!-- 右侧：指标表格 -->
       <div class="distribution-panel">
         <!-- 战略任务模式：选中任务时显示 -->
-        <div v-if="sidebarMode === 'task' && selectedTask" class="table-card card-base">
+        <div v-if="sidebarMode === 'task' && selectedTask" class="table-card card-base card-animate" style="animation-delay: 0.1s;">
           <!-- 表头 -->
           <div class="card-header">
             <div class="header-left">
@@ -1571,7 +1571,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
         </div>
 
         <!-- 学院模式：选中学院时显示 -->
-        <div v-else-if="sidebarMode === 'college' && selectedCollege" class="table-card card-base">
+        <div v-else-if="sidebarMode === 'college' && selectedCollege" class="table-card card-base card-animate" style="animation-delay: 0.1s;">
           <!-- 表头 -->
           <div class="card-header">
             <div class="header-left">
@@ -2904,6 +2904,40 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   .distribution-panel {
     flex: 1;
     min-height: 400px;
+  }
+}
+
+/* ========================================
+   动画效果 - 统一过渡动画
+   ======================================== */
+.page-fade-enter {
+  animation: fadeIn var(--transition-slow, 0.6s) ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-animate {
+  animation: slideUp 0.4s ease-out;
+  animation-fill-mode: both;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>
