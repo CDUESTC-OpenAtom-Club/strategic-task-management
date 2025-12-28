@@ -51,7 +51,7 @@ export interface StrategicTask {
 }
 
 // 进度审批状态类型
-export type ProgressApprovalStatus = 'none' | 'pending' | 'approved' | 'rejected'
+export type ProgressApprovalStatus = 'none' | 'draft' | 'pending' | 'approved' | 'rejected'
 
 // Strategic Indicator Types (Enhanced)
 export interface StrategicIndicator {

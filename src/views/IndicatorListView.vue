@@ -600,6 +600,14 @@ const reportForm = ref({
   attachments: [] as string[]
 })
 
+// 获取文件名
+const getFileName = (url: string) => {
+  if (!url) return ''
+  const parts = url.split('/')
+  const fileName = parts[parts.length - 1]
+  return fileName.split('?')[0]
+}
+
 // 打开填报弹窗
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
@@ -623,7 +631,7 @@ const closeReportDialog = () => {
   }
 }
 
-// 提交进度填报
+// 保存进度填报（设为待提交状态）
 const submitProgressReport = () => {
   if (!currentReportIndicator.value) return
 
@@ -648,39 +656,16 @@ const submitProgressReport = () => {
     return
   }
 
-  ElMessageBox.confirm(
-    `确认提交进度填报？\n\n指标：${indicator.name}\n当前进度：${currentProgress}%\n填报进度：${reportForm.value.newProgress}%\n\n提交后将等待上级审批`,
-    '提交确认',
-    {
-      confirmButtonText: '确认提交',
-      cancelButtonText: '取消',
-      type: 'info'
-    }
-  ).then(() => {
-    // 更新指标的待审批状态
-    strategicStore.updateIndicator(indicator.id.toString(), {
-      progressApprovalStatus: 'pending',
-      pendingProgress: reportForm.value.newProgress,
-      pendingRemark: reportForm.value.remark,
-      pendingAttachments: reportForm.value.attachments
-    })
-
-    // 添加审计日志
-    strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-      operator: authStore.userName || 'unknown',
-      operatorName: authStore.userName || '未知用户',
-      operatorDept: authStore.userDepartment || '未知部门',
-      action: 'submit',
-      comment: reportForm.value.remark,
-      previousProgress: currentProgress,
-      newProgress: reportForm.value.newProgress,
-      previousStatus: 'active',
-      newStatus: 'pending_approval'
-    })
-
-    ElMessage.success('进度填报已提交，等待上级审批')
-    closeReportDialog()
+  // 直接保存，设为待提交状态
+  strategicStore.updateIndicator(indicator.id.toString(), {
+    progressApprovalStatus: 'draft',  // 待提交状态
+    pendingProgress: reportForm.value.newProgress,
+    pendingRemark: reportForm.value.remark,
+    pendingAttachments: reportForm.value.attachments
   })
+
+  ElMessage.success('进度已保存，可在批量操作中提交')
+  closeReportDialog()
 }
 
 // 撤回进度填报
@@ -864,7 +849,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
               <el-table-column prop="status" label="状态" width="85" align="center">
                 <template #default="{ row }">
                   <div class="status-cell">
-                    <!-- 优先显示进度审批状态 -->
+                    <!-- 优先显示进度审批状态（draft状态不显示，仍显示原状态） -->
                     <el-tag v-if="row.progressApprovalStatus === 'pending'" type="warning" size="small">待审批</el-tag>
                     <el-tag v-else-if="row.progressApprovalStatus === 'rejected'" type="danger" size="small">已驳回</el-tag>
                     <el-tag v-else :type="getStatusTagType(row.status)" size="small">
@@ -877,15 +862,49 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                 <template #default="{ row }">
                   <div class="action-cell">
                     <el-button link type="primary" size="small" @click="handleViewDetail(row)">查看</el-button>
-                    <!-- 职能部门/二级学院显示填报按钮（历史年份禁用） -->
-                    <el-button 
-                      v-if="!isStrategicDept" 
-                      link 
-                      type="success" 
-                      size="small" 
-                      :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
-                      @click="handleOpenReportDialog(row)"
-                    >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
+                      <!-- 职能部门/二级学院显示填报按钮（历史年份禁用，待审批时禁用） -->
+                      <el-tooltip
+                        v-if="!isStrategicDept && (row.pendingProgress !== undefined || row.pendingRemark || (row.pendingAttachments && row.pendingAttachments.length > 0))"
+                        placement="top"
+                        effect="light"
+                        popper-class="report-tooltip"
+                      >
+                        <template #content>
+                          <div class="report-tooltip-content">
+                            <div v-if="row.pendingProgress !== undefined" class="tooltip-item">
+                              <span class="tooltip-label">上次填报进度：</span>
+                              <span class="tooltip-value highlight">{{ row.pendingProgress }}%</span>
+                            </div>
+                            <div v-if="row.pendingRemark" class="tooltip-item">
+                              <span class="tooltip-label">进度说明：</span>
+                              <div class="tooltip-value remark">{{ row.pendingRemark }}</div>
+                            </div>
+                            <div v-if="row.pendingAttachments && row.pendingAttachments.length > 0" class="tooltip-item">
+                              <span class="tooltip-label">附件：</span>
+                              <div class="tooltip-files">
+                                <div v-for="(file, idx) in row.pendingAttachments" :key="idx" class="file-name">
+                                  {{ getFileName(file) }}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </template>
+                        <el-button 
+                          link 
+                          type="success" 
+                          size="small" 
+                          :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
+                          @click="handleOpenReportDialog(row)"
+                        >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
+                      </el-tooltip>
+                      <el-button 
+                        v-else-if="!isStrategicDept" 
+                        link 
+                        type="success" 
+                        size="small" 
+                        :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
+                        @click="handleOpenReportDialog(row)"
+                      >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
                     <!-- 职能部门/二级学院在待审批状态下可撤回 -->
                     <el-button 
                       v-if="!isStrategicDept && row.progressApprovalStatus === 'pending'" 
@@ -1173,7 +1192,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
         <!-- 提示信息 -->
         <div class="report-tips">
           <el-alert
-            title="提交后将等待上级审批，审批通过后进度才会更新"
+            title="保存后可在批量操作中统一提交审批"
             type="info"
             :closable="false"
             show-icon
@@ -1183,7 +1202,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
 
       <template #footer>
         <el-button @click="closeReportDialog">取消</el-button>
-        <el-button type="primary" @click="submitProgressReport">提交填报</el-button>
+        <el-button type="primary" @click="submitProgressReport">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -1940,5 +1959,63 @@ const handleRevokeReport = (row: StrategicIndicator) => {
 
 .report-tips :deep(.el-alert) {
   border-radius: var(--radius-sm);
+}
+
+/* 填报提示 Tooltip 样式 */
+.report-tooltip-content {
+  padding: 4px;
+  max-width: 300px;
+}
+
+.tooltip-item {
+  margin-bottom: 8px;
+}
+
+.tooltip-item:last-child {
+  margin-bottom: 0;
+}
+
+.tooltip-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.tooltip-value {
+  font-size: 13px;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+.tooltip-value.highlight {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.tooltip-value.remark {
+  white-space: pre-wrap;
+  line-height: 1.4;
+  background: var(--bg-page);
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.tooltip-files {
+  margin-top: 4px;
+}
+
+.file-name {
+  font-size: 12px;
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.file-name::before {
+  content: "📎";
 }
 </style>

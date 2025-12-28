@@ -583,6 +583,23 @@
       return '所有里程碑已完成'
     }
   }
+
+  // 获取里程碑列表用于tooltip显示
+  interface MilestoneTooltipItem {
+    id: string | number
+    name: string
+    expectedDate: string
+    progress: number
+  }
+  
+  const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipItem[] => {
+    return (indicator.milestones || []).map(m => ({
+      id: m.id || '',
+      name: m.name,
+      expectedDate: m.deadline || '',
+      progress: m.targetProgress || 0
+    }))
+  }
   
   const selectDepartment = (dept: string) => {
     selectedDepartment.value = dept
@@ -1224,6 +1241,45 @@
                       />
                       <span v-else>{{ row.weight }}</span>
                     </span>
+                  </template>
+                </el-table-column>
+                <!-- 目标进度列 -->
+                <el-table-column label="目标进度" width="110" align="center">
+                  <template #default="{ row }">
+                    <el-popover
+                      placement="left"
+                      :width="320"
+                      trigger="hover"
+                      :disabled="!row.milestones?.length"
+                    >
+                      <template #reference>
+                        <div class="milestone-cell">
+                          <span class="milestone-count">
+                            {{ row.milestones?.length || 0 }} 个里程碑
+                          </span>
+                        </div>
+                      </template>
+                      <div class="milestone-popover">
+                        <div class="milestone-popover-title">里程碑列表</div>
+                        <div 
+                          v-for="(ms, idx) in getMilestonesTooltip(row)" 
+                          :key="ms.id"
+                          class="milestone-item"
+                        >
+                          <div class="milestone-item-header">
+                            <span class="milestone-index">{{ idx + 1 }}.</span>
+                            <span class="milestone-name">{{ ms.name || '未命名' }}</span>
+                          </div>
+                          <div class="milestone-item-info">
+                            <span>预期: {{ ms.expectedDate || '未设置' }}</span>
+                            <span>进度: {{ ms.progress }}%</span>
+                          </div>
+                        </div>
+                        <div v-if="!row.milestones?.length" class="milestone-empty">
+                          暂无里程碑
+                        </div>
+                      </div>
+                    </el-popover>
                   </template>
                 </el-table-column>
                 <el-table-column prop="progress" label="进度" width="100" align="center">
@@ -3273,5 +3329,84 @@
     align-items: center;
     justify-content: center;
     width: 100%;
+  }
+
+  /* ========================================
+     目标进度列 - 里程碑样式
+     ======================================== */
+  .milestone-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+  }
+
+  .milestone-cell:hover {
+    background: rgba(44, 82, 130, 0.05);
+  }
+
+  .milestone-count {
+    font-size: 12px;
+    color: var(--color-qualitative, #9333ea);
+    font-weight: 500;
+  }
+
+  /* 里程碑弹出层 */
+  .milestone-popover {
+    padding: 4px 0;
+  }
+
+  .milestone-popover-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main, #1e293b);
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-light, #f1f5f9);
+  }
+
+  .milestone-item {
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--border-light, #f1f5f9);
+  }
+
+  .milestone-item:last-child {
+    border-bottom: none;
+  }
+
+  .milestone-item-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .milestone-index {
+    font-size: 12px;
+    color: var(--text-placeholder, #94a3b8);
+    font-weight: 500;
+  }
+
+  .milestone-name {
+    font-size: 13px;
+    color: var(--text-main, #1e293b);
+    font-weight: 500;
+  }
+
+  .milestone-item-info {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-secondary, #64748b);
+    padding-left: 18px;
+  }
+
+  .milestone-empty {
+    font-size: 12px;
+    color: var(--text-placeholder, #94a3b8);
+    text-align: center;
+    padding: 12px 0;
   }
   </style>
