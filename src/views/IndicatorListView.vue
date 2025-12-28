@@ -242,10 +242,18 @@ const handleBatchDistributeByTask = (group: { taskContent: string; rows: Strateg
 
 // 按任务组批量提交（职能部门/二级学院专用）
 const handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
-  const indicatorNames = group.rows.map(ind => ind.name).join('、')
+  // 找出所有待提交（draft）或已驳回（rejected）的指标
+  const pendingRows = group.rows.filter(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')
+  
+  if (pendingRows.length === 0) {
+    ElMessage.warning('当前没有待提交的进度')
+    return
+  }
+
+  const indicatorNames = pendingRows.map(ind => ind.name).join('、')
 
   ElMessageBox.confirm(
-    `确认对任务 "${group.taskContent}" 下的 ${group.rows.length} 个指标进行批量提交？\n\n${indicatorNames}`,
+    `确认对任务 "${group.taskContent}" 下的 ${pendingRows.length} 个指标进行批量提交？\n\n${indicatorNames}`,
     '批量提交确认',
     {
       confirmButtonText: '确定提交',
@@ -253,8 +261,73 @@ const handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndi
       type: 'info'
     }
   ).then(() => {
-    // TODO: 打开批量提交对话框或跳转到提交页面
-    ElMessage.success(`已选择${group.rows.length}项指标进行提交`)
+    pendingRows.forEach(row => {
+      // 更新指标状态为待审批
+      strategicStore.updateIndicator(row.id.toString(), {
+        progressApprovalStatus: 'pending'
+      })
+
+      // 添加审计日志
+      strategicStore.addStatusAuditEntry(row.id.toString(), {
+        operator: authStore.userName || 'unknown',
+        operatorName: authStore.userName || '未知用户',
+        operatorDept: authStore.userDepartment || '未知部门',
+        action: 'submit',
+        comment: '批量提交进度填报',
+        previousProgress: row.progress,
+        newProgress: row.pendingProgress,
+        previousStatus: row.progressApprovalStatus,
+        newStatus: 'pending'
+      })
+    })
+
+    ElMessage.success(`成功提交${pendingRows.length}项指标进度`)
+  })
+}
+
+// 按任务组批量撤回（职能部门/二级学院专用）
+const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+  // 找出所有待审批（pending）的指标
+  const pendingRows = group.rows.filter(r => r.progressApprovalStatus === 'pending')
+  
+  if (pendingRows.length === 0) {
+    ElMessage.warning('该任务下没有待审批的指标')
+    return
+  }
+
+  const indicatorNames = pendingRows.map(ind => ind.name).join('、')
+
+  ElMessageBox.confirm(
+    `确认撤回任务 "${group.taskContent}" 下的 ${pendingRows.length} 个待审批指标？\n\n${indicatorNames}`,
+    '批量撤回确认',
+    {
+      confirmButtonText: '确认撤回',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    pendingRows.forEach(row => {
+      // 撤回：将状态改回 none，并保留填报数据供修改
+      // 或者改回 draft？用户说“撤回”，通常是回到可编辑状态。
+      // 在这里我们改回 none，但保留 pendingProgress 等字段，这样“填报”按钮会显示这些值。
+      // 实际上 updateIndicator 会合并对象。
+      strategicStore.updateIndicator(row.id.toString(), {
+        progressApprovalStatus: 'none'
+      })
+
+      // 添加审计日志
+      strategicStore.addStatusAuditEntry(row.id.toString(), {
+        operator: authStore.userName || 'unknown',
+        operatorName: authStore.userName || '未知用户',
+        operatorDept: authStore.userDepartment || '未知部门',
+        action: 'revoke',
+        comment: '批量撤回进度填报',
+        previousStatus: 'pending',
+        newStatus: 'none'
+      })
+    })
+
+    ElMessage.info(`已撤回${pendingRows.length}项指标提交`)
   })
 }
 
@@ -600,14 +673,6 @@ const reportForm = ref({
   attachments: [] as string[]
 })
 
-// 获取文件名
-const getFileName = (url: string) => {
-  if (!url) return ''
-  const parts = url.split('/')
-  const fileName = parts[parts.length - 1]
-  return fileName.split('?')[0]
-}
-
 // 打开填报弹窗
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
@@ -681,10 +746,7 @@ const handleRevokeReport = (row: StrategicIndicator) => {
   ).then(() => {
     // 清除待审批状态
     strategicStore.updateIndicator(row.id.toString(), {
-      progressApprovalStatus: 'none',
-      pendingProgress: undefined,
-      pendingRemark: undefined,
-      pendingAttachments: undefined
+      progressApprovalStatus: 'none'
     })
 
     // 添加审计日志
@@ -694,8 +756,8 @@ const handleRevokeReport = (row: StrategicIndicator) => {
       operatorDept: authStore.userDepartment || '未知部门',
       action: 'revoke',
       comment: '撤回进度填报',
-      previousStatus: 'pending_approval',
-      newStatus: 'active'
+      previousStatus: 'pending',
+      newStatus: 'none'
     })
 
     ElMessage.info('已撤回进度填报')
@@ -862,49 +924,15 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                 <template #default="{ row }">
                   <div class="action-cell">
                     <el-button link type="primary" size="small" @click="handleViewDetail(row)">查看</el-button>
-                      <!-- 职能部门/二级学院显示填报按钮（历史年份禁用，待审批时禁用） -->
-                      <el-tooltip
-                        v-if="!isStrategicDept && (row.pendingProgress !== undefined || row.pendingRemark || (row.pendingAttachments && row.pendingAttachments.length > 0))"
-                        placement="top"
-                        effect="light"
-                        popper-class="report-tooltip"
-                      >
-                        <template #content>
-                          <div class="report-tooltip-content">
-                            <div v-if="row.pendingProgress !== undefined" class="tooltip-item">
-                              <span class="tooltip-label">上次填报进度：</span>
-                              <span class="tooltip-value highlight">{{ row.pendingProgress }}%</span>
-                            </div>
-                            <div v-if="row.pendingRemark" class="tooltip-item">
-                              <span class="tooltip-label">进度说明：</span>
-                              <div class="tooltip-value remark">{{ row.pendingRemark }}</div>
-                            </div>
-                            <div v-if="row.pendingAttachments && row.pendingAttachments.length > 0" class="tooltip-item">
-                              <span class="tooltip-label">附件：</span>
-                              <div class="tooltip-files">
-                                <div v-for="(file, idx) in row.pendingAttachments" :key="idx" class="file-name">
-                                  {{ getFileName(file) }}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </template>
-                        <el-button 
-                          link 
-                          type="success" 
-                          size="small" 
-                          :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
-                          @click="handleOpenReportDialog(row)"
-                        >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
-                      </el-tooltip>
-                      <el-button 
-                        v-else-if="!isStrategicDept" 
-                        link 
-                        type="success" 
-                        size="small" 
-                        :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
-                        @click="handleOpenReportDialog(row)"
-                      >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
+                    <!-- 职能部门/二级学院显示填报按钮（历史年份禁用，待审批时禁用） -->
+                    <el-button 
+                      v-if="!isStrategicDept" 
+                      link 
+                      type="success" 
+                      size="small" 
+                      :disabled="row.progressApprovalStatus === 'pending' || timeContext.isReadOnly"
+                      @click="handleOpenReportDialog(row)"
+                    >{{ row.progressApprovalStatus === 'rejected' ? '重新填报' : '填报' }}</el-button>
                     <!-- 职能部门/二级学院在待审批状态下可撤回 -->
                     <el-button 
                       v-if="!isStrategicDept && row.progressApprovalStatus === 'pending'" 
@@ -917,27 +945,39 @@ const handleRevokeReport = (row: StrategicIndicator) => {
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column label="批量" width="75" align="center" class-name="batch-column">
-                <template #default="{ row }">
-                  <div class="batch-cell">
-                    <!-- 战略发展部显示分解按钮 -->
-                    <el-button 
-                      v-if="isStrategicDept" 
-                      type="primary" 
-                      size="small" 
-                      @click="handleBatchDistributeByTask(getTaskGroup(row))"
-                    >分解</el-button>
-                    <!-- 职能部门/二级学院显示填报按钮（历史年份禁用） -->
-                    <el-button 
-                      v-else 
-                      type="success" 
-                      size="small" 
-                      :disabled="timeContext.isReadOnly"
-                      @click="handleBatchFillByTask(getTaskGroup(row))"
-                    >提交</el-button>
-                  </div>
-                </template>
-              </el-table-column>
+                <el-table-column label="批量" width="75" align="center" class-name="batch-column">
+                  <template #default="{ row }">
+                    <div class="batch-cell">
+                      <!-- 战略发展部显示分解按钮 -->
+                      <el-button 
+                        v-if="isStrategicDept" 
+                        type="primary" 
+                        size="small" 
+                        @click="handleBatchDistributeByTask(getTaskGroup(row))"
+                      >分解</el-button>
+                      <!-- 职能部门/二级学院显示提交/撤回按钮 -->
+                      <template v-else>
+                        <!-- 如果该组下有待审批的指标，且没有待提交或被驳回的指标，则显示撤回 -->
+                        <el-button 
+                          v-if="getTaskGroup(row).rows.some(r => r.progressApprovalStatus === 'pending') && !getTaskGroup(row).rows.some(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')"
+                          type="warning" 
+                          size="small" 
+                          :disabled="timeContext.isReadOnly"
+                          @click="handleBatchRevokeByTask(getTaskGroup(row))"
+                        >撤回</el-button>
+                        <!-- 否则显示提交 -->
+                        <el-button 
+                          v-else 
+                          type="success" 
+                          size="small" 
+                          :disabled="timeContext.isReadOnly || !getTaskGroup(row).rows.some(r => r.progressApprovalStatus === 'draft' || r.progressApprovalStatus === 'rejected')"
+                          @click="handleBatchFillByTask(getTaskGroup(row))"
+                        >提交</el-button>
+                      </template>
+                    </div>
+                  </template>
+                </el-table-column>
+
             </el-table>
           </div>
 
@@ -1959,63 +1999,5 @@ const handleRevokeReport = (row: StrategicIndicator) => {
 
 .report-tips :deep(.el-alert) {
   border-radius: var(--radius-sm);
-}
-
-/* 填报提示 Tooltip 样式 */
-.report-tooltip-content {
-  padding: 4px;
-  max-width: 300px;
-}
-
-.tooltip-item {
-  margin-bottom: 8px;
-}
-
-.tooltip-item:last-child {
-  margin-bottom: 0;
-}
-
-.tooltip-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: 2px;
-}
-
-.tooltip-value {
-  font-size: 13px;
-  color: var(--text-main);
-  word-break: break-all;
-}
-
-.tooltip-value.highlight {
-  color: var(--color-primary);
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.tooltip-value.remark {
-  white-space: pre-wrap;
-  line-height: 1.4;
-  background: var(--bg-page);
-  padding: 6px 8px;
-  border-radius: 4px;
-}
-
-.tooltip-files {
-  margin-top: 4px;
-}
-
-.file-name {
-  font-size: 12px;
-  color: var(--color-primary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 2px;
-}
-
-.file-name::before {
-  content: "📎";
 }
 </style>
