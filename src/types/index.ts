@@ -71,7 +71,7 @@ export interface StrategicIndicator {
   unit: string
   responsibleDept: string
   responsiblePerson: string
-  status: 'draft' | 'active' | 'archived'
+  status: 'draft' | 'active' | 'archived' | 'distributed' | 'pending' | 'approved'
   isStrategic: boolean
   approvalStatus?: ApprovalStatus
   alertLevel?: AlertLevel
@@ -95,7 +95,7 @@ export interface StatusAuditEntry {
   operator: string           // 操作人用户名
   operatorName: string       // 操作人姓名
   operatorDept: string       // 操作人部门
-  action: 'submit' | 'approve' | 'reject' | 'revoke' | 'update' | 'distribute'  // distribute: 下发
+  action: 'submit' | 'approve' | 'reject' | 'revoke' | 'update' | 'distribute' | 'withdraw'  // distribute: 下发, withdraw: 撤销
   comment?: string           // 操作备注
   previousStatus?: string    // 变更前状态
   newStatus?: string         // 变更后状态

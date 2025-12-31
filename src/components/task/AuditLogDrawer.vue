@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * 审计日志抽屉组件
- * 显示指标的审批历史时间线
+ * 显示指标详情和审批历史时间线
  */
 import { computed } from "vue";
 import {
@@ -15,6 +15,9 @@ import {
   ChatDotRound,
 } from "@element-plus/icons-vue";
 import type { StrategicIndicator, StatusAuditEntry } from "@/types";
+import { useStrategicStore } from "@/stores/strategic";
+
+const strategicStore = useStrategicStore();
 
 const props = defineProps<{
   visible: boolean;
@@ -31,6 +34,15 @@ const drawerVisible = computed({
   get: () => props.visible,
   set: (val) => emit("update:visible", val),
 });
+
+// 获取父指标（核心指标）名称
+const getParentIndicatorName = () => {
+  if (!props.indicator?.parentIndicatorId) return '-';
+  const parentIndicator = strategicStore.indicators.find(
+    i => i.id.toString() === props.indicator?.parentIndicatorId
+  );
+  return parentIndicator?.name || '-';
+};
 
 // 获取审计日志（按时间倒序）
 const auditLogs = computed(() => {
@@ -114,7 +126,7 @@ const handleClose = () => {
 <template>
   <el-drawer
     v-model="drawerVisible"
-    title="审计日志"
+    title="指标详情"
     direction="rtl"
     size="450px"
     :before-close="handleClose"
@@ -124,7 +136,7 @@ const handleClose = () => {
       <div class="drawer-header">
         <div class="header-title">
           <el-icon><ChatDotRound /></el-icon>
-          <span>审计日志</span>
+          <span>指标详情</span>
         </div>
         <div class="header-subtitle" v-if="indicator">
           {{ indicator.name }}
@@ -133,6 +145,34 @@ const handleClose = () => {
     </template>
 
     <div class="drawer-content">
+      <!-- 指标基本信息 -->
+      <div v-if="indicator" class="indicator-info-section">
+        <h4 class="section-title">基本信息</h4>
+        <el-descriptions :column="1" border size="small">
+          <el-descriptions-item label="战略任务">
+            {{ indicator.taskContent || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="核心指标">
+            {{ getParentIndicatorName() }}
+          </el-descriptions-item>
+          <el-descriptions-item label="指标类型">
+            <el-tag size="small" :type="indicator.type1 === '定量' ? 'primary' : 'warning'">
+              {{ indicator.type1 }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="权重">
+            {{ indicator.weight ?? '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">
+            {{ indicator.remark || '-' }}
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+
+      <el-divider v-if="indicator" />
+
+      <h4 class="section-title">审计日志</h4>
+      
       <!-- 空状态 -->
       <el-empty
         v-if="auditLogs.length === 0"
@@ -354,6 +394,23 @@ const handleClose = () => {
 .log-count {
   font-size: 13px;
   color: var(--text-secondary, #64748b);
+}
+
+/* 指标基本信息区域 */
+.indicator-info-section {
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #1e293b);
+  margin: 0 0 12px 0;
+}
+
+.indicator-info-section :deep(.el-descriptions__label) {
+  width: 80px;
+  font-weight: 500;
 }
 
 /* 滚动条样式 */

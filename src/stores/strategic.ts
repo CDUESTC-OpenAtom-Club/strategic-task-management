@@ -182,28 +182,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       isStrategic: false,
       ownerDept: '就业创业指导中心',
       parentIndicatorId: '101',
-      statusAudit: [
-        {
-          id: 'audit-101-1-1',
-          timestamp: new Date('2025-12-01'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'distribute',
-          comment: '下发子指标'
-        },
-        {
-          id: 'audit-101-1-2',
-          timestamp: new Date('2025-12-15'),
-          operator: 'zhao-dean',
-          operatorName: '赵院长',
-          operatorDept: '计算机学院',
-          action: 'submit',
-          comment: '提交进度72%',
-          previousProgress: 0,
-          newProgress: 72
-        }
-      ]
+      statusAudit: []  // 草稿状态
     },
     {
       id: '101-2',
@@ -231,37 +210,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       isStrategic: false,
       ownerDept: '就业创业指导中心',
       parentIndicatorId: '101',
-      statusAudit: [
-        {
-          id: 'audit-101-2-1',
-          timestamp: new Date('2025-12-01'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'distribute',
-          comment: '下发子指标'
-        },
-        {
-          id: 'audit-101-2-2',
-          timestamp: new Date('2025-12-10'),
-          operator: 'qian-dean',
-          operatorName: '钱院长',
-          operatorDept: '商学院',
-          action: 'submit',
-          comment: '提交进度58%',
-          previousProgress: 0,
-          newProgress: 58
-        },
-        {
-          id: 'audit-101-2-3',
-          timestamp: new Date('2025-12-12'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'approve',
-          comment: '审批通过，进度达标'
-        }
-      ]
+      statusAudit: []  // 草稿状态
     },
     {
       id: '101-3',
@@ -289,17 +238,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       isStrategic: false,
       ownerDept: '就业创业指导中心',
       parentIndicatorId: '101',
-      statusAudit: [
-        {
-          id: 'audit-101-3-1',
-          timestamp: new Date('2025-12-01'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'distribute',
-          comment: '下发子指标'
-        }
-      ]
+      statusAudit: []  // 草稿状态
     },
     {
       id: '101-4',
@@ -327,37 +266,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       isStrategic: false,
       ownerDept: '就业创业指导中心',
       parentIndicatorId: '101',
-      statusAudit: [
-        {
-          id: 'audit-101-4-1',
-          timestamp: new Date('2025-12-01'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'distribute',
-          comment: '下发子指标'
-        },
-        {
-          id: 'audit-101-4-2',
-          timestamp: new Date('2025-12-08'),
-          operator: 'li-dean',
-          operatorName: '李院长',
-          operatorDept: '工学院',
-          action: 'submit',
-          comment: '提交进度50%',
-          previousProgress: 0,
-          newProgress: 50
-        },
-        {
-          id: 'audit-101-4-3',
-          timestamp: new Date('2025-12-10'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'reject',
-          comment: '进度偏低，请加强跟进'
-        }
-      ]
+      statusAudit: []  // 草稿状态
     },
     {
       id: '101-5',
@@ -385,28 +294,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       isStrategic: false,
       ownerDept: '就业创业指导中心',
       parentIndicatorId: '101',
-      statusAudit: [
-        {
-          id: 'audit-101-5-1',
-          timestamp: new Date('2025-12-01'),
-          operator: 'jyc-admin',
-          operatorName: '就业中心管理员',
-          operatorDept: '就业创业指导中心',
-          action: 'distribute',
-          comment: '下发子指标'
-        },
-        {
-          id: 'audit-101-5-2',
-          timestamp: new Date('2025-12-20'),
-          operator: 'zhou-dean',
-          operatorName: '周院长',
-          operatorDept: '航空学院',
-          action: 'submit',
-          comment: '提交进度82%',
-          previousProgress: 0,
-          newProgress: 82
-        }
-      ]
+      statusAudit: []  // 草稿状态
     },
     {
       id: '102-1',
@@ -1358,6 +1246,79 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
+  // ============ 批量操作相关 ============
+
+  // 获取某学院下某父指标的所有子指标
+  const getChildIndicatorsByCollegeAndParent = (college: string, parentIndicatorId: string) => {
+    return indicators.value.filter(i => {
+      const depts = Array.isArray(i.responsibleDept) ? i.responsibleDept : [i.responsibleDept]
+      return depts.includes(college) && i.parentIndicatorId === parentIndicatorId && !i.isStrategic
+    })
+  }
+
+  // 获取某学院下所有子指标
+  const getChildIndicatorsByCollege = (college: string) => {
+    return indicators.value.filter(i => {
+      const depts = Array.isArray(i.responsibleDept) ? i.responsibleDept : [i.responsibleDept]
+      return depts.includes(college) && !i.isStrategic
+    })
+  }
+
+  // 批量撤销：将学院下所有已下发的子指标状态重置（撤销后可修改删除）
+  const withdrawIndicatorsByCollege = (college: string) => {
+    const childIndicators = getChildIndicatorsByCollege(college)
+    childIndicators.forEach(indicator => {
+      if (indicator.status === 'distributed' || indicator.status === 'pending' || indicator.status === 'approved') {
+        indicator.status = 'draft' // 撤销后变为草稿状态，可编辑删除
+        indicator.canWithdraw = false
+      }
+    })
+    return childIndicators.length
+  }
+
+  // 批量下发：将学院下所有草稿状态的子指标下发
+  const distributeIndicatorsByCollege = (college: string) => {
+    const childIndicators = getChildIndicatorsByCollege(college)
+    const draftIndicators = childIndicators.filter(i => i.status === 'draft')
+    draftIndicators.forEach(indicator => {
+      indicator.status = 'distributed'
+      indicator.canWithdraw = true
+    })
+    return draftIndicators.length
+  }
+
+  // 批量审批：将学院下所有待审批状态的子指标审批通过
+  const approveIndicatorsByCollege = (college: string) => {
+    const childIndicators = getChildIndicatorsByCollege(college)
+    const pendingIndicators = childIndicators.filter(i => i.status === 'pending')
+    pendingIndicators.forEach(indicator => {
+      indicator.status = 'approved'
+      indicator.canWithdraw = false
+    })
+    return pendingIndicators.length
+  }
+
+  // 批量打回：将学院下所有待审批状态的子指标打回
+  const rejectIndicatorsByCollege = (college: string) => {
+    const childIndicators = getChildIndicatorsByCollege(college)
+    const pendingIndicators = childIndicators.filter(i => i.status === 'pending')
+    pendingIndicators.forEach(indicator => {
+      indicator.status = 'distributed' // 打回后变为已下发状态
+      indicator.canWithdraw = true
+    })
+    return pendingIndicators.length
+  }
+
+  // 获取学院下所有子指标的统一状态（如果状态不一致返回 'mixed'）
+  const getCollegeIndicatorsStatus = (college: string): string => {
+    const childIndicators = getChildIndicatorsByCollege(college)
+    if (childIndicators.length === 0) return 'none'
+    
+    const statuses = [...new Set(childIndicators.map(i => i.status))]
+    if (statuses.length === 1) return statuses[0] || 'none'
+    return 'mixed'
+  }
+
   const updateMilestoneStatus = (indicatorId: string, milestoneId: string, status: 'pending' | 'completed' | 'overdue') => {
     const indicator = getIndicatorById(indicatorId)
     if (indicator) {
@@ -1446,6 +1407,15 @@ export const useStrategicStore = defineStore('strategic', () => {
     deleteIndicator,
     updateMilestoneStatus,
     addStatusAuditEntry,
-    initializeIndicatorFields
+    initializeIndicatorFields,
+
+    // 批量操作
+    getChildIndicatorsByCollege,
+    getChildIndicatorsByCollegeAndParent,
+    withdrawIndicatorsByCollege,
+    distributeIndicatorsByCollege,
+    approveIndicatorsByCollege,
+    rejectIndicatorsByCollege,
+    getCollegeIndicatorsStatus
   }
 })
