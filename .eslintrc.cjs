@@ -22,29 +22,48 @@ module.exports = {
   rules: {
     // 8.1.1 禁止 console.log，但允许 warn 和 error
     'no-console': ['error', { allow: ['warn', 'error'] }],
-    
+
     // 8.1.2 TypeScript 严格模式规则
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/explicit-function-return-type': 'off',
-    '@typescript-eslint/no-unused-vars': ['error', { 
-      argsIgnorePattern: '^_',
-      varsIgnorePattern: '^_'
-    }],
+    '@typescript-eslint/no-unused-vars': [
+      'error',
+      {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_'
+      }
+    ],
     '@typescript-eslint/no-non-null-assertion': 'warn',
-    
+
     // Vue 相关规则
     'vue/multi-word-component-names': 'off',
     'vue/no-v-html': 'warn',
     'vue/require-default-prop': 'off',
     'vue/require-explicit-emits': 'error',
-    
+
     // 通用代码质量规则
     'no-debugger': 'error',
     'no-alert': 'warn',
     'prefer-const': 'error',
     'no-var': 'error',
-    'eqeqeq': ['error', 'always'],
-    'curly': ['error', 'all']
+    eqeqeq: ['error', 'always'],
+    curly: ['error', 'all'],
+
+    // Terminology consistency rules (Requirements 1.1, 1.2)
+    // Warn when backend terminology is used in frontend code
+    'no-restricted-syntax': [
+      'warn',
+      {
+        selector: 'Identifier[name=/strategic_task/i]',
+        message:
+          'Use "plan" terminology instead of "strategic_task" in frontend code (Requirement 1.1)'
+      },
+      {
+        selector: 'Identifier[name=/strategicTask/i]',
+        message:
+          'Use "plan" terminology instead of "strategicTask" in frontend code (Requirement 1.1)'
+      }
+    ]
   },
   overrides: [
     {
@@ -57,11 +76,11 @@ module.exports = {
     {
       // 配置文件和脚本可以使用 console
       files: [
-        '*.config.ts', 
-        '*.config.js', 
+        '*.config.ts',
+        '*.config.js',
         '*.config.cjs',
         'scripts/**/*.js',
-        'scripts/**/*.cjs', 
+        'scripts/**/*.cjs',
         'server/**/*.js',
         'database/**/*.js'
       ],
@@ -71,10 +90,5 @@ module.exports = {
       }
     }
   ],
-  ignorePatterns: [
-    'dist',
-    'node_modules',
-    '*.d.ts',
-    'coverage'
-  ]
+  ignorePatterns: ['dist', 'node_modules', '*.d.ts', 'coverage']
 }
