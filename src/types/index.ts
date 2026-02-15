@@ -1,0 +1,840 @@
+/**
+ * Types 统一导出
+ *
+ * 本文件提供所有类型定义的统一入口
+ * 同时导出 TypeScript 类型和 Zod 运行时验证 Schema
+ *
+ * @module types
+ */
+
+// ============================================================================
+// Zod 运行时验证 Schema 重新导出
+// ============================================================================
+export {
+  UserRoleSchema,
+  ApprovalStatusSchema,
+  ProgressApprovalStatusSchema,
+  IndicatorTypeSchema,
+  AlertLevelSchema,
+  MessageTypeSchema,
+  AuditActionSchema,
+  UserSchema,
+  LoginCredentialsSchema,
+  MilestoneSchema,
+  StatusAuditEntrySchema,
+  StrategicIndicatorSchema,
+  StrategicTaskSchema,
+  DashboardDataSchema,
+  validateUser,
+  validateIndicator,
+  validateMilestone,
+  validateLoginCredentials
+} from './schemas'
+
+// 重新导出从 Schema 推断的类型
+export type {
+  UserRole,
+  ApprovalStatus,
+  ProgressApprovalStatus,
+  IndicatorType,
+  AlertLevel,
+  MessageType,
+  AuditAction,
+  User,
+  LoginCredentials,
+  Milestone,
+  StatusAuditEntry,
+  StrategicIndicator,
+  StrategicTask,
+  DashboardData
+} from './schemas'
+
+// ============================================================================
+// 原有类型定义保持兼容性
+// ============================================================================
+
+// Core System Types
+export type DrillDownLevel = 'organization' | 'department' | 'indicator'
+
+export type EntityType = 'task' | 'indicator' | 'approval'
+
+// User and Permission Types
+export interface User {
+  id: string
+  username: string
+  name: string
+  role: UserRole
+  department: string
+  avatar?: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface Permission {
+  resource: string
+  action: 'create' | 'read' | 'update' | 'delete' | 'approve'
+}
+
+// Strategic Task Types
+export interface StrategicTask {
+  id: string
+  title: string
+  desc: string
+  createTime: string
+  cycle: string
+  startDate: Date
+  endDate: Date
+  status: 'draft' | 'active' | 'completed' | 'cancelled'
+  createdBy: string
+  indicators: StrategicIndicator[]
+  // 时间维度字段
+  year: number                    // 年份，如 2025
+  isRecurring: boolean            // 是否长久性任务（跨年复制）
+  parentTaskId?: string           // 跨年复制的原任务ID
+}
+
+// 进度审批状态类型
+export type ProgressApprovalStatus = 'none' | 'draft' | 'pending' | 'approved' | 'rejected'
+
+// Strategic Indicator Types (Enhanced)
+export interface StrategicIndicator {
+  id: string
+  name: string
+  isQualitative: boolean
+  type1: '定性' | '定量'
+  type2: '发展性' | '基础性'
+  progress: number
+  createTime: string
+  weight: number
+  remark: string
+  canWithdraw: boolean
+  milestones: Milestone[]
+  targetValue: number
+  actualValue?: number
+  unit: string
+  responsibleDept: string
+  responsiblePerson: string
+  status: 'draft' | 'active' | 'archived' | 'distributed' | 'pending' | 'approved'
+  isStrategic: boolean
+  approvalStatus?: ApprovalStatus
+  alertLevel?: AlertLevel
+  taskContent?: string // 关联的战略任务内容
+  ownerDept?: string // 发布方部门 (对应数据库 owner_org_id)
+  parentIndicatorId?: string // 父指标ID (对应数据库 parent_indicator_id)
+  // 时间维度字段
+  year?: number                        // 年份，如 2025（可选，默认当前年）
+  statusAudit?: StatusAuditEntry[]     // 审批/操作历史JSON（可选，默认空数组）
+  // 进度填报审批相关字段
+  progressApprovalStatus?: ProgressApprovalStatus  // 进度审批状态：none-无待审批, pending-待审批, approved-已通过, rejected-已驳回
+  pendingProgress?: number             // 待审批的进度值
+  pendingRemark?: string               // 待审批的说明
+  pendingAttachments?: string[]        // 待审批的附件URL列表
+}
+
+// 状态审计日志条目（用于记录指标的审批历史）
+export interface StatusAuditEntry {
+  id: string
+  timestamp: Date
+  operator: string           // 操作人用户名
+  operatorName: string       // 操作人姓名
+  operatorDept: string       // 操作人部门
+  action: 'submit' | 'approve' | 'reject' | 'revoke' | 'update' | 'distribute' | 'withdraw'  // distribute: 下发, withdraw: 撤销
+  comment?: string           // 操作备注
+  previousStatus?: string    // 变更前状态
+  newStatus?: string         // 变更后状态
+  previousProgress?: number  // 变更前进度
+  newProgress?: number       // 变更后进度
+}
+
+// 里程碑类型
+export interface Milestone {
+  id: string
+  name: string
+  targetProgress: number // 目标进度
+  deadline: string // 截止时间
+  status: 'pending' | 'completed' | 'overdue' // 状态：待完成、已完成、逾期未完成
+  isPaired?: boolean // 是否已配对（有审核通过的填报记录）
+  weightPercent?: number // 权重百分比
+  sortOrder?: number // 排序顺序
+  indicatorId?: string // 关联的指标ID
+}
+
+// 里程碑配对状态摘要
+export interface MilestonePairingStatus {
+  totalMilestones: number
+  pairedCount: number
+  unpairedCount: number
+  nextMilestoneToReport: Milestone | null
+  isAllPaired: boolean
+  pairingProgress: number // 配对进度百分比
+}
+
+// 里程碑填报验证结果
+export interface MilestoneReportValidation {
+  milestoneId: string
+  canReport: boolean
+  message: string
+  nextMilestoneToReport: Milestone | null
+}
+
+// 仪表盘数据类型 (Enhanced)
+export interface DashboardData {
+  totalScore: number
+  basicScore: number
+  developmentScore: number
+  completionRate: number
+  warningCount: number
+  totalIndicators: number
+  completedIndicators: number
+  alertIndicators: {
+    severe: number
+    moderate: number
+    normal: number
+  }
+}
+
+// 部门进度类型 (Enhanced)
+export interface DepartmentProgress {
+  dept: string
+  progress: number
+  score: number
+  status: 'success' | 'warning' | 'exception'
+  totalIndicators: number
+  completedIndicators: number
+  alertCount: number
+}
+
+// 指标类型 (Enhanced)
+export interface Indicator {
+  id: string
+  name: string
+  type: '定量' | '定性'
+  progress: number
+  status: 'normal' | 'warning' | 'danger'
+  deadline: string
+  department: string
+  targetValue: number
+  actualValue?: number
+  unit: string
+  responsiblePerson: string
+}
+
+// 待审批项类型 (Enhanced)
+export interface PendingApproval {
+  id: string
+  title: string
+  submitter: string
+  time: string
+  type: string
+  priority: 'high' | 'medium' | 'low'
+  alertDescription?: string
+  approvalStatus: ApprovalStatus
+}
+
+// Approval Types
+export interface ApprovalRequest {
+  id: string
+  indicatorId: string
+  indicatorName: string
+  submittedBy: string
+  submittedDept: string
+  submittedAt: Date
+  approvalStatus: ApprovalStatus
+  approverId?: string
+  approvedAt?: Date
+  rejectionReason?: string
+  priority: 'high' | 'medium' | 'low'
+  alertDescription?: string
+  attachments?: Attachment[]
+}
+
+export interface ApprovalHistory {
+  id: string
+  requestId: string
+  approverId: string
+  approverName: string
+  action: 'approved' | 'rejected'
+  comment?: string
+  timestamp: Date
+}
+
+// Reporting Types
+export interface ProgressReport {
+  id: string
+  indicatorId: string
+  reportedBy: string
+  reportedAt: Date
+  actualValue: number
+  evidence?: string
+  attachments?: Attachment[]
+  status: 'draft' | 'submitted' | 'approved' | 'rejected'
+  rejectionReason?: string
+}
+
+// Message Types
+export interface Message {
+  id: string
+  type: MessageType
+  title: string
+  content: string
+  severity?: AlertLevel
+  recipientRole?: UserRole | UserRole[] // 接收者角色
+  recipientDept?: string | string[] // 接收者部门
+  recipientId?: string // 特定接收者ID
+  isRead: boolean
+  createdAt: Date
+  relatedId?: string
+  actionUrl?: string // 操作链接
+}
+
+export interface NotificationSettings {
+  userId: string
+  emailNotifications: boolean
+  alertNotifications: boolean
+  approvalNotifications: boolean
+  systemNotifications: boolean
+}
+
+// Tab 类型
+export interface TabItem {
+  id: string
+  label: string
+  icon: string
+}
+
+// 角色选项类型
+export interface RoleOption {
+  value: string
+  label: string
+}
+
+// Utility Types
+export interface Attachment {
+  id: string
+  name: string
+  url: string
+  size: number
+  type: string
+  uploadedAt: Date
+}
+
+export interface PaginationParams {
+  page: number
+  pageSize: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface ApiResponse<T> {
+  data: T
+  message: string
+  success: boolean
+  timestamp: Date
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+}
+
+// Form Types
+export interface StrategicTaskForm {
+  title: string
+  desc: string
+  cycle: string
+  startDate: string
+  endDate: string
+}
+
+export interface IndicatorForm {
+  taskId: string
+  name: string
+  type: IndicatorType
+  targetValue: number
+  unit: string
+  description?: string
+  responsibleDept: string
+  responsiblePerson: string
+  isStrategic: boolean
+}
+
+export interface ApprovalForm {
+  requestId: string
+  action: 'approve' | 'reject'
+  comment?: string
+  rejectionReason?: string
+}
+
+export interface ReportForm {
+  indicatorId: string
+  actualValue: number
+  evidence?: string
+  attachments?: File[]
+}
+
+// Chart and Visualization Types
+export interface ChartData {
+  labels: string[]
+  datasets: ChartDataset[]
+}
+
+export interface ChartDataset {
+  label: string
+  data: number[]
+  backgroundColor?: string | string[]
+  borderColor?: string
+  borderWidth?: number
+}
+
+export interface GaugeData {
+  value: number
+  min: number
+  max: number
+  thresholds: {
+    severe: number
+    moderate: number
+    normal: number
+  }
+}
+
+// System Configuration Types
+export interface SystemConfig {
+  alertThresholds: {
+    severe: number
+    moderate: number
+  }
+  approvalWorkflow: {
+    autoApproveBelowThreshold: boolean
+    threshold: number
+  }
+  reporting: {
+    allowLateSubmission: boolean
+    maxAttachments: number
+    maxAttachmentSize: number
+  }
+}
+
+// Error Types
+export interface ApiError {
+  code: string
+  message: string
+  details?: Record<string, any>
+  timestamp: Date
+}
+
+export interface ValidationError {
+  field: string
+  message: string
+  value?: any
+}
+
+// 面包屑导航
+export interface BreadcrumbItem {
+  level: DrillDownLevel
+  label: string
+  value?: string
+}
+
+// 筛选状态
+export interface FilterState {
+  department?: string
+  indicatorType?: '定性' | '定量'
+  alertLevel?: AlertLevel
+  dateRange?: [Date, Date]
+  sourceOwner?: string // 任务来源过滤 (发布方部门)
+  collegeFilter?: string // 学院过滤
+}
+
+// 审计日志
+export interface AuditLogItem {
+  id: string
+  entityType: EntityType
+  entityId: string
+  entityName: string
+  action: AuditAction
+  operator: string
+  operatorName: string
+  operateTime: Date
+  ipAddress?: string
+  dataBefore?: Record<string, any>
+  dataAfter?: Record<string, any>
+  changes?: FieldChange[]
+}
+
+export interface FieldChange {
+  field: string
+  fieldLabel: string
+  oldValue: any
+  newValue: any
+}
+
+export interface AuditLogFilters {
+  operator?: string
+  entityType?: EntityType
+  action?: AuditAction
+  dateRange?: [Date, Date]
+}
+
+// 审批流程节点
+export interface WorkflowNode {
+  id: string
+  name: string
+  status: 'completed' | 'current' | 'pending' | 'rejected'
+  operator?: string
+  operatorName?: string
+  operateTime?: Date
+  comment?: string
+}
+
+// 审批历史项
+export interface ApprovalHistoryItem {
+  id: string
+  action: 'submit' | 'approve' | 'reject' | 'withdraw'
+  operator: string
+  operatorName: string
+  operateTime: Date
+  comment?: string
+  dataBefore?: Record<string, any>
+  dataAfter?: Record<string, any>
+}
+
+// 热力图数据
+export interface HeatmapData {
+  taskId: string
+  taskName: string
+  progress: number
+  status: 'success' | 'warning' | 'danger'
+}
+
+// 预警汇总
+export interface AlertSummary {
+  severe: number
+  moderate: number
+  normal: number
+  total: number
+}
+
+// Dashboard Three-tier Drilldown Types
+
+// 进度对比数据 (用于 ComparisonChart)
+export interface ComparisonItem {
+  dept: string // 部门名称
+  progress: number // 平均进度 (0-100)
+  score: number // 综合得分
+  completionRate: number // 完成率 (0-100)
+  totalIndicators: number // 指标总数
+  completedIndicators: number // 已完成指标数
+  alertCount: number // 预警数量
+  status: 'success' | 'warning' | 'danger' // 状态
+  rank: number // 排名
+}
+
+// 桑基图数据 (用于 TaskSankeyChart)
+export interface SankeyLink {
+  source: string // 源节点名称
+  target: string // 目标节点名称
+  value: number // 流量值 (任务数量)
+}
+
+export interface SankeyNode {
+  name: string // 节点名称
+  depth?: number // 深度 (层级)
+}
+
+export interface SankeyData {
+  nodes: SankeyNode[] // 节点列表
+  links: SankeyLink[] // 链接列表
+}
+
+// 任务来源分布 (用于 SourcePieChart)
+export interface SourcePieData {
+  name: string // 来源部门名称
+  value: number // 任务数量
+  percentage: number // 占比 (0-100)
+}
+
+// 扩展下钻层级类型
+export type OrgLevel = 'strategy' | 'functional' | 'college'
+
+// 指标下发相关类型
+export interface IndicatorDistributionRequest {
+  parentIndicatorId: string
+  targetOrgId: string
+  customDesc?: string // 可选的自定义描述（定性指标可微调）
+  actorUserId?: string
+}
+
+export interface IndicatorDistributionEligibility {
+  canDistribute: boolean
+  reason: string
+  existingDistributionCount: number
+}
+
+export interface BatchDistributionRequest {
+  parentIndicatorId: string
+  targetOrgIds: string[]
+  actorUserId?: string
+}
+
+// ============================================================
+// 新数据结构类型定义 (Plan -> Task -> Indicator -> IndicatorFill)
+// ============================================================
+
+// Plan 状态类型
+export type PlanStatus = 'draft' | 'pending' | 'published' | 'archived'
+
+// Plan 审核状态
+export type PlanFillStatus = 'submitted' | 'approved' | 'rejected'
+
+// Task 类型
+export type TaskType = 'qualitative' | 'quantitative'
+
+/**
+ * Plan (计划 - 顶层容器)
+ * 相当于原来的"Task Plan"，作为一个"大文件夹"包含多个任务
+ */
+export interface Plan {
+  id: string | number
+  name: string
+  cycle: string // 周期，如 '2023-2025'
+  org_id: string | number // 所属组织
+  status: PlanStatus
+  tasks: Task[] // 包含的任务
+  createdAt?: string
+  updatedAt?: string
+  createdBy?: string
+  description?: string
+  // 前端辅助字段
+  totalIndicators?: number // 总指标数
+  completedIndicators?: number // 已完成指标数
+  latestFillDate?: string // 最近填报日期
+}
+
+/**
+ * Task (任务 - 逻辑分组)
+ * 文件夹里的"分类隔板"，用于给指标分类，本身没有状态
+ */
+export interface Task {
+  id: string | number
+  plan_id: string | number
+  name: string
+  type: TaskType // qualitative | quantitative
+  description?: string
+  sortOrder?: number // 排序
+  indicators: Indicator[]
+}
+
+/**
+ * Indicator (指标 - 基础数据元)
+ * 文件夹里的"单张表格"，是填报的最小单位
+ */
+export interface Indicator {
+  id: string | number
+  task_id: string | number
+  name: string
+  definition: string // 定义
+  milestones: Milestone[] // 里程碑（包含目标值等）
+  createdAt?: string
+  updatedAt?: string
+
+  // 前端辅助字段（用于展示最新进度，从历史表中获取）
+  latest_progress?: number
+  latest_fill_date?: string
+  latest_fill_id?: string // 最近一次填报记录ID
+  fill_count?: number // 填报次数
+}
+
+/**
+ * IndicatorFill (指标填报历史 - 新增核心表)
+ * 这张表格背后的"修改记录本"
+ */
+export interface IndicatorFill {
+  id: string | number
+  indicator_id: string | number
+  plan_fill_id: string | number // 关联到某次整体填报
+  fill_date: string // 填报日期
+  progress: number // 当前进度百分比
+  content: string // 填报说明/批注
+  attachments: Attachment[] // 附件列表
+  filled_by: string // 填报人ID
+  filled_by_name: string // 填报人姓名
+  created_at: string
+  updated_at: string
+
+  // 审核相关字段
+  status?: PlanFillStatus // 当前填报的审核状态
+  audit_comment?: string // 审核意见
+  audited_by?: string // 审核人ID
+  audited_at?: string // 审核时间
+
+  // 关联的里程碑（如果有）
+  milestone_id?: string | number
+  milestone_name?: string
+}
+
+/**
+ * PlanFill (整体填报记录 - 用于审核)
+ * 记录整个 Plan 的一次提交，包含多个 IndicatorFill
+ */
+export interface PlanFill {
+  id: string | number
+  plan_id: string | number
+  submit_date: string
+  status: PlanFillStatus
+  submitted_by: string // 提交人ID
+  submitted_by_name: string // 提交人姓名
+  fills: IndicatorFill[] // 包含的所有指标填报记录
+  audit_logs: AuditLogItem[] // 审核日志
+  created_at: string
+  updated_at: string
+  total_indicators: number // 本次提交的指标总数
+  completed_indicators: number // 已完成的指标数
+}
+
+/**
+ * UserRoleWithPermission (权限相关)
+ * 通过 Org ID 控制数据权限
+ */
+export interface UserRoleWithPermission {
+  user_id: string | number
+  role_name: string
+  org_id: string | number // 核心：通过Org ID控制数据权限
+  org_name: string
+  permissions: Permission[] // 页面按钮级别的权限标识
+  is_active: boolean
+}
+
+/**
+ * 权限标识枚举
+ */
+export enum PermissionCode {
+  // Plan 相关
+  PLAN_CREATE = 'plan.create',
+  PLAN_VIEW = 'plan.view',
+  PLAN_EDIT = 'plan.edit',
+  PLAN_DELETE = 'plan.delete',
+  PLAN_SUBMIT = 'plan.submit',
+
+  // Indicator 相关
+  INDICATOR_VIEW = 'indicator.view',
+  INDICATOR_FILL = 'indicator.fill',
+  INDICATOR_EDIT = 'indicator.edit',
+
+  // 审核相关
+  AUDIT_VIEW = 'audit.view',
+  AUDIT_APPROVE = 'audit.approve',
+  AUDIT_REJECT = 'audit.reject',
+
+  // Task 相关
+  TASK_CREATE = 'task.create',
+  TASK_EDIT = 'task.edit',
+  TASK_DELETE = 'task.delete',
+}
+
+/**
+ * 填报记录表单
+ */
+export interface IndicatorFillForm {
+  indicator_id: string | number
+  progress: number
+  content: string
+  attachments?: File[]
+  milestone_id?: string | number
+}
+
+/**
+ * Plan 提交表单
+ */
+export interface PlanSubmitForm {
+  plan_id: string | number
+  comment?: string
+  attachments?: File[]
+}
+
+/**
+ * 审核表单
+ */
+export interface AuditForm {
+  fill_id: string | number // 可以是 PlanFill 或 IndicatorFill 的 ID
+  action: 'approve' | 'reject'
+  comment?: string
+}
+
+// ============================================================
+// 用户管理相关类型 (User Management)
+// ============================================================
+
+/**
+ * 用户管理项 - 用于管理后台列表
+ */
+export interface UserManagementItem {
+  id: string | number
+  username: string // 登录用户名
+  realName: string // 真实姓名
+  email?: string
+  phone?: string
+  orgId: string | number // 所属组织ID (核心权限控制字段)
+  orgName: string // 所属组织名称
+  roles: UserRole[] // 用户角色列表 (支持多角色)
+  status: 'active' | 'disabled' | 'locked'
+  lastLoginAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * 用户表单 - 创建/编辑用户
+ */
+export interface UserForm {
+  id?: string | number // 编辑时有ID
+  username: string
+  password?: string // 新建时必填，编辑时留空表示不修改
+  realName: string
+  email?: string
+  phone?: string
+  orgId: string | number // 必填 - 决定数据权限
+  roles: UserRole[] // 必填 - 至少一个角色
+  status: 'active' | 'disabled'
+}
+
+/**
+ * 组织结构 - 用于用户管理中的组织选择器
+ */
+export interface Organization {
+  id: string | number
+  name: string
+  type: UserRole // strategic_dept | functional_dept | secondary_college
+  parentId?: string | number
+  children?: Organization[]
+}
+
+/**
+ * 审批流程模板
+ */
+export interface ApprovalTemplate {
+  id: string | number
+  name: string // 模板名称，如 "标准审批流程"
+  description?: string
+  isDefault: boolean // 是否为默认模板
+  steps: ApprovalTemplateStep[] // 审批步骤
+  applicableRoles: UserRole[] // 适用角色
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * 审批流程步骤
+ */
+export interface ApprovalTemplateStep {
+  id: string | number
+  stepOrder: number // 步骤顺序
+  stepName: string // 步骤名称，如 "主任审核"
+  requiredRole: UserRole // 需要的角色
+  allowCustomApprover: boolean // 是否允许自定义审批人
+  customApproverId?: string | number // 自定义审批人ID (可选)
+  autoApprove: boolean // 是否自动通过
+}

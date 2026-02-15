@@ -1,0 +1,64 @@
+:root {
+  /* --- 核心品牌色 --- */
+  --color-primary-dark: #2b6de7;  /* 深蓝：选中态/Header选中 */
+  --color-primary: #409eff;       /* 亮蓝：主按钮/链接 */
+  --color-primary-light: #ecf5ff; /* 浅蓝：背景底色 */
+
+  /* --- 字体颜色 --- */
+  --text-main: #303133;      /* 一级标题/强调色 */
+  --text-regular: #606266;   /* 正文/表格内容 */
+  --text-secondary: #909399; /* 辅助/占位符 */
+  --text-placeholder: #c0c4cc; /* 占位符颜色 */
+
+  /* --- 背景与边框 --- */
+  --bg-page: #f5f7fa;        /* 页面大背景（浅灰） */
+  --bg-white: #ffffff;       /* 卡片/内容背景（纯白） */
+  --bg-light: #fafafa;       /* 表头背景（浅灰） */
+  --bg-card-light: #f0f2f5;  /* 卡片浅背景（徽章背景） */
+  --border-color: #ebeef5;   /* 通用边框色 */
+  --border-light: #e4e7ed;   /* 浅边框色 */
+  --border-input: #dcdfe6;   /* 输入框边框色 */
+
+  /* --- 状态色 --- */
+  --color-danger: #f56c6c;    /* 危险色 */
+  --color-danger-soft: #fab6b6; /* 柔和危险色（进度条exception） */
+  --color-warning: #e6a23c;   /* 警告色 */
+  --color-success: #67c23a;   /* 成功色 */
+  --color-orange: #ff6600;    /* 橙色（特殊强调） */
+
+  /* --- 特殊颜色 --- */
+  --color-purple: #9333ea;    /* 紫色（标签） */
+  --color-blue-light: #2563eb; /* 浅蓝色（标签） */
+  --bg-purple-light: #f3e8ff; /* 紫色背景（标签） */
+  --bg-blue-light: #dbeafe;   /* 浅蓝背景（标签） */
+
+  /* --- 指标类型颜色（区分于任务类型） --- */
+  --color-qualitative: #9333ea;  /* 定性指标：紫色 */
+  --color-quantitative: #0891b2; /* 定量指标：青色 */
+
+  /* --- 统一圆角规范 --- */
+  --radius-sm: 4px;           /* 小圆角：按钮、输入框 */
+  --radius-md: 8px;           /* 中圆角：小卡片、下拉框 */
+  --radius-lg: 12px;          /* 大圆角：普通卡片 */
+  --radius-xl: 16px;          /* 特大圆角：主卡片、弹窗 */
+
+  /* --- 统一间距规范 --- */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-2xl: 24px;
+
+  /* --- 阴影效果 --- */
+  --shadow-light: 0 2px 4px rgba(0,0,0,0.02);
+  --shadow-card: 0 2px 12px 0 rgba(0,0,0,0.05);
+  --shadow-hover: 0 8px 20px rgba(64, 158, 255, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  /* --- 过渡动画 --- */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow: 0.35s ease;
+}
+

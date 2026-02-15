@@ -1,0 +1,87 @@
+@import './colors.css';
+@import './unified-styles.css';
+
+:root {
+  /* --- 全局设置 --- */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* 强制使用亮色模式以匹配设计图 */
+  color-scheme: light;
+  color: var(--text-regular);
+  background-color: var(--bg-page);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 全局重置：防止布局错位 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  display: block; /* 修正：原为 flex center 会导致页面垂直居中，不适合管理后台 */
+  min-width: 1024px; /* 保证最小宽度 */
+  min-height: 100vh;
+  background-color: var(--bg-page);
+}
+
+/* 链接样式 */
+a {
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a:hover {
+  color: var(--color-primary-dark);
+  opacity: 0.8;
+}
+
+/* 标题重置 */
+h1 {
+  font-size: 2em;
+  line-height: 1.1;
+  color: var(--text-main);
+}
+
+/* 按钮基础样式：对齐设计图风格 */
+button {
+  border-radius: 4px; /* 修正：由8px改为4px，更商务 */
+  border: 1px solid transparent;
+  padding: 0.5em 1em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--bg-white);
+  color: var(--text-regular);
+  cursor: pointer;
+  transition: all 0.25s;
+}
+
+button:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+}
+
+/* Vue 挂载点容器修正 */
+#app {
+  max-width: 100%; /* 修正：移除 1280px 限制，铺满全屏 */
+  margin: 0;
+  padding: 0;      /* 修正：移除默认 padding */
+  text-align: left; /* 修正：移除居中对齐 */
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

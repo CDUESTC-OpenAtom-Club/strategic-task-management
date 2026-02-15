@@ -1,0 +1,798 @@
+/* 统一样式文件 - 基于colors.css配色 */
+
+/* --- 全局重置与字体 --- */
+* {
+  box-sizing: border-box;
+}
+
+/* ========================================
+   页面级统一样式
+   ======================================== */
+
+/* 页面主容器 - 用于包裹页面主要内容区域 */
+.page-container {
+  padding: var(--spacing-2xl);
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  min-height: calc(100vh - 200px);
+}
+
+/* 页面布局容器 - 用于整体页面布局 */
+.page-layout {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-page);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 页面头部 */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-2xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.page-header-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* 页面标题 */
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* 页面描述 */
+.page-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: var(--spacing-sm);
+}
+
+/* 页面操作区 */
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* ========================================
+   卡片统一样式
+   ======================================== */
+
+/* 卡片基础样式 */
+.card-base {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: all var(--transition-normal);
+}
+
+.card-base:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+/* 卡片头部 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-2xl);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* 卡片标题 */
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+/* 卡片内容区 */
+.card-body {
+  padding: var(--spacing-2xl);
+}
+
+/* 卡片底部 */
+.card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-2xl);
+  border-top: 1px solid var(--border-color);
+  gap: var(--spacing-md);
+}
+
+/* ========================================
+   表格统一样式
+   ======================================== */
+
+/* 统一表格样式 */
+.table-unified {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.table-unified th {
+  background: var(--bg-light);
+  color: var(--text-regular);
+  font-weight: 600;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.table-unified td {
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-regular);
+}
+
+.table-unified tr:hover td {
+  background: #f0f7ff;
+}
+
+/* 表格斑马纹 */
+.table-unified tr:nth-child(even) td {
+  background: var(--bg-page);
+}
+
+.table-unified tr:nth-child(even):hover td {
+  background: #f0f7ff;
+}
+
+/* ========================================
+   空状态统一样式
+   ======================================== */
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--spacing-2xl) * 2);
+  color: var(--text-secondary);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-lg);
+  color: var(--text-placeholder);
+}
+
+.empty-state-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-lg);
+}
+
+.empty-state-action {
+  margin-top: var(--spacing-md);
+}
+
+/* --- Header --- */
+.main-header {
+  height: 60px;
+  background: var(--bg-white);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon svg {
+  background: var(--color-primary);
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.system-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.sub-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.dept-badge {
+  background: var(--bg-card-light);
+  color: var(--text-regular);
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary);
+  color: var(--bg-white);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* --- Nav Tabs --- */
+.nav-tabs {
+  display: flex;
+  justify-content: center;
+  background: var(--bg-white);
+  padding-top: 15px;
+  gap: 40px;
+  box-shadow: var(--shadow-light);
+}
+
+.nav-item {
+  padding: 10px 30px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-regular);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 20px 20px 0 0;
+}
+
+.nav-item.active {
+  background: var(--color-primary-dark);
+  color: var(--bg-white);
+  border-radius: 8px 8px 0 0;
+  padding: 10px 50px;
+}
+
+/* --- Main Layout --- */
+.main-body {
+  flex: 1;
+  display: flex;
+  padding: 20px;
+  gap: 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* --- Sidebar --- */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.dept-select {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  color: var(--text-regular);
+}
+
+.btn-primary-small {
+  background: var(--color-primary);
+  color: var(--bg-white);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.task-list-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-main);
+}
+
+.task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-item {
+  padding: 12px 10px;
+  font-size: 13px;
+  color: var(--text-regular);
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-item:hover {
+  background: var(--bg-page);
+}
+
+.task-item.active {
+  background: var(--color-primary-dark);
+  color: var(--bg-white);
+}
+
+/* --- Content Card --- */
+.content-card {
+  flex: 1;
+  background: var(--bg-white);
+  border-radius: 8px;
+  padding: 20px 30px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+}
+
+.task-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 15px 0;
+  color: var(--text-main);
+}
+
+.task-meta-row {
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--text-regular);
+}
+
+.meta-label {
+  color: var(--text-secondary);
+}
+
+/* --- Indicator Table Area --- */
+.indicator-toolbar {
+  margin-top: 30px;
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 15px;
+  margin-right: 20px;
+}
+
+.btn-text-icon {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font-size: 13px;
+  cursor: pointer;
+  margin-right: 15px;
+}
+
+/* --- Table Styles --- */
+.table-container {
+  flex: 1;
+  overflow: auto;
+}
+
+.indicator-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.indicator-table th {
+  background: var(--bg-light);
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.indicator-table td {
+  padding: 12px 10px;
+  color: var(--text-regular);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+/* 颜色类 */
+.text-orange {
+  color: var(--color-orange);
+}
+
+.text-blue {
+  color: var(--color-primary-dark);
+}
+
+.text-remark {
+  color: var(--text-main);
+  max-width: 200px;
+}
+
+/* 标签样式 */
+.tags-wrapper {
+  display: flex;
+  gap: 6px;
+}
+
+.tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  transform: scale(0.95);
+}
+
+.tag-purple {
+  background: var(--bg-purple-light);
+  color: var(--color-purple);
+}
+
+.tag-blue {
+  background: var(--bg-blue-light);
+  color: var(--color-blue-light);
+}
+
+/* 操作按钮 */
+.actions span {
+  cursor: pointer;
+  margin-right: 10px;
+  font-size: 12px;
+}
+
+.action-btn.view {
+  color: var(--color-primary);
+}
+
+.action-btn.warn {
+  color: var(--color-warning);
+}
+
+.action-btn.delete {
+  color: var(--color-danger);
+}
+
+/* 编辑行样式 */
+.edit-row {
+  background: var(--bg-light);
+}
+
+.form-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.form-input:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+.form-input.small {
+  width: 60px;
+}
+
+.select-trigger {
+  border: 1px solid var(--border-input);
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--bg-white);
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.btn-primary-xs {
+  background: var(--color-primary);
+  color: var(--bg-white);
+  border: none;
+  border-radius: 2px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+
+/* ========================================
+   视觉优化增强样式
+   注意：圆角、阴影、过渡变量已在 colors.css 中统一定义
+   ======================================== */
+
+/* --- 补充阴影变量 --- */
+:root {
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* --- 数据卡片统一悬停效果 --- */
+.stat-card,
+.chart-card,
+.data-card {
+  transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.stat-card:hover,
+.chart-card:hover,
+.data-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+}
+
+/* --- 表格样式优化（斑马纹、悬停高亮） --- */
+.el-table {
+  --el-table-border-color: var(--border-light);
+  --el-table-header-bg-color: var(--bg-light);
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: var(--bg-page);
+}
+
+.el-table__body tr:hover > td.el-table__cell {
+  background: #f0f7ff !important;
+}
+
+.el-table th.el-table__cell {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+/* --- 页面加载淡入动画 --- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-fade-enter {
+  animation: fadeIn var(--transition-slow) ease-out;
+}
+
+/* --- 数据卡片入场动画 --- */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card-animate {
+  animation: slideUp 0.4s ease-out;
+}
+
+.card-animate:nth-child(1) { animation-delay: 0s; }
+.card-animate:nth-child(2) { animation-delay: 0.1s; }
+.card-animate:nth-child(3) { animation-delay: 0.2s; }
+.card-animate:nth-child(4) { animation-delay: 0.3s; }
+
+/* --- 操作反馈过渡效果 --- */
+.el-button {
+  transition: all var(--transition-fast);
+}
+
+.el-button:active {
+  transform: scale(0.96);
+}
+
+/* --- 消息提示样式统一 --- */
+.el-message {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.el-message--success {
+  background: linear-gradient(135deg, #f0f9eb 0%, #e1f3d8 100%) !important;
+  border-color: var(--color-success) !important;
+}
+
+.el-message--error {
+  background: linear-gradient(135deg, #fef0f0 0%, #fde2e2 100%) !important;
+  border-color: var(--color-danger) !important;
+}
+
+.el-message--warning {
+  background: linear-gradient(135deg, #fdf6ec 0%, #faecd8 100%) !important;
+  border-color: var(--color-warning) !important;
+}
+
+/* --- 确认对话框美化 --- */
+.el-message-box {
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.el-message-box__header {
+  padding: 20px 20px 10px !important;
+}
+
+.el-message-box__title {
+  font-weight: 600 !important;
+}
+
+.el-message-box__content {
+  padding: 10px 20px 20px !important;
+}
+
+.el-message-box__btns {
+  padding: 10px 20px 20px !important;
+}
+
+/* --- 进度条美化 --- */
+.el-progress-bar__outer {
+  border-radius: 100px !important;
+  background: var(--bg-light) !important;
+}
+
+.el-progress-bar__inner {
+  border-radius: 100px !important;
+  transition: width var(--transition-slow) !important;
+}
+
+/* 进度条 exception 状态使用柔和红色 */
+.el-progress--exception .el-progress-bar__inner {
+  background-color: var(--color-danger-soft, #fab6b6) !important;
+}
+
+.el-progress--exception .el-progress__text {
+  color: var(--color-danger) !important;
+}
+
+/* --- 标签页美化 --- */
+.el-tabs__item {
+  transition: all var(--transition-fast);
+}
+
+.el-tabs__item:hover {
+  color: var(--color-primary);
+}
+
+.el-tabs__active-bar {
+  transition: transform var(--transition-normal);
+}
+
+/* --- 输入框聚焦效果 --- */
+.el-input__wrapper:focus-within {
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2) !important;
+}
+
+.el-select .el-input__wrapper:focus-within {
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2) !important;
+}
+
+/* --- 下拉菜单美化 --- */
+.el-select-dropdown {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.el-select-dropdown__item:hover {
+  background: #f0f7ff !important;
+}
+
+/* --- 工具提示美化 --- */
+.el-tooltip__popper {
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+/* --- 骨架屏加载效果 --- */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-loading {
+  background: linear-gradient(90deg, var(--bg-light) 25%, var(--bg-page) 50%, var(--bg-light) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* --- 空状态美化 --- */
+.el-empty {
+  padding: 40px 0;
+}
+
+.el-empty__description {
+  color: var(--text-secondary);
+}
+
+/* --- 分页器美化 --- */
+.el-pagination {
+  --el-pagination-button-bg-color: var(--bg-white);
+  --el-pagination-hover-color: var(--color-primary);
+}
+
+.el-pagination .el-pager li {
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.el-pagination .el-pager li:hover {
+  background: #f0f7ff;
+}
+
+/* --- 徽章动画 --- */
+.el-badge__content {
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* --- 加载状态 --- */
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: inherit;
+}
+
+/* --- 成功/失败状态图标动画 --- */
+@keyframes checkmark {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.success-icon {
+  animation: checkmark 0.5s ease-out forwards;
+}
