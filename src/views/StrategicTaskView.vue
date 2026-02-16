@@ -1,13 +1,14 @@
 <script setup lang="ts">
   import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
   import { Plus, View, Download, Delete, ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right, Timer } from '@element-plus/icons-vue'
-  import { ElMessage, ElMessageBox } from 'element-plus'
+  import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
   import type { ElTable } from 'element-plus'
   import type { StrategicTask, StrategicIndicator } from '@/types'
   import { useStrategicStore } from '@/stores/strategic'
   import { useAuthStore } from '@/stores/auth'
   import { useTimeContextStore } from '@/stores/timeContext'
   import { useOrgStore } from '@/stores/org'
+  import { logger } from '@/utils/logger'
   import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
   import MilestoneList from '@/components/milestone/MilestoneList.vue'
@@ -734,35 +735,54 @@
   }
   
   // 保存新行
-  const saveNewRow = () => {
-    if (!newRow.value.name) return
+  const saveNewRow = async () => {
+    if (!newRow.value.name) {
+      ElMessage.warning('请填写核心指标内容')
+      return
+    }
   
-    // 使用 Store 添加指标
-    strategicStore.addIndicator({
-      id: Date.now().toString(),
-      taskContent: newRow.value.taskContent || '未命名任务',
-      name: newRow.value.name,
-      isQualitative: newRow.value.type1 === '定性',
-      type1: newRow.value.type1,
-      type2: newRow.value.type2,
-      progress: 0,
-      createTime: new Date().toLocaleDateString('zh-CN'),
-      weight: Number(newRow.value.weight) || 0,
-      remark: newRow.value.remark || '无备注',
-      canWithdraw: true,
-      milestones: [...newRow.value.milestones],
-      targetValue: 100,
-      unit: '%',
-      responsibleDept: selectedDepartment.value || authStore.userDepartment || '未分配',
-      ownerDept: selectedDepartment.value || authStore.userDepartment || '未分配',
-      responsiblePerson: authStore.userName || '未分配',
-      status: 'active',
-      isStrategic: true,
-      year: timeContext.currentYear,
-      statusAudit: []
+    // 显示加载状态
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在保存指标...',
+      background: 'rgba(0, 0, 0, 0.7)'
     })
-    cancelAdd()
-    updateEditTime()
+
+    try {
+      // 调用 Store 添加指标（现在是异步的，会调用后端 API）
+      await strategicStore.addIndicator({
+        id: Date.now().toString(),
+        taskContent: newRow.value.taskContent || '未命名任务',
+        name: newRow.value.name,
+        isQualitative: newRow.value.type1 === '定性',
+        type1: newRow.value.type1,
+        type2: newRow.value.type2,
+        progress: 0,
+        createTime: new Date().toLocaleDateString('zh-CN'),
+        weight: Number(newRow.value.weight) || 0,
+        remark: newRow.value.remark || '无备注',
+        canWithdraw: true,
+        milestones: [...newRow.value.milestones],
+        targetValue: 100,
+        unit: '%',
+        responsibleDept: selectedDepartment.value || authStore.userDepartment || '未分配',
+        ownerDept: selectedDepartment.value || authStore.userDepartment || '未分配',
+        responsiblePerson: authStore.userName || '未分配',
+        status: 'active',
+        isStrategic: true,
+        year: timeContext.currentYear,
+        statusAudit: []
+      })
+      
+      // 成功：关闭表单并更新 UI
+      cancelAdd()
+      updateEditTime()
+    } catch (error) {
+      // 错误已在 Store 中处理并显示消息
+      logger.error('[StrategicTaskView] Failed to save indicator:', error)
+    } finally {
+      loading.close()
+    }
   }
 
   // 删除指标

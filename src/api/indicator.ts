@@ -38,6 +38,23 @@ export interface IndicatorVO {
   milestones?: MilestoneVO[]
 }
 
+// 指标创建请求类型
+export interface IndicatorCreateRequest {
+  taskId: number                    // Required
+  parentIndicatorId?: number        // Optional
+  indicatorDesc: string             // Required (核心指标内容)
+  weightPercent?: number            // Optional (权重)
+  sortOrder?: number                // Optional (排序)
+  remark?: string                   // Optional (备注)
+  type?: string                     // Optional (基础性/发展性)
+  progress?: number                 // Optional (进度, default: 0)
+  ownerOrgId?: number               // Optional (来源部门ID)
+  targetOrgId?: number              // Optional (责任部门ID)
+  level?: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'  // Optional
+  year?: number                     // Optional (年份)
+  canWithdraw?: boolean             // Optional (是否可撤回)
+}
+
 export interface MilestoneVO {
   milestoneId: number
   indicatorId: number
@@ -158,6 +175,22 @@ export const indicatorApi = {
    */
   async updateIndicator(indicatorId: string, updates: Partial<IndicatorVO>): Promise<ApiResponse<IndicatorVO>> {
     return apiService.put<IndicatorVO>(`/indicators/${indicatorId}`, updates)
+  },
+
+  /**
+   * 创建新指标
+   * @param request 指标创建请求
+   */
+  async createIndicator(request: IndicatorCreateRequest): Promise<ApiResponse<IndicatorVO>> {
+    return apiService.post<IndicatorVO>('/indicators', request)
+  },
+
+  /**
+   * 删除指标
+   * @param indicatorId 指标ID
+   */
+  async deleteIndicator(indicatorId: string): Promise<ApiResponse<void>> {
+    return apiService.delete<void>(`/indicators/${indicatorId}`)
   },
 }
 

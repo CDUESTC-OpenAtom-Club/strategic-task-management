@@ -248,8 +248,57 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
-  const addIndicator = (indicator: StrategicIndicator) => {
+  const addIndicator = async (indicator: StrategicIndicator) => {
+    // 先进行乐观更新：添加到本地状态
+    const tempId = indicator.id
     indicators.value.push(indicator)
+    
+    try {
+      // 调用后端 API 持久化数据
+      const { default: indicatorApi, type: IndicatorCreateRequest } = await import('@/api/indicator')
+      
+      // 将 StrategicIndicator 映射到 IndicatorCreateRequest
+      const request = {
+        taskId: 1, // TODO: 从实际任务获取 taskId，暂时使用默认值
+        indicatorDesc: indicator.name,
+        weightPercent: indicator.weight || 0,
+        sortOrder: 0,
+        remark: indicator.remark || '',
+        type: indicator.type2, // 基础性/发展性
+        progress: indicator.progress || 0,
+        year: indicator.year || new Date().getFullYear(),
+        canWithdraw: indicator.canWithdraw !== false,
+      }
+      
+      const response = await indicatorApi.createIndicator(request)
+      
+      if (response.success && response.data) {
+        // 用后端返回的真实 ID 更新本地指标
+        const index = indicators.value.findIndex(i => i.id === tempId)
+        if (index !== -1) {
+          // 保留前端特有字段，更新后端字段
+          indicators.value[index] = {
+            ...indicators.value[index],
+            id: response.data.indicatorId.toString(),
+            // 可以添加更多从后端返回的字段
+          }
+        }
+        
+        logger.info('[Strategic Store] Successfully created indicator:', response.data.indicatorId)
+        ElMessage.success('指标创建成功')
+      }
+    } catch (err) {
+      logger.error('[Strategic Store] Failed to create indicator:', err)
+      
+      // 回滚：从本地状态移除
+      const index = indicators.value.findIndex(i => i.id === tempId)
+      if (index !== -1) {
+        indicators.value.splice(index, 1)
+      }
+      
+      ElMessage.error('指标创建失败，请稍后重试')
+      throw err
+    }
   }
 
   const updateIndicator = async (id: string, updates: Partial<StrategicIndicator>) => {
