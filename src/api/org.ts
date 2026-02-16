@@ -119,9 +119,31 @@ export const orgApi = {
    */
   async getAllDepartments(): Promise<Department[]> {
     try {
-      const orgs = await this.getAllOrgs()
-      return orgs.map(vo => convertOrgVOToDepartment(vo))
-    } catch {
+      const response = await apiService.get('/orgs')
+      
+      // Direct transformation without Zod validation to avoid issues
+      if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
+        return response.data.map((org: any) => {
+          const id = org.id || org.orgId
+          const name = org.name || org.orgName
+          const type = org.type || org.orgType
+          
+          if (!id || !name || !type) {
+            console.warn('Invalid org data:', org)
+          }
+          
+          return {
+            id: String(id),
+            name: name,
+            type: mapOrgTypeToFrontend(type),
+            sortOrder: org.sortOrder ?? 0
+          }
+        })
+      }
+      
+      return []
+    } catch (error) {
+      console.error('Error loading departments:', error)
       return []
     }
   },

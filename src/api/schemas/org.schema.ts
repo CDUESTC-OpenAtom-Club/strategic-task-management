@@ -27,25 +27,55 @@ export const orgTypeSchema = z.enum([
 
 /**
  * OrgVO schema
- * 定义组织机构值对象的完整验证模式（camelCase 格式）
+ * 定义组织机构值对象的完整验证模式（支持 camelCase 和 snake_case 格式）
  *
  * 注意：后端返回的字段可能不完整，使用 optional() 处理可选字段
+ * 支持两种格式：orgId/orgName/orgType 和 id/name/type
  *
  * @see Requirements 2.1 - OrgVO_Interface SHALL 定义所有 camelCase 字段及其类型
  * @see Requirements 3.1 - Zod_Schema SHALL 定义 OrgVO 的完整验证模式
  */
-export const orgVOSchema = z.object({
-  orgId: z.number(),
-  orgName: z.string(),
-  orgType: orgTypeSchema,
-  parentOrgId: z.number().nullable().optional(),
-  parentOrgName: z.string().nullable().optional(),
-  isActive: z.boolean().optional(),
-  sortOrder: z.number().optional(),
-  remark: z.string().nullable().optional(),
-  createdAt: z.string().optional(),
-  updatedAt: z.string().optional()
-})
+export const orgVOSchema = z.union([
+  // Format 1: camelCase (orgId, orgName, orgType)
+  z.object({
+    orgId: z.number(),
+    orgName: z.string(),
+    orgType: orgTypeSchema,
+    parentOrgId: z.number().nullable().optional(),
+    parentOrgName: z.string().nullable().optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().optional(),
+    remark: z.string().nullable().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    typeDisplay: z.string().optional()
+  }),
+  // Format 2: simple (id, name, type) - transform to camelCase
+  z.object({
+    id: z.number(),
+    name: z.string(),
+    type: orgTypeSchema,
+    parentOrgId: z.number().nullable().optional(),
+    parentOrgName: z.string().nullable().optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().optional(),
+    remark: z.string().nullable().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    typeDisplay: z.string().optional()
+  }).transform((data) => ({
+    orgId: data.id,
+    orgName: data.name,
+    orgType: data.type,
+    parentOrgId: data.parentOrgId,
+    parentOrgName: data.parentOrgName,
+    isActive: data.isActive,
+    sortOrder: data.sortOrder,
+    remark: data.remark,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt
+  }))
+])
 
 /**
  * ApiResponse<OrgVO[]> schema
