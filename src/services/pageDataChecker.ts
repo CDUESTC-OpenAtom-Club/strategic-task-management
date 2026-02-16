@@ -177,7 +177,8 @@ export class PageDataChecker {
     // 检查权重总和
     const deptWeights = new Map<string, number>()
     strategicIndicators.forEach(i => {
-      const dept = i.responsibleDept || '未分配'
+      const dept = i.responsibleDept
+      if (!dept) return // Skip indicators without responsible department
       const current = deptWeights.get(dept) || 0
       deptWeights.set(dept, current + (i.weight || 0))
     })

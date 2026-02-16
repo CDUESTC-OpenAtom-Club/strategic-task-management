@@ -146,7 +146,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     // 统计实际指标数据
     targetIndicators.forEach(indicator => {
-      const dept = indicator.responsibleDept || '未分配'
+      const dept = indicator.responsibleDept
+      if (!dept) return // Skip indicators without responsible department
       
       // 战略发展部：只统计职能部门的指标，跳过学院
       if (role === 'strategic_dept' && !targetDepartments.has(dept)) {
@@ -352,7 +353,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }>()
 
     indicators.forEach(indicator => {
-      const deptName = (indicator[groupField] as string) || '未分配'
+      const deptName = indicator[groupField] as string
+      if (!deptName) return // Skip indicators without department
       if (!deptMap.has(deptName)) {
         deptMap.set(deptName, {
           totalProgress: 0,
@@ -435,9 +437,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 统计实际任务流转
     indicators.forEach(indicator => {
       const source = indicator.ownerDept || '战略发展部'
-      const target = indicator.responsibleDept || '未分配'
+      const target = indicator.responsibleDept
 
-      if (!source || !target) return
+      if (!source || !target) return // Skip indicators without complete department info
 
       nodes.add(source)
       nodes.add(target)
