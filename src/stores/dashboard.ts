@@ -22,6 +22,8 @@ import { useAuthStore } from './auth'
 import { useTimeContextStore } from './timeContext'
 import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from './org'
+import api from '@/api'
+import { logger } from '@/utils/logger'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -531,22 +533,18 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = null
 
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch('/api/dashboard', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      })
+      logger.info('[Dashboard Store] Fetching dashboard data from API...')
+      const response = await api.get<DashboardData>('/dashboard')
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data')
+      if (response.success && response.data) {
+        dashboardData.value = response.data
+        logger.info('[Dashboard Store] Dashboard data loaded successfully')
+      } else {
+        throw new Error(response.message || 'Failed to fetch dashboard data')
       }
-
-      const result: ApiResponse<DashboardData> = await response.json()
-      dashboardData.value = result.data
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error occurred'
-      console.error('Dashboard fetch error:', err)
+      logger.error('[Dashboard Store] Failed to fetch dashboard data:', err)
     } finally {
       loading.value = false
     }
@@ -554,37 +552,29 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   const fetchDepartmentProgress = async () => {
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch('/api/dashboard/department-progress', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      })
+      logger.info('[Dashboard Store] Fetching department progress from API...')
+      const response = await api.get<DepartmentProgress[]>('/dashboard/department-progress')
 
-      if (response.ok) {
-        const result: ApiResponse<DepartmentProgress[]> = await response.json()
-        departmentProgress.value = result.data
+      if (response.success && response.data) {
+        departmentProgress.value = response.data
+        logger.info('[Dashboard Store] Department progress loaded successfully')
       }
     } catch (err) {
-      console.error('Department progress fetch error:', err)
+      logger.error('[Dashboard Store] Failed to fetch department progress:', err)
     }
   }
 
   const fetchRecentActivities = async () => {
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch('/api/dashboard/recent-activities', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      })
+      logger.info('[Dashboard Store] Fetching recent activities from API...')
+      const response = await api.get<any[]>('/dashboard/recent-activities')
 
-      if (response.ok) {
-        const result: ApiResponse<any[]> = await response.json()
-        recentActivities.value = result.data
+      if (response.success && response.data) {
+        recentActivities.value = response.data
+        logger.info('[Dashboard Store] Recent activities loaded successfully')
       }
     } catch (err) {
-      console.error('Recent activities fetch error:', err)
+      logger.error('[Dashboard Store] Failed to fetch recent activities:', err)
     }
   }
 

@@ -40,6 +40,8 @@ CLAUDE.md
 # Temporary files
 *.tmp
 *.temp
+*.bak
+*.backup
 check-db.js
 .postman.json
 

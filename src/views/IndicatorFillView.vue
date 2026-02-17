@@ -1,12 +1,15 @@
+
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElButton, ElIcon, ElCard } from 'element-plus'
+import { ElButton, ElIcon, ElCard, ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { Indicator } from '@/types'
 import { usePlanStore } from '@/stores/plan'
 import IndicatorFillForm from '@/components/indicator/IndicatorFillForm.vue'
 import IndicatorFillHistory from '@/components/indicator/IndicatorFillHistory.vue'
+import { indicatorApi } from '@/api/indicator'
+import { logger } from '@/utils/logger'
 
 /**
  * 指标填报页面
@@ -15,6 +18,7 @@ import IndicatorFillHistory from '@/components/indicator/IndicatorFillHistory.vu
  * - 显示指标填报表单
  * - 显示填报历史记录
  * - 支持保存草稿和提交审核
+ * ✅ FIXED: 现在使用真实 API 加载指标详情
  */
 
 const router = useRouter()
@@ -59,23 +63,43 @@ const handleSelectHistory = (fill: any) => {
   showHistory.value = false
 }
 
-// 加载指标详情
+// 加载指标详情 - ✅ FIXED: 使用真实 API 调用
 const loadIndicator = async () => {
   loading.value = true
   try {
-    // TODO: 从 API 加载指标详情
-    // 目前使用模拟数据
-    indicator.value = {
-      id: indicatorId.value,
-      task_id: 1,
-      name: '示例指标',
-      definition: '这是一个示例指标定义',
-      milestones: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    logger.info(`[IndicatorFillView] Loading indicator ${indicatorId.value} from API...`)
+
+    const response = await indicatorApi.getIndicatorById(indicatorId.value)
+
+    if (response.success && response.data) {
+      // 将 IndicatorVO 转换为 Indicator 类型
+      indicator.value = {
+        id: response.data.indicatorId.toString(),
+        task_id: response.data.taskId,
+        name: response.data.indicatorDesc,
+        definition: response.data.indicatorDesc,
+        milestones: response.data.milestones?.map(m => ({
+          id: m.milestoneId.toString(),
+          indicator_id: m.indicatorId.toString(),
+          name: m.milestoneName,
+          description: m.milestoneDesc || '',
+          deadline: m.dueDate,
+          weight_percent: m.weightPercent,
+          status: m.status.toLowerCase(),
+          sort_order: m.sortOrder,
+          created_at: m.createdAt,
+          updated_at: m.updatedAt
+        })) || [],
+        createdAt: response.data.createdAt,
+        updatedAt: response.data.updatedAt
+      }
+      logger.info(`[IndicatorFillView] Indicator loaded successfully`)
+    } else {
+      throw new Error(response.message || 'Failed to load indicator')
     }
   } catch (error) {
-    console.error('Failed to load indicator:', error)
+    logger.error('[IndicatorFillView] Failed to load indicator:', error)
+    ElMessage.error('加载指标详情失败')
   } finally {
     loading.value = false
   }
@@ -85,7 +109,6 @@ onMounted(() => {
   loadIndicator()
 })
 </script>
-
 <template>
   <div class="indicator-fill-view">
     <!-- 头部 -->
