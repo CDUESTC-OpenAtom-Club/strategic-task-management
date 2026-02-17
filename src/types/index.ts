@@ -8,6 +8,38 @@
  */
 
 // ============================================================================
+// 统一实体类型导出 (与后端完全对齐)
+// ============================================================================
+export type {
+  StrategicTask,
+  Indicator,
+  Milestone,
+  User,
+  AssessmentCycle,
+  ProgressReport,
+  StatusAuditEntry,
+  PageResponse,
+  ApiResponse,
+  CreateStrategicTaskRequest,
+  UpdateStrategicTaskRequest,
+  CreateIndicatorRequest,
+  UpdateIndicatorRequest,
+  SubmitProgressApprovalRequest,
+  ApproveProgressRequest,
+  CreateMilestoneRequest,
+  UpdateMilestoneRequest
+} from './entities'
+
+export enum {
+  TaskType,
+  MilestoneStatus,
+  ProgressApprovalStatus,
+  AuditAction,
+  IndicatorStatus,
+  UserRole
+} from './entities'
+
+// ============================================================================
 // Zod 运行时验证 Schema 重新导出
 // ============================================================================
 export {
