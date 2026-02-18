@@ -77,7 +77,6 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     EmptyState: typeof import('./components/common/EmptyState.vue')['default']
     EnhancedMessageCenter: typeof import('./components/message/EnhancedMessageCenter.vue')['default']
-    HelloWorld: typeof import('./components/HelloWorld.vue')['default']
     HelpTooltip: typeof import('./components/common/HelpTooltip.vue')['default']
     IndicatorDetailDialog: typeof import('./components/indicator/IndicatorDetailDialog.vue')['default']
     IndicatorFillForm: typeof import('./components/indicator/IndicatorFillForm.vue')['default']

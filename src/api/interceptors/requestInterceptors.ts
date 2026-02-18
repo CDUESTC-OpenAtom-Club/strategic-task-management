@@ -1,37 +1,30 @@
 /**
  * Request Interceptors - 请求拦截器模块
  *
+ * Phase 4 重构: 简化拦截器,删除过度工程化功能
+ *
  * 职责:
  * - Mock 模式处理
  * - 性能监控
  * - 缓存验证头
  * - 请求 ID
  * - 认证 Token
- * - 请求签名
- * - 幂等性 Key
  *
- * @module api/interceptors
+ * 删除的功能:
+ * - 请求签名 (内部系统不需要)
+ * - 幂等性 Key (内部系统不需要)
  */
 
 import type { InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { generateSignature } from '@/utils/security'
 import { logger } from '@/utils/logger'
-import { addRequestId } from '../errorHandler'
-import {
-  generateIdempotencyKey,
-  shouldAddIdempotencyKey,
-  DEFAULT_IDEMPOTENCY_CONFIG
-} from '@/utils/idempotency'
+import { generateRequestId } from '../errorHandler'
 import {
   cacheManager,
   generateCacheKey,
   shouldCache,
   getCacheValidationHeaders
 } from '@/utils/cache'
-
-// 需要签名验证的敏感操作路径
-const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
 
 // Mock 模式配置
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
@@ -41,17 +34,13 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
  */
 export interface RequestInterceptorConfig {
   useMock?: boolean
-  sensitivePaths?: string[]
 }
 
 /**
  * 创建请求拦截器
  */
 export function createRequestInterceptor(config: RequestInterceptorConfig = {}) {
-  const {
-    useMock = USE_MOCK,
-    sensitivePaths = SENSITIVE_PATHS
-  } = config
+  const { useMock = USE_MOCK } = config
 
   return async (axiosConfig: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> => {
     const config = axiosConfig as any
@@ -93,90 +82,28 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     // ========================================================================
     // REQUEST ID (for error tracking and log correlation)
     // ========================================================================
-    addRequestId(config)
+    const requestId = generateRequestId()
+    config.headers['X-Request-ID'] = requestId
+
+    // ========================================================================
+    // AUTHENTICATION TOKEN
+    // ========================================================================
+    const authStore = useAuthStore()
+    const token = authStore.token
+
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+      logger.debug('🔐 [Auth] Token 已添加到请求头')
+    } else {
+      logger.debug('⚠️  [Auth] 未找到 Token,请求可能被拦截')
+    }
 
     // 调试日志：请求开始
     logger.debug('🚀 [API Request]', {
       method: config.method?.toUpperCase(),
       url: config.url,
-      params: config.params,
-      data: config.data,
-      requestId: config.headers['X-Request-ID']
+      requestId: requestId.substring(0, 8)
     })
-
-    // ========================================================================
-    // AUTH TOKEN
-    // ========================================================================
-    const authStore = useAuthStore()
-
-    // 优先从authStore读取token，如果不存在则从localStorage读取（解决时序问题）
-    const storeToken = authStore.token
-    const localToken = localStorage.getItem('token')
-    const token = storeToken || localToken
-    
-    // 强制输出到console，用于调试
-    console.log('[RequestInterceptor] Token检查:', {
-      url: config.url,
-      hasStoreToken: !!storeToken,
-      hasLocalToken: !!localToken,
-      willUseToken: !!token,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
-    })
-    
-    logger.debug('🔍 [API Auth] Token检查:', {
-      hasStoreToken: !!storeToken,
-      hasLocalToken: !!localToken,
-      willUseToken: !!token,
-      url: config.url
-    })
-    
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-      console.log('[RequestInterceptor] ✅ Authorization头已添加:', config.url)
-      logger.debug('🔐 [API Auth] Token已添加', {
-        source: storeToken ? 'authStore' : 'localStorage',
-        tokenPreview: token.substring(0, 20) + '...',
-        url: config.url
-      })
-    } else {
-      console.warn('[RequestInterceptor] ⚠️ 无Token，未添加Authorization头:', config.url)
-      logger.warn('⚠️ [API Auth] 无Token (authStore和localStorage都为空)', {
-        url: config.url
-      })
-    }
-
-    // ========================================================================
-    // REQUEST SIGNATURE (for sensitive operations)
-    // ========================================================================
-    const isSensitive = sensitivePaths.some(path => config.url?.includes(path))
-    const isWriteOperation = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(
-      config.method?.toUpperCase() || ''
-    )
-
-    if (isSensitive && isWriteOperation) {
-      const timestamp = Date.now()
-      const signature = await generateSignature(config.data, timestamp)
-      config.headers['X-Timestamp'] = timestamp.toString()
-      config.headers['X-Signature'] = signature
-      logger.debug('🔏 [API Security] 签名已添加')
-    }
-
-    // ========================================================================
-    // IDEMPOTENCY KEY (for write operations on protected paths)
-    // ========================================================================
-    if (shouldAddIdempotencyKey(config.method, config.url || '', DEFAULT_IDEMPOTENCY_CONFIG)) {
-      try {
-        const idempotencyKey = await generateIdempotencyKey(
-          config.method || 'POST',
-          config.url || '',
-          config.data
-        )
-        config.headers['X-Idempotency-Key'] = idempotencyKey
-        logger.debug('🔑 [API Idempotency] Key已添加:', idempotencyKey.substring(0, 8) + '...')
-      } catch (error) {
-        logger.warn('⚠️ [API Idempotency] 生成Key失败:', error)
-      }
-    }
 
     return config
   }
@@ -186,8 +113,14 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
  * 创建请求错误拦截器
  */
 export function createRequestErrorInterceptor() {
-  return (error: any): Promise<never> => {
-    logger.error('❌ [API Request Error]', error)
+  return (error: any) => {
+    logger.error('❌ [Request Error]', error.message)
+
+    // 如果是取消的请求,不显示错误
+    if (error.code === 'ECONNABORTED') {
+      return Promise.reject(error)
+    }
+
     return Promise.reject(error)
   }
 }

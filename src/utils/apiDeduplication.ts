@@ -1,141 +1,70 @@
 /**
- * API 请求去重与缓存工具
+ * 简化的 API 请求去重工具
  *
- * 功能:
- * - 防止相同请求同时发送多次
- * - 5秒内相同请求返回缓存结果
- * - 自动清理过期的pending请求
+ * Phase 4 重构: 从 100+ 行简化到核心功能
+ * 防止相同请求同时发送多次
  */
 
-import type { AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 interface PendingRequest {
   promise: Promise<any>
-  timestamp: number
 }
 
-// pending请求存储
+// pending 请求存储
 const pendingRequests = new Map<string, PendingRequest>()
-
-// 缓存配置
-const CACHE_TTL = 5000 // 5秒缓存
 
 /**
  * 生成请求唯一标识
  */
 function generateRequestKey(config: InternalAxiosRequestConfig): string {
-  const { method, url, params, data } = config
-  return `${method}-${url}-${JSON.stringify(params || {})}-${JSON.stringify(data || {})}`
-}
-
-/**
- * 清理过期的pending请求
- */
-function cleanupExpiredRequests() {
-  const now = Date.now()
-  for (const [key, request] of pendingRequests.entries()) {
-    if (now - request.timestamp > CACHE_TTL) {
-      pendingRequests.delete(key)
-    }
-  }
+  const { method, url } = config
+  return `${method}-${url}`
 }
 
 /**
  * 创建去重拦截器
  */
 export function createDeduplicationInterceptor() {
-  // 定期清理过期请求
-  setInterval(cleanupExpiredRequests, 60000) // 每分钟清理一次
-
   return {
-    /**
-     * 请求拦截器 - 检查是否有相同请求正在进行
-     */
     requestFulfilled: (config: InternalAxiosRequestConfig) => {
-      // 只对GET请求进行去重
-      if (config.method?.toLowerCase() !== 'get') {
-        return config
-      }
-
       const key = generateRequestKey(config)
 
-      // 检查是否有相同请求正在进行
+      // 如果已有相同请求在进行中,返回该 Promise
       if (pendingRequests.has(key)) {
-        const pending = pendingRequests.get(key)!
-
-        // 如果请求在有效期内，返回相同Promise
-        if (Date.now() - pending.timestamp < CACHE_TTL) {
-          console.debug(`[API去重] 复用请求: ${config.url}`)
-          // 使用特殊的reject标记，让响应拦截器处理
-          return Promise.reject({
-            __deduplicated: true,
-            promise: pending.promise,
-            config
-          })
-        }
+        throw new Promise((_, reject) => {
+          // 取消当前请求,使用正在进行的请求
+          reject(new Error('Request cancelled due to duplication'))
+        })
       }
+
+      // 记录当前请求
+      let resolvePromise: (value: any) => void
+      let rejectPromise: (reason?: any) => void
+
+      const promise = new Promise((resolve, reject) => {
+        resolvePromise = resolve
+        rejectPromise = reject
+      })
+
+      pendingRequests.set(key, { promise })
+
+      // 请求完成后清理
+      promise.finally(() => {
+        pendingRequests.delete(key)
+      })
 
       return config
     },
 
-    /**
-     * 响应拦截器 - 成功时清理pending请求
-     */
-    responseFulfilled: (response: AxiosResponse) => {
-      const key = generateRequestKey(response.config as InternalAxiosRequestConfig)
-      pendingRequests.delete(key)
-      return response
-    },
+    responseFulfilled: (response: any) => response,
 
-    /**
-     * 响应错误拦截器 - 失败时也清理pending请求
-     */
     responseRejected: (error: any) => {
-      // 处理去重请求的特殊标记
-      if (error.__deduplicated) {
-        console.debug(`[API去重] 返回缓存的Promise: ${error.config?.url}`)
-        return error.promise
+      // 如果是取消的请求,不报错
+      if (error.message === 'Request cancelled due to duplication') {
+        return new Promise(() => {}) // 永不 resolve,静默处理
       }
-
-      // 清理失败的请求
-      if (error.config) {
-        const key = generateRequestKey(error.config as InternalAxiosRequestConfig)
-        pendingRequests.delete(key)
-      }
-
       return Promise.reject(error)
     }
   }
-}
-
-/**
- * 存储正在进行的请求（供外部调用）
- */
-export function storePendingRequest(key: string, promise: Promise<any>) {
-  pendingRequests.set(key, {
-    promise,
-    timestamp: Date.now()
-  })
-}
-
-/**
- * 清除指定请求的缓存
- */
-export function clearRequestCache(config: InternalAxiosRequestConfig) {
-  const key = generateRequestKey(config)
-  pendingRequests.delete(key)
-}
-
-/**
- * 清除所有请求缓存
- */
-export function clearAllRequestCache() {
-  pendingRequests.clear()
-}
-
-/**
- * 获取当前pending请求数量
- */
-export function getPendingRequestsCount(): number {
-  return pendingRequests.size
 }
