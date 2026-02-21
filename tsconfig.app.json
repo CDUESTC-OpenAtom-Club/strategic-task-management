@@ -11,7 +11,9 @@
       "@stores/*": ["src/stores/*"],
       "@types/*": ["src/types/*"],
       "@utils/*": ["src/utils/*"],
-      "@api/*": ["src/api/*"]
+      "@api/*": ["src/api/*"],
+      "@/features/*": ["src/features/*"],
+      "@/shared/*": ["src/shared/*"]
     },
 
     /* Linting */

@@ -1,11 +1,13 @@
 /**
  * 组织机构 API
  * 从后端获取部门数据
+ * 使用简化的 apiClient，在业务层实现必要的重试逻辑
  *
  * @see Requirements 2.1, 2.3 - 使用 Zod 推导的 OrgVO 类型
- * @see Requirements 4.1, 4.2, 4.3 - 使用 Zod 验证 API 响应
+ * @see Requirements 2.4, 2.6 - 使用简化的 apiClient
  */
-import { apiService } from './index'
+import { apiClient } from '@/shared/api/client'
+import { logger } from '@/utils/logger'
 import { orgListResponseSchema, type OrgVO, type OrgType } from './schemas/org.schema'
 
 // 重新导出 OrgVO 类型供其他模块使用
@@ -86,7 +88,7 @@ export const orgApi = {
    */
   async getAllOrgs(): Promise<OrgVO[]> {
     try {
-      const response = await apiService.get('/orgs')
+      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>('/orgs')
 
       // Zod 运行时验证
       const result = orgListResponseSchema.safeParse(response)
@@ -107,6 +109,7 @@ export const orgApi = {
 
       return result.data.data
     } catch (error) {
+      logger.error('[orgApi] Failed to get orgs:', error)
       return []
     }
   },
@@ -119,19 +122,19 @@ export const orgApi = {
    */
   async getAllDepartments(): Promise<Department[]> {
     try {
-      const response = await apiService.get('/orgs')
-      
+      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>('/orgs')
+
       // Direct transformation without Zod validation to avoid issues
       if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
         return response.data.map((org: any) => {
           const id = org.id || org.orgId
           const name = org.name || org.orgName
           const type = org.type || org.orgType
-          
+
           if (!id || !name || !type) {
             console.warn('Invalid org data:', org)
           }
-          
+
           return {
             id: String(id),
             name: name,
@@ -140,10 +143,10 @@ export const orgApi = {
           }
         })
       }
-      
+
       return []
     } catch (error) {
-      console.error('Error loading departments:', error)
+      logger.error('[orgApi] Error loading departments:', error)
       return []
     }
   },

@@ -35,7 +35,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: () => import('@/views/DashboardView.vue'),
+    component: () => import('@/features/dashboard/views/DashboardView.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -47,13 +47,13 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/indicators',
     name: 'Indicators',
-    component: () => import('@/views/IndicatorListView.vue'),
+    component: () => import('@/features/indicator/views/IndicatorListView.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/distribution',
     name: 'Distribution',
-    component: () => import('@/views/IndicatorDistributionView.vue'),
+    component: () => import('@/features/indicator/views/IndicatorDistributionView.vue'),
     meta: { requiresAuth: true, roles: ['functional_dept'] }
   },
   {
@@ -80,7 +80,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans',
     name: 'PlanList',
-    component: () => import('@/views/PlanListView.vue'),
+    component: () => import('@/features/plan/views/PlanListView.vue'),
     meta: { requiresAuth: true }
   },
 
@@ -91,7 +91,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans/:id',
     name: 'plan-detail',
-    component: () => import('@/views/PlanDetailView.vue'),
+    component: () => import('@/features/plan/views/PlanDetailView.vue'),
     meta: { requiresAuth: true }
   },
 
@@ -102,7 +102,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans/:id/edit',
     name: 'plan-edit',
-    component: () => import('@/views/PlanEditView.vue'),
+    component: () => import('@/features/plan/views/PlanEditView.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept'] }
   },
 
@@ -112,7 +112,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans/create',
     name: 'plan-create',
-    component: () => import('@/views/PlanEditView.vue'),
+    component: () => import('@/features/plan/views/PlanEditView.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept'] }
   },
 
@@ -123,7 +123,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/fills/indicator/:indicatorId',
     name: 'indicator-fill',
-    component: () => import('@/views/IndicatorFillView.vue'),
+    component: () => import('@/features/indicator/views/IndicatorFillView.vue'),
     meta: { requiresAuth: true }
   },
 
@@ -134,7 +134,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/audit/plan/:fillId',
     name: 'plan-audit',
-    component: () => import('@/views/PlanAuditView.vue'),
+    component: () => import('@/features/plan/views/PlanAuditView.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept', 'functional_dept'] }
   },
 
