@@ -58,7 +58,9 @@ export default defineConfig(({ mode }) => {
         '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
         '@types': fileURLToPath(new URL('./src/types', import.meta.url)),
         '@utils': fileURLToPath(new URL('./src/utils', import.meta.url)),
-        '@api': fileURLToPath(new URL('./src/api', import.meta.url))
+        '@api': fileURLToPath(new URL('./src/api', import.meta.url)),
+        '@/features': fileURLToPath(new URL('./src/features', import.meta.url)),
+        '@/shared': fileURLToPath(new URL('./src/shared', import.meta.url))
       }
     },
     server: {

@@ -2,268 +2,314 @@
 
 This directory contains TypeScript type definitions for the SISM frontend application.
 
+## 核心原则
+
+> **后端叫什么,前端就叫什么**
+
+消除"翻译层",消除认知负荷。前后端使用统一的术语和命名。
+
 ## Files
 
-### `backend-aligned.ts`
+### `entities.ts` ⭐ 核心
 
-Contains TypeScript interfaces that directly align with the backend database schema. These types use backend field names and should be used when communicating with the API.
+**统一的实体类型定义,与后端完全对齐。**
 
-**Key Features:**
+所有新代码都应该使用这里的类型定义。
 
-- Direct mapping to PostgreSQL database schema
-- Backend field naming conventions (snake_case in comments, camelCase in TypeScript)
-- Complete enum definitions matching backend
-- Type guards for API responses
+**包含:**
+- `StrategicTask` - 对应后端 `strategic_task` 表
+- `Indicator` - 对应后端 `indicator` 表
+- `Milestone` - 对应后端 `milestone` 表
+- `User` - 对应后端 `app_user` 表
+- `AssessmentCycle` - 对应后端 `assessment_cycle` 表
+- `ProgressReport` - 对应后端 `progress_report` 表
+- 完整的枚举类型定义
+- 请求/响应类型定义
+- 实用工具类型
 
-### `index.ts`
-
-Contains frontend-specific types and UI-related interfaces. These types use frontend terminology and conventions.
-
-**Key Features:**
-
-- UI component types
-- Form state types
-- Dashboard and visualization types
-- Frontend-specific enums
-
-## Terminology Mapping
-
-The system uses different terminology in the backend vs frontend to better match user mental models:
-
-| Backend Term                     | Frontend Term | Description                         |
-| -------------------------------- | ------------- | ----------------------------------- |
-| `strategic_task`                 | `Plan`        | Top-level strategic planning entity |
-| `indicator` (at plan level)      | `Task`        | Work items under a Plan             |
-| `indicator` (at execution level) | `Indicator`   | Measurable metrics with milestones  |
-
-### Why This Mapping?
-
-1. **Backend (`strategic_task`)**: Database uses this term for historical reasons and technical clarity
-2. **Frontend (`Plan`)**: Users think of these as "plans" or "strategic plans", not "tasks"
-3. **Backend (`indicator`)**: Database uses this term for all measurable items
-4. **Frontend (`Task`/`Indicator`)**: Users distinguish between work items (tasks) and metrics (indicators)
-
-## Usage Guidelines
-
-### When to Use `backend-aligned.ts`
-
-Use these types when:
-
-- Making API calls
-- Processing API responses
-- Storing data that will be sent to the backend
-- Writing API service layer code
-
+**示例:**
 ```typescript
-import { Plan, Task, ApiResponse } from '@/types/backend-aligned'
+import { StrategicTask, Indicator, Milestone } from '@/types/entities'
 
-async function fetchPlan(planId: number): Promise<ApiResponse<Plan>> {
-  const response = await axios.get(`/api/plans/${planId}`)
-  return response.data
-}
-```
-
-### When to Use `index.ts`
-
-Use these types when:
-
-- Building UI components
-- Managing component state
-- Handling form data
-- Creating visualization data structures
-
-```typescript
-import { DashboardData, FilterState } from '@/types'
-
-const dashboardData: DashboardData = {
-  totalScore: 85,
-  completionRate: 75
+const task: StrategicTask = {
+  taskId: 1,
+  taskName: '提升教学质量',
+  taskDesc: '战略任务描述',
+  taskType: TaskType.DEVELOPMENT,
   // ...
 }
 ```
 
-### Type Conversion
+### `schemas.ts`
 
-When converting between backend and frontend types, create explicit conversion functions:
+Zod 运行时验证 Schema。
+
+提供运行时类型验证,用于 API 响应验证和表单验证。
+
+**使用场景:**
+- API 响应验证
+- 表单数据验证
+- 运行时类型检查
+
+**示例:**
+```typescript
+import { validateIndicator } from '@/types'
+
+const isValid = validateIndicator(apiResponse.data)
+```
+
+### `index.ts`
+
+统一导出入口。
+
+**重新导出:**
+- `entities.ts` 的所有类型
+- `schemas.ts` 的所有 Schema
+
+**使用方式:**
+```typescript
+// 推荐: 直接从 @/types 导入
+import { StrategicTask, Indicator } from '@/types'
+
+// 等价于:
+import { StrategicTask, Indicator } from '@/types/entities'
+```
+
+## 命名规范
+
+### 实体类型命名
+
+| 后端表名 | 前端类型名 | 字段命名 |
+|---------|----------|---------|
+| `strategic_task` | `StrategicTask` | `taskId`, `taskName`, `taskDesc` |
+| `indicator` | `Indicator` | `indicatorId`, `indicatorName`, `indicatorDesc` |
+| `milestone` | `Milestone` | `milestoneId`, `milestoneName`, `milestoneDesc` |
+| `app_user` | `User` | `userId`, `username`, `passwordHash` |
+
+**规则:**
+- ✅ 类型名: PascalCase,去掉下划线,首字母大写
+- ✅ 字段名: camelCase,与后端 VO 完全一致
+- ❌ 不要创建"翻译层" (如 Plan, Task 等别名)
+
+### 枚举类型命名
 
 ```typescript
-// In a service or utility file
-import { Plan as BackendPlan } from '@/types/backend-aligned'
-import { StrategicTask as FrontendPlan } from '@/types'
+// ✅ 正确: 使用后端枚举值
+enum TaskType {
+  BASIC = 'BASIC',
+  DEVELOPMENT = 'DEVELOPMENT',
+  KEY = 'KEY'
+}
 
-export function convertBackendPlanToFrontend(backendPlan: BackendPlan): FrontendPlan {
-  return {
-    id: backendPlan.taskId.toString(),
-    title: backendPlan.taskName,
-    desc: backendPlan.taskDesc || ''
-    // ... other field mappings
-  }
+// ❌ 错误: 创建中文别名
+enum TaskType {
+  BASIC = '基础性',  // 不要这样做!
+  DEVELOPMENT = '发展性'
 }
 ```
 
-## Type Safety Best Practices
+## 使用指南
 
-### 1. Use Type Guards
+### API 调用
 
 ```typescript
-import { isApiError, isApiResponse } from '@/types/backend-aligned'
+import { strategicTaskApi } from '@/api/strategic'
+import type { StrategicTask, ApiResponse } from '@/types'
+
+async function loadStrategicTasks(): Promise<StrategicTask[]> {
+  const response = await strategicTaskApi.getAllStrategicTasks()
+
+  if (response.success && response.data) {
+    return response.data
+  }
+
+  return []
+}
+```
+
+### Store 定义
+
+```typescript
+import { defineStore } from 'pinia'
+import type { StrategicTask } from '@/types'
+
+export const useStrategicTaskStore = defineStore('strategicTask', () => {
+  const strategicTasks = ref<StrategicTask[]>([])
+  const currentTask = ref<StrategicTask | null>(null)
+
+  async function loadTask(taskId: number) {
+    // ...
+  }
+
+  return { strategicTasks, currentTask, loadTask }
+})
+```
+
+### View 组件
+
+```vue
+<script setup lang="ts">
+import type { StrategicTask } from '@/types'
+
+interface Props {
+  task: StrategicTask
+}
+
+const props = defineProps<Props>()
+</script>
+
+<template>
+  <div>
+    <h3>{{ task.taskName }}</h3>
+    <p>{{ task.taskDesc }}</p>
+  </div>
+</template>
+```
+
+## 迁移指南
+
+如果你需要将旧代码迁移到新的类型系统:
+
+### 1. 识别需要修改的文件
+
+搜索以下模式:
+- `from '@/types/backend-aligned'` → 改为 `from '@/types/entities'`
+- `: Plan` → 改为 `: StrategicTask`
+- `: Task` → 改为 `: Milestone` (如果是里程碑) 或 `: Indicator` (如果是指標)
+
+### 2. 更新导入
+
+```typescript
+// ❌ 旧代码
+import { Plan, Task } from '@/types/backend-aligned'
+
+// ✅ 新代码
+import { StrategicTask, Milestone, Indicator } from '@/types/entities'
+```
+
+### 3. 更新类型引用
+
+```typescript
+// ❌ 旧代码
+const plans = ref<Plan[]>([])
+const currentPlan = ref<Plan | null>(null)
+
+// ✅ 新代码
+const strategicTasks = ref<StrategicTask[]>([])
+const currentTask = ref<StrategicTask | null>(null)
+```
+
+### 4. 更新字段名
+
+```typescript
+// ❌ 旧代码 (如果有字段名不一致)
+plan.id
+plan.title
+
+// ✅ 新代码 (与后端 VO 对齐)
+task.taskId
+task.taskName
+```
+
+## 类型安全最佳实践
+
+### 1. 使用类型推导
+
+```typescript
+// ✅ 好: TypeScript 自动推导类型
+const task: StrategicTask = {
+  taskId: 1,
+  taskName: '任务名称',
+  // ...
+}
+
+// ❌ 差: 使用 any
+const task: any = fetchData()
+```
+
+### 2. 使用类型守卫
+
+```typescript
+import { isApiError } from '@/types/entities'
 
 const response = await fetchData()
+
 if (isApiError(response)) {
-  // Handle error
-  console.error(response.error.message)
-} else if (isApiResponse(response)) {
-  // Handle success
-  processData(response.data)
+  // TypeScript 知道这是 ApiError
+  console.error(response.message)
+} else {
+  // TypeScript 知道这是 ApiResponse<T>
+  console.log(response.data)
 }
 ```
 
-### 2. Avoid `any`
-
-Never use `any` type. Use `unknown` if the type is truly unknown, then narrow it with type guards.
+### 3. 避免类型断言
 
 ```typescript
-// Bad
-function processData(data: any) {
-  return data.value
-}
+// ❌ 差: 强制类型断言
+const task = data as StrategicTask
 
-// Good
-function processData(data: unknown) {
-  if (typeof data === 'object' && data !== null && 'value' in data) {
-    return (data as { value: number }).value
-  }
-  throw new Error('Invalid data structure')
+// ✅ 好: 类型守卫或验证
+if (isStrategicTask(data)) {
+  // TypeScript 知道这是 StrategicTask
+  const task = data
 }
 ```
 
-### 3. Use Utility Types
+## 测试
 
-```typescript
-import { DeepPartial, RequireFields } from '@/types/backend-aligned'
-
-// Make all fields optional for partial updates
-type PartialTask = DeepPartial<Task>
-
-// Require specific fields
-type TaskWithRequired = RequireFields<Task, 'indicatorId' | 'taskId'>
-```
-
-### 4. Runtime Validation in Development
-
-In development mode, validate API responses against TypeScript interfaces:
-
-```typescript
-if (import.meta.env.DEV) {
-  validateApiResponse(response, expectedSchema)
-}
-```
-
-## ESLint Rules
-
-The project has ESLint rules to enforce terminology consistency:
-
-- **Warning**: Using `strategic_task` or `strategicTask` in frontend code
-- **Recommendation**: Use `plan` terminology instead
-
-These rules help maintain consistency and prevent confusion between backend and frontend terminology.
-
-## Testing
-
-### Unit Tests
-
-Test type conversions and type guards:
+### 单元测试
 
 ```typescript
 import { describe, it, expect } from 'vitest'
-import { isApiError, isApiResponse } from '@/types/backend-aligned'
+import { validateStrategicTask } from '@/types'
 
-describe('Type Guards', () => {
-  it('should identify API errors correctly', () => {
-    const error = { success: false, error: { code: 'ERR_001' } }
-    expect(isApiError(error)).toBe(true)
+describe('StrategicTask Validation', () => {
+  it('should validate valid strategic task', () => {
+    const task = {
+      taskId: 1,
+      taskName: '任务名称',
+      taskType: TaskType.DEVELOPMENT,
+      // ...
+    }
+
+    expect(validateStrategicTask(task)).toBe(true)
   })
 })
 ```
 
-### Property-Based Tests
+## 贡献指南
 
-Test that type conversions preserve data integrity:
+当添加新类型时:
 
-```typescript
-import fc from 'fast-check'
-import { convertBackendPlanToFrontend } from '@/services/converters'
+1. **确定类型类别**
+   - 实体类型 → 添加到 `entities.ts`
+   - UI 特定类型 → 添加到 `index.ts`
+   - 验证 Schema → 添加到 `schemas.ts`
 
-fc.assert(
-  fc.property(
-    fc.record({
-      taskId: fc.integer(),
-      taskName: fc.string()
-      // ... other fields
-    }),
-    backendPlan => {
-      const frontendPlan = convertBackendPlanToFrontend(backendPlan)
-      expect(frontendPlan.id).toBe(backendPlan.taskId.toString())
-      expect(frontendPlan.title).toBe(backendPlan.taskName)
-    }
-  )
-)
-```
+2. **遵循命名规范**
+   - 与后端完全对齐
+   - 使用后端字段名
+   - 添加 JSDoc 注释
 
-## Migration Guide
-
-If you're updating existing code to use the new type system:
-
-1. **Identify Backend vs Frontend Types**
-   - API calls → use `backend-aligned.ts`
-   - UI components → use `index.ts`
-
-2. **Update Imports**
-
-   ```typescript
-   // Old
-   import { StrategicTask } from '@/types'
-
-   // New (for API calls)
-   import { Plan } from '@/types/backend-aligned'
-
-   // New (for UI)
-   import { StrategicTask } from '@/types'
+3. **运行类型检查**
+   ```bash
+   npm run type-check
    ```
 
-3. **Add Type Conversions**
-   - Create converter functions for backend ↔ frontend type transformations
-   - Place converters in `@/services/converters.ts`
+4. **更新此文档**
+   - 在"实体类型命名"表格中添加新类型
+   - 提供使用示例
 
-4. **Update Tests**
-   - Ensure tests use the correct types
-   - Add property-based tests for type conversions
-
-## Contributing
-
-When adding new types:
-
-1. **Determine the Type Category**
-   - Backend entity → add to `backend-aligned.ts`
-   - UI-specific → add to `index.ts`
-
-2. **Follow Naming Conventions**
-   - Backend types: Use backend field names (camelCase)
-   - Frontend types: Use frontend terminology
-   - Add JSDoc comments explaining the mapping
-
-3. **Add Type Guards**
-   - For discriminated unions
-   - For API response validation
-
-4. **Update This Documentation**
-   - Add the new type to the appropriate section
-   - Provide usage examples
-   - Update the terminology mapping table if needed
-
-## References
+## 参考资料
 
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
 - [Vue 3 TypeScript Guide](https://vuejs.org/guide/typescript/overview.html)
-- Backend Schema: `sism-backend/database/migrations/V1.0__init.sql`
-- Design Document: `.kiro/specs/frontend-optimization/design.md`
+- 后端 API 文档: `sism-backend/src/main/java/com/sism/controller/`
+- 重构规范: `.kiro/specs/frontend-refactor/`
+
+---
+
+**最后更新:** 2025-02-17
+**维护者:** Claude Code
+**相关规范:** Phase 2 - 统一领域语言

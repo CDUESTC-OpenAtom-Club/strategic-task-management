@@ -55,7 +55,7 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   localStorage.setItem('strategic-real-year', currentRealYear.toString())
 
   // 当前选中的年份（默认为当前真实年份，或用户上次选择的年份）
-  const currentYear = ref<number>(initialYear)
+  const currentYear = ref<number>(realCurrentYear)  // 直接使用真实年份
 
   // 可用年份列表（从后端获取或本地生成）
   const availableYears = ref<number[]>([])
@@ -128,8 +128,9 @@ export const useTimeContextStore = defineStore('timeContext', () => {
       // 持久化到 localStorage，刷新页面后能恢复
       localStorage.setItem('strategic-current-year', year.toString())
 
-      // TODO: 触发数据重新加载
-      // 这里会触发其他 Store 的 watch 监听器重新加载数据
+      // 触发数据重新加载
+      // 通过发射事件通知其他组件和 store
+      window.dispatchEvent(new CustomEvent('year-changed', { detail: { year } }))
 
       return true
     } catch (e) {
@@ -145,8 +146,8 @@ export const useTimeContextStore = defineStore('timeContext', () => {
    */
   function getYearStatus(year: number): 'history' | 'current' | 'future' {
     const current = realCurrentYear.value
-    if (year < current) return 'history'
-    if (year > current) return 'future'
+    if (year < current) {return 'history'}
+    if (year > current) {return 'future'}
     return 'current'
   }
 

@@ -1,33 +1,11 @@
 import axios from 'axios'
+import type { AxiosError } from 'axios'
 import type { ApiResponse } from '@/types'
 import { logger } from '@/utils/logger'
-import { createRetryInterceptor, DEFAULT_RETRY_CONFIG } from './retry'
-import {
-  createRequestInterceptor,
-  createRequestErrorInterceptor,
-  createResponseInterceptor,
-  createResponseErrorInterceptor
-} from './interceptors'
 import { formatErrorMessage, isRetryableError, getErrorSeverity } from './errorHandler'
 import type { ExtendedErrorInfo } from '@/types/error'
 import { refreshCache, refreshCachePattern, cacheManager, getFromCache } from '@/utils/cache'
-import { createDeduplicationInterceptor } from '@/utils/apiDeduplication'
-
-// 扩展 AxiosRequestConfig
-declare module 'axios' {
-  interface InternalAxiosRequestConfig {
-    _startTime?: number
-    _cacheKey?: string
-    _useCache?: boolean
-  }
-}
-
-// Mock 模式配置
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
-
-if (USE_MOCK) {
-  logger.warn('🎭 [Mock Mode] 已启用 Mock 模式 - 所有 API 请求将返回模拟数据')
-}
+import { useAuthStore } from '@/stores/auth'
 
 // Create axios instance
 const api = axios.create({
@@ -39,38 +17,115 @@ const api = axios.create({
 })
 
 // ============================================================================
-// 注册拦截器
+// 简化的拦截器 - 只保留核心功能
 // ============================================================================
 
-// 1. 重试拦截器 (必须最先添加)
-createRetryInterceptor(api, {
-  maxRetries: DEFAULT_RETRY_CONFIG.maxRetries,
-  baseDelay: DEFAULT_RETRY_CONFIG.baseDelay,
-  maxDelay: DEFAULT_RETRY_CONFIG.maxDelay
-})
-
-// 2. API去重拦截器 (防止重复请求)
-const dedupInterceptor = createDeduplicationInterceptor()
+// 请求拦截器: Token注入
 api.interceptors.request.use(
-  dedupInterceptor.requestFulfilled,
-  undefined,
-  { synchronous: true } // 同步执行，优先级最高
-)
-api.interceptors.response.use(
-  dedupInterceptor.responseFulfilled,
-  dedupInterceptor.responseRejected
+  (config) => {
+    const authStore = useAuthStore()
+    const token = authStore.token
+
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+
+    return config
+  },
+  (error) => {
+    logger.error('❌ [Request Error]', error.message)
+    return Promise.reject(error)
+  }
 )
 
-// 3. 请求拦截器
-api.interceptors.request.use(
-  createRequestInterceptor({ useMock: USE_MOCK }),
-  createRequestErrorInterceptor()
-)
-
-// 4. 响应拦截器
+// 响应拦截器: 错误处理
 api.interceptors.response.use(
-  createResponseInterceptor({ useMock: USE_MOCK }),
-  createResponseErrorInterceptor({ useMock: USE_MOCK })
+  (response) => {
+    // 成功响应直接返回
+    return response
+  },
+  async (error: AxiosError) => {
+    // 401 未授权 - 跳转登录
+    if (error.response?.status === 401) {
+      const isLoginRequest = error.config?.url?.includes('/auth/login')
+      if (!isLoginRequest) {
+        const authStore = useAuthStore()
+        authStore.logout()
+        
+        const { ElMessage } = await import('element-plus')
+        ElMessage.warning({
+          message: '登录已过期，请重新登录',
+          duration: 3000,
+          showClose: true
+        })
+        
+        setTimeout(() => {
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login'
+          }
+        }, 100)
+      }
+    }
+
+    // 403 权限不足
+    if (error.response?.status === 403) {
+      const isHealthCheck = error.config?.url?.includes('/actuator/health') ||
+                           error.config?.url?.includes('/orgs') ||
+                           error.config?.url?.includes('/indicators') ||
+                           error.config?.url?.includes('/tasks') ||
+                           error.config?.url?.includes('/milestones')
+      
+      const isHealthCheckRequest = error.config?.headers?.['X-Health-Check'] === 'true'
+      
+      if (!isHealthCheck && !isHealthCheckRequest) {
+        const { ElMessage } = await import('element-plus')
+        ElMessage.error({
+          message: '权限不足，无法执行此操作',
+          duration: 3000,
+          showClose: true
+        })
+      }
+    }
+
+    // 500 服务器错误
+    if (error.response?.status === 500) {
+      const { ElMessage } = await import('element-plus')
+      ElMessage.error({
+        message: '服务器内部错误，请稍后重试或联系管理员',
+        duration: 5000,
+        showClose: true
+      })
+    }
+
+    // 网络连接错误
+    if (!error.response && error.request) {
+      const { ElMessage } = await import('element-plus')
+      ElMessage.error({
+        message: '无法连接到后端服务，请确认后端服务已启动',
+        duration: 5000,
+        showClose: true
+      })
+    }
+
+    // 超时错误
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      const { ElMessage } = await import('element-plus')
+      ElMessage.warning({
+        message: '请求超时，请检查网络连接或稍后重试',
+        duration: 4000,
+        showClose: true
+      })
+    }
+
+    logger.error('❌ [API Error]', {
+      method: error.config?.method?.toUpperCase(),
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message
+    })
+
+    return Promise.reject(error)
+  }
 )
 
 // ============================================================================

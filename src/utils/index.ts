@@ -34,14 +34,8 @@ export { cacheManager, generateCacheKey, refreshCache, refreshCachePattern, getF
 // 性能监控
 export { recordApiLatency, getApiLatencyStats, clearLatencyStats } from './performance'
 
-// 安全工具
-export { generateSignature, verifySignature } from './security'
-
 // Token 管理
 export { tokenManager, TokenRefreshError } from './tokenManager'
-
-// 幂等性
-export { generateIdempotencyKey, shouldAddIdempotencyKey } from './idempotency'
 
 // API 健康检查
 export { checkApiHealth, getApiHealthStatus } from './apiHealth'

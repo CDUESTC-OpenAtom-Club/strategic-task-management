@@ -8,6 +8,38 @@
  */
 
 // ============================================================================
+// 统一实体类型导出 (与后端完全对齐)
+// ============================================================================
+export type {
+  StrategicTask,
+  Indicator,
+  Milestone,
+  User,
+  AssessmentCycle,
+  ProgressReport,
+  StatusAuditEntry,
+  PageResponse,
+  ApiResponse,
+  CreateStrategicTaskRequest,
+  UpdateStrategicTaskRequest,
+  CreateIndicatorRequest,
+  UpdateIndicatorRequest,
+  SubmitProgressApprovalRequest,
+  ApproveProgressRequest,
+  CreateMilestoneRequest,
+  UpdateMilestoneRequest
+} from './entities'
+
+export enum {
+  TaskType,
+  MilestoneStatus,
+  ProgressApprovalStatus,
+  AuditAction,
+  IndicatorStatus,
+  UserRole
+} from './entities'
+
+// ============================================================================
 // Zod 运行时验证 Schema 重新导出
 // ============================================================================
 export {
@@ -75,89 +107,11 @@ export interface Permission {
   action: 'create' | 'read' | 'update' | 'delete' | 'approve'
 }
 
-// Strategic Task Types
-export interface StrategicTask {
-  id: string
-  title: string
-  desc: string
-  createTime: string
-  cycle: string
-  startDate: Date
-  endDate: Date
-  status: 'draft' | 'active' | 'completed' | 'cancelled'
-  createdBy: string
-  indicators: StrategicIndicator[]
-  // 时间维度字段
-  year: number                    // 年份，如 2025
-  isRecurring: boolean            // 是否长久性任务（跨年复制）
-  parentTaskId?: string           // 跨年复制的原任务ID
-}
-
-// 进度审批状态类型
-export type ProgressApprovalStatus = 'none' | 'draft' | 'pending' | 'approved' | 'rejected'
-
-// Strategic Indicator Types (Enhanced)
-export interface StrategicIndicator {
-  id: string
-  name: string
-  isQualitative: boolean
-  type1: '定性' | '定量'
-  type2: '发展性' | '基础性'
-  progress: number
-  createTime: string
-  weight: number
-  remark: string
-  canWithdraw: boolean
-  milestones: Milestone[]
-  targetValue: number
-  actualValue?: number
-  unit: string
-  responsibleDept: string
-  responsiblePerson: string
-  status: 'draft' | 'active' | 'archived' | 'distributed' | 'pending' | 'approved'
-  isStrategic: boolean
-  approvalStatus?: ApprovalStatus
-  alertLevel?: AlertLevel
-  taskContent?: string // 关联的战略任务内容
-  ownerDept?: string // 发布方部门 (对应数据库 owner_org_id)
-  parentIndicatorId?: string // 父指标ID (对应数据库 parent_indicator_id)
-  // 时间维度字段
-  year?: number                        // 年份，如 2025（可选，默认当前年）
-  statusAudit?: StatusAuditEntry[]     // 审批/操作历史JSON（可选，默认空数组）
-  // 进度填报审批相关字段
-  progressApprovalStatus?: ProgressApprovalStatus  // 进度审批状态：none-无待审批, pending-待审批, approved-已通过, rejected-已驳回
-  pendingProgress?: number             // 待审批的进度值
-  pendingRemark?: string               // 待审批的说明
-  pendingAttachments?: string[]        // 待审批的附件URL列表
-}
-
-// 状态审计日志条目（用于记录指标的审批历史）
-export interface StatusAuditEntry {
-  id: string
-  timestamp: Date
-  operator: string           // 操作人用户名
-  operatorName: string       // 操作人姓名
-  operatorDept: string       // 操作人部门
-  action: 'submit' | 'approve' | 'reject' | 'revoke' | 'update' | 'distribute' | 'withdraw'  // distribute: 下发, withdraw: 撤销
-  comment?: string           // 操作备注
-  previousStatus?: string    // 变更前状态
-  newStatus?: string         // 变更后状态
-  previousProgress?: number  // 变更前进度
-  newProgress?: number       // 变更后进度
-}
-
-// 里程碑类型
-export interface Milestone {
-  id: string
-  name: string
-  targetProgress: number // 目标进度
-  deadline: string // 截止时间
-  status: 'pending' | 'completed' | 'overdue' // 状态：待完成、已完成、逾期未完成
-  isPaired?: boolean // 是否已配对（有审核通过的填报记录）
-  weightPercent?: number // 权重百分比
-  sortOrder?: number // 排序顺序
-  indicatorId?: string // 关联的指标ID
-}
+// ============================================================================
+// 以下是 UI 特有的类型定义
+// 实体类型(StrategicTask, Indicator, Milestone 等)已移至 entities.ts
+// 请使用: import { StrategicTask, Indicator, Milestone } from '@/types'
+// ============================================================================
 
 // 里程碑配对状态摘要
 export interface MilestonePairingStatus {
@@ -259,17 +213,8 @@ export interface ApprovalHistory {
 }
 
 // Reporting Types
-export interface ProgressReport {
-  id: string
-  indicatorId: string
-  reportedBy: string
-  reportedAt: Date
-  actualValue: number
-  evidence?: string
-  attachments?: Attachment[]
-  status: 'draft' | 'submitted' | 'approved' | 'rejected'
-  rejectionReason?: string
-}
+// ProgressReport 已移至 entities.ts,请使用: import { ProgressReport } from '@/types'
+
 
 // Message Types
 export interface Message {
@@ -342,12 +287,17 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 }
 
 // Form Types
+// 注意: 以下表单类型需要与后端 VO 对齐
+// 使用 CreateStrategicTaskRequest / UpdateStrategicTaskRequest 代替
+
 export interface StrategicTaskForm {
-  title: string
-  desc: string
-  cycle: string
-  startDate: string
-  endDate: string
+  taskName: string        // 与后端对齐: taskName
+  taskDesc: string | null // 与后端对齐: taskDesc
+  cycleId: number         // 与后端对齐: cycleId
+  taskType: TaskType      // 与后端对齐: taskType
+  responsibleDept: string // 与后端对齐
+  weight: number          // 与后端对齐
+  targetValue: number | null // 与后端对齐
 }
 
 export interface IndicatorForm {
