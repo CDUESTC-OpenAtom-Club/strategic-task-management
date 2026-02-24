@@ -252,14 +252,18 @@ export const useStrategicStore = defineStore('strategic', () => {
     // 先进行乐观更新：添加到本地状态
     const tempId = indicator.id
     indicators.value.push(indicator)
-    
+
     try {
       // 调用后端 API 持久化数据
       const { default: indicatorApi, type: IndicatorCreateRequest } = await import('@/api/indicator')
-      
+
+      // 获取当前活动的任务 ID，如果没有则使用第一个任务
+      const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
+      const taskId = activeTask ? Number(activeTask.id) : 1
+
       // 将 StrategicIndicator 映射到 IndicatorCreateRequest
       const request = {
-        taskId: 1, // TODO: 从实际任务获取 taskId，暂时使用默认值
+        taskId,
         indicatorDesc: indicator.name,
         weightPercent: indicator.weight || 0,
         sortOrder: 0,
@@ -269,9 +273,9 @@ export const useStrategicStore = defineStore('strategic', () => {
         year: indicator.year || new Date().getFullYear(),
         canWithdraw: indicator.canWithdraw !== false,
       }
-      
+
       const response = await indicatorApi.createIndicator(request)
-      
+
       if (response.success && response.data) {
         // 用后端返回的真实 ID 更新本地指标
         const index = indicators.value.findIndex(i => i.id === tempId)
@@ -283,19 +287,19 @@ export const useStrategicStore = defineStore('strategic', () => {
             // 可以添加更多从后端返回的字段
           }
         }
-        
+
         logger.info('[Strategic Store] Successfully created indicator:', response.data.indicatorId)
         ElMessage.success('指标创建成功')
       }
     } catch (err) {
       logger.error('[Strategic Store] Failed to create indicator:', err)
-      
+
       // 回滚：从本地状态移除
       const index = indicators.value.findIndex(i => i.id === tempId)
       if (index !== -1) {
         indicators.value.splice(index, 1)
       }
-      
+
       ElMessage.error('指标创建失败，请稍后重试')
       throw err
     }
@@ -303,10 +307,10 @@ export const useStrategicStore = defineStore('strategic', () => {
 
   const updateIndicator = async (id: string, updates: Partial<StrategicIndicator>) => {
     const index = indicators.value.findIndex(i => i.id === id)
-    if (index === -1) return
+    if (index === -1) {return}
 
     const indicator = indicators.value[index]
-    if (!indicator) return
+    if (!indicator) {return}
 
     // 保存原始状态用于回滚
     const originalState = { ...indicator }
@@ -376,7 +380,7 @@ export const useStrategicStore = defineStore('strategic', () => {
   // 根据学院获取子指标
   const getChildIndicatorsByCollege = (college: string) => {
     return indicators.value.filter(i => {
-      if (i.isStrategic) return false
+      if (i.isStrategic) {return false}
       // 支持字符串或数组格式的 responsibleDept
       if (Array.isArray(i.responsibleDept)) {
         return i.responsibleDept.includes(college)

@@ -131,17 +131,26 @@ export const usePlanStore = defineStore('plan', () => {
   // 检查 Plan 是否可以提交
   const canSubmitPlan = (planId: number | string) => {
     const plan = getPlanById(planId)
-    if (!plan) return false
+    if (!plan) {return false}
 
     // 检查状态：只有 draft 或 pending 状态可以提交
     if (plan.status !== 'draft' && plan.status !== 'pending') {
       return false
     }
 
-    // TODO: 检查所有指标是否都已填报
-    // 这里需要根据业务规则实现
+    // 检查所有指标是否都已填报
+    const planReport = getPlanReportByPlanId(planId)
+    if (!planReport || !planReport.indicators || planReport.indicators.length === 0) {
+      return false
+    }
 
-    return true
+    // 检查是否所有指标都有填报记录
+    const allIndicatorsFilled = planReport.indicators.every(indicator => {
+      const fill = getLatestIndicatorFill(indicator.indicatorId)
+      return fill !== null && fill.value !== null && fill.value !== undefined && fill.value !== ''
+    })
+
+    return allIndicatorsFilled
   }
 
   // ============ Actions ============
