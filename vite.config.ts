@@ -18,13 +18,13 @@ export default defineConfig(({ mode }) => {
     mode,
     useMock,
     viteUseMock: env.VITE_USE_MOCK,
-    apiTarget: env.VITE_API_TARGET || 'http://localhost:3500'
+    apiTarget: env.VITE_API_TARGET || 'http://localhost:8080'
   })
 
   if (!useMock) {
     console.log(
       '🌐 [Proxy Enabled] API requests will be forwarded to:',
-      env.VITE_API_TARGET || 'http://localhost:3500'
+      env.VITE_API_TARGET || 'http://localhost:8080'
     )
   } else {
     console.log('🎭 [Mock Mode] Using local mock data')
@@ -63,13 +63,13 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
-      port: 3000,
+      port: 3500,
       // 只在非 Mock 模式下配置代理
       proxy: useMock
         ? undefined
         : {
             '/api': {
-              target: env.VITE_API_TARGET || 'http://localhost:3500',
+              target: env.VITE_API_TARGET || 'http://localhost:8080',
               changeOrigin: true,
               secure: false,
               rewrite: path => path,
