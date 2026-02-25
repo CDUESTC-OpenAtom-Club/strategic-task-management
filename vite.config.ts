@@ -73,14 +73,14 @@ export default defineConfig(({ mode }) => {
               changeOrigin: true,
               secure: false,
               rewrite: path => path,
-              configure: (proxy, _options) => {
-                proxy.on('error', (err, _req, _res) => {
+              configure: (proxy, options) => {
+                proxy.on('error', err => {
                   console.error('❌ [Proxy Error]', err.message)
                 })
-                proxy.on('proxyReq', (_proxyReq, req, _res) => {
-                  console.log('📤 [Proxy Request]', req.method, req.url, '→', _options.target)
+                proxy.on('proxyReq', (proxyReq, req) => {
+                  console.log('📤 [Proxy Request]', req.method, req.url, '→', options.target)
                 })
-                proxy.on('proxyRes', (proxyRes, req, _res) => {
+                proxy.on('proxyRes', (proxyRes, req) => {
                   console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url)
                 })
               }

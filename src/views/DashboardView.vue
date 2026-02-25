@@ -879,6 +879,21 @@ watch(() => strategicStore.loadingState.error, (error) => {
   }
 }, { immediate: true })
 
+// 重新加载数据函数
+const reloadData = async () => {
+  try {
+    startLoading()
+    clearError()
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    await dashboardStore.refreshDashboard()
+  } catch (err) {
+    setError(err instanceof Error ? err.message : '重新加载失败')
+    logger.error('[Dashboard] Failed to reload data:', err)
+  } finally {
+    endLoading()
+  }
+}
+
 // ============================================================================
 // 降级模式检测 - Requirements 1.4, 10.5
 // ============================================================================
@@ -2137,7 +2152,7 @@ onUnmounted(() => {
       <template #default>
         <span class="fallback-alert-content">
           当前使用离线数据，部分功能可能受限。
-          <el-button link type="primary" size="small" @click="strategicStore.loadFromApi()">
+          <el-button link type="primary" size="small" @click="reloadData()">
             <el-icon><Refresh /></el-icon>
             重新连接
           </el-button>
@@ -2198,7 +2213,7 @@ onUnmounted(() => {
               <p class="empty-hint">请检查数据源或联系管理员</p>
             </div>
           </template>
-          <el-button type="primary" @click="strategicStore.loadFromApi()">
+          <el-button type="primary" @click="reloadData()">
             <el-icon><Refresh /></el-icon>
             重新加载
           </el-button>
@@ -2217,7 +2232,7 @@ onUnmounted(() => {
         >
           <template #default>
             <div class="error-actions">
-              <el-button type="primary" size="small" @click="strategicStore.loadFromApi()">
+              <el-button type="primary" size="small" @click="reloadData()">
                 <el-icon><Refresh /></el-icon>
                 重试
               </el-button>
