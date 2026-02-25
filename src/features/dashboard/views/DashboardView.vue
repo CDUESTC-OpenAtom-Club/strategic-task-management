@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { Download, TrendCharts, DataAnalysis, Warning, Aim, Refresh, Filter, QuestionFilled, Top, Bottom, Lightning, Close } from '@element-plus/icons-vue'
+import { Download, Warning, Aim, Refresh, QuestionFilled, Top, Close } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -13,9 +13,7 @@ import DepartmentProgressChart from '@/components/charts/DepartmentProgressChart
 // 新增图表组件
 import TaskSankeyChart from '@/components/charts/TaskSankeyChart.vue'
 import SourcePieChart from '@/components/charts/SourcePieChart.vue'
-import DashboardFilters from '@/components/common/DashboardFilters.vue'
 import * as XLSX from 'xlsx'
-import type { ECharts } from 'echarts'
 import { ElMessage } from 'element-plus'
 import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/stores/org'
@@ -878,6 +876,21 @@ watch(() => strategicStore.loadingState.error, (error) => {
     clearError()
   }
 }, { immediate: true })
+
+// 重新加载数据函数
+const reloadData = async () => {
+  try {
+    startLoading()
+    clearError()
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    await dashboardStore.refreshDashboard()
+  } catch (err) {
+    setError(err instanceof Error ? err.message : '重新加载失败')
+    logger.error('[Dashboard] Failed to reload data:', err)
+  } finally {
+    endLoading()
+  }
+}
 
 // ============================================================================
 // 降级模式检测 - Requirements 1.4, 10.5
@@ -2137,7 +2150,7 @@ onUnmounted(() => {
       <template #default>
         <span class="fallback-alert-content">
           当前使用离线数据，部分功能可能受限。
-          <el-button link type="primary" size="small" @click="strategicStore.loadFromApi()">
+          <el-button link type="primary" size="small" @click="reloadData()">
             <el-icon><Refresh /></el-icon>
             重新连接
           </el-button>
@@ -2198,7 +2211,7 @@ onUnmounted(() => {
               <p class="empty-hint">请检查数据源或联系管理员</p>
             </div>
           </template>
-          <el-button type="primary" @click="strategicStore.loadFromApi()">
+          <el-button type="primary" @click="reloadData()">
             <el-icon><Refresh /></el-icon>
             重新加载
           </el-button>
@@ -2217,7 +2230,7 @@ onUnmounted(() => {
         >
           <template #default>
             <div class="error-actions">
-              <el-button type="primary" size="small" @click="strategicStore.loadFromApi()">
+              <el-button type="primary" size="small" @click="reloadData()">
                 <el-icon><Refresh /></el-icon>
                 重试
               </el-button>
