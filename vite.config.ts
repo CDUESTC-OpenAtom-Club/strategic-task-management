@@ -22,7 +22,10 @@ export default defineConfig(({ mode }) => {
   })
 
   if (!useMock) {
-    console.log('🌐 [Proxy Enabled] API requests will be forwarded to:', env.VITE_API_TARGET || 'http://localhost:8080')
+    console.log(
+      '🌐 [Proxy Enabled] API requests will be forwarded to:',
+      env.VITE_API_TARGET || 'http://localhost:8080'
+    )
   } else {
     console.log('🎭 [Mock Mode] Using local mock data')
   }
@@ -34,11 +37,7 @@ export default defineConfig(({ mode }) => {
         // Element Plus自动导入
         resolvers: [ElementPlusResolver()],
         // Vue相关API自动导入
-        imports: [
-          'vue',
-          'vue-router',
-          'pinia'
-        ],
+        imports: ['vue', 'vue-router', 'pinia'],
         dts: 'src/auto-imports.d.ts',
         eslintrc: {
           enabled: true
@@ -64,27 +63,29 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
-      port: 3000,
+      port: 3500,
       // 只在非 Mock 模式下配置代理
-      proxy: useMock ? undefined : {
-        '/api': {
-          target: env.VITE_API_TARGET || 'http://localhost:8080',
-          changeOrigin: true,
-          secure: false,
-          rewrite: (path) => path,
-          configure: (proxy, options) => {
-            proxy.on('error', (err, req, res) => {
-              console.error('❌ [Proxy Error]', err.message);
-            });
-            proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log('📤 [Proxy Request]', req.method, req.url, '→', options.target);
-            });
-            proxy.on('proxyRes', (proxyRes, req, res) => {
-              console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url);
-            });
+      proxy: useMock
+        ? undefined
+        : {
+            '/api': {
+              target: env.VITE_API_TARGET || 'http://localhost:8080',
+              changeOrigin: true,
+              secure: false,
+              rewrite: path => path,
+              configure: (proxy, _options) => {
+                proxy.on('error', (err, _req, _res) => {
+                  console.error('❌ [Proxy Error]', err.message)
+                })
+                proxy.on('proxyReq', (_proxyReq, req, _res) => {
+                  console.log('📤 [Proxy Request]', req.method, req.url, '→', _options.target)
+                })
+                proxy.on('proxyRes', (proxyRes, req, _res) => {
+                  console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url)
+                })
+              }
+            }
           }
-        }
-      }
     },
     build: {
       // Production build optimizations
@@ -99,13 +100,13 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             'vue-vendor': ['vue', 'vue-router', 'pinia'],
             'element-plus': ['element-plus'],
-            'echarts': ['echarts'],
-            'utils': ['axios', 'dayjs']
+            echarts: ['echarts'],
+            utils: ['axios', 'dayjs']
           },
           // Asset file naming
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',
-          assetFileNames: (assetInfo) => {
+          assetFileNames: assetInfo => {
             const info = assetInfo.name?.split('.') || []
             const ext = info[info.length - 1]
             if (/\.(png|jpe?g|gif|svg|webp|ico)$/i.test(assetInfo.name || '')) {
