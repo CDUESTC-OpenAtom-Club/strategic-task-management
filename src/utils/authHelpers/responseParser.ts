@@ -77,34 +77,37 @@ export function mapBackendUser(userData: any): User {
 export function parseLoginResponse(response: any): ParseResult {
   let loginData: LoginResponseData | null = null
 
+  // API拦截器返回 response.data，所以：
+  // 后端返回 { code: 0, data: { token, user } }
+  // 拦截器返回 { code: 0, data: { token, user } }
+
   // 格式1: { success: true, data: { token, user } } (经过拦截器转换)
-  if (response.data?.success && response.data?.data?.token) {
+  if (response.success && response.data?.token) {
     logger.debug('✅ [Auth] 响应格式1: { success: true, data: { token, user } }')
-    loginData = response.data.data
-  }
-  // 格式2: { code: 0, data: { token, user } } (原始后端格式)
-  else if (response.data?.code === 0 && response.data?.data?.token) {
-    logger.debug('✅ [Auth] 响应格式2: { code: 0, data: {...} }')
-    loginData = response.data.data
-  }
-  // 格式3: { token, user } (直接返回)
-  else if (response.data?.token && response.data?.user) {
-    logger.debug('✅ [Auth] 响应格式3: { token, user }')
     loginData = response.data
   }
-  // 格式4: { data: { token, user } } (无code/success字段)
-  else if (response.data?.data?.token && response.data?.data?.user) {
+  // 格式2: { code: 0, data: { token, user } } (原始后端格式)
+  else if (response.code === 0 && response.data?.token) {
+    logger.debug('✅ [Auth] 响应格式2: { code: 0, data: {...} }')
+    loginData = response.data
+  }
+  // 格式3: { token, user } (直接返回)
+  else if (response.token && response.user) {
+    logger.debug('✅ [Auth] 响应格式3: { token, user }')
+    loginData = response
+  }
+  // 格式4: 嵌套的data.data (兼容某些特殊情况)
+  else if (response.data?.data?.token) {
     logger.debug('✅ [Auth] 响应格式4: { data: { token, user } }')
     loginData = response.data.data
   }
-  // 格式5: 直接在response.data中
-  else if (response.data) {
-    logger.debug('⚠️ [Auth] 尝试解析未知格式:', response.data)
-    const data = response.data
-    if (data.token || data.accessToken) {
+  // 格式5: 尝试直接提取
+  else if (response) {
+    logger.debug('⚠️ [Auth] 尝试解析未知格式:', response)
+    if (response.token || response.accessToken) {
       loginData = {
-        token: data.token || data.accessToken,
-        user: data.user || data.userInfo || {}
+        token: response.token || response.accessToken,
+        user: response.user || response.userInfo || {}
       }
     }
   }

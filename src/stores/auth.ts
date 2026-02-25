@@ -144,9 +144,10 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.get('/auth/me')
 
       // 后端返回格式: { code: 0, message: "...", data: user, timestamp: ... }
-      if (response.data.code === 0 && response.data.data) {
-        user.value = response.data.data
-        localStorage.setItem('currentUser', JSON.stringify(response.data.data))
+      // API拦截器返回 response.data，所以直接访问 response.code
+      if (response.code === 0 && response.data) {
+        user.value = response.data
+        localStorage.setItem('currentUser', JSON.stringify(response.data))
       } else {
         // Token invalid, clear auth state
         logout()
