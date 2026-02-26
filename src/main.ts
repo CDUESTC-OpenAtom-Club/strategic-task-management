@@ -9,7 +9,7 @@ import './style.css'
 import './unified-styles.css'
 import './colors.css'
 import App from './App.vue'
-import { autoHealthCheck } from './utils/apiHealth'
+import { showBackendConnectionStatus } from './utils/apiHealth'
 import { performanceMonitor } from './utils/performance'
 
 const app = createApp(App)
@@ -47,4 +47,4 @@ performanceMonitor.init({
 
 // 开发环境下自动运行API健康检查
 console.log('🚀 [Main] 应用已启动')
-autoHealthCheck()
+showBackendConnectionStatus()

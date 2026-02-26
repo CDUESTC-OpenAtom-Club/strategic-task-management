@@ -442,6 +442,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const target = indicator.responsibleDept
 
       if (!source || !target) return // Skip indicators without complete department info
+      if (source === target) return // 跳过自己指向自己的情况，避免循环
 
       nodes.add(source)
       nodes.add(target)
@@ -453,7 +454,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const links: SankeyLink[] = []
     linkMap.forEach((count, key) => {
       const [source, target] = key.split('->')
-      links.push({ source, target, value: count })
+      // 再次确认不是自己指向自己
+      if (source !== target) {
+        links.push({ source, target, value: count })
+      }
     })
 
     // 为节点分配明确的层级（depth），确保职能部门和学院分层显示
