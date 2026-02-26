@@ -23,7 +23,7 @@ const getNodeClass = (status: WorkflowNode['status']) => {
 }
 
 const formatTime = (date?: Date) => {
-  if (!date) return ''
+  if (!date) {return ''}
   const d = new Date(date)
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }

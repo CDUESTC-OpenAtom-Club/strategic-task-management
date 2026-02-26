@@ -106,7 +106,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     // 根据下钻状态和角色确定要显示的部门和过滤的指标
     let targetIndicators = indicators
-    let targetDepartments: Set<string> = new Set()
+    const targetDepartments: Set<string> = new Set()
 
     // 如果下钻到职能部门层级，只显示该部门下发任务的目标组织
     if (currentOrgLevel.value === 'functional' && selectedFunctionalDept.value) {
@@ -136,7 +136,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         targetIndicators = deptIndicators
       } else {
         // 二级学院只看自己
-        if (userDept) targetDepartments.add(userDept)
+        if (userDept) {targetDepartments.add(userDept)}
       }
     }
 
@@ -149,7 +149,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 统计实际指标数据
     targetIndicators.forEach(indicator => {
       const dept = indicator.responsibleDept
-      if (!dept) return // Skip indicators without responsible department
+      if (!dept) {return} // Skip indicators without responsible department
       
       // 战略发展部：只统计职能部门的指标，跳过学院
       if (role === 'strategic_dept' && !targetDepartments.has(dept)) {
@@ -168,7 +168,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       data.total += indicator.weight
       data.progress += indicator.progress
       data.count += 1
-      if (indicator.progress < 60) data.alerts += 1
+      if (indicator.progress < 60) {data.alerts += 1}
     })
 
     // 生成结果列表
@@ -215,8 +215,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   
   // 辅助函数：获取预警级别
   const getAlertLevel = (progress: number): 'severe' | 'moderate' | 'normal' => {
-    if (progress < 30) return 'severe'
-    if (progress < 60) return 'moderate'
+    if (progress < 30) {return 'severe'}
+    if (progress < 60) {return 'moderate'}
     return 'normal'
   }
 
@@ -356,7 +356,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     indicators.forEach(indicator => {
       const deptName = indicator[groupField] as string
-      if (!deptName) return // Skip indicators without department
+      if (!deptName) {return} // Skip indicators without department
       if (!deptMap.has(deptName)) {
         deptMap.set(deptName, {
           totalProgress: 0,
@@ -371,8 +371,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       data.totalProgress += indicator.progress * indicator.weight
       data.totalWeight += indicator.weight
       data.count += 1
-      if (indicator.progress >= 100) data.completed += 1
-      if (indicator.progress < 60) data.alerts += 1
+      if (indicator.progress >= 100) {data.completed += 1}
+      if (indicator.progress < 60) {data.alerts += 1}
     })
 
     const result: ComparisonItem[] = []
@@ -441,7 +441,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const source = indicator.ownerDept || '战略发展部'
       const target = indicator.responsibleDept
 
-      if (!source || !target) return // Skip indicators without complete department info
+      if (!source || !target) {return} // Skip indicators without complete department info
 
       nodes.add(source)
       nodes.add(target)
@@ -640,7 +640,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 面包屑导航
   const navigateToBreadcrumb = (index: number) => {
     const target = breadcrumbs.value[index]
-    if (!target) return
+    if (!target) {return}
     
     currentLevel.value = target.level
     breadcrumbs.value = breadcrumbs.value.slice(0, index + 1)
@@ -729,7 +729,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 增强面包屑导航（支持三级联动重置）
   const navigateToBreadcrumbEnhanced = (index: number) => {
     const target = breadcrumbs.value[index]
-    if (!target) return
+    if (!target) {return}
 
     currentLevel.value = target.level
     breadcrumbs.value = breadcrumbs.value.slice(0, index + 1)

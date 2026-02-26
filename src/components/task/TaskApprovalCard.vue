@@ -32,24 +32,24 @@ const approvalAction = ref<'approve' | 'reject'>('approve')
 // 计算进度状态
 const progressStatus = computed(() => {
   const progress = props.indicator.progress || 0
-  if (progress >= 80) return 'success'
-  if (progress >= 50) return 'warning'
+  if (progress >= 80) {return 'success'}
+  if (progress >= 50) {return 'warning'}
   return 'exception'
 })
 
 // 计算进度颜色
 const progressColor = computed(() => {
-  if (props.indicator.canWithdraw) return '#C0C4CC' // 未下发：灰色
+  if (props.indicator.canWithdraw) {return '#C0C4CC'} // 未下发：灰色
   const progress = props.indicator.progress || 0
-  if (progress >= 80) return '#67C23A' // 绿色
-  if (progress >= 50) return '#E6A23C' // 黄色
+  if (progress >= 80) {return '#67C23A'} // 绿色
+  if (progress >= 50) {return '#E6A23C'} // 黄色
   return '#F56C6C' // 红色
 })
 
 // 判断是否有待审批
 const hasPendingApproval = computed(() => {
   const audit = props.indicator.statusAudit || []
-  if (audit.length === 0) return false
+  if (audit.length === 0) {return false}
   const lastEntry = audit[audit.length - 1]
   return lastEntry.action === 'submit'
 })
@@ -180,7 +180,7 @@ const handleViewAuditLog = () => {
           <el-icon><User /></el-icon>
           <span>{{ indicator.responsiblePerson }}</span>
         </div>
-        <div class="meta-item" v-if="indicator.taskContent">
+        <div v-if="indicator.taskContent" class="meta-item">
           <el-icon><TrendCharts /></el-icon>
           <span>{{ indicator.taskContent }}</span>
         </div>
@@ -198,7 +198,7 @@ const handleViewAuditLog = () => {
           :color="progressColor"
           :show-text="false"
         />
-        <div class="progress-footer" v-if="indicator.targetValue">
+        <div v-if="indicator.targetValue" class="progress-footer">
           <span>目标: {{ indicator.targetValue }}{{ indicator.unit }}</span>
           <span>权重: {{ indicator.weight }}</span>
         </div>
@@ -212,10 +212,10 @@ const handleViewAuditLog = () => {
               <span>{{ latestSubmission.operatorName }} 于 {{ new Date(latestSubmission.timestamp).toLocaleString() }} 提交了进度更新</span>
             </div>
           </template>
-          <div class="pending-detail" v-if="latestSubmission.comment">
+          <div v-if="latestSubmission.comment" class="pending-detail">
             {{ latestSubmission.comment }}
           </div>
-          <div class="pending-progress" v-if="latestSubmission.previousProgress !== undefined">
+          <div v-if="latestSubmission.previousProgress !== undefined" class="pending-progress">
             进度: {{ latestSubmission.previousProgress }}% → {{ latestSubmission.newProgress }}%
           </div>
         </el-alert>
@@ -249,7 +249,7 @@ const handleViewAuditLog = () => {
         查看详情
       </el-button>
 
-      <div class="footer-actions" v-if="canApprove && hasPendingApproval && !isReadOnly && !showApprovalForm">
+      <div v-if="canApprove && hasPendingApproval && !isReadOnly && !showApprovalForm" class="footer-actions">
         <el-button
           type="success"
           size="small"

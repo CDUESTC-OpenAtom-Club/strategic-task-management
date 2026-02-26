@@ -60,10 +60,10 @@ const formatRelativeTime = (timestamp: Date | string) => {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffMins < 1) return '刚刚'
-  if (diffMins < 60) return `${diffMins}分钟前`
-  if (diffHours < 24) return `${diffHours}小时前`
-  if (diffDays < 30) return `${diffDays}天前`
+  if (diffMins < 1) {return '刚刚'}
+  if (diffMins < 60) {return `${diffMins}分钟前`}
+  if (diffHours < 24) {return `${diffHours}小时前`}
+  if (diffDays < 30) {return `${diffDays}天前`}
   return formatAuditTime(timestamp)
 }
 
@@ -176,7 +176,7 @@ const filterOwnerDept = ref('')  // 来源部门筛选（仅学院使用）
 
 // 获取学院接收到的来源部门列表（从指标数据中提取）
 const availableOwnerDepts = computed(() => {
-  if (!isSecondaryCollege.value || !props.viewingDept) return []
+  if (!isSecondaryCollege.value || !props.viewingDept) {return []}
   
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
@@ -375,16 +375,16 @@ const indicators = computed(() => {
 
 const overallStatus = computed(() => {
   const list = indicators.value
-  if (list.length === 0) return 'draft'
+  if (list.length === 0) {return 'draft'}
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   const hasPending = list.some(i => isApprovalStatus(i, 'pending'))
-  if (hasPending) return 'pending'
+  if (hasPending) {return 'pending'}
   const hasRejected = list.some(i => isApprovalStatus(i, 'rejected'))
-  if (hasRejected) return 'rejected'
+  if (hasRejected) {return 'rejected'}
   const allApproved = list.every(i => isApprovalStatus(i, 'approved'))
-  if (allApproved) return 'approved'
+  if (allApproved) {return 'approved'}
   const hasActive = list.some(i => i.status === 'active')
-  if (hasActive) return 'active'
+  if (hasActive) {return 'active'}
   return 'draft'
 })
 
@@ -711,7 +711,7 @@ const editingIndicatorValue = ref<any>(null)
 
 // 任务详情双击编辑处理
 const handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
-  if (!canEdit.value) return
+  if (!canEdit.value) {return}
   editingField.value = field
   editingValue.value = value
 }
@@ -724,10 +724,10 @@ const saveEdit = (field: 'title' | 'desc' | 'cycle' | 'createTime') => {
   }
 
   const task = taskList.value[currentTaskIndex.value]
-  if (field === 'title') task.title = editingValue.value
-  else if (field === 'desc') task.desc = editingValue.value
-  else if (field === 'cycle') task.cycle = editingValue.value
-  else if (field === 'createTime') task.createTime = editingValue.value
+  if (field === 'title') {task.title = editingValue.value}
+  else if (field === 'desc') {task.desc = editingValue.value}
+  else if (field === 'cycle') {task.cycle = editingValue.value}
+  else if (field === 'createTime') {task.createTime = editingValue.value}
 
   cancelEdit()
 }
@@ -740,7 +740,7 @@ const cancelEdit = () => {
 
 // 指标双击编辑
 const handleIndicatorDblClick = (row: StrategicIndicator, field: string) => {
-  if (!canEdit.value) return
+  if (!canEdit.value) {return}
   editingIndicatorId.value = row.id
   editingIndicatorField.value = field
   editingIndicatorValue.value = row[field as keyof StrategicIndicator]
@@ -748,7 +748,7 @@ const handleIndicatorDblClick = (row: StrategicIndicator, field: string) => {
 
 // 保存指标编辑
 const saveIndicatorEdit = (row: StrategicIndicator, field: string) => {
-  if (editingIndicatorId.value === null) return
+  if (editingIndicatorId.value === null) {return}
 
   if (editingIndicatorValue.value === null || editingIndicatorValue.value === undefined) {
     cancelIndicatorEdit()
@@ -841,10 +841,10 @@ const calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'w
     const deadline = safeGet(milestone, 'deadline', '')
     const status = safeGet(milestone, 'status', 'pending')
     
-    if (!deadline) return false // 没有截止日期的里程碑不算逾期
+    if (!deadline) {return false} // 没有截止日期的里程碑不算逾期
     
     const deadlineDate = new Date(deadline)
-    if (isNaN(deadlineDate.getTime())) return false // 无效日期不算逾期
+    if (isNaN(deadlineDate.getTime())) {return false} // 无效日期不算逾期
     
     return status === 'pending' && deadlineDate < currentDate
   })
@@ -853,11 +853,11 @@ const calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'w
     const status = safeGet(milestone, 'status', 'pending')
     const deadline = safeGet(milestone, 'deadline', '')
     
-    if (status === 'completed') return false
-    if (!deadline) return false // 没有截止日期的里程碑不算即将到期
+    if (status === 'completed') {return false}
+    if (!deadline) {return false} // 没有截止日期的里程碑不算即将到期
     
     const deadlineDate = new Date(deadline)
-    if (isNaN(deadlineDate.getTime())) return false // 无效日期不算即将到期
+    if (isNaN(deadlineDate.getTime())) {return false} // 无效日期不算即将到期
     
     const daysUntilDeadline = Math.ceil((deadlineDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilDeadline > 0 && daysUntilDeadline <= 30
@@ -890,11 +890,11 @@ const getMilestoneProgressText = (indicator: StrategicIndicator): string => {
     const status = safeGet(m, 'status', 'pending')
     const deadline = safeGet(m, 'deadline', '')
     
-    if (status !== 'pending') return false
-    if (!deadline) return false // 没有截止日期的里程碑不算逾期
+    if (status !== 'pending') {return false}
+    if (!deadline) {return false} // 没有截止日期的里程碑不算逾期
     
     const deadlineDate = new Date(deadline)
-    if (isNaN(deadlineDate.getTime())) return false // 无效日期不算逾期
+    if (isNaN(deadlineDate.getTime())) {return false} // 无效日期不算逾期
     
     return deadlineDate < currentDate
   }).length
@@ -945,7 +945,7 @@ const getIndicatorProgressStatus = (indicator: StrategicIndicator): ProgressStat
   // 过滤掉没有有效截止日期的里程碑，并使用 safeGet 安全获取字段
   const validMilestones = milestones.filter(m => {
     const deadline = safeGet(m, 'deadline', '')
-    if (!deadline) return false
+    if (!deadline) {return false}
     const date = new Date(deadline)
     return !isNaN(date.getTime())
   })
@@ -1202,7 +1202,7 @@ const reportForm = ref({
 // 计算离当前最近的里程碑（未完成且截止日期最近的）
 // @requirement 2.4 - Milestone data validation with complete fields
 const nearestMilestone = computed(() => {
-  if (!currentReportIndicator.value?.milestones?.length) return null
+  if (!currentReportIndicator.value?.milestones?.length) {return null}
   
   const now = new Date()
   const pendingMilestones = currentReportIndicator.value.milestones
@@ -1236,9 +1236,9 @@ const nearestMilestone = computed(() => {
 // 格式化里程碑日期
 // @requirement 2.4 - Milestone data validation with complete fields
 const formatMilestoneDate = (deadline: string) => {
-  if (!deadline) return '未设置'
+  if (!deadline) {return '未设置'}
   const date = new Date(deadline)
-  if (isNaN(date.getTime())) return '日期格式错误'
+  if (isNaN(date.getTime())) {return '日期格式错误'}
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
@@ -1268,7 +1268,7 @@ const closeReportDialog = () => {
 
 // 保存进度填报（设为待提交状态）
 const submitProgressReport = () => {
-  if (!currentReportIndicator.value) return
+  if (!currentReportIndicator.value) {return}
 
   const indicator = currentReportIndicator.value
   const currentProgress = indicator.progress || 0
@@ -1324,14 +1324,14 @@ const isIndicatorFilled = (row: StrategicIndicator): boolean => {
 
 // 检查所有指标是否都已填报
 const allIndicatorsFilled = computed(() => {
-  if (indicators.value.length === 0) return false
+  if (indicators.value.length === 0) {return false}
   return indicators.value.every(row => isIndicatorFilled(row))
 })
 
 // 检查是否所有指标都已提交（待审批状态）
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const allIndicatorsSubmitted = computed(() => {
-  if (indicators.value.length === 0) return false
+  if (indicators.value.length === 0) {return false}
   return indicators.value.every(row => isApprovalStatus(row, 'pending'))
 })
 
@@ -1454,7 +1454,7 @@ const handleWithdrawAll = () => {
         <p class="page-desc">管理和查看所有战略考核指标</p>
       </div>
       <div class="page-actions">
-        <el-button type="primary" @click="addNewRow" v-if="canEdit">
+        <el-button v-if="canEdit" type="primary" @click="addNewRow">
           <el-icon><Plus /></el-icon>
           新增指标
         </el-button>
@@ -1478,7 +1478,7 @@ const handleWithdrawAll = () => {
               </el-select>
             </el-form-item>
             <!-- 来源部门筛选（仅学院可见） -->
-            <el-form-item label="来源部门" v-if="isSecondaryCollege && availableOwnerDepts.length > 0">
+            <el-form-item v-if="isSecondaryCollege && availableOwnerDepts.length > 0" label="来源部门">
               <el-select v-model="filterOwnerDept" placeholder="选择来源部门" style="width: 200px;">
                 <el-option 
                   v-for="dept in availableOwnerDepts" 
@@ -1488,7 +1488,7 @@ const handleWithdrawAll = () => {
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="责任部门" v-if="showResponsibleDeptColumn">
+            <el-form-item v-if="showResponsibleDeptColumn" label="责任部门">
               <el-select v-model="filterDept" placeholder="全部部门" clearable style="width: 200px;">
                 <el-option v-for="dept in functionalDepartments" :key="dept" :label="dept" :value="dept" />
               </el-select>
@@ -1557,8 +1557,8 @@ const handleWithdrawAll = () => {
               :span-method="getSpanMethod"
               border
               highlight-current-row
-              @selection-change="handleSelectionChange"
               class="unified-table"
+              @selection-change="handleSelectionChange"
             >
 
               <el-table-column prop="taskContent" label="战略任务" width="200">
@@ -1672,7 +1672,7 @@ const handleWithdrawAll = () => {
                   <span class="progress-number" :class="getProgressStatusClass(row)">{{ row.progress || 0 }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="responsibleDept" label="责任部门" min-width="140" v-if="showResponsibleDeptColumn">
+              <el-table-column v-if="showResponsibleDeptColumn" prop="responsibleDept" label="责任部门" min-width="140">
                 <template #default="{ row }">
                   <span class="dept-text">{{ row.responsibleDept || '未分配' }}</span>
                 </template>
@@ -1694,7 +1694,7 @@ const handleWithdrawAll = () => {
                       @click="handleOpenReportDialog(row)"
                     >{{ isApprovalStatus(row, 'rejected') ? '重新填报' : (isIndicatorFilled(row) ? '编辑' : '填报') }}</el-button>
 
-                    <el-button link type="danger" size="small" @click="handleDeleteIndicator(row)" v-if="canEdit">删除</el-button>
+                    <el-button v-if="canEdit" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
                   </div>
                 </template>
               </el-table-column>
@@ -1705,7 +1705,7 @@ const handleWithdrawAll = () => {
           <!-- 空状态 - 统一空状态样式 (Requirements: 7.1, 7.2, 7.3) -->
           <div v-if="indicators.length === 0" class="empty-state">
             <el-empty description="暂无指标数据">
-              <el-button type="primary" @click="addNewRow" v-if="canEdit">
+              <el-button v-if="canEdit" type="primary" @click="addNewRow">
                 <el-icon><Plus /></el-icon>
                 新增指标
               </el-button>
@@ -1912,7 +1912,7 @@ const handleWithdrawAll = () => {
                 {{ nearestMilestone.targetProgress }}%（{{ formatMilestoneDate(nearestMilestone.deadline) }}）
               </span>
             </el-tooltip>
-            <span class="info-value" v-else>{{ currentReportIndicator.targetValue }}{{ currentReportIndicator.unit }}</span>
+            <span v-else class="info-value">{{ currentReportIndicator.targetValue }}{{ currentReportIndicator.unit }}</span>
           </div>
         </div>
 

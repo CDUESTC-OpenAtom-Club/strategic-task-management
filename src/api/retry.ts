@@ -104,7 +104,7 @@ export function calculateExponentialBackoff(
  * @returns true if the method is idempotent
  */
 export function isIdempotentMethod(method: string | undefined): boolean {
-  if (!method) return false
+  if (!method) {return false}
   const upperMethod = method.toUpperCase()
   return IDEMPOTENT_METHODS.includes(upperMethod as IdempotentMethod)
 }
@@ -116,7 +116,7 @@ export function isIdempotentMethod(method: string | undefined): boolean {
  * @returns true if the method is non-idempotent
  */
 export function isNonIdempotentMethod(method: string | undefined): boolean {
-  if (!method) return false
+  if (!method) {return false}
   const upperMethod = method.toUpperCase()
   return NON_IDEMPOTENT_METHODS.includes(upperMethod as NonIdempotentMethod)
 }

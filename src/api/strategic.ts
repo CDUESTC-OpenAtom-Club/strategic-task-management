@@ -161,8 +161,8 @@ function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
 function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndicator {
   // 转换里程碑状态
   const convertMilestoneStatus = (status: string): 'pending' | 'completed' | 'overdue' => {
-    if (status === 'COMPLETED') return 'completed'
-    if (status === 'DELAYED' || status === 'CANCELED') return 'overdue'
+    if (status === 'COMPLETED') {return 'completed'}
+    if (status === 'DELAYED' || status === 'CANCELED') {return 'overdue'}
     return 'pending' // NOT_STARTED, IN_PROGRESS 都映射为 pending
   }
 
@@ -180,7 +180,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
 
   // 转换进度审批状态
   const convertProgressApprovalStatus = (status?: string): 'none' | 'draft' | 'pending' | 'approved' | 'rejected' => {
-    if (!status) return 'none'
+    if (!status) {return 'none'}
     const map: Record<string, 'none' | 'draft' | 'pending' | 'approved' | 'rejected'> = {
       'NONE': 'none',
       'DRAFT': 'draft',
@@ -247,7 +247,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
  * 根据里程碑计算进度
  */
 function calculateProgress(milestones: { status: string }[]): number {
-  if (milestones.length === 0) return 0
+  if (milestones.length === 0) {return 0}
   const completed = milestones.filter(m => m.status === 'completed').length
   return Math.round((completed / milestones.length) * 100)
 }

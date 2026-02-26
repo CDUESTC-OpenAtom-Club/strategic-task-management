@@ -105,7 +105,7 @@
       </div>
 
       <el-form-item>
-        <el-button type="primary" @click="handleSubmit" :loading="loading">
+        <el-button type="primary" :loading="loading" @click="handleSubmit">
           保存设置
         </el-button>
         <el-button @click="handleReset">

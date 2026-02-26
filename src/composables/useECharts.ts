@@ -256,7 +256,7 @@ export function useECharts(options: UseEChartsOptions = {}): UseEChartsReturn {
    * 调整图表大小
    */
   const resize = () => {
-    if (!chartInstance.value) return
+    if (!chartInstance.value) {return}
 
     try {
       chartInstance.value.resize()

@@ -154,7 +154,7 @@ const handleSizeChange = (size: number) => {
 
 /** 计算显示的列 (包含选择列) */
 const displayColumns = computed(() => {
-  if (!props.selectable) return props.columns
+  if (!props.selectable) {return props.columns}
 
   return [
     {

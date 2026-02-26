@@ -49,8 +49,8 @@ const getDaysRemaining = (deadline: string) => {
   const deadlineDate = new Date(deadline)
   const diff = deadlineDate.getTime() - now.value.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days < 0) return `已逾期 ${Math.abs(days)} 天`
-  if (days === 0) return '今日截止'
+  if (days < 0) {return `已逾期 ${Math.abs(days)} 天`}
+  if (days === 0) {return '今日截止'}
   return `剩余 ${days} 天`
 }
 </script>

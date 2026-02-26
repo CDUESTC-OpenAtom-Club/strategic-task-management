@@ -49,9 +49,9 @@ const chartOption = computed(() => ({
       type: 'shadow'
     },
     formatter: (params: any) => {
-      if (!params || !params[0]) return ''
+      if (!params || !params[0]) {return ''}
       const item = sortedData.value[params[0].dataIndex]
-      if (!item) return ''
+      if (!item) {return ''}
       return `
         <div style="padding: 8px;">
           <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">

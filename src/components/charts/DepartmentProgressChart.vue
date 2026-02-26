@@ -117,8 +117,8 @@ const getItemLabel = (deptName: string) => {
       <el-button
         text
         type="primary"
-        @click="toggleShowAll"
         class="show-more-btn"
+        @click="toggleShowAll"
       >
         <template v-if="!showAll">
           显示全部 ({{ sortedDepartments.length - defaultShowCount }} 个)

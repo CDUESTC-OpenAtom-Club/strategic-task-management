@@ -147,8 +147,8 @@ export class MockApiHandler {
 
     // Mock 登录：任意用户名密码都可以登录
     let user = mockUsers.admin
-    if (username === 'functional') user = mockUsers.functional
-    else if (username === 'college') user = mockUsers.college
+    if (username === 'functional') {user = mockUsers.functional}
+    else if (username === 'college') {user = mockUsers.college}
 
     logger.info('🎭 [Mock Login] 用户登录:', user.realName)
 

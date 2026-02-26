@@ -64,19 +64,19 @@ const activeTab = ref<'info' | 'history' | 'fill'>('info')
 
 // 当前选中的任务
 const selectedTask = computed(() => {
-  if (!plan.value || !selectedTaskId.value) return null
+  if (!plan.value || !selectedTaskId.value) {return null}
   return plan.value.tasks.find(t => t.id === selectedTaskId.value) || null
 })
 
 // 当前选中的指标
 const selectedIndicator = computed(() => {
-  if (!selectedTask.value || !selectedIndicatorId.value) return null
+  if (!selectedTask.value || !selectedIndicatorId.value) {return null}
   return selectedTask.value.indicators.find(i => i.id === selectedIndicatorId.value) || null
 })
 
 // 树形数据
 const treeData = computed(() => {
-  if (!plan.value) return []
+  if (!plan.value) {return []}
   return plan.value.tasks.map(task => ({
     id: task.id,
     label: task.name,
@@ -97,7 +97,7 @@ const currentKey = computed(() => {
 
 // 填报统计
 const fillStats = computed(() => {
-  if (!selectedIndicator.value) return null
+  if (!selectedIndicator.value) {return null}
   const indicator = selectedIndicator.value
   return {
     totalFills: indicator.fill_count || 0,
@@ -333,8 +333,8 @@ watch(() => props.planId, () => {
               :current-node-key="currentKey"
               node-key="id"
               :props="{ children: 'children', label: 'label' }"
-              @node-click="handleNodeClick"
               class="indicator-tree"
+              @node-click="handleNodeClick"
             >
               <template #default="{ node, data }">
                 <div class="tree-node">

@@ -34,7 +34,7 @@ watch(() => props.modelValue, (newValue) => {
 // 职能部门选项 - 使用完整配置列表
 const functionalDepts = computed(() => {
   // 使用完整的职能部门配置
-  let allDepts = orgStore.getAllFunctionalDepartmentNames()
+  const allDepts = orgStore.getAllFunctionalDepartmentNames()
 
   // 战略发展部可以看所有职能部门
   if (authStore.user?.role === 'strategic_dept') {
@@ -55,7 +55,7 @@ const collegeOptions = computed(() => {
   const indicators = strategicStore.indicators
 
   // 使用完整的学院配置
-  let allColleges = orgStore.getAllCollegeNames()
+  const allColleges = orgStore.getAllCollegeNames()
 
   // 如果选中了职能部门，只显示该部门下发的学院（基于实际数据）
   if (localFilters.value.department) {
@@ -198,10 +198,10 @@ const hasFilters = computed(() => {
 
       <!-- 操作按钮 -->
       <el-form-item>
-        <el-button type="primary" @click="handleApply" :icon="hasFilters ? 'Search' : undefined">
+        <el-button type="primary" :icon="hasFilters ? 'Search' : undefined" @click="handleApply">
           {{ hasFilters ? '应用筛选' : '查询' }}
         </el-button>
-        <el-button @click="handleReset" :disabled="!hasFilters">
+        <el-button :disabled="!hasFilters" @click="handleReset">
           重置
         </el-button>
       </el-form-item>
@@ -212,36 +212,36 @@ const hasFilters = computed(() => {
       <el-tag
         v-if="localFilters.department"
         closable
-        @close="localFilters.department = undefined; handleApply()"
         type="info"
         size="small"
+        @close="localFilters.department = undefined; handleApply()"
       >
         职能部门: {{ localFilters.department }}
       </el-tag>
       <el-tag
         v-if="localFilters.collegeFilter"
         closable
-        @close="localFilters.collegeFilter = undefined; handleApply()"
         type="info"
         size="small"
+        @close="localFilters.collegeFilter = undefined; handleApply()"
       >
         学院: {{ localFilters.collegeFilter }}
       </el-tag>
       <el-tag
         v-if="localFilters.indicatorType"
         closable
-        @close="localFilters.indicatorType = undefined; handleApply()"
         type="info"
         size="small"
+        @close="localFilters.indicatorType = undefined; handleApply()"
       >
         类型: {{ localFilters.indicatorType }}
       </el-tag>
       <el-tag
         v-if="localFilters.alertLevel"
         closable
-        @close="localFilters.alertLevel = undefined; handleApply()"
         :type="localFilters.alertLevel === 'severe' ? 'danger' : localFilters.alertLevel === 'moderate' ? 'warning' : 'success'"
         size="small"
+        @close="localFilters.alertLevel = undefined; handleApply()"
       >
         预警: {{ localFilters.alertLevel === 'severe' ? '严重' : localFilters.alertLevel === 'moderate' ? '中度' : '正常' }}
       </el-tag>

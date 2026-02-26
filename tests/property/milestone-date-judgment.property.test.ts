@@ -46,11 +46,11 @@ beforeAll(() => {
  * 条件：截止日期已过 且 状态不是 'completed'
  */
 function isOverdue(milestone: Milestone, currentDate: Date = new Date()): boolean {
-  if (!milestone.deadline) return false
-  if (milestone.status === 'completed') return false
+  if (!milestone.deadline) {return false}
+  if (milestone.status === 'completed') {return false}
   
   const deadlineDate = new Date(milestone.deadline)
-  if (isNaN(deadlineDate.getTime())) return false
+  if (isNaN(deadlineDate.getTime())) {return false}
   
   return deadlineDate < currentDate
 }
@@ -60,11 +60,11 @@ function isOverdue(milestone: Milestone, currentDate: Date = new Date()): boolea
  * 条件：截止日期在30天内 且 状态是 'pending'
  */
 function isUpcoming(milestone: Milestone, currentDate: Date = new Date(), daysThreshold: number = 30): boolean {
-  if (!milestone.deadline) return false
-  if (milestone.status !== 'pending') return false
+  if (!milestone.deadline) {return false}
+  if (milestone.status !== 'pending') {return false}
   
   const deadlineDate = new Date(milestone.deadline)
-  if (isNaN(deadlineDate.getTime())) return false
+  if (isNaN(deadlineDate.getTime())) {return false}
   
   const diffMs = deadlineDate.getTime() - currentDate.getTime()
   const diffDays = diffMs / (1000 * 60 * 60 * 24)

@@ -32,9 +32,9 @@ export const formatRelativeTime = (date: Date | string) => {
 }
 
 export const formatDateChinese = (date: Date | string | null | undefined): string => {
-  if (!date) return '未设置'
+  if (!date) {return '未设置'}
   const d = dayjs(date)
-  if (!d.isValid()) return '日期格式错误'
+  if (!d.isValid()) {return '日期格式错误'}
   return d.format('YYYY年MM月DD日')
 }
 
@@ -43,9 +43,9 @@ export const safeFormatDate = (
   format = 'YYYY-MM-DD',
   defaultValue = '未设置'
 ): string => {
-  if (!date) return defaultValue
+  if (!date) {return defaultValue}
   const d = dayjs(date)
-  if (!d.isValid()) return defaultValue
+  if (!d.isValid()) {return defaultValue}
   return d.format(format)
 }
 
@@ -169,14 +169,14 @@ export const getStatusTagType = (status: string): StatusTagType => {
 }
 
 export const getProgressColor = (progress: number): string => {
-  if (progress >= 80) return 'var(--color-success)'
-  if (progress >= 50) return 'var(--color-warning)'
+  if (progress >= 80) {return 'var(--color-success)'}
+  if (progress >= 50) {return 'var(--color-warning)'}
   return 'var(--color-danger)'
 }
 
 export const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception' => {
-  if (progress >= 80) return 'success'
-  if (progress >= 50) return 'warning'
+  if (progress >= 80) {return 'success'}
+  if (progress >= 50) {return 'warning'}
   return 'exception'
 }
 
@@ -185,7 +185,7 @@ export const getProgressStatus = (progress: number): 'success' | 'warning' | 'ex
 // ============================================================================
 
 export const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
+  if (bytes === 0) {return '0 B'}
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -225,9 +225,9 @@ export const validatePercentage = (value: number): boolean => {
 }
 
 export const validateRequired = (value: any): boolean => {
-  if (value === null || value === undefined) return false
-  if (typeof value === 'string') return value.trim().length > 0
-  if (Array.isArray(value)) return value.length > 0
+  if (value === null || value === undefined) {return false}
+  if (typeof value === 'string') {return value.trim().length > 0}
+  if (Array.isArray(value)) {return value.length > 0}
   return true
 }
 
@@ -236,12 +236,12 @@ export const validateRequired = (value: any): boolean => {
 // ============================================================================
 
 export const truncateText = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) return text
+  if (text.length <= maxLength) {return text}
   return text.slice(0, maxLength) + '...'
 }
 
 export const highlightText = (text: string, highlight: string): string => {
-  if (!highlight) return text
+  if (!highlight) {return text}
   const regex = new RegExp(`(${highlight})`, 'gi')
   return text.replace(regex, '<mark>$1</mark>')
 }
@@ -368,9 +368,9 @@ export const throttle = <T extends (...args: any[]) => any>(
 }
 
 export const deepClone = <T>(obj: T): T => {
-  if (obj === null || typeof obj !== 'object') return obj
-  if (obj instanceof Date) return new Date(obj.getTime()) as T
-  if (obj instanceof Array) return obj.map(item => deepClone(item)) as T
+  if (obj === null || typeof obj !== 'object') {return obj}
+  if (obj instanceof Date) {return new Date(obj.getTime()) as T}
+  if (obj instanceof Array) {return obj.map(item => deepClone(item)) as T}
   if (typeof obj === 'object') {
     const clonedObj = {} as T
     for (const key in obj) {

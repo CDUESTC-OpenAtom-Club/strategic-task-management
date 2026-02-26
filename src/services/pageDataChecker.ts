@@ -178,7 +178,7 @@ export class PageDataChecker {
     const deptWeights = new Map<string, number>()
     strategicIndicators.forEach(i => {
       const dept = i.responsibleDept
-      if (!dept) return // Skip indicators without responsible department
+      if (!dept) {return} // Skip indicators without responsible department
       const current = deptWeights.get(dept) || 0
       deptWeights.set(dept, current + (i.weight || 0))
     })
@@ -223,8 +223,8 @@ export class PageDataChecker {
     )
 
     let overallHealth: 'healthy' | 'warning' | 'critical' = 'healthy'
-    if (errors > 0) overallHealth = 'critical'
-    else if (warnings > 0) overallHealth = 'warning'
+    if (errors > 0) {overallHealth = 'critical'}
+    else if (warnings > 0) {overallHealth = 'warning'}
 
     return {
       generatedAt: new Date(),

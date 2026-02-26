@@ -400,7 +400,7 @@ const getDeptStatsAtMonth = (deptName: string, month: number, year: number) => {
 
 // 计算堆叠柱状图数据（部门视图 - 第一层）
 const stackedBarData = computed(() => {
-  if (isDrillDown.value) return []
+  if (isDrillDown.value) {return []}
 
   const summary = dashboardStore.departmentSummary
   if (!summary || summary.length === 0) {
@@ -424,7 +424,7 @@ const stackedBarData = computed(() => {
 
 // 计算下钻后的月度堆叠数据（部门月度视图 - 第二层）
 const monthlyStackedData = computed(() => {
-  if (!isDrillDown.value || !drilledDept.value) return []
+  if (!isDrillDown.value || !drilledDept.value) {return []}
 
   // 显示1月到选中的月份
   const months = []
@@ -545,14 +545,14 @@ const getCollegeStatsForFunctionalDept = (ownerDept: string, month: number, year
 
 // 学院看板堆叠数据（第一层：学院视图）
 const collegeBarData = computed(() => {
-  if (isCollegeDrillDown.value) return []
-  if (currentRole.value === 'secondary_college') return []
+  if (isCollegeDrillDown.value) {return []}
+  if (currentRole.value === 'secondary_college') {return []}
 
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
   const currentYear = timeContext.currentYear
 
-  let ownerDept = currentDepartment.value
+  const ownerDept = currentDepartment.value
 
   // 战略发展部视角：显示所有职能部门下发给学院的指标汇总
   if (currentRole.value === 'strategic_dept') {
@@ -600,7 +600,7 @@ const collegeBarData = computed(() => {
 
 // 学院看板月度趋势数据（第二层：学院月度视图）
 const collegeMonthlyStackedData = computed(() => {
-  if (!isCollegeDrillDown.value || !drilledCollege.value) return []
+  if (!isCollegeDrillDown.value || !drilledCollege.value) {return []}
 
   const months = []
   for (let m = 1; m <= collegeSelectedMonth.value; m++) {
@@ -707,7 +707,7 @@ const handleCloseCollegeMonthIndicatorCard = () => {
 
 // 计算二级学院的分数（权重 × 进度）
 const getCollegeRankingData = computed(() => {
-  if (currentRole.value === 'secondary_college') return []
+  if (currentRole.value === 'secondary_college') {return []}
 
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
@@ -758,7 +758,7 @@ const getCollegeRankingData = computed(() => {
     const progress = i.progress || 0
     stats.score += weight * progress / 100
     stats.totalIndicators++
-    if (progress >= 100) stats.completedIndicators++
+    if (progress >= 100) {stats.completedIndicators++}
     stats[i.status]++
   })
 
@@ -1003,9 +1003,9 @@ const dashboardData = computed<DashboardData>(() => {
 // 应用筛选
 const applyFilters = () => {
   const filter: Record<string, string | undefined> = {}
-  if (filterForm.value.department) filter.department = filterForm.value.department
-  if (filterForm.value.indicatorType) filter.indicatorType = filterForm.value.indicatorType
-  if (filterForm.value.alertLevel) filter.alertLevel = filterForm.value.alertLevel
+  if (filterForm.value.department) {filter.department = filterForm.value.department}
+  if (filterForm.value.indicatorType) {filter.indicatorType = filterForm.value.indicatorType}
+  if (filterForm.value.alertLevel) {filter.alertLevel = filterForm.value.alertLevel}
   dashboardStore.applyFilter(filter)
   showFilterPanel.value = false
 }
@@ -1276,7 +1276,7 @@ const delayedTasks = computed(() => {
 
 // 催办任务
 const handleUrge = (task: any) => {
-  if (task.reminded) return
+  if (task.reminded) {return}
   task.reminded = true
   ElMessage.success(`已向 ${task.dept} 发送催办通知`)
 }
@@ -1289,7 +1289,7 @@ const radarData = computed(() => {
   const typeGroups: Record<string, number[]> = {}
   indicators.forEach(i => {
     const type = i.type || '其他'
-    if (!typeGroups[type]) typeGroups[type] = []
+    if (!typeGroups[type]) {typeGroups[type] = []}
     typeGroups[type].push(i.progress)
   })
   
@@ -1328,7 +1328,7 @@ const benchmarkData = computed(() => {
 // 雷达图统计数据
 const radarStats = computed(() => {
   const data = radarData.value
-  if (!data || data.length === 0) return { avgMatch: 0, volatility: 0 }
+  if (!data || data.length === 0) {return { avgMatch: 0, volatility: 0 }}
   const avg = data.reduce((a, b) => a + b.value, 0) / data.length
   // 计算波动离散度（标准差的简化版）
   const variance = data.reduce((sum, d) => sum + Math.pow(d.value - avg, 2), 0) / data.length
@@ -1341,7 +1341,7 @@ const radarStats = computed(() => {
 
 // 初始化雷达图
 const initRadarChart = () => {
-  if (!radarChartRef.value) return
+  if (!radarChartRef.value) {return}
   
   const data = radarData.value
   if (!data || data.length === 0) {
@@ -1400,7 +1400,7 @@ const benchmarkChartHeight = computed(() => {
 
 // 初始化排名对标图 - 改为堆叠柱状图
 const initBenchmarkChart = () => {
-  if (!benchmarkChartRef.value) return
+  if (!benchmarkChartRef.value) {return}
 
   // 根据下钻状态选择数据源
   const data = isDrillDown.value ? monthlyStackedData.value : stackedBarData.value
@@ -1430,7 +1430,7 @@ const initBenchmarkChart = () => {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       formatter: (params: any) => {
-        if (!Array.isArray(params) || params.length === 0) return ''
+        if (!Array.isArray(params) || params.length === 0) {return ''}
         const dataIndex = params[0].dataIndex
         const dataItem = data[dataIndex]
         const name = dataItem?.fullName || dataItem?.name || params[0].name
@@ -1717,7 +1717,7 @@ const handleResize = () => {
 
 // 初始化学院看板堆叠柱状图
 const initCollegeChart = () => {
-  if (!collegeChartRef.value) return
+  if (!collegeChartRef.value) {return}
   if (currentRole.value === 'secondary_college') {
     // 二级学院不显示此图表，清空已有实例
     if (collegeChartInstance) {
@@ -1752,7 +1752,7 @@ const initCollegeChart = () => {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       formatter: (params: any) => {
-        if (!Array.isArray(params) || params.length === 0) return ''
+        if (!Array.isArray(params) || params.length === 0) {return ''}
         const dataIndex = params[0].dataIndex
         const dataItem = data[dataIndex]
         const name = dataItem?.fullName || dataItem?.name || params[0].name
@@ -1930,7 +1930,7 @@ const handleBackToColleges = () => {
 
 // 初始化分院排名条形图
 const initCollegeRankingChart = () => {
-  if (!collegeRankingChartRef.value) return
+  if (!collegeRankingChartRef.value) {return}
   if (currentRole.value === 'secondary_college') {
     // 二级学院不显示此图表，清空已有实例
     if (collegeRankingChartInstance) {
@@ -2020,9 +2020,9 @@ const initCollegeRankingChart = () => {
         borderRadius: [0, 4, 4, 0],
         color: (params: any) => {
           const value = params.value as number
-          if (value >= 80) return '#67c23a'
-          if (value >= 60) return '#409eff'
-          if (value >= 40) return '#e6a23c'
+          if (value >= 80) {return '#67c23a'}
+          if (value >= 60) {return '#409eff'}
+          if (value >= 40) {return '#e6a23c'}
           return '#f56c6c'
         }
       },
@@ -2179,7 +2179,7 @@ onUnmounted(() => {
 
       <!-- 图表区域骨架屏 -->
       <el-row :gutter="16" class="chart-section">
-        <el-col :xs="24" :md="8" v-for="i in 3" :key="i">
+        <el-col v-for="i in 3" :key="i" :xs="24" :md="8">
           <el-card shadow="hover" class="chart-card">
             <template #header>
               <el-skeleton-item variant="text" style="width: 120px;" />
@@ -2350,8 +2350,8 @@ onUnmounted(() => {
                   v-if="isDrillDown"
                   type="primary"
                   size="small"
-                  @click="handleBackToDepts"
                   class="back-btn"
+                  @click="handleBackToDepts"
                 >
                   <el-icon><Top /></el-icon>
                   返回部门视图
@@ -2362,8 +2362,8 @@ onUnmounted(() => {
                   <el-select
                     v-model="selectedMonth"
                     size="small"
-                    @change="handleMonthChange"
                     class="month-select"
+                    @change="handleMonthChange"
                   >
                     <el-option
                       v-for="m in 12"
@@ -2481,7 +2481,7 @@ onUnmounted(() => {
                       />
                     </span>
                   </div>
-                  <div class="detail-row" v-if="indicator.targetProgress !== null || indicator.milestoneIndex">
+                  <div v-if="indicator.targetProgress !== null || indicator.milestoneIndex" class="detail-row">
                     <span class="detail-label">目标进度</span>
                     <span class="detail-value">{{ indicator.targetProgress !== null ? indicator.targetProgress + '%' : '-' }}{{ indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : '' }}</span>
                   </div>
@@ -2615,7 +2615,7 @@ onUnmounted(() => {
                       />
                     </span>
                   </div>
-                  <div class="detail-row" v-if="indicator.targetProgress !== null || indicator.milestoneIndex">
+                  <div v-if="indicator.targetProgress !== null || indicator.milestoneIndex" class="detail-row">
                     <span class="detail-label">目标进度</span>
                     <span class="detail-value">{{ indicator.targetProgress !== null ? indicator.targetProgress + '%' : '-' }}{{ indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : '' }}</span>
                   </div>
@@ -2674,8 +2674,8 @@ onUnmounted(() => {
                   v-if="isCollegeDrillDown"
                   type="primary"
                   size="small"
-                  @click="handleBackToColleges"
                   class="back-btn"
+                  @click="handleBackToColleges"
                 >
                   <el-icon><Top /></el-icon>
                   返回学院视图
@@ -2686,8 +2686,8 @@ onUnmounted(() => {
                   <el-select
                     v-model="collegeSelectedMonth"
                     size="small"
-                    @change="handleCollegeMonthChange"
                     class="month-select"
+                    @change="handleCollegeMonthChange"
                   >
                     <el-option
                       v-for="m in 12"
@@ -2810,7 +2810,7 @@ onUnmounted(() => {
                       />
                     </span>
                   </div>
-                  <div class="detail-row" v-if="indicator.targetProgress !== null || indicator.milestoneIndex">
+                  <div v-if="indicator.targetProgress !== null || indicator.milestoneIndex" class="detail-row">
                     <span class="detail-label">目标进度</span>
                     <span class="detail-value">{{ indicator.targetProgress !== null ? indicator.targetProgress + '%' : '-' }}{{ indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : '' }}</span>
                   </div>
@@ -2869,8 +2869,8 @@ onUnmounted(() => {
                     <el-select
                       v-model="collegeRankingMonth"
                       size="small"
-                      @change="handleCollegeRankingMonthChange"
                       class="month-select"
+                      @change="handleCollegeRankingMonthChange"
                     >
                       <el-option
                         v-for="m in 12"
@@ -2886,8 +2886,8 @@ onUnmounted(() => {
                     <el-select
                       v-model="selectedOwnerDeptFilter"
                       size="small"
-                      @change="handleOwnerDeptFilterChange"
                       class="dept-select"
+                      @change="handleOwnerDeptFilterChange"
                     >
                       <el-option label="全部" value="all" />
                       <el-option

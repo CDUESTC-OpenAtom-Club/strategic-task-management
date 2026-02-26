@@ -54,7 +54,7 @@ function getCodeFiles(dir: string, files: string[] = []): string[] {
       return relativePath.includes(pattern) || entry.name === pattern
     })
     
-    if (shouldExclude) continue
+    if (shouldExclude) {continue}
     
     if (entry.isDirectory()) {
       getCodeFiles(fullPath, files)
@@ -212,14 +212,14 @@ describe('Property 6: 敏感信息隔离', () => {
       const lines = content.split('\n')
       
       for (const line of lines) {
-        if (line.trim().startsWith('#') || line.trim() === '') continue
+        if (line.trim().startsWith('#') || line.trim() === '') {continue}
         
         const match = line.match(/^([A-Z_]+)\s*=\s*(.*)$/)
         if (match) {
           const key = match[1]
           const value = match[2]
           
-          if (!key || value === undefined) continue
+          if (!key || value === undefined) {continue}
           
           if (['DB_PASSWORD', 'JWT_SECRET', 'API_KEY', 'SECRET_KEY'].includes(key)) {
             const lowerValue = value.toLowerCase()

@@ -130,7 +130,7 @@ const handleChartClick = (params: any) => {
     '正常': 'normal'
   }
   const level = levelMap[params.name]
-  if (level) emit('click', level)
+  if (level) {emit('click', level)}
 }
 </script>
 

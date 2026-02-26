@@ -121,20 +121,20 @@ const getNodeClass = (status: WorkflowNode['status']) => {
 
 // 格式化时间
 const formatTime = (date?: Date) => {
-  if (!date) return ''
+  if (!date) {return ''}
   const d = new Date(date)
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 // 获取用户信息
 const getUserInfo = (userId?: string) => {
-  if (!userId) return null
+  if (!userId) {return null}
   return organizationUsers.value.find(u => u.id === userId)
 }
 
 // 检查节点是否可编辑
 const canEditNode = (node: WorkflowNode) => {
-  if (!props.allowCustomApprover || props.readonly) return false
+  if (!props.allowCustomApprover || props.readonly) {return false}
   // 只能编辑当前或待处理的节点
   return node.status === 'current' || node.status === 'pending'
 }

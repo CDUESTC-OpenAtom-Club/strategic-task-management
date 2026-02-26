@@ -908,10 +908,23 @@ const isFallbackMode = computed(() => {
 })
 
 // 当前视角角色（优先使用父组件传递的，否则使用有效角色）
-const currentRole = computed<UserRole>(() => 
-  (props.viewingRole as UserRole) || authStore.effectiveRole || 'strategic_dept'
-)
-const currentDepartment = computed(() => props.viewingDept || authStore.effectiveDepartment || '')
+const currentRole = computed<UserRole>(() => {
+  if (props.viewingRole) return props.viewingRole as UserRole
+  if (authStore.effectiveRole) return authStore.effectiveRole
+  // 从 localStorage 读取（降级）
+  const storedRole = localStorage.getItem('effectiveRole')
+  if (storedRole) return storedRole as UserRole
+  return 'strategic_dept'
+})
+
+const currentDepartment = computed(() => {
+  if (props.viewingDept) return props.viewingDept
+  if (authStore.effectiveDepartment) return authStore.effectiveDepartment
+  // 从 localStorage 读取（降级）
+  const storedDept = localStorage.getItem('effectiveDepartment')
+  if (storedDept) return storedDept
+  return ''
+})
 
 // 是否显示筛选功能（二级学院不显示）
 const showFilterFeature = computed(() => currentRole.value !== 'secondary_college')
@@ -2111,7 +2124,12 @@ watch(showCollegeMonthIndicatorCard, () => {
 })
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
+  // 确保 orgStore 数据已加载
+  if (!orgStore.loaded) {
+    await orgStore.loadDepartments()
+  }
+  
   nextTick(() => {
     initRadarChart()
     initBenchmarkChart()

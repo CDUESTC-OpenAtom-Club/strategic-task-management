@@ -60,11 +60,11 @@ const getStatusConfig = (status: string) => {
 
 // 计算完成进度
 const getProgress = () => {
-  if (!plan.value) return 0
+  if (!plan.value) {return 0}
   const totalIndicators = plan.value.tasks?.reduce((sum, task) => {
     return sum + (task.indicators?.length || 0)
   }, 0) || 0
-  if (totalIndicators === 0) return 0
+  if (totalIndicators === 0) {return 0}
   return Math.round((plan.value.completedIndicators || 0) / totalIndicators * 100)
 }
 

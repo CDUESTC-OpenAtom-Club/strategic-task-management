@@ -80,34 +80,34 @@ function deserializeIndicator(json: string): IndicatorData {
  */
 function areIndicatorsEqual(a: IndicatorData, b: IndicatorData): boolean {
   // Compare primitive fields
-  if (a.id !== b.id) return false
-  if (a.name !== b.name) return false
-  if (a.isQualitative !== b.isQualitative) return false
-  if (a.type1 !== b.type1) return false
-  if (a.type2 !== b.type2) return false
-  if (a.progress !== b.progress) return false
-  if (a.createTime !== b.createTime) return false
-  if (a.weight !== b.weight) return false
-  if (a.remark !== b.remark) return false
-  if (a.canWithdraw !== b.canWithdraw) return false
-  if (a.targetValue !== b.targetValue) return false
-  if (a.unit !== b.unit) return false
-  if (a.responsibleDept !== b.responsibleDept) return false
-  if (a.responsiblePerson !== b.responsiblePerson) return false
-  if (a.status !== b.status) return false
-  if (a.isStrategic !== b.isStrategic) return false
-  if (a.year !== b.year) return false
+  if (a.id !== b.id) {return false}
+  if (a.name !== b.name) {return false}
+  if (a.isQualitative !== b.isQualitative) {return false}
+  if (a.type1 !== b.type1) {return false}
+  if (a.type2 !== b.type2) {return false}
+  if (a.progress !== b.progress) {return false}
+  if (a.createTime !== b.createTime) {return false}
+  if (a.weight !== b.weight) {return false}
+  if (a.remark !== b.remark) {return false}
+  if (a.canWithdraw !== b.canWithdraw) {return false}
+  if (a.targetValue !== b.targetValue) {return false}
+  if (a.unit !== b.unit) {return false}
+  if (a.responsibleDept !== b.responsibleDept) {return false}
+  if (a.responsiblePerson !== b.responsiblePerson) {return false}
+  if (a.status !== b.status) {return false}
+  if (a.isStrategic !== b.isStrategic) {return false}
+  if (a.year !== b.year) {return false}
   
   // Compare optional fields
-  if (a.ownerDept !== b.ownerDept) return false
-  if (a.parentIndicatorId !== b.parentIndicatorId) return false
-  if (a.progressApprovalStatus !== b.progressApprovalStatus) return false
-  if (a.pendingProgress !== b.pendingProgress) return false
-  if (a.pendingRemark !== b.pendingRemark) return false
+  if (a.ownerDept !== b.ownerDept) {return false}
+  if (a.parentIndicatorId !== b.parentIndicatorId) {return false}
+  if (a.progressApprovalStatus !== b.progressApprovalStatus) {return false}
+  if (a.pendingProgress !== b.pendingProgress) {return false}
+  if (a.pendingRemark !== b.pendingRemark) {return false}
   
   // Compare arrays
-  if (a.milestones.length !== b.milestones.length) return false
-  if (a.statusAudit.length !== b.statusAudit.length) return false
+  if (a.milestones.length !== b.milestones.length) {return false}
+  if (a.statusAudit.length !== b.statusAudit.length) {return false}
   
   // Compare milestones
   for (let i = 0; i < a.milestones.length; i++) {

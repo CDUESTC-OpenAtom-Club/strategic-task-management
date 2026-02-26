@@ -135,7 +135,7 @@ export function getCurrentTargetProgress(indicator: StrategicIndicator): number 
  * 计算进度百分比
  */
 export function getProgressPercentage(current: number, target: number): number {
-  if (target === 0) return 0
+  if (target === 0) {return 0}
   return Math.min(100, Math.round((current / target) * 100))
 }
 

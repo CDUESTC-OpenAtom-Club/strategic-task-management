@@ -22,7 +22,7 @@ const emit = defineEmits<{
 
 // 判断里程碑是否已完成
 const isMilestoneCompleted = (milestone: Milestone) => {
-  if (props.currentProgress === undefined) return false
+  if (props.currentProgress === undefined) {return false}
   return props.currentProgress >= milestone.targetProgress
 }
 

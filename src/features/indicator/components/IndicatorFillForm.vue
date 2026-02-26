@@ -117,7 +117,7 @@ const initFormData = () => {
 
 // 保存草稿
 const handleSave = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
 
   try {
     await formRef.value.validate()
@@ -147,7 +147,7 @@ const handleSave = async () => {
 
 // 提交审核
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
 
   try {
     await formRef.value.validate()

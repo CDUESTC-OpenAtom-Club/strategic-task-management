@@ -38,7 +38,7 @@ const drawerVisible = computed({
 
 // 获取父指标（核心指标）名称
 const getParentIndicatorName = () => {
-  if (!props.indicator?.parentIndicatorId) return '-';
+  if (!props.indicator?.parentIndicatorId) {return '-';}
   const parentIndicator = strategicStore.indicators.find(
     i => i.id.toString() === props.indicator?.parentIndicatorId
   );
@@ -47,7 +47,7 @@ const getParentIndicatorName = () => {
 
 // 获取审计日志（按时间倒序）
 const auditLogs = computed(() => {
-  if (!props.indicator?.statusAudit) return [];
+  if (!props.indicator?.statusAudit) {return [];}
   return [...props.indicator.statusAudit].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   );
@@ -111,10 +111,10 @@ const formatRelativeTime = (timestamp: Date | string) => {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 1) return "刚刚";
-  if (diffMins < 60) return `${diffMins}分钟前`;
-  if (diffHours < 24) return `${diffHours}小时前`;
-  if (diffDays < 30) return `${diffDays}天前`;
+  if (diffMins < 1) {return "刚刚";}
+  if (diffMins < 60) {return `${diffMins}分钟前`;}
+  if (diffHours < 24) {return `${diffHours}小时前`;}
+  if (diffDays < 30) {return `${diffDays}天前`;}
   return formatTime(timestamp);
 };
 
@@ -139,7 +139,7 @@ const handleClose = () => {
           <el-icon><ChatDotRound /></el-icon>
           <span>指标详情</span>
         </div>
-        <div class="header-subtitle" v-if="indicator">
+        <div v-if="indicator" class="header-subtitle">
           {{ indicator.name }}
         </div>
       </div>

@@ -177,7 +177,7 @@ describe('Property P3: 日志敏感数据过滤', () => {
         fc.string(),
         (sensitiveField, sensitiveValue, normalField, normalValue) => {
           // 确保字段名不同
-          if (sensitiveField === normalField) return true
+          if (sensitiveField === normalField) {return true}
           
           const obj = {
             [sensitiveField]: sensitiveValue,

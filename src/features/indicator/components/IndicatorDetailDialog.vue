@@ -30,7 +30,7 @@ const indicator = computed<StrategicIndicator | undefined>(() =>
 
 // 模拟审批历史数据
 const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
-  if (!indicator.value) return []
+  if (!indicator.value) {return []}
   return [
     {
       id: '1',
@@ -70,8 +70,8 @@ const getType2TagType = (type: string) => {
 }
 
 const getProgressStatus = (progress: number) => {
-  if (progress >= 80) return 'success'
-  if (progress >= 50) return ''
+  if (progress >= 80) {return 'success'}
+  if (progress >= 50) {return ''}
   return 'exception'
 }
 

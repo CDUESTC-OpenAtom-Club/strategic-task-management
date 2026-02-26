@@ -107,7 +107,7 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Re
   const request: Record<string, any> = {}
 
   for (const [key, value] of Object.entries(updates)) {
-    if (value === undefined) continue
+    if (value === undefined) {continue}
 
     const backendKey = FRONTEND_TO_BACKEND[key]
     if (backendKey) {

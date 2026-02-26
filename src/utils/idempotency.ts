@@ -25,7 +25,7 @@ export type WriteMethod = typeof WRITE_METHODS[number]
  * Check if a method is a write operation that needs idempotency protection
  */
 export function isWriteMethod(method: string | undefined): boolean {
-  if (!method) return false
+  if (!method) {return false}
   return WRITE_METHODS.includes(method.toUpperCase() as WriteMethod)
 }
 

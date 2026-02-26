@@ -54,10 +54,10 @@
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-    if (diffMins < 1) return '刚刚'
-    if (diffMins < 60) return `${diffMins}分钟前`
-    if (diffHours < 24) return `${diffHours}小时前`
-    if (diffDays < 30) return `${diffDays}天前`
+    if (diffMins < 1) {return '刚刚'}
+    if (diffMins < 60) {return `${diffMins}分钟前`}
+    if (diffHours < 24) {return `${diffHours}小时前`}
+    if (diffDays < 30) {return `${diffDays}天前`}
     return formatAuditTime(timestamp)
   }
 
@@ -71,7 +71,7 @@
   
   // 判断是否可以编辑（只有战略发展部可以编辑，且非只读模式）
   const canEdit = computed(() => {
-    if (isReadOnly.value) return false
+    if (isReadOnly.value) {return false}
     return authStore.userRole === 'strategic_dept' || props.selectedRole === 'strategic_dept'
   })
   
@@ -101,7 +101,7 @@
   // 计算当前选中部门的所有指标权重之和（用于下发验证）
   // 只计算战略指标（isStrategic=true）且 responsibleDept 匹配的指标
   const departmentTotalWeight = computed(() => {
-    if (!selectedDepartment.value) return 0
+    if (!selectedDepartment.value) {return 0}
     
     const deptIndicators = strategicStore.indicators.filter(i => 
       (!i.year || i.year === timeContext.currentYear) &&
@@ -116,15 +116,15 @@
   // 计算当前页面整体状态（基于所有指标）
   const overallStatus = computed(() => {
     const list = indicators.value
-    if (list.length === 0) return { label: '暂无指标', type: 'info' }
+    if (list.length === 0) {return { label: '暂无指标', type: 'info' }}
     
     const hasPending = list.some(i => i.progressApprovalStatus === 'pending')
     const hasRejected = list.some(i => i.progressApprovalStatus === 'rejected')
     const allDistributed = list.every(i => !i.canWithdraw)
     
-    if (hasPending) return { label: '待审批', type: 'warning' }
-    if (hasRejected) return { label: '有驳回', type: 'danger' }
-    if (allDistributed) return { label: '已下发', type: 'success' }
+    if (hasPending) {return { label: '待审批', type: 'warning' }}
+    if (hasRejected) {return { label: '有驳回', type: 'danger' }}
+    if (allDistributed) {return { label: '已下发', type: 'success' }}
     return { label: '待下发', type: 'info' }
   })
 
@@ -135,8 +135,8 @@
 
   // 判断是否可以编辑（未下发状态才能编辑）
   const canEditIndicators = computed(() => {
-    if (isReadOnly.value) return false
-    if (!canEdit.value) return false
+    if (isReadOnly.value) {return false}
+    if (!canEdit.value) {return false}
     return !hasDistributedIndicators.value
   })
   
@@ -406,7 +406,7 @@
 
   // 保存里程碑编辑
   const saveMilestoneEdit = async () => {
-    if (!editingMilestoneIndicator.value) return
+    if (!editingMilestoneIndicator.value) {return}
 
     // 验证里程碑数据
     for (const ms of editingMilestones.value) {
@@ -520,15 +520,15 @@
 
   // 格式化更新时间
   const formatUpdateTime = (time: string | Date | undefined) => {
-    if (!time) return '-'
+    if (!time) {return '-'}
     const date = new Date(time)
     return `${date.getMonth() + 1}/${date.getDate()}`
   }
 
   // 获取进度数字的样式类
   const getProgressClass = (progress: number) => {
-    if (progress >= 80) return 'progress-success'
-    if (progress >= 50) return 'progress-warning'
+    if (progress >= 80) {return 'progress-success'}
+    if (progress >= 50) {return 'progress-warning'}
     return 'progress-danger'
   }
   
@@ -670,7 +670,7 @@
   
   // 任务详情双击编辑处理
   const handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
-    if (!canEdit.value) return
+    if (!canEdit.value) {return}
     editingField.value = field
     editingValue.value = value
   }
@@ -684,10 +684,10 @@
     }
   
     const task = taskList.value[currentTaskIndex.value]
-    if (field === 'title') task.title = editingValue.value
-    else if (field === 'desc') task.desc = editingValue.value
-    else if (field === 'cycle') task.cycle = editingValue.value
-    else if (field === 'createTime') task.createTime = editingValue.value
+    if (field === 'title') {task.title = editingValue.value}
+    else if (field === 'desc') {task.desc = editingValue.value}
+    else if (field === 'cycle') {task.cycle = editingValue.value}
+    else if (field === 'createTime') {task.createTime = editingValue.value}
   
     cancelEdit()
   }
@@ -700,9 +700,9 @@
   
   // 指标双击编辑
   const handleIndicatorDblClick = (row: StrategicIndicator, field: string) => {
-    if (!canEdit.value) return
+    if (!canEdit.value) {return}
     // 已下发状态下不允许编辑
-    if (hasDistributedIndicators.value) return
+    if (hasDistributedIndicators.value) {return}
     editingIndicatorId.value = row.id
     editingIndicatorField.value = field
     editingIndicatorValue.value = row[field as keyof StrategicIndicator]
@@ -711,7 +711,7 @@
   // 保存指标编辑
   const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
     // 如果已经在取消过程中或值无效，直接退出
-    if (editingIndicatorId.value === null) return; 
+    if (editingIndicatorId.value === null) {return;} 
   
     if (editingIndicatorValue.value === null || editingIndicatorValue.value === undefined) {
         cancelIndicatorEdit()
@@ -757,7 +757,7 @@
   // 全局点击事件处理 - 点击编辑区域外退出编辑
   const handleGlobalClick = (event: MouseEvent) => {
     // 如果没有正在编辑的字段，直接返回
-    if (editingIndicatorId.value === null) return
+    if (editingIndicatorId.value === null) {return}
   
     const target = event.target as HTMLElement
   
@@ -900,7 +900,7 @@
   
     // 检查是否有即将到期的里程碑（30天内）
     const hasUpcomingMilestone = indicator.milestones.some(milestone => {
-      if (milestone.status === 'completed') return false
+      if (milestone.status === 'completed') {return false}
       const deadlineDate = new Date(milestone.deadline)
       const daysUntilDeadline = Math.ceil((deadlineDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24))
       return daysUntilDeadline > 0 && daysUntilDeadline <= 30
@@ -929,7 +929,7 @@
   
     const currentDate = new Date()
     const overdueMilestonesCount = indicator.milestones.filter(m => {
-      if (m.status !== 'pending') return false
+      if (m.status !== 'pending') {return false}
       const deadlineDate = new Date(m.deadline)
       return deadlineDate < currentDate
     }).length
@@ -1017,7 +1017,7 @@
 
   // 专门用于审批抽屉的指标列表（显示当前选中部门的所有指标，一个部门的所有指标状态应该统一）
   const approvalIndicators = computed(() => {
-    if (!selectedDepartment.value) return []
+    if (!selectedDepartment.value) {return []}
     return strategicStore.indicators
       .filter(i => !i.year || i.year === timeContext.currentYear)
       .filter(i => i.responsibleDept === selectedDepartment.value)  // 只显示当前选中部门的指标
@@ -1026,14 +1026,14 @@
 
   // 判断当前选中部门是否有待审批的指标（用于按钮显示和状态判断）
   const hasPendingApproval = computed(() => {
-    if (!selectedDepartment.value) return false
+    if (!selectedDepartment.value) {return false}
     return approvalIndicators.value.some(i => i.progressApprovalStatus === 'pending')
   })
 
   // 待审批数量：如果部门有任何一个指标待审批，则显示该部门的总指标数（因为要一起审批）
   const pendingApprovalCount = computed(() => {
-    if (!selectedDepartment.value) return 0
-    if (!hasPendingApproval.value) return 0
+    if (!selectedDepartment.value) {return 0}
+    if (!hasPendingApproval.value) {return 0}
     return approvalIndicators.value.length  // 显示该部门的总指标数
   })
 
@@ -1100,7 +1100,7 @@
 
   // 提交审批
   const submitApproval = () => {
-    if (!currentApprovalIndicator.value) return
+    if (!currentApprovalIndicator.value) {return}
 
     const indicator = currentApprovalIndicator.value
     const isApprove = approvalForm.value.action === 'approve'
@@ -1261,7 +1261,7 @@
     }
     
     // 单个下发模式
-    if (!currentDistributeItem.value) return
+    if (!currentDistributeItem.value) {return}
     
     ElMessageBox.confirm(
       `确认将指标 "${currentDistributeItem.value.name}" 下发到以下部门？\n\n${targetDepts}`,
@@ -1632,8 +1632,8 @@
   // 获取进度状态 - 使用统一的进度条颜色规则 (Requirements: 10.2)
   // 规则: progress >= 80: success, 50 <= progress < 80: warning, progress < 50: exception
   const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception' => {
-    if (progress >= 80) return 'success'
-    if (progress >= 50) return 'warning'
+    if (progress >= 80) {return 'success'}
+    if (progress >= 50) {return 'warning'}
     return 'exception'
   }
   </script>
@@ -1757,8 +1757,8 @@
               :span-method="getSpanMethod"
               border
               highlight-current-row
-              @selection-change="handleSelectionChange"
               class="unified-table"
+              @selection-change="handleSelectionChange"
             >
 
               <el-table-column prop="taskContent" label="战略任务" width="180">
@@ -1934,8 +1934,8 @@
               <div class="nav-left">
                 <el-button 
                   :disabled="currentIndicatorIndex === 0" 
-                  @click="goToPrevIndicator"
                   size="small"
+                  @click="goToPrevIndicator"
                 >
                   <el-icon><ArrowDown style="transform: rotate(90deg)" /></el-icon>
                   上一个
@@ -1945,8 +1945,8 @@
                 </span>
                 <el-button 
                   :disabled="currentIndicatorIndex === indicators.length - 1" 
-                  @click="goToNextIndicator"
                   size="small"
+                  @click="goToNextIndicator"
                 >
                   下一个
                   <el-icon><ArrowDown style="transform: rotate(-90deg)" /></el-icon>
@@ -2145,9 +2145,9 @@
                       default-first-option
                       placeholder="选择或输入战略任务名称"
                       style="width: 100%"
+                      :teleported="false"
                       @change="handleTaskSelect"
                       @visible-change="handleTaskVisibleChange"
-                      :teleported="false"
                     >
                       <el-option
                         v-for="task in existingTaskNames"
@@ -2256,14 +2256,14 @@
           <el-form :model="{ assignmentMethod, assignmentTarget }" label-width="120px">
             <el-form-item :label="props.selectedRole === '战略发展部' ? '下发方式' : '下发方式'">
               <el-radio-group v-model="assignmentMethod">
-                <el-radio value="self" v-if="props.selectedRole === '战略发展部'">职能部门完成</el-radio>
-                <el-radio value="college" v-if="props.selectedRole === '战略发展部'">分解到职能部门</el-radio>
-                <el-radio value="self" v-else-if="props.selectedRole === '教务处' || props.selectedRole === '科研处'">自己完成</el-radio>
-                <el-radio value="college" v-if="props.selectedRole === '教务处' || props.selectedRole === '科研处'">下发给学院</el-radio>
+                <el-radio v-if="props.selectedRole === '战略发展部'" value="self">职能部门完成</el-radio>
+                <el-radio v-if="props.selectedRole === '战略发展部'" value="college">分解到职能部门</el-radio>
+                <el-radio v-else-if="props.selectedRole === '教务处' || props.selectedRole === '科研处'" value="self">自己完成</el-radio>
+                <el-radio v-if="props.selectedRole === '教务处' || props.selectedRole === '科研处'" value="college">下发给学院</el-radio>
               </el-radio-group>
             </el-form-item>
   
-            <el-form-item label="目标部门" v-if="assignmentMethod === 'college'">
+            <el-form-item v-if="assignmentMethod === 'college'" label="目标部门">
               <el-select v-model="assignmentTarget" placeholder="选择学院" style="width: 100%;">
                 <el-option label="计算机学院" value="计算机学院" />
                 <el-option label="艺术与科技学院" value="艺术与科技学院" />
@@ -2276,7 +2276,7 @@
           <el-button @click="showAssignmentDialog = false; assignmentTarget = ''; assignmentMethod = 'self'">
             取消
           </el-button>
-          <el-button type="primary" @click="confirmAssignment" :disabled="assignmentMethod === 'college' && !assignmentTarget">
+          <el-button type="primary" :disabled="assignmentMethod === 'college' && !assignmentTarget" @click="confirmAssignment">
             确认下发
           </el-button>
         </template>

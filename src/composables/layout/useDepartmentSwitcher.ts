@@ -98,7 +98,7 @@ export function useDepartmentSwitcher() {
 
   // 切换视角时重置到第一个标签页，并更新 authStore 的视角状态
   watch(viewingDept, (newDept) => {
-    if (!newDept) return
+    if (!newDept) {return}
 
     // 更新 authStore 的视角状态
     if (newDept === strategicDeptName.value) {

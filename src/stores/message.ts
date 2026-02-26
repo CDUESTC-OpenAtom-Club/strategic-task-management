@@ -40,7 +40,7 @@ export const useMessageStore = defineStore('message', () => {
    */
   const isMessageVisibleToUser = (message: Message): boolean => {
     const user = authStore.user
-    if (!user) return false
+    if (!user) {return false}
     
     // 如果指定了特定接收者ID，只有该用户可见
     if (message.recipientId && message.recipientId !== user.id) {
@@ -116,12 +116,12 @@ export const useMessageStore = defineStore('message', () => {
   const generateAlertMessages = (): Message[] => {
     const alerts: Message[] = []
     const user = authStore.user
-    if (!user) return alerts
+    if (!user) {return alerts}
     
     // 获取当前用户相关的指标
     const userIndicators = strategicStore.indicators.filter(indicator => {
       // 战略发展部可以看所有指标
-      if (user.role === 'strategic_dept') return true
+      if (user.role === 'strategic_dept') {return true}
       
       // 职能部门看自己下发的和接收的
       if (user.role === 'functional_dept') {
@@ -173,7 +173,7 @@ export const useMessageStore = defineStore('message', () => {
     strategicStore.getOverdueMilestones
       .filter(item => {
         const indicator = item.indicator
-        if (user.role === 'strategic_dept') return true
+        if (user.role === 'strategic_dept') {return true}
         if (user.role === 'functional_dept') {
           return indicator.ownerDept === user.department || 
                  indicator.responsibleDept === user.department
@@ -199,7 +199,7 @@ export const useMessageStore = defineStore('message', () => {
     strategicStore.getUpcomingMilestones
       .filter(item => {
         const indicator = item.indicator
-        if (user.role === 'strategic_dept') return true
+        if (user.role === 'strategic_dept') {return true}
         if (user.role === 'functional_dept') {
           return indicator.ownerDept === user.department || 
                  indicator.responsibleDept === user.department
@@ -231,10 +231,10 @@ export const useMessageStore = defineStore('message', () => {
   const generateApprovalMessages = (): Message[] => {
     const approvals: Message[] = []
     const user = authStore.user
-    if (!user) return approvals
+    if (!user) {return approvals}
     
     // 只有战略发展部和职能部门有审批权限
-    if (user.role === 'secondary_college') return approvals
+    if (user.role === 'secondary_college') {return approvals}
     
     // 获取待审批的指标（这里简化处理，实际应该从报告数据中获取）
     const pendingApprovals = strategicStore.indicators.filter(indicator => {

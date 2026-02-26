@@ -146,17 +146,17 @@ const getRelativeTime = (date: Date) => {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 7) return `${days}天前`
-  if (days < 30) return `${Math.floor(days / 7)}周前`
+  if (minutes < 1) {return '刚刚'}
+  if (minutes < 60) {return `${minutes}分钟前`}
+  if (hours < 24) {return `${hours}小时前`}
+  if (days < 7) {return `${days}天前`}
+  if (days < 30) {return `${Math.floor(days / 7)}周前`}
   return `${new Date(date).toLocaleDateString()}`
 }
 
 // 获取消息图标样式
 const getIconClass = (message: Message) => {
-  if (message.isRead) return 'icon-read'
+  if (message.isRead) {return 'icon-read'}
 
   const classes: Record<MessageType, string> = {
     approval: 'icon-approval',

@@ -305,7 +305,7 @@ function normalizeUrl(url: string): string {
  * 计算百分位数
  */
 function calculatePercentile(values: number[], percentile: number): number {
-  if (values.length === 0) return 0
+  if (values.length === 0) {return 0}
   
   const sorted = [...values].sort((a, b) => a - b)
   const index = Math.ceil((percentile / 100) * sorted.length) - 1
@@ -543,7 +543,7 @@ export function printPerformanceReport(metrics?: PerformanceMetrics): void {
  * 获取 Web Vital 指标状态
  */
 function getVitalStatus(metric: string, value: number | null): string {
-  if (value === null) return '⚪ N/A'
+  if (value === null) {return '⚪ N/A'}
 
   // 阈值参考: https://web.dev/vitals/
   const thresholds: Record<string, { good: number; needsImprovement: number }> = {
@@ -555,10 +555,10 @@ function getVitalStatus(metric: string, value: number | null): string {
   }
 
   const threshold = thresholds[metric]
-  if (!threshold) return '⚪ Unknown'
+  if (!threshold) {return '⚪ Unknown'}
 
-  if (value <= threshold.good) return '🟢 Good'
-  if (value <= threshold.needsImprovement) return '🟡 Needs Improvement'
+  if (value <= threshold.good) {return '🟢 Good'}
+  if (value <= threshold.needsImprovement) {return '🟡 Needs Improvement'}
   return '🔴 Poor'
 }
 

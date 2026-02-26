@@ -186,7 +186,7 @@ const handleFieldChange = (prop: string, value: any) => {
 
 /** 提交表单 */
 const submit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
 
   try {
     await formRef.value.validate()

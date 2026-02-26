@@ -32,7 +32,7 @@ export const useOrgStore = defineStore('org', () => {
       // 排序：战略发展部 > 职能部门 > 二级学院
       const typeOrder = { strategic_dept: 1, functional_dept: 2, secondary_college: 3 }
       const typeCompare = typeOrder[a.type] - typeOrder[b.type]
-      if (typeCompare !== 0) return typeCompare
+      if (typeCompare !== 0) {return typeCompare}
       return a.sortOrder - b.sortOrder
     })
   )
@@ -76,15 +76,31 @@ export const useOrgStore = defineStore('org', () => {
 
   // 工具函数
   const isStrategicDept = (deptName: string): boolean => {
-    return departments.value.some(d => d.name === deptName && d.type === 'strategic_dept')
+    // 如果 departments 已加载，使用精确匹配
+    if (departments.value.length > 0) {
+      return departments.value.some(d => d.name === deptName && d.type === 'strategic_dept')
+    }
+    // 降级：使用名称判断
+    return deptName === '战略发展部'
   }
 
   const isFunctionalDept = (deptName: string): boolean => {
-    return departments.value.some(d => d.name === deptName && d.type === 'functional_dept')
+    // 如果 departments 已加载，使用精确匹配
+    if (departments.value.length > 0) {
+      return departments.value.some(d => d.name === deptName && d.type === 'functional_dept')
+    }
+    // 降级：职能部门通常包含"处"、"部"、"办公室"、"中心"、"馆"等后缀
+    const functionalSuffixes = ['处', '部', '办公室', '中心', '馆']
+    return deptName ? functionalSuffixes.some(suffix => deptName.includes(suffix)) && !deptName.includes('学院') : false
   }
 
   const isCollege = (deptName: string): boolean => {
-    return departments.value.some(d => d.name === deptName && d.type === 'secondary_college')
+    // 如果 departments 已加载，使用精确匹配
+    if (departments.value.length > 0) {
+      return departments.value.some(d => d.name === deptName && d.type === 'secondary_college')
+    }
+    // 降级：如果 departments 未加载，使用名称判断
+    return deptName ? deptName.includes('学院') : false
   }
 
   const getDepartmentByName = (name: string): Department | undefined => {

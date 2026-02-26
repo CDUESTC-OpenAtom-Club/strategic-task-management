@@ -428,6 +428,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   // 辅助函数：生成桑基图数据
   const generateSankeyData = (indicators: StrategicIndicator[]): SankeyData => {
+    const orgStore = useOrgStore()
     const nodes = new Set<string>()
     const linkMap = new Map<string, number>()
 
