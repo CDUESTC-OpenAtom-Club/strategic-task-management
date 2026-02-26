@@ -1,0 +1,17 @@
+# Build outputs
+dist
+coverage
+
+# Dependencies
+node_modules
+
+# Generated files
+*.d.ts
+package-lock.json
+
+# Database
+database/*.sql
+
+# Other
+.git
+.husky
