@@ -9,6 +9,7 @@
   import { useTimeContextStore } from '@/stores/timeContext'
   import { useOrgStore } from '@/stores/org'
   import { logger } from '@/utils/logger'
+  import api from '@/api'
   import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
   import MilestoneList from '@/components/milestone/MilestoneList.vue'
@@ -390,7 +391,7 @@
       
       editingMilestones.value.push({
         id: Date.now() + month,
-        name: indicatorName,
+        name: `${indicatorName} - ${month}月`,  // 添加月份标识，避免重复
         targetProgress: progress,
         deadline: deadline,
         status: 'pending'
@@ -424,19 +425,89 @@
     }
 
     try {
-      // 更新指标的里程碑
-      await strategicStore.updateIndicator(editingMilestoneIndicator.value.id.toString(), {
-        milestones: [...editingMilestones.value]
-      })
+      const indicatorId = Number(editingMilestoneIndicator.value.id)
+      logger.info(`Saving milestones for indicator ${indicatorId}`)
+      
+      // 使用 Milestone API 批量更新里程碑
+      // 1. 先获取现有里程碑并删除
+      try {
+        const existingResponse = await api.get(`/milestones/indicator/${indicatorId}`)
+        const existingMilestones = existingResponse.data?.data || []
+        
+        if (existingMilestones.length > 0) {
+          logger.info(`Deleting ${existingMilestones.length} existing milestones`)
+          // 使用 Promise.all 等待所有删除操作完成
+          await Promise.all(
+            existingMilestones.map(async (ms: any) => {
+              if (ms.milestoneId) {
+                try {
+                  await api.delete(`/milestones/${ms.milestoneId}`)
+                  logger.info(`Deleted milestone ${ms.milestoneId}`)
+                } catch (err) {
+                  logger.warn(`Failed to delete milestone ${ms.milestoneId}:`, err)
+                }
+              }
+            })
+          )
+          logger.info('All existing milestones deleted')
+        }
+      } catch (err) {
+        logger.warn('Failed to fetch existing milestones:', err)
+      }
+      
+      // 2. 创建新的里程碑
+      const createdMilestones = []
+      for (let i = 0; i < editingMilestones.value.length; i++) {
+        const ms = editingMilestones.value[i]
+        const createRequest = {
+          indicatorId: indicatorId,
+          milestoneName: ms.name,
+          milestoneDesc: ms.name,
+          dueDate: ms.deadline, // 格式: YYYY-MM-DD
+          targetProgress: ms.targetProgress || 0,
+          sortOrder: i
+        }
+        
+        logger.info(`Creating milestone ${i + 1}/${editingMilestones.value.length}:`, createRequest)
+        
+        try {
+          const response = await api.post('/milestones', createRequest)
+          if (response.data?.data) {
+            createdMilestones.push(response.data.data)
+            logger.info(`Created milestone: ${response.data.data.milestoneId}`)
+          }
+        } catch (err: any) {
+          logger.error(`Failed to create milestone ${i + 1}:`, err.response?.data || err.message)
+          throw err // 抛出错误以停止后续创建
+        }
+      }
+      
+      // 3. 更新本地状态
+      editingMilestoneIndicator.value.milestones = createdMilestones.map(ms => ({
+        id: ms.milestoneId,
+        milestoneId: ms.milestoneId,
+        name: ms.milestoneName,
+        milestoneName: ms.milestoneName,
+        targetProgress: ms.targetProgress || 0,
+        deadline: ms.dueDate,
+        dueDate: ms.dueDate,
+        status: ms.status,
+        weightPercent: ms.weightPercent,
+        sortOrder: ms.sortOrder
+      }))
+      
+      // 强制刷新指标列表
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
 
-      ElMessage.success('里程碑已更新')
+      ElMessage.success(`里程碑已更新（共${createdMilestones.length}个）`)
       milestoneEditDialogVisible.value = false
       editingMilestoneIndicator.value = null
       editingMilestones.value = []
       updateEditTime()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save milestones:', error)
-      ElMessage.error('里程碑更新失败')
+      const errorMsg = error.response?.data?.message || error.message || '里程碑更新失败'
+      ElMessage.error(errorMsg)
     }
   }
 
@@ -572,7 +643,7 @@
       
       newRow.value.milestones.push({
         id: Date.now() + month,
-        name: indicatorName,
+        name: `${indicatorName} - ${month}月`,  // 添加月份标识，避免重复
         targetProgress: progress,
         deadline: deadline,
         status: 'pending'
