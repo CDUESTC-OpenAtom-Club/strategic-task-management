@@ -6,8 +6,35 @@
  * Requirements: Testing framework configuration (Vitest + fast-check)
  */
 
-import { beforeAll, afterEach, afterAll } from 'vitest'
+import { beforeAll, afterEach, afterAll, vi } from 'vitest'
 import { config } from '@vue/test-utils'
+
+// Mock localStorage and sessionStorage before all tests
+const localStorageMock = (() => {
+  let store: Record<string, string> = {}
+
+  return {
+    getItem: (key: string): string | null => {
+      return store[key] || null
+    },
+    setItem: (key: string, value: string): void => {
+      store[key] = value.toString()
+    },
+    removeItem: (key: string): void => {
+      delete store[key]
+    },
+    clear: (): void => {
+      store = {}
+    },
+    get length(): number {
+      return Object.keys(store).length
+    },
+    key: (index: number): string | null => {
+      const keys = Object.keys(store)
+      return keys[index] || null
+    }
+  }
+})()
 
 // Configure Vue Test Utils
 beforeAll(() => {
@@ -24,6 +51,18 @@ beforeAll(() => {
     'el-table': true,
     'el-table-column': true
   }
+
+  // Mock localStorage
+  Object.defineProperty(global, 'localStorage', {
+    value: localStorageMock,
+    writable: true
+  })
+
+  // Mock sessionStorage
+  Object.defineProperty(global, 'sessionStorage', {
+    value: localStorageMock,
+    writable: true
+  })
 })
 
 // Clean up after each test
@@ -31,11 +70,15 @@ afterEach(() => {
   // Clear all mocks
   vi.clearAllMocks()
 
-  // Clear localStorage
-  localStorage.clear()
+  // Clear localStorage (if it exists and has clear method)
+  if (typeof localStorage !== 'undefined' && typeof localStorage.clear === 'function') {
+    localStorage.clear()
+  }
 
-  // Clear sessionStorage
-  sessionStorage.clear()
+  // Clear sessionStorage (if it exists and has clear method)
+  if (typeof sessionStorage !== 'undefined' && typeof sessionStorage.clear === 'function') {
+    sessionStorage.clear()
+  }
 })
 
 // Clean up after all tests
