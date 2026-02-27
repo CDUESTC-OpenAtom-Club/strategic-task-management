@@ -137,6 +137,22 @@ export const useStrategicStore = defineStore('strategic', () => {
       if (response.success && response.data) {
         const converted = response.data.map(vo => strategicApi.convertIndicatorVOToStrategicIndicator(vo))
         logger.info(`[Strategic Store] Loaded ${converted.length} indicators from API`)
+        
+        // 注释掉自动加载里程碑，避免触发速率限制
+        // 里程碑数据将在用户查看具体指标时按需加载
+        // const { default: milestoneApi } = await import('@/api/milestone')
+        // for (const indicator of converted) {
+        //   try {
+        //     const milestonesResponse = await milestoneApi.getMilestonesByIndicator(indicator.id.toString())
+        //     if (milestonesResponse.success && milestonesResponse.data) {
+        //       indicator.milestones = milestonesResponse.data
+        //     }
+        //   } catch (err) {
+        //     logger.warn(`[Strategic Store] Failed to load milestones for indicator ${indicator.id}:`, err)
+        //     // 继续处理其他指标
+        //   }
+        // }
+        
         return converted
       }
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
@@ -249,65 +265,87 @@ export const useStrategicStore = defineStore('strategic', () => {
   }
 
   const addIndicator = async (indicator: StrategicIndicator) => {
-    // 先进行乐观更新：添加到本地状态
-    const tempId = indicator.id
+    // 先添加到本地状态（乐观更新）
     indicators.value.push(indicator)
 
     try {
-      // 调用后端 API 持久化数据
-      const { default: indicatorApi, type: IndicatorCreateRequest } = await import('@/api/indicator')
-
-      // 获取当前活动的任务 ID，如果没有则使用第一个任务
-      const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
-      const taskId = activeTask ? Number(activeTask.id) : 1
-
-      // 将 StrategicIndicator 映射到 IndicatorCreateRequest
-      const request = {
-        taskId,
-        indicatorDesc: indicator.name,
-        weightPercent: indicator.weight || 0,
-        sortOrder: 0,
-        remark: indicator.remark || '',
-        type: indicator.type2, // 基础性/发展性
-        progress: indicator.progress || 0,
-        year: indicator.year || new Date().getFullYear(),
-        canWithdraw: indicator.canWithdraw !== false,
-      }
-
-      const response = await indicatorApi.createIndicator(request)
-
-      if (response.success && response.data) {
-        // 用后端返回的真实 ID 更新本地指标
-        const index = indicators.value.findIndex(i => i.id === tempId)
-        if (index !== -1) {
-          // 保留前端特有字段，更新后端字段
-          indicators.value[index] = {
-            ...indicators.value[index],
-            id: response.data.indicatorId.toString(),
-            // 可以添加更多从后端返回的字段
-          }
+      // 调用后端API创建指标
+      const { default: indicatorApi } = await import('@/api/indicator')
+      const { useAuthStore } = await import('./auth')
+      const { useOrgStore } = await import('./org')
+      const authStore = useAuthStore()
+      const orgStore = useOrgStore()
+      
+      // 根据 ownerDept 名称查找来源组织ID
+      let ownerOrgId = authStore.user?.orgId || 1 // 默认使用当前用户的组织ID
+      if (indicator.ownerDept) {
+        const ownerOrg = orgStore.getDepartmentByName(indicator.ownerDept)
+        if (ownerOrg && ownerOrg.id) {
+          ownerOrgId = ownerOrg.id
+        } else {
+          logger.warn('[Strategic Store] Owner organization not found:', indicator.ownerDept)
         }
-
-        logger.info('[Strategic Store] Successfully created indicator:', response.data.indicatorId)
-        ElMessage.success('指标创建成功')
       }
+      
+      // 根据 responsibleDept 名称查找目标组织ID
+      let targetOrgId = ownerOrgId // 默认使用来源组织ID
+      if (indicator.responsibleDept) {
+        const targetOrg = orgStore.getDepartmentByName(indicator.responsibleDept)
+        if (targetOrg && targetOrg.id) {
+          targetOrgId = targetOrg.id
+        } else {
+          logger.warn('[Strategic Store] Target organization not found:', indicator.responsibleDept)
+        }
+      }
+      
+      // 构建创建请求
+      const createRequest = {
+        taskId: null, // 允许为空，不关联具体任务
+        parentIndicatorId: indicator.parentIndicatorId ? parseInt(indicator.parentIndicatorId) : null,
+        indicatorDesc: indicator.name || '',
+        weightPercent: indicator.weight || 0,
+        sortOrder: 0, // 默认排序
+        remark: indicator.remark || '',
+        type: indicator.type2 || '基础性',
+        ownerOrgId: ownerOrgId, // 使用 ownerDept 对应的组织ID
+        targetOrgId: targetOrgId, // 使用 responsibleDept 对应的组织ID
+        year: indicator.year || new Date().getFullYear(),
+        canWithdraw: indicator.canWithdraw !== undefined ? indicator.canWithdraw : false
+      }
+      
+      logger.info('[Strategic Store] Creating indicator with request:', createRequest)
+      const response = await indicatorApi.createIndicator(createRequest)
+      logger.info('[Strategic Store] Successfully created indicator in backend', response)
+      
+      // 清除相关缓存
+      const { refreshCachePattern } = await import('@/utils/cache')
+      refreshCachePattern('/api/indicators')
+      logger.info('[Strategic Store] Cleared indicators cache after creation')
+      
+      // 重新从后端加载数据，确保所有视角都能看到最新数据
+      const timeContext = getTimeContext()
+      await loadIndicatorsByYear(timeContext.currentYear)
+      logger.info('[Strategic Store] Reloaded indicators after creation')
     } catch (err) {
-      logger.error('[Strategic Store] Failed to create indicator:', err)
-
-      // 回滚：从本地状态移除
-      const index = indicators.value.findIndex(i => i.id === tempId)
+      logger.error('[Strategic Store] Failed to create indicator in backend:', err)
+      // 如果后端创建失败，从本地移除
+      const index = indicators.value.findIndex(i => i.id === indicator.id)
       if (index !== -1) {
         indicators.value.splice(index, 1)
       }
-
-      ElMessage.error('指标创建失败，请稍后重试')
+      ElMessage.error('创建指标失败，请稍后重试')
       throw err
     }
   }
 
   const updateIndicator = async (id: string, updates: Partial<StrategicIndicator>) => {
+    console.log('[Strategic Store] updateIndicator called with id:', id, 'updates:', updates)
+    
     const index = indicators.value.findIndex(i => i.id === id)
-    if (index === -1) {return}
+    if (index === -1) {
+      console.log('[Strategic Store] Indicator not found:', id)
+      return
+    }
 
     const indicator = indicators.value[index]
     if (!indicator) {return}
@@ -321,17 +359,92 @@ export const useStrategicStore = defineStore('strategic', () => {
     indicators.value = [...indicators.value]
 
     // 检查是否有需要同步到后端的字段
-    if (hasBackendUpdatesUtil(updates)) {
+    const hasBackend = hasBackendUpdatesUtil(updates)
+    console.log('[Strategic Store] hasBackendUpdates:', hasBackend, 'updates keys:', Object.keys(updates))
+    
+    if (hasBackend) {
       try {
         // 调用后端API更新指标
         const { default: indicatorApi } = await import('@/api/indicator')
 
         // 使用字段映射器构建后端更新请求
         const updateRequest = convertToUpdateRequest(updates)
+        console.log('[Strategic Store] Sending to backend:', updateRequest)
 
         await indicatorApi.updateIndicator(id, updateRequest)
         logger.info(`[Strategic Store] Successfully synced indicator ${id} to backend`, updateRequest)
+        
+        // 清除相关缓存
+        const { refreshCachePattern } = await import('@/utils/cache')
+        refreshCachePattern('/api/indicators')
+        logger.info('[Strategic Store] Cleared indicators cache after update')
+        
+        // 重新从后端加载数据，确保所有视角都能看到最新数据
+        const timeContext = getTimeContext()
+        await loadIndicatorsByYear(timeContext.currentYear)
+        logger.info('[Strategic Store] Reloaded indicators after update')
       } catch (err) {
+        console.error('[Strategic Store] API调用失败，详细错误:', err)
+        console.error('[Strategic Store] 错误类型:', typeof err)
+        console.error('[Strategic Store] 错误对象:', JSON.stringify(err, null, 2))
+        
+        logger.error(`[Strategic Store] Failed to sync indicator ${id} to backend:`, err)
+        // 如果后端同步失败，回滚本地状态
+        Object.assign(indicator, originalState)
+        indicators.value = [...indicators.value]
+        ElMessage.error('数据更新失败，请稍后重试')
+        throw err
+      }
+    }
+  }
+  const updateIndicatorWithoutReload = async (id: string, updates: Partial<StrategicIndicator>) => {
+    console.log('[Strategic Store] updateIndicatorWithoutReload called with id:', id, 'updates:', updates)
+
+    const index = indicators.value.findIndex(i => i.id === id)
+    if (index === -1) {
+      console.log('[Strategic Store] Indicator not found:', id)
+      return
+    }
+
+    const indicator = indicators.value[index]
+    if (!indicator) return
+
+    // 保存原始状态用于回滚
+    const originalState = { ...indicator }
+
+    // 先更新本地状态
+    Object.assign(indicator, updates)
+    // 强制触发响应式更新（创建新数组引用）
+    indicators.value = [...indicators.value]
+
+    // 检查是否有需要同步到后端的字段
+    const hasBackend = hasBackendUpdatesUtil(updates)
+    console.log('[Strategic Store] hasBackendUpdates:', hasBackend, 'updates keys:', Object.keys(updates))
+
+    if (hasBackend) {
+      try {
+        // 调用后端API更新指标
+        const { default: indicatorApi } = await import('@/api/indicator')
+
+        // 使用字段映射器构建后端更新请求
+        const updateRequest = convertToUpdateRequest(updates)
+        console.log('[Strategic Store] Sending to backend:', updateRequest)
+
+        await indicatorApi.updateIndicator(id, updateRequest)
+        logger.info(`[Strategic Store] Successfully synced indicator ${id} to backend`, updateRequest)
+
+        // 清除相关缓存
+        const { refreshCachePattern } = await import('@/utils/cache')
+        refreshCachePattern('/api/indicators')
+        logger.info('[Strategic Store] Cleared indicators cache after update')
+
+        // 注意：不重新加载数据，这是与 updateIndicator 的唯一区别
+        logger.info('[Strategic Store] Skipped reload after update (updateIndicatorWithoutReload)')
+      } catch (err) {
+        console.error('[Strategic Store] API调用失败，详细错误:', err)
+        console.error('[Strategic Store] 错误类型:', typeof err)
+        console.error('[Strategic Store] 错误对象:', JSON.stringify(err, null, 2))
+
         logger.error(`[Strategic Store] Failed to sync indicator ${id} to backend:`, err)
         // 如果后端同步失败，回滚本地状态
         Object.assign(indicator, originalState)
@@ -342,10 +455,40 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
-  const deleteIndicator = (id: string) => {
+  const deleteIndicator = async (id: string) => {
     const index = indicators.value.findIndex(i => i.id === id)
-    if (index !== -1) {
-      indicators.value.splice(index, 1)
+    if (index === -1) {
+      logger.warn('[Strategic Store] Indicator not found for deletion:', id)
+      return
+    }
+    
+    // 保存原始数据用于回滚
+    const deletedIndicator = indicators.value[index]
+    
+    // 先从本地删除（乐观更新）
+    indicators.value.splice(index, 1)
+    
+    try {
+      // 调用后端API删除指标（软删除）
+      const { default: indicatorApi } = await import('@/api/indicator')
+      await indicatorApi.deleteIndicator(id)
+      logger.info('[Strategic Store] Successfully deleted indicator in backend:', id)
+      
+      // 清除相关缓存
+      const { refreshCachePattern } = await import('@/utils/cache')
+      refreshCachePattern('/api/indicators')
+      logger.info('[Strategic Store] Cleared indicators cache after deletion')
+      
+      // 重新从后端加载数据，确保所有视角都能看到最新数据
+      const timeContext = getTimeContext()
+      await loadIndicatorsByYear(timeContext.currentYear)
+      logger.info('[Strategic Store] Reloaded indicators after deletion')
+    } catch (err) {
+      logger.error('[Strategic Store] Failed to delete indicator in backend:', err)
+      // 如果后端删除失败，恢复本地数据
+      indicators.value.splice(index, 0, deletedIndicator)
+      ElMessage.error('删除指标失败，请稍后重试')
+      throw err
     }
   }
 
@@ -499,6 +642,7 @@ export const useStrategicStore = defineStore('strategic', () => {
     deleteTask,
     addIndicator,
     updateIndicator,
+    updateIndicatorWithoutReload,
     deleteIndicator,
     updateMilestoneStatus,
     addStatusAuditEntry,

@@ -155,8 +155,33 @@ const isSecondaryCollege = computed(() => {
   return props.viewingRole === 'secondary_college'
 })
 
-// 判断是否可以编辑（只有战略发展部可以编辑，职能部门不能新增指标，历史年份只读）
-const canEdit = computed(() => authStore.userRole === 'strategic_dept' && isStrategicDept.value && !timeContext.isReadOnly)
+// 当前部门名称（优先使用 props，否则使用 authStore）
+const currentDept = computed(() => {
+  return props.viewingDept || authStore.userDepartment || ''
+})
+
+// 判断是否可以编辑（战略发展部可以编辑所有，职能部门可以删除自己创建的，历史年份只读）
+const canEdit = computed(() => {
+  if (timeContext.isReadOnly) return false
+  // 战略发展部可以编辑所有
+  if (authStore.userRole === 'strategic_dept' && isStrategicDept.value) return true
+  // 职能部门可以删除自己创建的指标（但不能新增）
+  return false
+})
+
+// 判断指标是否可以删除（职能部门可以删除自己创建的）
+const canDeleteIndicator = (indicator: StrategicIndicator) => {
+  if (timeContext.isReadOnly) return false
+  // 战略发展部可以删除所有
+  if (authStore.userRole === 'strategic_dept' && isStrategicDept.value) return true
+  // 职能部门可以删除自己创建的草稿状态指标
+  if (props.viewingRole === 'functional_dept' && indicator.ownerDept === currentDept.value) {
+    // 只能删除草稿状态的指标
+    const statusAudit = indicator.statusAudit || []
+    return statusAudit.length === 0 // 草稿状态
+  }
+  return false
+}
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
@@ -176,7 +201,7 @@ const filterOwnerDept = ref('')  // 来源部门筛选（仅学院使用）
 
 // 获取学院接收到的来源部门列表（从指标数据中提取）
 const availableOwnerDepts = computed(() => {
-  if (!isSecondaryCollege.value || !props.viewingDept) {return []}
+  if (!isSecondaryCollege.value || !currentDept.value) return []
   
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
@@ -186,7 +211,7 @@ const availableOwnerDepts = computed(() => {
   strategicStore.indicators.forEach(i => {
     const indicatorYear = i.year || realYear
     if (indicatorYear === currentYear && 
-        i.responsibleDept === props.viewingDept && 
+        i.responsibleDept === currentDept.value && 
         i.ownerDept) {
       ownerDepts.add(i.ownerDept)
     }
@@ -243,10 +268,10 @@ const approvalIndicators = computed(() => {
   })
 
   // 根据当前角色过滤数据
-  if (!isStrategicDept.value && props.viewingDept) {
+  if (!isStrategicDept.value && currentDept.value) {
     list = list.filter(i => {
-      const isResponsible = i.responsibleDept === props.viewingDept
-      const isOwner = i.ownerDept === props.viewingDept
+      const isResponsible = i.responsibleDept === currentDept.value
+      const isOwner = i.ownerDept === currentDept.value
       return isResponsible || isOwner
     })
   }
@@ -281,10 +306,10 @@ const pendingApprovalCount = computed(() => {
   })
 
   // 根据当前角色过滤数据
-  if (!isStrategicDept.value && props.viewingDept) {
+  if (!isStrategicDept.value && currentDept.value) {
     list = list.filter(i => {
-      const isResponsible = i.responsibleDept === props.viewingDept
-      const isOwner = i.ownerDept === props.viewingDept
+      const isResponsible = i.responsibleDept === currentDept.value
+      const isOwner = i.ownerDept === currentDept.value
       return isResponsible || isOwner
     })
   }
@@ -333,14 +358,17 @@ const indicators = computed(() => {
   })
 
   // 根据当前角色过滤数据
-  // 如果不是战略发展部，只显示下发给当前部门的指标（responsibleDept 或 ownerDept 匹配）
-  if (!isStrategicDept.value && props.viewingDept) {
+  // 如果不是战略发展部，只显示下发给当前部门的指标（responsibleDept 匹配）
+  if (!isStrategicDept.value && currentDept.value) {
     list = list.filter(i => {
       // 匹配责任部门（当前部门负责的指标）
-      const isResponsible = i.responsibleDept === props.viewingDept
-      // 匹配下发部门（当前部门下发的指标）
-      const isOwner = i.ownerDept === props.viewingDept
-      return isResponsible || isOwner
+      const isResponsible = i.responsibleDept === currentDept.value
+      // 注意：不匹配 ownerDept，因为那是当前部门下发给别人的指标，不应该在"指标填报"页面显示
+      // 只显示已下发（ACTIVE）的指标，不显示草稿（DRAFT）状态的指标
+      const isActive = i.status === 'active' || i.status === 'ACTIVE'
+      // 修复：已下发的指标 canWithdraw = true（可以撤回），草稿状态才是 canWithdraw = false
+      // 所以这里应该检查 canWithdraw === true，或者直接移除这个条件（因为 isActive 已经足够）
+      return isResponsible && isActive
     })
   }
 
@@ -1694,7 +1722,7 @@ const handleWithdrawAll = () => {
                       @click="handleOpenReportDialog(row)"
                     >{{ isApprovalStatus(row, 'rejected') ? '重新填报' : (isIndicatorFilled(row) ? '编辑' : '填报') }}</el-button>
 
-                    <el-button v-if="canEdit" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
+                    <el-button link type="danger" size="small" @click="handleDeleteIndicator(row)" v-if="canDeleteIndicator(row)">删除</el-button>
                   </div>
                 </template>
               </el-table-column>

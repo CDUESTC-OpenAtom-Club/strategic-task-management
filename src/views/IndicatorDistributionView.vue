@@ -106,9 +106,8 @@ const filteredColleges = computed(() => {
 // 获取学院的子指标数量（只统计当前部门下发的）
 const getCollegeChildCount = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
-    // 只统计当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) {return false}
+    // 只统计当前部门下发的指标（包括战略指标和子指标）
+    if (i.ownerDept !== currentDept.value) return false
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
@@ -121,9 +120,8 @@ const getCollegeChildCount = (college: string) => {
 const collegeIndicators = computed(() => {
   if (!selectedCollege.value) {return []}
   
-  // 获取当前部门下发给该学院的子指标
-  const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
+  // 获取当前部门下发给该学院的所有指标（包括战略指标和子指标）
+  const allIndicators = strategicStore.indicators.filter(i => {
     // 只显示当前部门下发的指标
     if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
@@ -133,13 +131,25 @@ const collegeIndicators = computed(() => {
     return i.responsibleDept === selectedCollege.value
   })
   
-  // 获取这些子指标的父指标
+  // 分离战略指标（父指标）和子指标
+  const strategicIndicators = allIndicators.filter(i => i.isStrategic)
+  const childIndicators = allIndicators.filter(i => !i.isStrategic)
+  
+  // 获取子指标的父指标（可能来自其他部门）
   const parentIds = new Set(childIndicators.map(c => c.parentIndicatorId).filter(Boolean))
   const parentIndicators = strategicStore.indicators.filter(i =>
     i.isStrategic && parentIds.has(i.id.toString())
   )
   
-  return parentIndicators
+  // 合并：当前部门的战略指标 + 子指标的父指标（去重）
+  const allParentIndicators = [...strategicIndicators]
+  parentIndicators.forEach(p => {
+    if (!allParentIndicators.find(i => i.id === p.id)) {
+      allParentIndicators.push(p)
+    }
+  })
+  
+  return allParentIndicators
 })
 
 // 获取指标的子指标（只显示当前部门下发的）
@@ -194,7 +204,12 @@ const selectingParentForIndex = ref<number>(-1)
 // 战略任务和指标数据（用于选择关联指标弹框）
 const strategicTasksWithIndicators = computed(() => {
   // 获取所有战略指标，按任务分组
-  const indicators = strategicStore.indicators.filter(i => i.isStrategic)
+  // 只显示当前部门作为 responsibleDept 的指标（职能部门接收到的战略指标）
+  const indicators = strategicStore.indicators.filter(i => {
+    if (!i.isStrategic) return false
+    // 只显示当前部门负责的指标
+    return i.responsibleDept === currentDept.value
+  })
   const taskMap = new Map<string, StrategicIndicator[]>()
   
   indicators.forEach(indicator => {
@@ -796,8 +811,8 @@ const cancelChildEdit = () => {
 // 辅助函数：获取当前部门下发给指定学院的子指标
 const getMyCollegeIndicators = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
-    if (i.ownerDept !== currentDept.value) {return false}
+    // 移除 isStrategic 过滤，因为历史数据可能 isStrategic = true 但仍然是下发给学院的指标
+    if (i.ownerDept !== currentDept.value) return false
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
@@ -882,7 +897,7 @@ const handleBatchReject = (college: string) => {
 }
 
 // 批量撤销：针对学院下所有已下发、待审批或已通过的子指标，撤销后可编辑删除
-const handleBatchWithdraw = (college: string) => {
+const handleBatchWithdraw = async (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const withdrawableIndicators = childIndicators.filter(i => {
     const status = getChildStatus(i as StrategicIndicator)
@@ -895,35 +910,59 @@ const handleBatchWithdraw = (college: string) => {
     return
   }
   
-  ElMessageBox.confirm(
-    `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
-    '批量撤销确认',
-    {
-      confirmButtonText: '确认撤销',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 为每个可撤销指标添加审计日志并更新状态
-    withdrawableIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+  try {
+    await ElMessageBox.confirm(
+      `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
+      '批量撤销确认',
+      {
+        confirmButtonText: '确认撤销',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    
+    // 批量更新所有指标（不重新加载数据）
+    const updatePromises = withdrawableIndicators.map(indicator => {
+      // 构建新的审计日志条目
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
+        timestamp: new Date(),
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
-        action: 'withdraw',
+        action: 'withdraw' as const,
         comment: '批量撤销下发'
-      })
-      strategicStore.updateIndicator(indicator.id.toString(), {
+      }
+      
+      // 获取现有的审计日志
+      const existingAudit = indicator.statusAudit || []
+      const updatedAudit = [...existingAudit, newAuditEntry]
+      
+      // 直接调用后端 API，不触发自动重新加载
+      return strategicStore.updateIndicatorWithoutReload(indicator.id.toString(), {
         status: 'draft',
-        canWithdraw: false
+        canWithdraw: false,
+        statusAudit: updatedAudit
       })
     })
+    
+    // 等待所有更新完成
+    await Promise.all(updatePromises)
+    
+    // 只重新加载一次数据
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    
     ElMessage.success(`已批量撤销 ${withdrawableIndicators.length} 个指标`)
-  })
+  } catch (error) {
+    // 用户取消或更新失败
+    if (error !== 'cancel') {
+      console.error('批量撤销失败:', error)
+    }
+  }
 }
 
 // 批量下发：针对学院下所有草稿状态的子指标
-const handleBatchDistribute = (college: string) => {
+const handleBatchDistribute = async (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const draftIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'draft')
   
@@ -932,45 +971,74 @@ const handleBatchDistribute = (college: string) => {
     return
   }
   
-  ElMessageBox.confirm(
-    `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
-    '批量下发确认',
-    {
-      confirmButtonText: '确认下发',
-      cancelButtonText: '取消',
-      type: 'success'
-    }
-  ).then(() => {
-    // 为每个草稿指标添加审计日志并更新状态
-    draftIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+  try {
+    await ElMessageBox.confirm(
+      `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
+      '批量下发确认',
+      {
+        confirmButtonText: '确认下发',
+        cancelButtonText: '取消',
+        type: 'success'
+      }
+    )
+    
+    // 批量更新所有指标（不重新加载数据）
+    const updatePromises = draftIndicators.map(indicator => {
+      // 构建新的审计日志条目
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
+        timestamp: new Date(),
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
-        action: 'distribute',
+        action: 'distribute' as const,
         comment: '批量下发'
-      })
-      strategicStore.updateIndicator(indicator.id.toString(), {
-        status: 'distributed',
-        canWithdraw: true
+      }
+      
+      // 获取现有的审计日志
+      const existingAudit = indicator.statusAudit || []
+      const updatedAudit = [...existingAudit, newAuditEntry]
+      
+      // 直接调用后端 API，不触发自动重新加载
+      return strategicStore.updateIndicatorWithoutReload(indicator.id.toString(), {
+        status: 'active',
+        canWithdraw: true,
+        statusAudit: updatedAudit
       })
     })
+    
+    // 等待所有更新完成
+    await Promise.all(updatePromises)
+    
+    // 只重新加载一次数据
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    
     ElMessage.success(`已批量下发 ${draftIndicators.length} 个指标`)
-  })
+  } catch (error) {
+    // 用户取消或更新失败
+    if (error !== 'cancel') {
+      console.error('批量下发失败:', error)
+    }
+  }
 }
 
 // 获取学院下子指标的统一状态（用于判断显示哪些批量操作按钮，只统计当前部门下发的）
 const getCollegeStatus = (college: string) => {
-  // 只统计当前部门下发给该学院的指标
+  // 统计当前部门下发给该学院的所有指标（不再过滤 isStrategic）
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
-    if (i.ownerDept !== currentDept.value) {return false}
+    // 移除 isStrategic 过滤，因为历史数据可能 isStrategic = true 但仍然是下发给学院的指标
+    if (i.ownerDept !== currentDept.value) return false
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
     return i.responsibleDept === college
   })
-  if (childIndicators.length === 0) {return { draft: 0, distributed: 0, pending: 0, approved: 0 }}
+  
+  console.log('[getCollegeStatus] 学院:', college)
+  console.log('[getCollegeStatus] 找到指标数量:', childIndicators.length)
+  console.log('[getCollegeStatus] 指标列表:', childIndicators.map(i => ({ name: i.name, isStrategic: i.isStrategic, ownerDept: i.ownerDept })))
+  
+  if (childIndicators.length === 0) return { draft: 0, distributed: 0, pending: 0, approved: 0 }
   
   // 统计各状态数量
   const statusCounts = {
@@ -986,6 +1054,8 @@ const getCollegeStatus = (college: string) => {
       statusCounts[status]++
     }
   })
+  
+  console.log('[getCollegeStatus] 状态统计:', statusCounts)
   
   return statusCounts
 }
@@ -1071,7 +1141,33 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
 // 打回后回到 distributed 状态，撤销后回到 draft 状态
 const getChildStatus = (child: StrategicIndicator) => {
   const audit = child.statusAudit || []
-  if (audit.length === 0) {return 'draft'}  // 无审计记录时为草稿状态
+  
+  // 调试日志 - 显示更详细的信息
+  console.log('[getChildStatus] 指标:', child.name?.substring(0, 30))
+  console.log('[getChildStatus] status:', child.status, '(type:', typeof child.status, ')')
+  console.log('[getChildStatus] canWithdraw:', child.canWithdraw, '(type:', typeof child.canWithdraw, ')')
+  console.log('[getChildStatus] audit.length:', audit.length)
+  console.log('[getChildStatus] 条件检查: status === "active"?', child.status === 'active')
+  console.log('[getChildStatus] 条件检查: canWithdraw === false?', child.canWithdraw === false)
+  console.log('[getChildStatus] 条件检查: !canWithdraw?', !child.canWithdraw)
+  
+  // 特殊处理：如果没有审计记录
+  if (audit.length === 0) {
+    // 如果 status = active 且 canWithdraw = true，说明刚刚下发，返回 distributed
+    if (child.status === 'active' && child.canWithdraw === true) {
+      console.log('[getChildStatus] ✓ 返回 distributed（刚下发的指标）')
+      return 'distributed'
+    }
+    // 如果 status = active 且 canWithdraw = false，说明是历史数据，返回 distributed
+    if (child.status === 'active' && child.canWithdraw === false) {
+      console.log('[getChildStatus] ✓ 返回 distributed（历史数据）')
+      return 'distributed'
+    }
+    // 其他情况返回 draft
+    console.log('[getChildStatus] ✗ 返回 draft（真正的草稿）')
+    return 'draft'
+  }
+  
   const lastAudit = audit[audit.length - 1]
   if (!lastAudit) {return 'draft'}
   const lastAction = lastAudit.action
@@ -1314,13 +1410,17 @@ const getEditingChildType = (): string => {
 
 // 添加里程碑
 const addMilestone = () => {
-  const autoName = getEditingChildType() === '定量' ? getEditingChildName() : ''
+  const indicatorName = getEditingChildName() || '指标'
+  // 计算下一个月份（基于已有里程碑数量）
+  const nextMonth = editingMilestones.value.length + 1
+  const autoName = `${indicatorName}-${nextMonth}月`
+  
   const lastProgress = editingMilestones.value.length > 0 
     ? editingMilestones.value[editingMilestones.value.length - 1]?.progress ?? 0
     : 0
   editingMilestones.value.push({
     id: `ms-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    name: autoName,
+    name: autoName,  // ✅ 自动添加月份标识
     expectedDate: '',
     progress: lastProgress
   })
@@ -1461,7 +1561,9 @@ const collegeTableData = computed(() => {
     
     // 获取下发给该学院的子指标（支持字符串或数组格式）
     const children = strategicStore.indicators.filter(i => {
-      if (i.parentIndicatorId !== indicatorId || i.isStrategic) {return false}
+      if (i.parentIndicatorId !== indicatorId || i.isStrategic) return false
+      // 只显示当前部门下发的指标
+      if (i.ownerDept !== currentDept.value) return false
       // 支持字符串或数组格式的 responsibleDept
       if (Array.isArray(i.responsibleDept)) {
         return i.responsibleDept.includes(selectedCollege.value!)
@@ -1474,8 +1576,22 @@ const collegeTableData = computed(() => {
       nc => nc.college.includes(selectedCollege.value!)
     )
     
-    // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
-    if (children.length === 0 && newChildren.length === 0) {
+    // 特殊处理：如果这个指标本身就是当前部门下发给学院的（没有父指标），
+    // 那么它本身就应该作为"子指标"显示
+    const isDirectlyDistributed = indicator.ownerDept === currentDept.value && 
+                                   indicator.responsibleDept === selectedCollege.value
+    
+    if (isDirectlyDistributed && children.length === 0 && newChildren.length === 0) {
+      // 这个指标本身就是下发给学院的，作为子指标显示
+      data.push({
+        type: 'child',
+        taskTitle: indicator.taskContent || '',
+        indicator: indicator,  // 父指标就是自己
+        child: indicator,      // 子指标也是自己
+        parentIndicatorId: indicatorId
+      })
+    } else if (children.length === 0 && newChildren.length === 0) {
+      // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
       data.push({
         type: 'indicator-only',
         taskTitle: indicator.taskContent || '',
