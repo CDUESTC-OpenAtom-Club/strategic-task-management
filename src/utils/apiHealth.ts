@@ -89,19 +89,11 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       }
     }
 
-    // 提取后端返回的详细错误信息
-    const responseData = error.response?.data
-    const detailedMessage = responseData?.message || error.message
-
     return {
       service: 'Backend API',
       status: 'error',
-      message: `后端服务异常: ${detailedMessage}`,
-      details: {
-        error: error.message,
-        response: responseData,
-        code: responseData?.code
-      },
+      message: `后端服务异常: ${error.message}`,
+      details: { error: error.message, response: error.response?.data },
       timestamp: new Date()
     }
   }
@@ -163,9 +155,6 @@ export async function showBackendConnectionStatus() {
 
 /**
  * 测试认证流程
- *
- * 注意：此功能仅在手动调用时使用，不会在自动健康检查中运行
- * 这是为了避免在登录页面显示误导性的错误消息
  */
 export async function checkAuthFlow(credentials?: {
   username: string
@@ -179,13 +168,7 @@ export async function checkAuthFlow(credentials?: {
   }
 
   try {
-    // 添加明确的请求头以避免 CORS 问题
-    const response = await healthApi.post('/auth/login', testCredentials, {
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
-      }
-    })
+    const response = await healthApi.post('/auth/login', testCredentials)
 
     logger.debug('✅ [Health Check] 认证流程正常')
     logger.debug('📦 [Health Check] 登录响应:', response.data)
@@ -232,18 +215,8 @@ export async function checkAuthFlow(credentials?: {
       return {
         service: 'Authentication',
         status: 'warning',
-        message: '认证端点可访问，但凭据无效（这是正常的，说明认证端点工作正常）',
+        message: '认证端点可访问，但凭据无效',
         details: { status: 401 },
-        timestamp: new Date()
-      }
-    }
-
-    if (status === 403) {
-      return {
-        service: 'Authentication',
-        status: 'warning',
-        message: '认证端点需要认证（这是正常的，说明端点存在且受保护）',
-        details: { status: 403 },
         timestamp: new Date()
       }
     }
@@ -252,7 +225,7 @@ export async function checkAuthFlow(credentials?: {
       return {
         service: 'Authentication',
         status: 'error',
-        message: '认证端点不存在，请检查后端配置',
+        message: '认证端点不存在',
         details: { status: 404 },
         timestamp: new Date()
       }
@@ -260,9 +233,9 @@ export async function checkAuthFlow(credentials?: {
 
     return {
       service: 'Authentication',
-      status: 'warning', // 降级为 warning，避免在登录页面显示错误通知
-      message: `认证流程测试失败: ${error.message}`,
-      details: { error: error.message, status },
+      status: 'error',
+      message: `认证流程异常: ${error.message}`,
+      details: { error: error.message },
       timestamp: new Date()
     }
   }
@@ -279,61 +252,10 @@ export async function runFullHealthCheck(): Promise<HealthCheckResult[]> {
   // 检查后端服务
   results.push(await checkBackendHealth())
 
-  // 注释: 不在自动健康检查中测试认证流程，避免在登录页面出现误导性错误
-  // 如果需要测试认证流程，请手动调用 checkAuthFlow()
-  // if (results[0].status !== 'error') {
-  //   results.push(await checkAuthFlow())
-  // }
+  // 如果后端服务正常，检查认证流程
+  if (results[0].status !== 'error') {
+    results.push(await checkAuthFlow())
+  }
 
   return results
-}
-
-/**
- * 在开发环境下自动运行健康检查
- */
-export function autoHealthCheck() {
-  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'true') {
-    logger.debug('🏥 [Health Check] 开发环境，自动运行健康检查...')
-
-    // 延迟1秒执行，确保应用已初始化
-    setTimeout(async () => {
-      const results = await runFullHealthCheck()
-
-      logger.info('🏥 健康检查报告')
-      logger.info('整体状态:', results.every(r => r.status === 'success') ? '健康' : '有问题')
-      logger.debug(
-        '详细结果:',
-        results.map(r => ({
-          服务: r.service,
-          状态: r.status,
-          消息: r.message
-        }))
-      )
-
-      // 如果有严重问题，显示警告
-      const hasError = results.some(r => r.status === 'error')
-      if (hasError) {
-        logger.warn('⚠️ 检测到后端服务问题，请检查')
-        logger.warn('1. 后端服务是否运行在 http://localhost:8080')
-        logger.warn('2. 数据库连接是否正常')
-        logger.warn('3. 查看后端日志获取详细错误信息')
-
-        ElNotification({
-          title: '后端服务异常',
-          message: '检测到后端服务问题，请检查后端是否正常运行',
-          type: 'error',
-          duration: 0,
-          position: 'bottom-right'
-        })
-      } else {
-        ElNotification({
-          title: '系统就绪',
-          message: '前后端连接正常，所有服务运行正常',
-          type: 'success',
-          duration: 3000,
-          position: 'bottom-right'
-        })
-      }
-    }, 1000)
-  }
 }

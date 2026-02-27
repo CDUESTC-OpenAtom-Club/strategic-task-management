@@ -13,7 +13,6 @@ import { useTimeContextStore } from '@/stores/timeContext'
 import { useOrgStore } from '@/stores/org'
 import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
-import indicatorApi from '@/api/indicator'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -383,40 +382,37 @@ const saveNewIndicator = () => {
   // 创建子指标（状态为草稿）
   const parentIndicator = strategicStore.indicators.find(i => i.id.toString() === newIndicatorForm.value.parentIndicatorId)
   
-    const newIndicator: StrategicIndicator = {
-      id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
-      name: newIndicatorForm.value.name,
-      isQualitative: newIndicatorForm.value.type1 === '定性',
-      type1: newIndicatorForm.value.type1,
-      type2: parentIndicator?.type2 || '发展性',
-      progress: 0,
-      createTime: new Date().toLocaleDateString('zh-CN'),
-      weight: newIndicatorForm.value.weight,
-      remark: newIndicatorForm.value.remark,
-      canWithdraw: false,
-      taskContent: newIndicatorForm.value.taskContent,
-      milestones: newIndicatorForm.value.type1 === '定性' ? newIndicatorForm.value.milestones.map(m => ({
-        id: m.id,
-        name: m.name,
-        targetProgress: m.targetProgress,
-        deadline: m.deadline,
-        status: 'pending' as const
-      })) : [],
-      targetValue: newIndicatorForm.value.type1 === '定量' ? newIndicatorForm.value.targetProgress : newIndicatorForm.value.milestones.length,
-      unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
-      responsibleDept: selectedCollege.value!,
-      responsiblePerson: '',
-      status: 'draft',
-      distributionStatus: 'DRAFT',
-      isStrategic: false,
-      ownerDept: currentDept.value,
-      parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
-      year: timeContext.currentYear,
-      statusAudit: []  // 空表示草稿状态
-    }
-    // Step1: 只保存到前端临时状态，不调用后端 createIndicator
-    // Step2: 点击"下发"按钮时，再调用 PATCH /indicators/{id}/distribution-status 接口
-    strategicStore.addDraftIndicator(newIndicator)
+  const newIndicator: StrategicIndicator = {
+    id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
+    name: newIndicatorForm.value.name,
+    isQualitative: newIndicatorForm.value.type1 === '定性',
+    type1: newIndicatorForm.value.type1,
+    type2: parentIndicator?.type2 || '发展性',
+    progress: 0,
+    createTime: new Date().toLocaleDateString('zh-CN'),
+    weight: newIndicatorForm.value.weight,
+    remark: newIndicatorForm.value.remark,
+    canWithdraw: false,
+    taskContent: newIndicatorForm.value.taskContent,
+    milestones: newIndicatorForm.value.type1 === '定性' ? newIndicatorForm.value.milestones.map(m => ({
+      id: m.id,
+      name: m.name,
+      targetProgress: m.targetProgress,
+      deadline: m.deadline,
+      status: 'pending' as const
+    })) : [],
+    targetValue: newIndicatorForm.value.type1 === '定量' ? newIndicatorForm.value.targetProgress : newIndicatorForm.value.milestones.length,
+    unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
+    responsibleDept: selectedCollege.value!,
+    responsiblePerson: '',
+    status: 'draft',
+    isStrategic: false,
+    ownerDept: currentDept.value,
+    parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
+    year: timeContext.currentYear,
+    statusAudit: []  // 空表示草稿状态
+  }
+  strategicStore.addIndicator(newIndicator)
   
   ElMessage.success('已添加指标（草稿状态）')
   cancelAddIndicator()
@@ -605,41 +601,39 @@ const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
     }
   ).then(() => {
     // 创建子指标
-      children.forEach(child => {
-        const newIndicator: StrategicIndicator = {
-          id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
-          name: child.name,
-          isQualitative: child.type1 === '定性',
-          type1: child.type1,
-          type2: parentIndicator.type2,
-          progress: 0,
-          createTime: new Date().toLocaleDateString('zh-CN'),
-          weight: child.weight,
-          remark: child.remark,
-          canWithdraw: false,
-          taskContent: parentIndicator.taskContent,
-          milestones: child.type1 === '定性' ? child.milestones.map(m => ({
-            id: m.id,
-            name: m.name,
-            targetProgress: m.progress,
-            deadline: m.expectedDate,
-            status: 'pending' as const
-          })) : [],
-          targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
-          unit: child.type1 === '定量' ? '%' : '个里程碑',
-          responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
-          responsiblePerson: '',
-          status: 'draft',
-          distributionStatus: 'DRAFT',
-          isStrategic: false,
-          ownerDept: currentDept.value,
-          parentIndicatorId: parentId,
-          year: timeContext.currentYear,
-          statusAudit: []  // 默认为空，状态为草稿
-        }
-        // Step1: 只保存到前端临时状态，不调用后端
-        strategicStore.addDraftIndicator(newIndicator)
-      })
+    children.forEach(child => {
+      const newIndicator: StrategicIndicator = {
+        id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
+        name: child.name,
+        isQualitative: child.type1 === '定性',
+        type1: child.type1,
+        type2: parentIndicator.type2,
+        progress: 0,
+        createTime: new Date().toLocaleDateString('zh-CN'),
+        weight: child.weight,
+        remark: child.remark,
+        canWithdraw: false,
+        taskContent: parentIndicator.taskContent,
+        milestones: child.type1 === '定性' ? child.milestones.map(m => ({
+          id: m.id,
+          name: m.name,
+          targetProgress: m.progress,
+          deadline: m.expectedDate,
+          status: 'pending' as const
+        })) : [],
+        targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
+        unit: child.type1 === '定量' ? '%' : '个里程碑',
+        responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
+        responsiblePerson: '',
+        status: 'draft',
+        isStrategic: false,
+        ownerDept: currentDept.value,
+        parentIndicatorId: parentId,
+        year: timeContext.currentYear,
+        statusAudit: []  // 默认为空，状态为草稿
+      }
+      strategicStore.addIndicator(newIndicator)
+    })
     
     // 清空临时数据
     delete newChildIndicators[parentId]
@@ -839,10 +833,10 @@ const handleBatchApprove = (college: string) => {
         action: 'approve',
         comment: '批量审批通过'
       })
-        strategicStore.updateIndicator(indicator.id.toString(), {
-          progressApprovalStatus: 'APPROVED',
-          canWithdraw: false
-        })
+      strategicStore.updateIndicator(indicator.id.toString(), {
+        status: 'approved',
+        canWithdraw: false
+      })
     })
     ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
   })
@@ -878,17 +872,17 @@ const handleBatchReject = (college: string) => {
         action: 'reject',
         comment: value || '批量打回重新提交'
       })
-        strategicStore.updateIndicator(indicator.id.toString(), {
-          progressApprovalStatus: 'REJECTED',
-          canWithdraw: true
-        })
+      strategicStore.updateIndicator(indicator.id.toString(), {
+        status: 'distributed',
+        canWithdraw: true
+      })
     })
     ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
   })
 }
 
 // 批量撤销：针对学院下所有已下发、待审批或已通过的子指标，撤销后可编辑删除
-const handleBatchWithdraw = async (college: string) => {
+const handleBatchWithdraw = (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const withdrawableIndicators = childIndicators.filter(i => {
     const status = getChildStatus(i as StrategicIndicator)
@@ -901,34 +895,17 @@ const handleBatchWithdraw = async (college: string) => {
     return
   }
   
-  try {
-    await ElMessageBox.confirm(
-      `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
-      '批量撤销确认',
-      {
-        confirmButtonText: '确认撤销',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-  } catch {
-    return
-  }
-
-  const errors: string[] = []
-
-  for (const indicator of withdrawableIndicators) {
-    const indicatorId = indicator.id.toString()
-    const isRealBackendId = /^\d+$/.test(indicatorId)
-
-    try {
-      if (isRealBackendId) {
-        // 调用 PATCH /indicators/{id}/distribution-status 撤回到 DRAFT
-        await indicatorApi.publishDistributionStatus(indicatorId, 'DRAFT')
-      }
-      // 临时 ID 的草稿本来就没有下发，直接更新前端状态即可
-
-      // 更新前端状态
+  ElMessageBox.confirm(
+    `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
+    '批量撤销确认',
+    {
+      confirmButtonText: '确认撤销',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 为每个可撤销指标添加审计日志并更新状态
+    withdrawableIndicators.forEach(indicator => {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
@@ -936,25 +913,17 @@ const handleBatchWithdraw = async (college: string) => {
         action: 'withdraw',
         comment: '批量撤销下发'
       })
-      await strategicStore.updateIndicator(indicator.id.toString(), {
+      strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'draft',
-        distributionStatus: 'DRAFT',
         canWithdraw: false
       })
-    } catch (err) {
-      errors.push(indicator.name)
-    }
-  }
-
-  if (errors.length > 0) {
-    ElMessage.error(`以下指标撤销失败：${errors.join('、')}`)
-  } else {
-    ElMessage.success(`已成功撤销 ${withdrawableIndicators.length} 个指标`)
-  }
+    })
+    ElMessage.success(`已批量撤销 ${withdrawableIndicators.length} 个指标`)
+  })
 }
 
 // 批量下发：针对学院下所有草稿状态的子指标
-const handleBatchDistribute = async (college: string) => {
+const handleBatchDistribute = (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const draftIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'draft')
   
@@ -963,57 +932,17 @@ const handleBatchDistribute = async (college: string) => {
     return
   }
   
-  try {
-    await ElMessageBox.confirm(
-      `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
-      '批量下发确认',
-      {
-        confirmButtonText: '确认下发',
-        cancelButtonText: '取消',
-        type: 'success'
-      }
-    )
-  } catch {
-    return
-  }
-
-  const errors: string[] = []
-
-  for (const indicator of draftIndicators) {
-    const indicatorId = indicator.id.toString()
-    const isRealBackendId = /^\d+$/.test(indicatorId)
-
-    try {
-      if (isRealBackendId) {
-        // 已有后端 ID：直接调用 PATCH /indicators/{id}/distribution-status
-        await indicatorApi.publishDistributionStatus(indicatorId, 'DISTRIBUTED')
-      } else {
-        // 临时 ID（本地草稿）：先调用 createIndicator 创建，再 publish
-        const activeTask = strategicStore.activeTasks[0]
-        const taskId = activeTask ? Number(activeTask.id) : 1
-        const createResp = await indicatorApi.createIndicator({
-          taskId,
-          indicatorDesc: indicator.name,
-          weightPercent: indicator.weight || 0,
-          sortOrder: 0,
-          remark: indicator.remark || '',
-          progress: indicator.progress || 0,
-          year: indicator.year || new Date().getFullYear(),
-          canWithdraw: false,
-          parentIndicatorId: indicator.parentIndicatorId ? Number(indicator.parentIndicatorId) : undefined,
-          distributionStatus: 'DRAFT' as const,
-        })
-        if (!createResp.success || !createResp.data) {
-          throw new Error(createResp.message || '创建指标失败')
-        }
-        const newBackendId = createResp.data.indicatorId.toString()
-        // 用真实 ID 替换临时 ID（纯本地操作，不调用后端）
-        strategicStore.replaceIndicatorId(indicatorId, newBackendId, { distributionStatus: 'DRAFT' })
-        // 发布状态
-        await indicatorApi.publishDistributionStatus(newBackendId, 'DISTRIBUTED')
-      }
-
-      // 更新前端状态
+  ElMessageBox.confirm(
+    `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
+    '批量下发确认',
+    {
+      confirmButtonText: '确认下发',
+      cancelButtonText: '取消',
+      type: 'success'
+    }
+  ).then(() => {
+    // 为每个草稿指标添加审计日志并更新状态
+    draftIndicators.forEach(indicator => {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
@@ -1021,21 +950,13 @@ const handleBatchDistribute = async (college: string) => {
         action: 'distribute',
         comment: '批量下发'
       })
-      await strategicStore.updateIndicator(indicator.id.toString(), {
+      strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
-        distributionStatus: 'DISTRIBUTED',
         canWithdraw: true
       })
-    } catch (err) {
-      errors.push(indicator.name)
-    }
-  }
-
-  if (errors.length > 0) {
-    ElMessage.error(`以下指标下发失败：${errors.join('、')}`)
-  } else {
-    ElMessage.success(`已成功下发 ${draftIndicators.length} 个指标`)
-  }
+    })
+    ElMessage.success(`已批量下发 ${draftIndicators.length} 个指标`)
+  })
 }
 
 // 获取学院下子指标的统一状态（用于判断显示哪些批量操作按钮，只统计当前部门下发的）
@@ -1149,28 +1070,20 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
 // 状态流转：draft(草稿) → distributed(已下发) → pending(待审批，下级提交后) → approved(已通过)
 // 打回后回到 distributed 状态，撤销后回到 draft 状态
 const getChildStatus = (child: StrategicIndicator) => {
-  // 优先使用后端持久化的 distributionStatus（页面刷新后仍准确）
-  if (child.distributionStatus) {
-    const distributionStatusMap: Record<string, string> = {
-      'DRAFT': 'draft',
-      'DISTRIBUTED': 'distributed',
-      'PENDING': 'pending',
-      'APPROVED': 'approved',
-      'REJECTED': 'distributed',
-    }
-    return distributionStatusMap[child.distributionStatus] ?? 'draft'
-  }
-
-  // fallback：后端尚未返回 distributionStatus 时，从 statusAudit 本地推导
   const audit = child.statusAudit || []
-  if (audit.length === 0) {return 'draft'}
+  if (audit.length === 0) {return 'draft'}  // 无审计记录时为草稿状态
   const lastAudit = audit[audit.length - 1]
   if (!lastAudit) {return 'draft'}
   const lastAction = lastAudit.action
+  // 下级部门提交后变为待审批
   if (lastAction === 'submit') {return 'pending'}
+  // 审批通过
   if (lastAction === 'approve') {return 'approved'}
+  // 打回后回到已下发状态，等待重新提交
   if (lastAction === 'reject') {return 'distributed'}
+  // 初始下发状态
   if (lastAction === 'distribute') {return 'distributed'}
+  // 撤销后回到草稿状态
   if (lastAction === 'withdraw') {return 'draft'}
   return 'draft'
 }

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type { StrategicTask, StrategicIndicator, Milestone, StatusAuditEntry, CreateStrategicTaskRequest, UpdateStrategicTaskRequest } from '@/types'
+import type { StrategicTask, StrategicIndicator, Milestone, StatusAuditEntry } from '@/types'
 import { useTimeContextStore } from './timeContext'
 import strategicApi from '@/api/strategic'
 import { useDataValidator, type ValidationResult } from '@/composables/useDataValidator'
@@ -13,7 +13,7 @@ import { convertToUpdateRequest, hasBackendUpdates as hasBackendUpdatesUtil } fr
  * @requirement 8.4 - Store data consistency check
  */
 export interface DataHealthStatus {
-  /** 健康状态: healthy=正常, warning=有警告, critical严重问题 */
+  /** 健康状态: healthy=正常, warning=有警告, critical=严重问题 */
   status: 'healthy' | 'warning' | 'critical'
   /** 数据来源: api=后端API, fallback=降级数据, local=本地数据 */
   dataSource: 'api' | 'fallback' | 'local'
@@ -139,12 +139,6 @@ export const useStrategicStore = defineStore('strategic', () => {
         logger.info(`[Strategic Store] Loaded ${converted.length} indicators from API`)
         return converted
       }
-      
-      // 如果接口返回失败，抛出错误
-      if (!response.success) {
-        throw new Error(response.message || 'API 返回失败')
-      }
-      
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
       return []
     } catch (err) {
@@ -165,12 +159,6 @@ export const useStrategicStore = defineStore('strategic', () => {
         logger.info(`[Strategic Store] Loaded ${converted.length} tasks from API`)
         return converted
       }
-      
-      // 如果接口返回失败，抛出错误
-      if (!response.success) {
-        throw new Error(response.message || 'API 返回失败')
-      }
-      
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
       return []
     } catch (err) {
@@ -210,22 +198,11 @@ export const useStrategicStore = defineStore('strategic', () => {
         loadingState.value.indicators = false
         loadingState.value.tasks = false
         return
-      } catch (err: any) {
+      } catch (err) {
         logger.error(`[Strategic Store] API failed:`, err)
-        // 优先使用详细的错误消息
-        const errorMsg = err.details?.message || err.message || 'API 请求失败'
-        error.value = errorMsg
-        loadingState.value.error = errorMsg
+        error.value = err instanceof Error ? err.message : 'API 请求失败'
+        loadingState.value.error = err instanceof Error ? err.message : 'API 请求失败'
         dataSource.value = 'fallback' // 数据来源：降级
-        
-        // 如果是 503 或 500，且包含数据库错误信息，给出更明确的提示
-        const errorDetail = JSON.stringify(err.details || '');
-        if ((err.code === 503 || err.code === 500 || err.code === 504) && 
-            (errorDetail.includes('JDBC') || errorDetail.includes('Connection') || errorDetail.includes('timeout') || err.message.includes('status code 500'))) {
-          const dbError = '数据库连接失败，请检查后端数据库配置（.env）或网络连通性。';
-          error.value = dbError;
-          loadingState.value.error = dbError;
-        }
         
         // API失败，清空数据
         indicators.value = []
@@ -271,152 +248,62 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
-  /**
-   * 创建新的战略任务并同步到后端
-   */
-  const createTask = async (request: CreateStrategicTaskRequest): Promise<StrategicTask> => {
-    logger.info('[Strategic Store] Creating new strategic task', { request })
-    
+  const addIndicator = async (indicator: StrategicIndicator) => {
+    // 先进行乐观更新：添加到本地状态
+    const tempId = indicator.id
+    indicators.value.push(indicator)
+
     try {
-      // 调用后端API创建任务
-      const response = await strategicApi.createTask(request)
-      
+      // 调用后端 API 持久化数据
+      const { default: indicatorApi, type: IndicatorCreateRequest } = await import('@/api/indicator')
+
+      // 获取当前活动的任务 ID，如果没有则使用第一个任务
+      const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
+      const taskId = activeTask ? Number(activeTask.id) : 1
+
+      // 将 StrategicIndicator 映射到 IndicatorCreateRequest
+      const request = {
+        taskId,
+        indicatorDesc: indicator.name,
+        weightPercent: indicator.weight || 0,
+        sortOrder: 0,
+        remark: indicator.remark || '',
+        type: indicator.type2, // 基础性/发展性
+        progress: indicator.progress || 0,
+        year: indicator.year || new Date().getFullYear(),
+        canWithdraw: indicator.canWithdraw !== false,
+      }
+
+      const response = await indicatorApi.createIndicator(request)
+
       if (response.success && response.data) {
-        // 转换后端返回的数据为前端格式
-        const newTask = strategicApi.convertTaskVOToStrategicTask(response.data)
-        
-        // 添加到本地状态
-        tasks.value.push(newTask)
-        
-        logger.info('[Strategic Store] Successfully created and added task', { taskId: newTask.id })
-        return newTask
-      } else {
-        throw new Error(response.message || 'Failed to create task')
-      }
-    } catch (error) {
-      logger.error('[Strategic Store] Failed to create task', { error, request })
-      ElMessage.error('任务创建失败，请稍后重试')
-      throw error
-    }
-  }
-
-  /**
-   * 更新现有战略任务并同步到后端
-   */
-  const updateTaskWithBackend = async (taskId: number, request: UpdateStrategicTaskRequest): Promise<StrategicTask> => {
-    logger.info('[Strategic Store] Updating strategic task', { taskId, request })
-    
-    try {
-      // 调用后端API更新任务
-      const response = await strategicApi.updateTask(taskId, request)
-      
-      if (response.success && response.data) {
-        // 转换后端返回的数据为前端格式
-        const updatedTask = strategicApi.convertTaskVOToStrategicTask(response.data)
-        
-        // 更新本地状态
-        const index = tasks.value.findIndex(t => t.id === String(taskId))
-        if (index !== -1) {
-          tasks.value[index] = updatedTask
-        }
-        
-        logger.info('[Strategic Store] Successfully updated task', { taskId })
-        return updatedTask
-      } else {
-        throw new Error(response.message || 'Failed to update task')
-      }
-    } catch (error) {
-      logger.error('[Strategic Store] Failed to update task', { error, taskId, request })
-      ElMessage.error('任务更新失败，请稍后重试')
-      throw error
-    }
-  }
-
-  /**
-   * 删除战略任务并同步到后端
-   */
-  const deleteTaskWithBackend = async (taskId: number): Promise<void> => {
-    logger.info('[Strategic Store] Deleting strategic task', { taskId })
-    
-    try {
-      // 调用后端API删除任务
-      const response = await strategicApi.deleteTask(taskId)
-      
-      if (response.success) {
-        // 从本地状态中移除
-        const index = tasks.value.findIndex(t => t.id === String(taskId))
-        if (index !== -1) {
-          tasks.value.splice(index, 1)
-        }
-        
-        logger.info('[Strategic Store] Successfully deleted task', { taskId })
-      } else {
-        throw new Error(response.message || 'Failed to delete task')
-      }
-    } catch (error) {
-      logger.error('[Strategic Store] Failed to delete task', { error, taskId })
-      ElMessage.error('任务删除失败，请稍后重试')
-      throw error
-    }
-  }
-
-    const addIndicator = async (indicator: StrategicIndicator) => {
-      // 先进行乐观更新：添加到本地状态
-      const tempId = indicator.id
-      indicators.value.push(indicator)
-
-      try {
-        // 调用后端 API 持久化数据（创建时带 distributionStatus: 'DRAFT'）
-        const { default: indicatorApi } = await import('@/api/indicator')
-
-        // 获取当前活动的任务 ID，如果没有则使用第一个任务
-        const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
-        const taskId = activeTask ? Number(activeTask.id) : 1
-
-        // 将 StrategicIndicator 映射到 IndicatorCreateRequest
-        const request = {
-          taskId,
-          indicatorDesc: indicator.name,
-          weightPercent: indicator.weight || 0,
-          sortOrder: 0,
-          remark: indicator.remark || '',
-          type: indicator.type2, // 基础性/发展性
-          progress: indicator.progress || 0,
-          year: indicator.year || new Date().getFullYear(),
-          canWithdraw: indicator.canWithdraw !== false,
-          // 草稿状态：告知后端这是草稿，尚未正式下发
-          distributionStatus: 'DRAFT' as const,
-        }
-
-        const response = await indicatorApi.createIndicator(request)
-
-        if (response.success && response.data) {
-          // 用后端返回的真实 ID 更新本地指标，同时记录真实 ID
-          const index = indicators.value.findIndex(i => i.id === tempId)
-          if (index !== -1) {
-            indicators.value[index] = {
-              ...indicators.value[index],
-              id: response.data.indicatorId.toString(),
-              distributionStatus: response.data.distributionStatus ?? 'DRAFT',
-            }
-          }
-
-          logger.info('[Strategic Store] Successfully created indicator:', response.data.indicatorId)
-          ElMessage.success('指标创建成功')
-        }
-      } catch (err) {
-        logger.error('[Strategic Store] Failed to create indicator:', err)
-
-        // 回滚：从本地状态移除
+        // 用后端返回的真实 ID 更新本地指标
         const index = indicators.value.findIndex(i => i.id === tempId)
         if (index !== -1) {
-          indicators.value.splice(index, 1)
+          // 保留前端特有字段，更新后端字段
+          indicators.value[index] = {
+            ...indicators.value[index],
+            id: response.data.indicatorId.toString(),
+            // 可以添加更多从后端返回的字段
+          }
         }
 
-        ElMessage.error('指标创建失败，请稍后重试')
-        throw err
+        logger.info('[Strategic Store] Successfully created indicator:', response.data.indicatorId)
+        ElMessage.success('指标创建成功')
       }
+    } catch (err) {
+      logger.error('[Strategic Store] Failed to create indicator:', err)
+
+      // 回滚：从本地状态移除
+      const index = indicators.value.findIndex(i => i.id === tempId)
+      if (index !== -1) {
+        indicators.value.splice(index, 1)
+      }
+
+      ElMessage.error('指标创建失败，请稍后重试')
+      throw err
     }
+  }
 
   const updateIndicator = async (id: string, updates: Partial<StrategicIndicator>) => {
     const index = indicators.value.findIndex(i => i.id === id)
@@ -455,33 +342,10 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
-  const deleteIndicator = async (id: string) => {
+  const deleteIndicator = (id: string) => {
     const index = indicators.value.findIndex(i => i.id === id)
-    if (index === -1) {return}
-
-    const indicator = indicators.value[index]
-
-    // 乐观删除：先从本地状态移除
-    indicators.value.splice(index, 1)
-
-    // 只有真实后端 ID（纯数字）才需要调用后端删除接口
-    // 临时 ID 格式如 "new-xxxxx" 或 "${timestamp}-${college}-xxx"，不调用后端
-    const isRealBackendId = /^\d+$/.test(id)
-    if (!isRealBackendId) {
-      logger.info(`[Strategic Store] Deleted local-only draft indicator (id: ${id})`)
-      return
-    }
-
-    try {
-      const { default: indicatorApi } = await import('@/api/indicator')
-      await indicatorApi.deleteIndicator(id)
-      logger.info(`[Strategic Store] Successfully deleted indicator ${id} from backend`)
-    } catch (err) {
-      logger.error(`[Strategic Store] Failed to delete indicator ${id} from backend:`, err)
-      // 回滚：把指标加回去
-      indicators.value.splice(index, 0, indicator)
-      ElMessage.error('指标删除失败，请稍后重试')
-      throw err
+    if (index !== -1) {
+      indicators.value.splice(index, 1)
     }
   }
 
@@ -576,36 +440,6 @@ export const useStrategicStore = defineStore('strategic', () => {
   }
 
   /**
-   * 添加草稿指标（仅本地状态，不调用后端）
-   * 
-   * 用于 Step1（填写表单阶段），只保存到前端临时状态。
-   * Step2（点击下发）时再通过 publishDistributionStatus 接口正式写入后端。
-   * 
-   * 对应前后端协作任务清单：前端任务 - Step1 只保存临时状态
-   */
-  const addDraftIndicator = (indicator: StrategicIndicator) => {
-    indicators.value.push(indicator)
-    logger.info(`[Strategic Store] Added local draft indicator: ${indicator.id}`)
-  }
-
-  /**
-   * 将临时 ID 替换为后端真实 ID（不调用后端，仅更新本地状态）
-   * 用于下发流程：先 createIndicator 拿到真实 ID，再替换临时 ID
-   */
-  const replaceIndicatorId = (tempId: string, realId: string, extraUpdates?: Partial<StrategicIndicator>) => {
-    const index = indicators.value.findIndex(i => i.id === tempId)
-    if (index !== -1) {
-      indicators.value[index] = {
-        ...indicators.value[index],
-        id: realId,
-        ...extraUpdates
-      }
-      indicators.value = [...indicators.value]
-      logger.info(`[Strategic Store] Replaced temp indicator id ${tempId} → ${realId}`)
-    }
-  }
-
-  /**
    * 获取数据健康状态
    */
   const getDataHealth = (): DataHealthStatus => {
@@ -660,17 +494,12 @@ export const useStrategicStore = defineStore('strategic', () => {
     indicatorsByCurrentYear,
 
     // Actions
-      addTask,
-      updateTask,
-      deleteTask,
-      createTask,
-      updateTaskWithBackend,
-      deleteTaskWithBackend,
-      addIndicator,
-      addDraftIndicator,
-      replaceIndicatorId,
-      updateIndicator,
-      deleteIndicator,
+    addTask,
+    updateTask,
+    deleteTask,
+    addIndicator,
+    updateIndicator,
+    deleteIndicator,
     updateMilestoneStatus,
     addStatusAuditEntry,
     loadIndicatorsByYear,

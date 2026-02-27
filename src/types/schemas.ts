@@ -102,10 +102,6 @@ export type StatusAuditEntry = z.infer<typeof StatusAuditEntrySchema>
 // 战略指标 Schema
 // ============================================================================
 
-// 指标下发状态（与后端 distribution_status 字段对齐）
-export const DistributionStatusSchema = z.enum(['DRAFT', 'DISTRIBUTED', 'PENDING', 'APPROVED', 'REJECTED'])
-export type DistributionStatus = z.infer<typeof DistributionStatusSchema>
-
 export const StrategicIndicatorSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(200),
@@ -124,12 +120,6 @@ export const StrategicIndicatorSchema = z.object({
   responsibleDept: z.string(),
   responsiblePerson: z.string(),
   status: z.enum(['draft', 'active', 'archived', 'distributed', 'pending', 'approved']),
-  /**
-   * 后端持久化的下发状态字段（distribution_status）。
-   * 前端草稿时为 'DRAFT'，调用 publish 接口后变为 'DISTRIBUTED'。
-   * 后端返回的 IndicatorVO 含此字段，前端以此为准，不再纯靠 statusAudit 派生状态。
-   */
-  distributionStatus: DistributionStatusSchema.optional(),
   isStrategic: z.boolean(),
   approvalStatus: ApprovalStatusSchema.optional(),
   alertLevel: AlertLevelSchema.optional(),

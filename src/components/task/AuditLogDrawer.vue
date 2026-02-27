@@ -13,6 +13,7 @@ import {
   User,
   Clock,
   ChatDotRound,
+  Right,
 } from "@element-plus/icons-vue";
 import type { StrategicIndicator, StatusAuditEntry } from "@/types";
 import { useStrategicStore } from "@/stores/strategic";

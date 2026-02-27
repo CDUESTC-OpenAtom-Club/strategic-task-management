@@ -1465,24 +1465,6 @@ const handleWithdrawAll = () => {
       </div>
     </div>
 
-    <!-- 错误提示 -->
-    <div v-if="strategicStore.loadingState.error" class="error-alert-container card-animate">
-      <el-alert
-        :title="strategicStore.loadingState.error"
-        type="error"
-        show-icon
-        :closable="false"
-      >
-        <template #default>
-          <div class="error-actions">
-            <el-button type="primary" size="small" link @click="strategicStore.loadIndicatorsByYear(timeContext.currentYear)">
-              重试
-            </el-button>
-          </div>
-        </template>
-      </el-alert>
-    </div>
-
     <!-- 主内容区域 -->
     <div class="content-wrapper">
       <!-- 筛选卡片 - 统一卡片样式 (Requirements: 2.1, 2.2, 8.1) -->

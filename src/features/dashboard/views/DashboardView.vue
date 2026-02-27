@@ -14,8 +14,9 @@ import DepartmentProgressChart from '@/components/charts/DepartmentProgressChart
 import TaskSankeyChart from '@/components/charts/TaskSankeyChart.vue'
 import SourcePieChart from '@/components/charts/SourcePieChart.vue'
 import * as XLSX from 'xlsx'
+import { init as echartsInit } from 'echarts'
+import type { ECharts } from 'echarts'
 import { ElMessage } from 'element-plus'
-import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/stores/org'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -37,17 +38,17 @@ const helpTexts = {
 }
 
 // 雷达图实例
-let radarChartInstance: echarts.ECharts | null = null
-let benchmarkChartInstance: echarts.ECharts | null = null
+let radarChartInstance: ECharts | null = null
+let benchmarkChartInstance: ECharts | null = null
 const radarChartRef = ref<HTMLElement | null>(null)
 const benchmarkChartRef = ref<HTMLElement | null>(null)
 
 // 学院看板图表实例
-let collegeChartInstance: echarts.ECharts | null = null
+let collegeChartInstance: ECharts | null = null
 const collegeChartRef = ref<HTMLElement | null>(null)
 
 // 分院排名图表实例
-let collegeRankingChartInstance: echarts.ECharts | null = null
+let collegeRankingChartInstance: ECharts | null = null
 const collegeRankingChartRef = ref<HTMLElement | null>(null)
 
 // 选中的部门（用于右侧指标完成情况卡片）
@@ -405,7 +406,7 @@ const stackedBarData = computed(() => {
 
   // 获取职能部门列表（战略发展部视角）
   const functionalDepts = summary
-    .filter(item => !isSecondaryCollege(item.dept))
+    .filter(item => !orgStore.isCollege(item.dept))
     .map(item => item.dept)
 
   return functionalDepts.map(dept => {
@@ -507,7 +508,7 @@ const getCollegeStatsForFunctionalDept = (ownerDept: string, month: number, year
       const indicatorYear = i.year || realYear
       return indicatorYear === currentYear &&
              i.ownerDept === ownerDept &&
-             isSecondaryCollege(i.responsibleDept)
+             orgStore.isCollege(i.responsibleDept)
     })
     .map(i => ({
       ...i,
@@ -558,7 +559,7 @@ const collegeBarData = computed(() => {
     const indicators = strategicStore.indicators
       .filter(i => {
         const indicatorYear = i.year || realYear
-        return indicatorYear === currentYear && isSecondaryCollege(i.responsibleDept)
+        return indicatorYear === currentYear && orgStore.isCollege(i.responsibleDept)
       })
       .map(i => ({
         ...i,
@@ -715,7 +716,7 @@ const getCollegeRankingData = computed(() => {
   let indicators = strategicStore.indicators
     .filter(i => {
       const indicatorYear = i.year || realYear
-      return indicatorYear === currentYear && isSecondaryCollege(i.responsibleDept)
+      return indicatorYear === currentYear && orgStore.isCollege(i.responsibleDept)
     })
     .map(i => ({
       ...i,
@@ -780,7 +781,7 @@ const availableFunctionalDepts = computed(() => {
   const depts = new Set<string>()
 
   strategicStore.indicators.forEach(i => {
-    if (i.ownerDept && isSecondaryCollege(i.responsibleDept)) {
+    if (i.ownerDept && orgStore.isCollege(i.responsibleDept)) {
       depts.add(i.ownerDept)
     }
   })
@@ -907,10 +908,23 @@ const isFallbackMode = computed(() => {
 })
 
 // 当前视角角色（优先使用父组件传递的，否则使用有效角色）
-const currentRole = computed<UserRole>(() => 
-  (props.viewingRole as UserRole) || authStore.effectiveRole || 'strategic_dept'
-)
-const currentDepartment = computed(() => props.viewingDept || authStore.effectiveDepartment || '')
+const currentRole = computed<UserRole>(() => {
+  if (props.viewingRole) return props.viewingRole as UserRole
+  if (authStore.effectiveRole) return authStore.effectiveRole
+  // 从 localStorage 读取（降级）
+  const storedRole = localStorage.getItem('effectiveRole')
+  if (storedRole) return storedRole as UserRole
+  return 'strategic_dept'
+})
+
+const currentDepartment = computed(() => {
+  if (props.viewingDept) return props.viewingDept
+  if (authStore.effectiveDepartment) return authStore.effectiveDepartment
+  // 从 localStorage 读取（降级）
+  const storedDept = localStorage.getItem('effectiveDepartment')
+  if (storedDept) return storedDept
+  return ''
+})
 
 // 是否显示筛选功能（二级学院不显示）
 const showFilterFeature = computed(() => currentRole.value !== 'secondary_college')
@@ -1070,7 +1084,7 @@ const handleExport = () => {
         ? dashboardStore.filteredIndicators
         : strategicStore.indicators
 
-      const collegeIndicators = indicators.filter(i => isSecondaryCollege(i.responsibleDept))
+      const collegeIndicators = indicators.filter(i => orgStore.isCollege(i.responsibleDept))
 
       if (collegeIndicators.length === 0) {
         ElMessage.warning('没有可导出的数据')
@@ -1167,13 +1181,13 @@ const handleSankeyNodeClick = (nodeName: string) => {
     }
   }
   
-  const isCollege = isSecondaryCollege(nodeName)
+  const isCollege = orgStore.isCollege(nodeName)
   dashboardStore.drillDownToDepartment(nodeName, isCollege ? 'college' : 'functional')
 }
 
 // 桑基图链接点击
 const handleSankeyLinkClick = (source: string, target: string) => {
-  const isCollege = isSecondaryCollege(target)
+  const isCollege = orgStore.isCollege(target)
   dashboardStore.drillDownToDepartment(target, isCollege ? 'college' : 'functional')
 }
 
@@ -1345,7 +1359,7 @@ const initRadarChart = () => {
     return
   }
   
-  radarChartInstance = echarts.init(radarChartRef.value)
+  radarChartInstance = echartsInit(radarChartRef.value)
   
   radarChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1418,7 +1432,7 @@ const initBenchmarkChart = () => {
   if (benchmarkChartInstance) {
     benchmarkChartInstance.dispose()
   }
-  benchmarkChartInstance = echarts.init(benchmarkChartRef.value)
+  benchmarkChartInstance = echartsInit(benchmarkChartRef.value)
 
   benchmarkChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1740,7 +1754,7 @@ const initCollegeChart = () => {
   if (collegeChartInstance) {
     collegeChartInstance.dispose()
   }
-  collegeChartInstance = echarts.init(collegeChartRef.value)
+  collegeChartInstance = echartsInit(collegeChartRef.value)
 
   collegeChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1953,7 +1967,7 @@ const initCollegeRankingChart = () => {
   if (collegeRankingChartInstance) {
     collegeRankingChartInstance.dispose()
   }
-  collegeRankingChartInstance = echarts.init(collegeRankingChartRef.value)
+  collegeRankingChartInstance = echartsInit(collegeRankingChartRef.value)
 
   collegeRankingChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -2110,7 +2124,12 @@ watch(showCollegeMonthIndicatorCard, () => {
 })
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
+  // 确保 orgStore 数据已加载
+  if (!orgStore.loaded) {
+    await orgStore.loadDepartments()
+  }
+  
   nextTick(() => {
     initRadarChart()
     initBenchmarkChart()

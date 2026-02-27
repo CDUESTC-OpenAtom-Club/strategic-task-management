@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import type {
   DashboardData,
   DepartmentProgress,
-  ApiResponse,
   DrillDownLevel,
   BreadcrumbItem,
   FilterState,
@@ -12,15 +11,12 @@ import type {
   ComparisonItem,
   SankeyData,
   SankeyLink,
-  SankeyNode,
-  SourcePieData,
-  OrgLevel,
-  UserRole
+  OrgLevel
 } from '@/types'
 import { useStrategicStore } from './strategic'
 import { useAuthStore } from './auth'
 import { useTimeContextStore } from './timeContext'
-import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
+import { getProgressStatus } from '@/utils/colors'
 import { useOrgStore } from './org'
 import api from '@/api'
 import { logger } from '@/utils/logger'
@@ -227,7 +223,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const authStore = useAuthStore()
     const strategicStore = useStrategicStore()
     const timeContext = useTimeContextStore()
-    const orgStore = useOrgStore()
     // 使用有效角色（考虑视角切换）
     const role = authStore.effectiveRole
     const dept = authStore.effectiveDepartment
@@ -416,13 +411,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     if (role === 'strategic_dept') {
       // 战略处看职能部门排行（排除学院）
-      indicators = indicators.filter(i => !isSecondaryCollege(i.responsibleDept))
+      indicators = indicators.filter(i => !orgStore.isCollege(i.responsibleDept))
       return aggregateByDepartment(indicators, 'responsibleDept')
     } else if (role === 'functional_dept') {
       // 职能部门看二级学院排行
       const dept = authStore.user?.department
       indicators = indicators.filter(i =>
-        isSecondaryCollege(i.responsibleDept) && i.ownerDept === dept
+        orgStore.isCollege(i.responsibleDept) && i.ownerDept === dept
       )
       return aggregateByDepartment(indicators, 'responsibleDept')
     } else {
@@ -433,6 +428,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   // 辅助函数：生成桑基图数据
   const generateSankeyData = (indicators: StrategicIndicator[]): SankeyData => {
+    const orgStore = useOrgStore()
     const nodes = new Set<string>()
     const linkMap = new Map<string, number>()
 
@@ -442,6 +438,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const target = indicator.responsibleDept
 
       if (!source || !target) {return} // Skip indicators without complete department info
+      if (source === target) {return} // 跳过自己指向自己的情况，避免循环
 
       nodes.add(source)
       nodes.add(target)
@@ -453,7 +450,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const links: SankeyLink[] = []
     linkMap.forEach((count, key) => {
       const [source, target] = key.split('->')
-      links.push({ source, target, value: count })
+      // 再次确认不是自己指向自己
+      if (source !== target) {
+        links.push({ source, target, value: count })
+      }
     })
 
     // 为节点分配明确的层级（depth），确保职能部门和学院分层显示
@@ -465,7 +465,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         depth = 0
       }
       // 二级学院在最右侧（第2层）
-      else if (isSecondaryCollege(name)) {
+      else if (orgStore.isCollege(name)) {
         depth = 2
       }
       // 职能部门在中间（第1层）
@@ -706,14 +706,14 @@ export const useDashboardStore = defineStore('dashboard', () => {
       case 'comparison':
         // 对比图点击
         if (data.dept) {
-          const isCollege = isSecondaryCollege(data.dept)
+          const isCollege = orgStore.isCollege(data.dept)
           drillDownToDepartment(data.dept, isCollege ? 'college' : 'functional')
         }
         break
       case 'sankey':
         // 桑基图点击
         if (data.target) {
-          const isCollege = isSecondaryCollege(data.target)
+          const isCollege = orgStore.isCollege(data.target)
           drillDownToDepartment(data.target, isCollege ? 'college' : 'functional')
         }
         break

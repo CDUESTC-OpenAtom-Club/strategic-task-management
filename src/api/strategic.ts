@@ -9,6 +9,42 @@ import { apiClient } from '@/shared/api/client'
 import type { ApiResponse, StrategicTask, StrategicIndicator } from '@/types'
 import { logger } from '@/utils/logger'
 
+/**
+ * 重试辅助函数 - 使用指数退避策略
+ *
+ * 对关键操作提供显式重试逻辑，最多重试3次
+ * 使用指数退避策略：第1次重试等待1秒，第2次等待2秒，第3次等待3秒
+ *
+ * **Validates: Requirements 2.4**
+ *
+ * @param fn 需要重试的异步函数
+ * @param maxRetries 最大重试次数（默认3次）
+ * @returns 函数执行结果
+ */
+async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promise<T> {
+  let lastError: Error
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error as Error
+
+      logger.warn(`[Retry] Attempt ${attempt}/${maxRetries} failed:`, error)
+
+      if (attempt < maxRetries) {
+        // 指数退避: 1s, 2s, 3s
+        const delayMs = attempt * 1000
+        logger.debug(`[Retry] Waiting ${delayMs}ms before next attempt`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+    }
+  }
+
+  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError!)
+  throw lastError!
+}
+
 // 后端返回的战略任务 VO
 export interface StrategicTaskVO {
   taskId: number
@@ -68,7 +104,6 @@ export interface IndicatorVO {
   isStrategic?: boolean
   responsibleDept?: string
   ownerDept?: string
-  distributionStatus?: 'DRAFT' | 'DISTRIBUTED' | 'PENDING' | 'APPROVED' | 'REJECTED'
 }
 
 // 后端返回的里程碑 VO
@@ -204,8 +239,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     pendingProgress: vo.pendingProgress,
     pendingRemark: vo.pendingRemark,
     pendingAttachments,
-    statusAudit,
-    distributionStatus: vo.distributionStatus
+    statusAudit
   }
 }
 
@@ -230,25 +264,33 @@ export const strategicApi = {
    * 获取指定年份的考核周期
    */
   async getCycleByYear(year: number): Promise<ApiResponse<AssessmentCycleVO | null>> {
-    const response = await apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles')
-    if (response.success && response.data) {
-      const cycle = response.data.find(c => c.year === year)
-      return { ...response, data: cycle || null }
+    try {
+      const response = await apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles')
+      if (response.success && response.data) {
+        const cycle = response.data.find(c => c.year === year)
+        return { ...response, data: cycle || null }
+      }
+      return { ...response, data: null }
+    } catch {
+      return { success: false, data: null, message: 'Failed to get cycle', timestamp: new Date() }
     }
-    return { ...response, data: null }
   },
 
   /**
    * 获取指定年份的战略任务（通过 cycle）
    */
   async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
-    // 获取所有任务，然后按年份过滤
-    const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
-    if (response.success && response.data) {
-      const filteredTasks = response.data.filter(t => t.year === year)
-      return { ...response, data: filteredTasks }
+    try {
+      // 先获取所有任务，然后按年份过滤
+      const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
+      if (response.success && response.data) {
+        const filteredTasks = response.data.filter(t => t.year === year)
+        return { ...response, data: filteredTasks }
+      }
+      return response
+    } catch {
+      return { success: false, data: [], message: 'Failed to get tasks', timestamp: new Date() }
     }
-    return response
   },
 
   /**
@@ -262,13 +304,17 @@ export const strategicApi = {
    * 获取指定年份的指标（包含里程碑）
    */
   async getIndicatorsByYear(year: number): Promise<ApiResponse<IndicatorVO[]>> {
-    // 获取所有指标，然后按年份过滤
-    const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
-    if (response.success && response.data) {
-      const filteredIndicators = response.data.filter(i => i.year === year)
-      return { ...response, data: filteredIndicators }
+    try {
+      // 获取所有指标，然后按年份过滤
+      const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+      if (response.success && response.data) {
+        const filteredIndicators = response.data.filter(i => i.year === year)
+        return { ...response, data: filteredIndicators }
+      }
+      return response
+    } catch {
+      return { success: false, data: [], message: 'Failed to get indicators', timestamp: new Date() }
     }
-    return response
   },
 
   /**

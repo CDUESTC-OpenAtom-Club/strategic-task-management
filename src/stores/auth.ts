@@ -282,12 +282,26 @@ export const useAuthStore = defineStore('auth', () => {
   const setViewingAs = (role: UserRole | null, department: string | null) => {
     viewingAsRole.value = role
     viewingAsDepartment.value = department
+    // 同步到 localStorage，供其他组件降级使用
+    if (role) {
+      localStorage.setItem('effectiveRole', role)
+    } else {
+      localStorage.removeItem('effectiveRole')
+    }
+    if (department) {
+      localStorage.setItem('effectiveDepartment', department)
+    } else {
+      localStorage.removeItem('effectiveDepartment')
+    }
   }
 
   // 重置视角到实际用户
   const resetViewingAs = () => {
     viewingAsRole.value = null
     viewingAsDepartment.value = null
+    // 清除 localStorage
+    localStorage.removeItem('effectiveRole')
+    localStorage.removeItem('effectiveDepartment')
   }
 
   return {

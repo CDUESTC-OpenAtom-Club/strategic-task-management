@@ -15,10 +15,12 @@ import TaskSankeyChart from '@/components/charts/TaskSankeyChart.vue'
 import SourcePieChart from '@/components/charts/SourcePieChart.vue'
 import DashboardFilters from '@/components/common/DashboardFilters.vue'
 import * as XLSX from 'xlsx'
+import { init as echartsInit } from 'echarts'
 import type { ECharts } from 'echarts'
 import { ElMessage } from 'element-plus'
 import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/stores/org'
+import { logger } from '@/utils/logger'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/composables/useLoadingState'
 
@@ -39,17 +41,17 @@ const helpTexts = {
 }
 
 // 雷达图实例
-let radarChartInstance: echarts.ECharts | null = null
-let benchmarkChartInstance: echarts.ECharts | null = null
+let radarChartInstance: ECharts | null = null
+let benchmarkChartInstance: ECharts | null = null
 const radarChartRef = ref<HTMLElement | null>(null)
 const benchmarkChartRef = ref<HTMLElement | null>(null)
 
 // 学院看板图表实例
-let collegeChartInstance: echarts.ECharts | null = null
+let collegeChartInstance: ECharts | null = null
 const collegeChartRef = ref<HTMLElement | null>(null)
 
 // 分院排名图表实例
-let collegeRankingChartInstance: echarts.ECharts | null = null
+let collegeRankingChartInstance: ECharts | null = null
 const collegeRankingChartRef = ref<HTMLElement | null>(null)
 
 // 选中的部门（用于右侧指标完成情况卡片）
@@ -1347,7 +1349,7 @@ const initRadarChart = () => {
     return
   }
   
-  radarChartInstance = echarts.init(radarChartRef.value)
+  radarChartInstance = echartsInit(radarChartRef.value)
   
   radarChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1420,7 +1422,7 @@ const initBenchmarkChart = () => {
   if (benchmarkChartInstance) {
     benchmarkChartInstance.dispose()
   }
-  benchmarkChartInstance = echarts.init(benchmarkChartRef.value)
+  benchmarkChartInstance = echartsInit(benchmarkChartRef.value)
 
   benchmarkChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1742,7 +1744,7 @@ const initCollegeChart = () => {
   if (collegeChartInstance) {
     collegeChartInstance.dispose()
   }
-  collegeChartInstance = echarts.init(collegeChartRef.value)
+  collegeChartInstance = echartsInit(collegeChartRef.value)
 
   collegeChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1955,7 +1957,7 @@ const initCollegeRankingChart = () => {
   if (collegeRankingChartInstance) {
     collegeRankingChartInstance.dispose()
   }
-  collegeRankingChartInstance = echarts.init(collegeRankingChartRef.value)
+  collegeRankingChartInstance = echartsInit(collegeRankingChartRef.value)
 
   collegeRankingChartInstance.setOption({
     backgroundColor: 'transparent',

@@ -58,11 +58,7 @@ const FRONTEND_TO_BACKEND: Record<string, string> = {
   // 单位
   unit: 'unit',
   // 负责人
-  responsiblePerson: 'responsiblePerson',
-  // 下发状态（后端 distribution_status 字段）
-  distributionStatus: 'distributionStatus',
-  // 审计日志（同步到后端持久化）
-  statusAudit: 'statusAudit',
+  responsiblePerson: 'responsiblePerson'
 }
 
 /**
@@ -90,9 +86,7 @@ const BACKEND_TO_FRONTEND: Record<string, string> = {
   targetValue: 'targetValue',
   actualValue: 'actualValue',
   unit: 'unit',
-  responsiblePerson: 'responsiblePerson',
-  distributionStatus: 'distributionStatus',
-  statusAudit: 'statusAudit',
+  responsiblePerson: 'responsiblePerson'
 }
 
 /**
@@ -103,8 +97,7 @@ const BACKEND_FIELDS = [
   'parentIndicatorId', 'level', 'ownerOrgId', 'targetOrgId', 'year',
   'status', 'progress', 'progressApprovalStatus', 'pendingProgress',
   'pendingRemark', 'pendingAttachments', 'targetValue', 'actualValue',
-  'unit', 'responsiblePerson', 'name', 'taskContent', 'weight',
-  'distributionStatus', 'statusAudit'
+  'unit', 'responsiblePerson', 'name', 'taskContent', 'weight'
 ]
 
 /**
