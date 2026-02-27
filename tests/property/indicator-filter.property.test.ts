@@ -104,7 +104,7 @@ function filterByResponsibleDept(
   indicators: StrategicIndicator[],
   dept: string | undefined
 ): StrategicIndicator[] {
-  if (!dept) return indicators
+  if (!dept) {return indicators}
   return indicators.filter(i => i.responsibleDept === dept)
 }
 
@@ -115,7 +115,7 @@ function filterByOwnerDept(
   indicators: StrategicIndicator[],
   dept: string | undefined
 ): StrategicIndicator[] {
-  if (!dept) return indicators
+  if (!dept) {return indicators}
   return indicators.filter(i => i.ownerDept === dept)
 }
 
@@ -126,7 +126,7 @@ function filterByDeptMatch(
   indicators: StrategicIndicator[],
   viewingDept: string | undefined
 ): StrategicIndicator[] {
-  if (!viewingDept) return indicators
+  if (!viewingDept) {return indicators}
   return indicators.filter(i => 
     i.responsibleDept === viewingDept || i.ownerDept === viewingDept
   )

@@ -113,15 +113,15 @@ const onLogout = () => {
     <!-- 主内容区 -->
     <main class="app-main">
       <!-- 标签页导航 -->
-      <div class="tab-nav" v-if="tabs.length > 0">
+      <div v-if="tabs.length > 0" class="tab-nav">
         <div
           v-for="tab in tabs"
           :key="tab.id"
           :class="['tab-item', { active: activeTab === tab.id }]"
-          @click.stop.prevent="handleTabClick(tab.path)"
           role="tab"
           :aria-selected="activeTab === tab.id"
           tabindex="0"
+          @click.stop.prevent="handleTabClick(tab.path)"
           @keydown.enter="handleTabClick(tab.path)"
           @keydown.space.prevent="handleTabClick(tab.path)"
         >
@@ -138,7 +138,7 @@ const onLogout = () => {
 
       <!-- 内容区域 - 使用 router-view -->
       <div class="content-area">
-        <router-view :viewingRole="viewingRole" :viewingDept="viewingDept" :selectedRole="viewingRole || ''" />
+        <router-view :viewing-role="viewingRole" :viewing-dept="viewingDept" :selected-role="viewingRole || ''" />
       </div>
     </main>
   </div>

@@ -48,6 +48,9 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
  * 包含指标下发相关的接口
  */
 
+// 指标下发状态枚举（与后端 distribution_status 字段对齐）
+export type DistributionStatus = 'DRAFT' | 'DISTRIBUTED' | 'PENDING' | 'APPROVED' | 'REJECTED'
+
 // 指标 VO 类型（与后端 IndicatorVO 对应）
 export interface IndicatorVO {
   indicatorId: number
@@ -68,6 +71,8 @@ export interface IndicatorVO {
   sortOrder: number
   year: number
   status: 'ACTIVE' | 'ARCHIVED'
+  /** 下发状态（后端 distribution_status 字段）*/
+  distributionStatus?: DistributionStatus
   remark?: string
   createdAt: string
   updatedAt: string
@@ -90,6 +95,8 @@ export interface IndicatorCreateRequest {
   level?: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'  // Optional
   year?: number                     // Optional (年份)
   canWithdraw?: boolean             // Optional (是否可撤回)
+  /** 初始下发状态，默认 DRAFT（草稿，尚未正式下发）*/
+  distributionStatus?: DistributionStatus
 }
 
 export interface MilestoneVO {
@@ -251,6 +258,31 @@ export const indicatorApi = {
   async createIndicator(request: IndicatorCreateRequest): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
       return apiClient.post<ApiResponse<IndicatorVO>>('/indicators', request)
+    })
+  },
+
+  /**
+   * 发布/变更指标的下发状态
+   * 
+   * 对应后端方案A接口：PATCH /indicators/{id}/distribution-status
+   * 将已存在的草稿指标（DRAFT）推进到 DISTRIBUTED，或撤回到 DRAFT。
+   * 
+   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
+   * 
+   * **对应前后端协作任务清单 - 后端任务：新增 PATCH 接口**
+   * 
+   * @param indicatorId 指标ID
+   * @param distributionStatus 目标状态（DISTRIBUTED=下发, DRAFT=撤回草稿）
+   */
+  async publishDistributionStatus(
+    indicatorId: string,
+    distributionStatus: DistributionStatus
+  ): Promise<ApiResponse<IndicatorVO>> {
+    return withRetry(async () => {
+      return apiClient.patch<ApiResponse<IndicatorVO>>(
+        `/indicators/${indicatorId}/distribution-status`,
+        { distributionStatus }
+      )
     })
   },
 

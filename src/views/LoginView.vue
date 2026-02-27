@@ -127,8 +127,8 @@
                 :loading="loading"
                 :disabled="isLoginLocked"
                 class="login-btn"
-                @click.prevent="handleLogin"
                 native-type="button"
+                @click.prevent="handleLogin"
               >
                 {{ loading ? '登录中...' : (isLoginLocked ? '账户已锁定' : '登 录') }}
               </el-button>
@@ -268,7 +268,7 @@ const resetErrorCount = () => {
 }
 
 const startAutoUnlock = () => {
-  if (lockTimer) clearTimeout(lockTimer)
+  if (lockTimer) {clearTimeout(lockTimer)}
   lockTimer = setTimeout(() => {
     loginErrorCount.value = 0
     ElMessage.success('账户已解锁，请重新登录')
@@ -385,9 +385,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (timeInterval) clearInterval(timeInterval)
-  if (lockTimer) clearTimeout(lockTimer)
-  if (bgInterval) clearInterval(bgInterval)
+  if (timeInterval) {clearInterval(timeInterval)}
+  if (lockTimer) {clearTimeout(lockTimer)}
+  if (bgInterval) {clearInterval(bgInterval)}
 })
 </script>
 

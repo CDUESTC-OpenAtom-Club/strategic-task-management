@@ -165,7 +165,7 @@ export const secureStorage = {
   
   async getItem<T>(key: string, decrypt = false): Promise<T | null> {
     const data = localStorage.getItem(key)
-    if (!data) return null
+    if (!data) {return null}
     
     try {
       if (decrypt) {

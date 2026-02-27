@@ -49,7 +49,7 @@ export const useAuditLogStore = defineStore('auditLog', () => {
     before?: Record<string, any>, 
     after?: Record<string, any>
   ): FieldChange[] => {
-    if (!before || !after) return []
+    if (!before || !after) {return []}
     
     const changes: FieldChange[] = []
     const fieldLabels: Record<string, string> = {

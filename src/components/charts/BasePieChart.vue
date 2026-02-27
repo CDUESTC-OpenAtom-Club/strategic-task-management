@@ -187,7 +187,7 @@ const chartOption = computed<EChartsOption>(() => {
 
 /** 处理图表点击 */
 const handleChartClick = (params: any) => {
-  if (!props.clickable) return
+  if (!props.clickable) {return}
 
   const index = params.dataIndex
   if (index >= 0 && index < props.data.length) {

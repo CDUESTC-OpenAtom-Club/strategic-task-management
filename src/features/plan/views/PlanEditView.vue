@@ -91,7 +91,7 @@ const handleBack = () => {
 }
 
 const handleSave = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
 
   try {
     await formRef.value.validate()
@@ -186,7 +186,7 @@ const handleCancelTask = () => {
 
 // 加载 Plan 数据（编辑模式）
 const loadPlan = async () => {
-  if (!planId.value) return
+  if (!planId.value) {return}
 
   loading.value = true
   try {

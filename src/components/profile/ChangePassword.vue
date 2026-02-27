@@ -24,7 +24,7 @@
           show-password
           @input="checkPasswordStrength"
         />
-        <div class="password-strength" v-if="form.newPassword">
+        <div v-if="form.newPassword" class="password-strength">
           <div class="strength-label">密码强度：</div>
           <div class="strength-meter">
             <div
@@ -49,7 +49,7 @@
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" @click="handleSubmit" :loading="loading">
+        <el-button type="primary" :loading="loading" @click="handleSubmit">
           修改密码
         </el-button>
         <el-button @click="handleReset">
@@ -131,14 +131,14 @@ const checkPasswordStrength = (password: string) => {
   let score = 0
 
   // Length check
-  if (password.length >= 8) score++
-  if (password.length >= 12) score++
+  if (password.length >= 8) {score++}
+  if (password.length >= 12) {score++}
 
   // Character variety checks
-  if (/[a-z]/.test(password)) score++ // lowercase
-  if (/[A-Z]/.test(password)) score++ // uppercase
-  if (/[0-9]/.test(password)) score++ // number
-  if (/[^A-Za-z0-9]/.test(password)) score++ // special character
+  if (/[a-z]/.test(password)) {score++} // lowercase
+  if (/[A-Z]/.test(password)) {score++} // uppercase
+  if (/[0-9]/.test(password)) {score++} // number
+  if (/[^A-Za-z0-9]/.test(password)) {score++} // special character
 
   const strengthMap = [
     { width: '20%', class: 'weak', text: '弱' },
@@ -154,7 +154,7 @@ const checkPasswordStrength = (password: string) => {
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
 
   try {
     await formRef.value.validate()
@@ -182,7 +182,7 @@ const handleSubmit = async () => {
 }
 
 const handleReset = () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
   formRef.value.resetFields()
   passwordStrength.value = { width: '0%', class: '', text: '弱', score: 0 }
 }

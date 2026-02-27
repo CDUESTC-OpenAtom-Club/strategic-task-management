@@ -79,7 +79,7 @@ describe('Feature: architecture-refactoring, Property 3: API Token Injection', (
         validTokenArb,
         validTokenArb,
         (token1, token2) => {
-          if (token1 === token2) return true
+          if (token1 === token2) {return true}
           
           tokenManager.setAccessToken(token1)
           const first = tokenManager.getAccessToken()

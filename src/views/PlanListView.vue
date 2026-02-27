@@ -109,7 +109,7 @@ const getStatusConfig = (status: PlanStatus) => {
 
 // 计算 Plan 的完成进度
 const getPlanProgress = (plan: Plan) => {
-  if (!plan.totalIndicators || plan.totalIndicators === 0) return 0
+  if (!plan.totalIndicators || plan.totalIndicators === 0) {return 0}
   return Math.round((plan.completedIndicators || 0) / plan.totalIndicators * 100)
 }
 
@@ -120,13 +120,13 @@ const canSubmitPlan = (plan: Plan) => {
 
 // 检查是否可以编辑
 const canEditPlan = (plan: Plan) => {
-  if (authStore.user?.role !== 'strategic_dept') return false
+  if (authStore.user?.role !== 'strategic_dept') {return false}
   return plan.status === 'draft'
 }
 
 // 检查是否可以删除
 const canDeletePlan = (plan: Plan) => {
-  if (authStore.user?.role !== 'strategic_dept') return false
+  if (authStore.user?.role !== 'strategic_dept') {return false}
   return plan.status === 'draft'
 }
 
@@ -182,7 +182,7 @@ const openSubmitDialog = (plan: Plan) => {
 
 // 提交 Plan
 const handleSubmit = async () => {
-  if (!submittingPlanId.value) return
+  if (!submittingPlanId.value) {return}
 
   try {
     await planStore.submitPlan({
@@ -319,10 +319,10 @@ onMounted(() => {
     <!-- 表格视图 -->
     <ElCard class="table-card" shadow="never">
       <ElTable
+        v-loading="planStore.loading"
         :data="filteredPlans"
         stripe
         class="plan-table"
-        v-loading="planStore.loading"
       >
         <ElTableColumn prop="name" label="计划名称" min-width="200">
           <template #default="{ row }">

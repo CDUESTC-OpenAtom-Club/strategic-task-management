@@ -378,7 +378,7 @@ const resetUserForm = () => {
 
 // 保存用户
 const handleSave = async () => {
-  if (!userFormRef.value) return
+  if (!userFormRef.value) {return}
 
   try {
     await userFormRef.value.validate()
@@ -470,7 +470,7 @@ const openPasswordDialog = (user: UserManagementItem) => {
 
 // 重置密码
 const handleResetPassword = async () => {
-  if (!passwordFormRef.value) return
+  if (!passwordFormRef.value) {return}
 
   try {
     await passwordFormRef.value.validate()
@@ -604,10 +604,10 @@ onMounted(() => {
     <!-- 用户列表表格 -->
     <ElCard class="table-card" shadow="never">
       <ElTable
+        v-loading="loading"
         :data="filteredUsers"
         stripe
         class="user-table"
-        v-loading="loading"
       >
         <ElTableColumn prop="username" label="用户名" width="140">
           <template #default="{ row }">

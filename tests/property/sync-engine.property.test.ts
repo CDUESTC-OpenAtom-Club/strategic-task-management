@@ -46,7 +46,7 @@ function validateExecutionOrder(executionOrder: string[]): boolean {
   
   for (const phaseName of executionOrder) {
     const phase = REQUIRED_ORDER.find(p => p.name === phaseName)
-    if (!phase) return false
+    if (!phase) {return false}
     
     // Check all dependencies have been executed
     for (const dep of phase.dependencies) {
@@ -205,7 +205,7 @@ describe('Property 1: Sync Execution Order Guarantee', () => {
               const phaseInfo = REQUIRED_ORDER.find(p => p.name === phase)!
               // All dependencies must have been executed
               const depsOk = phaseInfo.dependencies.every(dep => executed.has(dep))
-              if (!depsOk) return false
+              if (!depsOk) {return false}
               executed.add(phase)
             }
             return true
@@ -216,7 +216,7 @@ describe('Property 1: Sync Execution Order Guarantee', () => {
           for (const phase of shuffledOrder) {
             const phaseInfo = REQUIRED_ORDER.find(p => p.name === phase)!
             const depsOk = phaseInfo.dependencies.every(dep => executed.has(dep))
-            if (!depsOk) return true // Found the violation, test passes
+            if (!depsOk) {return true} // Found the violation, test passes
             executed.add(phase)
           }
           return false // No violation found but marked invalid - bug

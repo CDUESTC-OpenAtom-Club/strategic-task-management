@@ -289,10 +289,10 @@ const formatRelativeTime = (timestamp: Date | string) => {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-  if (diffMins < 1) return '刚刚'
-  if (diffMins < 60) return `${diffMins}分钟前`
-  if (diffHours < 24) return `${diffHours}小时前`
-  if (diffDays < 30) return `${diffDays}天前`
+  if (diffMins < 1) {return '刚刚'}
+  if (diffMins < 60) {return `${diffMins}分钟前`}
+  if (diffHours < 24) {return `${diffHours}小时前`}
+  if (diffDays < 30) {return `${diffDays}天前`}
   return formatTime(timestamp)
 }
 

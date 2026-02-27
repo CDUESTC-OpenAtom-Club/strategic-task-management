@@ -52,7 +52,7 @@ const handleBack = () => {
 }
 
 const handleApprove = async () => {
-  if (!fillId.value) return
+  if (!fillId.value) {return}
 
   submitting.value = true
   try {
@@ -69,7 +69,7 @@ const handleApprove = async () => {
 }
 
 const handleReject = async () => {
-  if (!fillId.value) return
+  if (!fillId.value) {return}
 
   if (!auditComment.value.trim()) {
     ElMessage.warning('请输入驳回原因')

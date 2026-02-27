@@ -515,7 +515,7 @@ describe('Token Expiration Time', () => {
           const token = generateJwtWithExpiration(expiresInMs)
           const expiration = getTokenExpirationTime(token)
           
-          if (expiration === null) return false
+          if (expiration === null) {return false}
           
           // 允许 2 秒的误差 (因为时间戳是秒级的，且测试执行有延迟)
           const expectedExpiration = now + expiresInMs

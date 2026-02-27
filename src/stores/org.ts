@@ -32,7 +32,7 @@ export const useOrgStore = defineStore('org', () => {
       // 排序：战略发展部 > 职能部门 > 二级学院
       const typeOrder = { strategic_dept: 1, functional_dept: 2, secondary_college: 3 }
       const typeCompare = typeOrder[a.type] - typeOrder[b.type]
-      if (typeCompare !== 0) return typeCompare
+      if (typeCompare !== 0) {return typeCompare}
       return a.sortOrder - b.sortOrder
     })
   )

@@ -230,7 +230,7 @@ export class CacheManager {
    */
   public isValid(key: string): boolean {
     const entry = this.cache.get(key)
-    if (!entry) return false
+    if (!entry) {return false}
     return entry.expiresAt >= Date.now()
   }
 

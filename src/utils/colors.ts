@@ -135,7 +135,7 @@ export function getDepartmentStatusColor(status: 'success' | 'warning' | 'except
  * @returns true 表示二级学院，false 表示职能部门
  */
 export function isSecondaryCollege(deptName: string | undefined): boolean {
-  if (!deptName) return false
+  if (!deptName) {return false}
 
   // 职能部门特征后缀
   const functionalDeptSuffixes = ['处', '部', '办公室', '中心', '馆']

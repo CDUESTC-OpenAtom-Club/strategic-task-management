@@ -119,7 +119,7 @@ function validateParentExists(
   childIndicator: StrategicIndicator,
   allIndicators: StrategicIndicator[]
 ): boolean {
-  if (!childIndicator.parentIndicatorId) return true // 无父指标ID，跳过验证
+  if (!childIndicator.parentIndicatorId) {return true} // 无父指标ID，跳过验证
   
   return allIndicators.some(i => 
     i.id.toString() === childIndicator.parentIndicatorId && i.isStrategic
@@ -133,13 +133,13 @@ function validateTaskContentMatch(
   childIndicator: StrategicIndicator,
   allIndicators: StrategicIndicator[]
 ): boolean {
-  if (!childIndicator.parentIndicatorId) return true
+  if (!childIndicator.parentIndicatorId) {return true}
   
   const parent = allIndicators.find(i => 
     i.id.toString() === childIndicator.parentIndicatorId
   )
   
-  if (!parent) return false
+  if (!parent) {return false}
   return childIndicator.taskContent === parent.taskContent
 }
 

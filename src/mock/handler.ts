@@ -77,6 +77,12 @@ export class MockApiHandler {
         response = await this.handleLogout()
       }
       // ============================================
+      // 组织架构 API
+      // ============================================
+      else if (path === '/orgs' && method === 'get') {
+        response = await this.handleGetOrgs()
+      }
+      // ============================================
       // 系统公告 API
       // ============================================
       else if (path === '/system/announcement' && method === 'get') {
@@ -119,8 +125,14 @@ export class MockApiHandler {
       // ============================================
       // 仪表板 API
       // ============================================
-      else if (path === '/dashboard/overview' && method === 'get') {
+      else if (path === '/dashboard' && method === 'get') {
         response = await this.handleGetDashboard()
+      } else if (path === '/dashboard/overview' && method === 'get') {
+        response = await this.handleGetDashboard()
+      } else if (path === '/dashboard/department-progress' && method === 'get') {
+        response = await this.handleGetDepartmentProgress()
+      } else if (path === '/dashboard/recent-activities' && method === 'get') {
+        response = await this.handleGetRecentActivities()
       }
       // ============================================
       // 未匹配的路由
@@ -147,8 +159,8 @@ export class MockApiHandler {
 
     // Mock 登录：任意用户名密码都可以登录
     let user = mockUsers.admin
-    if (username === 'functional') user = mockUsers.functional
-    else if (username === 'college') user = mockUsers.college
+    if (username === 'functional') {user = mockUsers.functional}
+    else if (username === 'college') {user = mockUsers.college}
 
     logger.info('🎭 [Mock Login] 用户登录:', user.realName)
 
@@ -166,6 +178,21 @@ export class MockApiHandler {
 
   private static async handleLogout() {
     return createMockResponse(null, '退出登录成功')
+  }
+
+  // ============================================
+  // 组织架构处理器
+  // ============================================
+
+  private static async handleGetOrgs() {
+    const mockOrgs = [
+      { id: 1, name: '战略发展部', code: 'STRATEGY', parentId: null },
+      { id: 2, name: '科研处', code: 'RESEARCH', parentId: null },
+      { id: 3, name: '教务处', code: 'EDUCATION', parentId: null },
+      { id: 4, name: '人事处', code: 'HR', parentId: null },
+      { id: 5, name: '财务处', code: 'FINANCE', parentId: null }
+    ]
+    return createMockResponse(mockOrgs, '获取组织架构成功')
   }
 
   // ============================================
@@ -296,7 +323,57 @@ export class MockApiHandler {
   // 仪表板处理器
   // ============================================
 
-  private static async handleGetDashboard() {
+  /**
+   * 处理获取仪表板数据
+   */
+  private async handleGetDashboard() {
     return createMockResponse(mockDashboardData, '获取仪表板数据成功')
+  }
+
+  /**
+   * 处理获取部门进度数据
+   */
+  private async handleGetDepartmentProgress() {
+    const departmentProgress = [
+      { name: '战略发展部', progress: 85.2, indicators: 5 },
+      { name: '科研处', progress: 78.6, indicators: 8 },
+      { name: '教务处', progress: 92.3, indicators: 6 },
+      { name: '人事处', progress: 67.8, indicators: 4 },
+      { name: '财务处', progress: 88.9, indicators: 3 }
+    ]
+    return createMockResponse(departmentProgress, '获取部门进度成功')
+  }
+
+  /**
+   * 处理获取最近活动数据
+   */
+  private async handleGetRecentActivities() {
+    const recentActivities = [
+      {
+        id: 'ACT001',
+        type: 'indicator_update',
+        title: '更新了"年度科研项目立项数"指标',
+        user: '张三',
+        time: '2025-12-05 14:30:00',
+        department: '战略发展部'
+      },
+      {
+        id: 'ACT002',
+        type: 'task_complete',
+        title: '完成了"科研经费统计"任务',
+        user: '赵六',
+        time: '2025-12-04 16:00:00',
+        department: '财务处'
+      },
+      {
+        id: 'ACT003',
+        type: 'milestone_reached',
+        title: '达到了"第一季度项目申报"里程碑',
+        user: '李四',
+        time: '2025-12-03 10:00:00',
+        department: '科研处'
+      }
+    ]
+    return createMockResponse(recentActivities, '获取最近活动成功')
   }
 }

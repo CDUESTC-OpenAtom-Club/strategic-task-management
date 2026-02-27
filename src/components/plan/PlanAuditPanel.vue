@@ -79,7 +79,7 @@ const submittedFills = computed(() => {
 
 // 计算整体完成进度
 const overallProgress = computed(() => {
-  if (!currentFill.value || submittedFills.value.length === 0) return 0
+  if (!currentFill.value || submittedFills.value.length === 0) {return 0}
   const total = submittedFills.value.reduce((sum, f) => sum + f.progress, 0)
   return Math.round(total / submittedFills.value.length)
 })
@@ -119,7 +119,7 @@ const loadPlanFill = async (fillId: number | string) => {
 
 // 审核通过
 const handleApprove = async () => {
-  if (!currentFill.value) return
+  if (!currentFill.value) {return}
 
   try {
     await ElMessageBox.confirm(
@@ -153,7 +153,7 @@ const handleApprove = async () => {
 
 // 驳回
 const handleReject = async () => {
-  if (!currentFill.value) return
+  if (!currentFill.value) {return}
 
   if (!auditComment.value.trim()) {
     ElMessage.warning('请填写驳回原因')

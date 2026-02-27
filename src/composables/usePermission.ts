@@ -158,12 +158,12 @@ export function usePermission(): UsePermissionReturn {
    * @returns 是否有权限
    */
   const hasPermission = (permission: PermissionCode | PermissionCode[]): boolean => {
-    if (!userRole.value) return false
+    if (!userRole.value) {return false}
 
     const permissions = Array.isArray(permission) ? permission : [permission]
 
     // 战略部门拥有所有权限
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 检查每个权限
     return permissions.some(p => {
@@ -179,7 +179,7 @@ export function usePermission(): UsePermissionReturn {
    */
   const canAccessOrg = (orgId: number | string): boolean => {
     // 战略部门可以访问所有数据
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 检查是否是同一组织
     return userOrgId.value === orgId
@@ -204,10 +204,10 @@ export function usePermission(): UsePermissionReturn {
    */
   const canViewPlan = (plan: Plan): boolean => {
     // 战略部门可以查看所有 Plan
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 职能部门可以查看自己发布的 Plan
-    if (isFunctionalDept.value && plan.org_id === userOrgId.value) return true
+    if (isFunctionalDept.value && plan.org_id === userOrgId.value) {return true}
 
     // 学院可以查看分配给自己的 Plan
     // 这里需要根据业务逻辑判断
@@ -223,13 +223,13 @@ export function usePermission(): UsePermissionReturn {
    */
   const canEditPlan = (plan: Plan): boolean => {
     // 只有草稿状态的 Plan 可以编辑
-    if (plan.status !== 'draft') return false
+    if (plan.status !== 'draft') {return false}
 
     // 战略部门可以编辑所有 Plan
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 职能部门只能编辑自己创建的 Plan
-    if (isFunctionalDept.value && plan.org_id === userOrgId.value) return true
+    if (isFunctionalDept.value && plan.org_id === userOrgId.value) {return true}
 
     return false
   }
@@ -241,7 +241,7 @@ export function usePermission(): UsePermissionReturn {
    */
   const canDeletePlan = (plan: Plan): boolean => {
     // 只有战略部门可以删除 Plan
-    if (!isStrategicDept.value) return false
+    if (!isStrategicDept.value) {return false}
 
     // 只有草稿状态的 Plan 可以删除
     return plan.status === 'draft'
@@ -254,13 +254,13 @@ export function usePermission(): UsePermissionReturn {
    */
   const canSubmitPlan = (plan: Plan): boolean => {
     // 只有草稿或待审核状态的 Plan 可以提交
-    if (plan.status !== 'draft' && plan.status !== 'pending') return false
+    if (plan.status !== 'draft' && plan.status !== 'pending') {return false}
 
     // 必须有权限
-    if (!hasPermission(PermissionCode.PLAN_SUBMIT)) return false
+    if (!hasPermission(PermissionCode.PLAN_SUBMIT)) {return false}
 
     // 战略部门可以提交所有 Plan
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 职能部门和学院只能提交自己的 Plan
     return plan.org_id === userOrgId.value
@@ -289,10 +289,10 @@ export function usePermission(): UsePermissionReturn {
     }
 
     // 只能审核待审核状态的提交
-    if (planFill.status !== 'submitted') return false
+    if (planFill.status !== 'submitted') {return false}
 
     // 战略部门可以审核所有提交
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 职能部门可以审核下级学院的提交
     // 这里需要根据业务逻辑判断
@@ -308,13 +308,13 @@ export function usePermission(): UsePermissionReturn {
    */
   const canViewPlanFill = (planFill: PlanFill): boolean => {
     // 战略部门可以查看所有提交
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // 提交人可以查看自己的提交
-    if (planFill.submitted_by === authStore.user?.id) return true
+    if (planFill.submitted_by === authStore.user?.id) {return true}
 
     // 审核人可以查看待审核的提交
-    if (canAuditPlanFill(planFill)) return true
+    if (canAuditPlanFill(planFill)) {return true}
 
     return false
   }
@@ -337,10 +337,10 @@ export function usePermission(): UsePermissionReturn {
    */
   const canFillIndicator = (indicator: Indicator): boolean => {
     // 必须有填报权限
-    if (!hasPermission(PermissionCode.INDICATOR_FILL)) return false
+    if (!hasPermission(PermissionCode.INDICATOR_FILL)) {return false}
 
     // 战略部门可以填报所有指标
-    if (isStrategicDept.value) return true
+    if (isStrategicDept.value) {return true}
 
     // TODO: 检查指标是否分配给当前用户/组织
 
@@ -366,7 +366,7 @@ export function usePermission(): UsePermissionReturn {
    */
   const canEditIndicatorFill = (fill: IndicatorFill): boolean => {
     // 只能编辑自己创建的填报记录
-    if (fill.filled_by !== authStore.user?.id) return false
+    if (fill.filled_by !== authStore.user?.id) {return false}
 
     // 只有草稿或已驳回状态的记录可以编辑
     return !fill.status || fill.status === 'rejected'
@@ -379,7 +379,7 @@ export function usePermission(): UsePermissionReturn {
    */
   const canDeleteIndicatorFill = (fill: IndicatorFill): boolean => {
     // 只能删除自己创建的填报记录
-    if (fill.filled_by !== authStore.user?.id) return false
+    if (fill.filled_by !== authStore.user?.id) {return false}
 
     // 只有草稿状态的记录可以删除
     return !fill.status

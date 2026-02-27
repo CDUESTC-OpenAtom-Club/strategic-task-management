@@ -159,7 +159,7 @@ const uploadAvatar = async (options: UploadRequestOptions) => {
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
 
   try {
     await formRef.value.validate()
@@ -172,7 +172,7 @@ const handleSubmit = async () => {
 }
 
 const handleReset = () => {
-  if (!formRef.value) return
+  if (!formRef.value) {return}
   formRef.value.resetFields()
   loadUserInfo()
 }

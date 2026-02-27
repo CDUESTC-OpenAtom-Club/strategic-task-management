@@ -115,7 +115,7 @@ const calculatePath = (indicatorId: string): string[] => {
   
   // 查找指标所属的部门和任务
   const indicator = (props.indicators || strategicStore.indicators).find(i => i.id === indicatorId)
-  if (!indicator) return path
+  if (!indicator) {return path}
   
   const dept = indicator.responsibleDept || '未分配'
   const tasks = props.tasks || strategicStore.tasks
@@ -191,38 +191,38 @@ const treeData = computed(() => {
 
 // 获取任务聚合状态
 const getTaskAggregatedStatus = (task: StrategicTask, indicators: StrategicIndicator[]) => {
-  if (indicators.length === 0) return 'info'
+  if (indicators.length === 0) {return 'info'}
   const avgProgress = indicators.reduce((sum, i) => sum + i.progress, 0) / indicators.length
-  if (avgProgress >= 80) return 'success'
-  if (avgProgress >= 50) return 'warning'
+  if (avgProgress >= 80) {return 'success'}
+  if (avgProgress >= 50) {return 'warning'}
   return 'danger'
 }
 
 // 获取任务聚合进度
 const getTaskAggregatedProgress = (task: StrategicTask, indicators: StrategicIndicator[]) => {
-  if (indicators.length === 0) return 0
+  if (indicators.length === 0) {return 0}
   return Math.round(indicators.reduce((sum, i) => sum + i.progress, 0) / indicators.length)
 }
 
 // 获取指标状态
 const getIndicatorStatus = (indicator: StrategicIndicator) => {
-  if (indicator.progress >= 80) return 'success'
-  if (indicator.progress >= 50) return 'warning'
+  if (indicator.progress >= 80) {return 'success'}
+  if (indicator.progress >= 50) {return 'warning'}
   return 'danger'
 }
 
 // 获取聚合状态
 const getAggregatedStatus = (indicators: StrategicIndicator[]) => {
-  if (indicators.length === 0) return 'info'
+  if (indicators.length === 0) {return 'info'}
   const avgProgress = indicators.reduce((sum, i) => sum + i.progress, 0) / indicators.length
-  if (avgProgress >= 80) return 'success'
-  if (avgProgress >= 50) return 'warning'
+  if (avgProgress >= 80) {return 'success'}
+  if (avgProgress >= 50) {return 'warning'}
   return 'danger'
 }
 
 // 获取聚合进度
 const getAggregatedProgress = (indicators: StrategicIndicator[]) => {
-  if (indicators.length === 0) return 0
+  if (indicators.length === 0) {return 0}
   return Math.round(indicators.reduce((sum, i) => sum + i.progress, 0) / indicators.length)
 }
 

@@ -6,44 +6,14 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import type { ApiResponse, StrategicTask, StrategicIndicator } from '@/types'
+import type { 
+  ApiResponse, 
+  StrategicTask, 
+  StrategicIndicator,
+  CreateStrategicTaskRequest,
+  UpdateStrategicTaskRequest
+} from '@/types'
 import { logger } from '@/utils/logger'
-
-/**
- * 重试辅助函数 - 使用指数退避策略
- *
- * 对关键操作提供显式重试逻辑，最多重试3次
- * 使用指数退避策略：第1次重试等待1秒，第2次等待2秒，第3次等待3秒
- *
- * **Validates: Requirements 2.4**
- *
- * @param fn 需要重试的异步函数
- * @param maxRetries 最大重试次数（默认3次）
- * @returns 函数执行结果
- */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promise<T> {
-  let lastError: Error
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      lastError = error as Error
-
-      logger.warn(`[Retry] Attempt ${attempt}/${maxRetries} failed:`, error)
-
-      if (attempt < maxRetries) {
-        // 指数退避: 1s, 2s, 3s
-        const delayMs = attempt * 1000
-        logger.debug(`[Retry] Waiting ${delayMs}ms before next attempt`)
-        await new Promise(resolve => setTimeout(resolve, delayMs))
-      }
-    }
-  }
-
-  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError!)
-  throw lastError!
-}
 
 // 后端返回的战略任务 VO
 export interface StrategicTaskVO {
@@ -69,70 +39,96 @@ export interface IndicatorVO {
   indicatorId: number
   taskId: number
   taskName: string
-  parentIndicatorId?: number
-  parentIndicatorDesc?: string
-  level: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'
-  ownerOrgId: number
-  ownerOrgName: string
-  targetOrgId: number
-  targetOrgName: string
+  indicatorName: string
   indicatorDesc: string
-  weightPercent: number
-  sortOrder: number
-  year: number
-  status: 'ACTIVE' | 'ARCHIVED'
-  remark?: string
+  isQualitative: boolean
+  type1: '定性' | '定量'
+  type2: '发展性' | '基础性'
+  progress: number
   createdAt: string
-  updatedAt: string
-  childIndicators?: IndicatorVO[]
-  milestones?: MilestoneVO[]
-  // 新增字段 (前端数据对齐 2026-01-19)
-  isQualitative?: boolean
-  type1?: string
-  type2?: string
-  canWithdraw?: boolean
-  targetValue?: number
-  actualValue?: number
-  unit?: string
-  responsiblePerson?: string
-  progress?: number
-  statusAudit?: string
-  progressApprovalStatus?: 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
+  weightPercent: number
+  remark: string
+  canWithdraw: boolean
+  targetValue: number
+  actualValue: number
+  unit: string
+  responsibleDept: string
+  responsiblePerson: string
+  status: 'ACTIVE' | 'ARCHIVED'
+  isStrategic: boolean
+  ownerDept: string
+  year: number
+  parentIndicatorId?: number
+  level: 'STRAT_TO_FUNC' | 'FUNC_TO_SEC'
+  progressApprovalStatus: 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
   pendingProgress?: number
   pendingRemark?: string
   pendingAttachments?: string
-  isStrategic?: boolean
-  responsibleDept?: string
-  ownerDept?: string
+  statusAudit?: string
+  milestones?: MilestoneVO[]
 }
 
 // 后端返回的里程碑 VO
 export interface MilestoneVO {
   milestoneId: number
   indicatorId: number
-  indicatorDesc: string
   milestoneName: string
-  milestoneDesc?: string
+  milestoneDesc: string
+  targetProgress: number
   dueDate: string
   weightPercent: number
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
   sortOrder: number
-  inheritedFromId?: number
-  createdAt: string
-  updatedAt: string
-  // 新增字段 (前端数据对齐 2026-01-19)
-  targetProgress?: number
-  isPaired?: boolean
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
+  isPaired: boolean
 }
 
-// 考核周期 VO
+// 后端返回的考核周期 VO
 export interface AssessmentCycleVO {
   cycleId: number
   cycleName: string
   year: number
   startDate: string
   endDate: string
-  description?: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * 指数退避重试辅助函数
+ * 在业务层实现重试逻辑，而不是在 apiClient 中
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: any
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation()
+    } catch (error: any) {
+      lastError = error
+      
+      // 如果是 4xx 错误，不重试
+      if (error.code >= 400 && error.code < 500) {
+        throw error
+      }
+
+      // 最后一次尝试，直接抛出错误
+      if (attempt === maxRetries) {
+        throw error
+      }
+
+      // 指数退避延迟
+      const delay = baseDelay * Math.pow(2, attempt)
+      logger.warn(`[API] Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`, { error: error.message })
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+
+  throw lastError
 }
 
 /**
@@ -161,8 +157,8 @@ function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
 function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndicator {
   // 转换里程碑状态
   const convertMilestoneStatus = (status: string): 'pending' | 'completed' | 'overdue' => {
-    if (status === 'COMPLETED') return 'completed'
-    if (status === 'DELAYED' || status === 'CANCELED') return 'overdue'
+    if (status === 'COMPLETED') {return 'completed'}
+    if (status === 'DELAYED' || status === 'CANCELED') {return 'overdue'}
     return 'pending' // NOT_STARTED, IN_PROGRESS 都映射为 pending
   }
 
@@ -180,7 +176,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
 
   // 转换进度审批状态
   const convertProgressApprovalStatus = (status?: string): 'none' | 'draft' | 'pending' | 'approved' | 'rejected' => {
-    if (!status) return 'none'
+    if (!status) {return 'none'}
     const map: Record<string, 'none' | 'draft' | 'pending' | 'approved' | 'rejected'> = {
       'NONE': 'none',
       'DRAFT': 'draft',
@@ -247,7 +243,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
  * 根据里程碑计算进度
  */
 function calculateProgress(milestones: { status: string }[]): number {
-  if (milestones.length === 0) return 0
+  if (milestones.length === 0) {return 0}
   const completed = milestones.filter(m => m.status === 'completed').length
   return Math.round((completed / milestones.length) * 100)
 }
@@ -329,6 +325,63 @@ export const strategicApi = {
    */
   async getIndicatorsByTask(taskId: string): Promise<ApiResponse<IndicatorVO[]>> {
     return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/task/${taskId}`)
+  },
+
+  /**
+   * 创建新的战略任务
+   */
+  async createTask(request: CreateStrategicTaskRequest): Promise<ApiResponse<StrategicTaskVO>> {
+    logger.info('[API] Creating new strategic task', { request })
+    
+    try {
+      const response = await withRetry(() => 
+        apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
+      )
+      
+      logger.info('[API] Successfully created task', { taskId: response.data?.taskId })
+      return response
+    } catch (error) {
+      logger.error('[API] Failed to create task', { error, request })
+      throw error
+    }
+  },
+
+  /**
+   * 更新现有的战略任务
+   */
+  async updateTask(taskId: number, request: UpdateStrategicTaskRequest): Promise<ApiResponse<StrategicTaskVO>> {
+    logger.info('[API] Updating strategic task', { taskId, request })
+    
+    try {
+      const response = await withRetry(() => 
+        apiClient.put<ApiResponse<StrategicTaskVO>>(`/tasks/${taskId}`, request)
+      )
+      
+      logger.info('[API] Successfully updated task', { taskId })
+      return response
+    } catch (error) {
+      logger.error('[API] Failed to update task', { error, taskId, request })
+      throw error
+    }
+  },
+
+  /**
+   * 删除战略任务
+   */
+  async deleteTask(taskId: number): Promise<ApiResponse<void>> {
+    logger.info('[API] Deleting strategic task', { taskId })
+    
+    try {
+      const response = await withRetry(() => 
+        apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}`)
+      )
+      
+      logger.info('[API] Successfully deleted task', { taskId })
+      return response
+    } catch (error) {
+      logger.error('[API] Failed to delete task', { error, taskId })
+      throw error
+    }
   },
 
   // 转换函数导出

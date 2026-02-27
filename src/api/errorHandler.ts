@@ -24,6 +24,16 @@ export function generateRequestId(): string {
 }
 
 /**
+ * 为请求配置添加请求ID
+ */
+export function addRequestId(config: any): void {
+  const requestId = generateRequestId()
+  config.headers = config.headers || {}
+  config.headers['X-Request-ID'] = requestId
+  config._requestId = requestId
+}
+
+/**
  * 格式化错误消息
  */
 export function formatErrorMessage(error: unknown): string {

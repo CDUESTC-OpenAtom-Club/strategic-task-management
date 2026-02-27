@@ -115,9 +115,9 @@ onMounted(() => {
     <!-- 表格 -->
     <el-card class="table-card" shadow="never">
       <el-table
+        v-loading="loading"
         :data="filteredFills"
         stripe
-        v-loading="loading"
         class="audit-table"
       >
         <el-table-column prop="plan_id" label="计划ID" width="100" />

@@ -58,7 +58,11 @@ const FRONTEND_TO_BACKEND: Record<string, string> = {
   // 单位
   unit: 'unit',
   // 负责人
-  responsiblePerson: 'responsiblePerson'
+  responsiblePerson: 'responsiblePerson',
+  // 下发状态（后端 distribution_status 字段）
+  distributionStatus: 'distributionStatus',
+  // 审计日志（同步到后端持久化）
+  statusAudit: 'statusAudit',
 }
 
 /**
@@ -86,7 +90,9 @@ const BACKEND_TO_FRONTEND: Record<string, string> = {
   targetValue: 'targetValue',
   actualValue: 'actualValue',
   unit: 'unit',
-  responsiblePerson: 'responsiblePerson'
+  responsiblePerson: 'responsiblePerson',
+  distributionStatus: 'distributionStatus',
+  statusAudit: 'statusAudit',
 }
 
 /**
@@ -97,7 +103,8 @@ const BACKEND_FIELDS = [
   'parentIndicatorId', 'level', 'ownerOrgId', 'targetOrgId', 'year',
   'status', 'progress', 'progressApprovalStatus', 'pendingProgress',
   'pendingRemark', 'pendingAttachments', 'targetValue', 'actualValue',
-  'unit', 'responsiblePerson', 'name', 'taskContent', 'weight'
+  'unit', 'responsiblePerson', 'name', 'taskContent', 'weight',
+  'distributionStatus', 'statusAudit'
 ]
 
 /**
@@ -107,7 +114,7 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Re
   const request: Record<string, any> = {}
 
   for (const [key, value] of Object.entries(updates)) {
-    if (value === undefined) continue
+    if (value === undefined) {continue}
 
     const backendKey = FRONTEND_TO_BACKEND[key]
     if (backendKey) {

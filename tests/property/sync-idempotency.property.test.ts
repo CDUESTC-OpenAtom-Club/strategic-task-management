@@ -84,7 +84,7 @@ const uniqueSyncRecordsArb = fc.array(syncRecordArb, { minLength: 0, maxLength: 
   .map(records => {
     const seen = new Set<string>()
     return records.filter(r => {
-      if (seen.has(r.id)) return false
+      if (seen.has(r.id)) {return false}
       seen.add(r.id)
       return true
     })

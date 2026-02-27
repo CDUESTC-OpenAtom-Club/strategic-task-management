@@ -124,14 +124,14 @@ const handleNodeClick = (node: TreeNode) => {
 
 // 判断节点是否选中
 const isNodeSelected = (node: TreeNode) => {
-  if (node.type === 'category') return false
-  if (node.id === 'all') return !selectedDept.value
+  if (node.type === 'category') {return false}
+  if (node.id === 'all') {return !selectedDept.value}
   return selectedDept.value === node.id
 }
 
 // 判断分类是否有选中的子节点
 const hasSelectedChild = (node: TreeNode) => {
-  if (!node.children) return false
+  if (!node.children) {return false}
   return node.children.some(child => child.id === selectedDept.value)
 }
 </script>

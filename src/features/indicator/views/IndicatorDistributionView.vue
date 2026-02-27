@@ -65,11 +65,11 @@ const taskApprovalVisible = ref(false)
 
 // 专门用于审批抽屉的指标列表（当前选中学院的所有子指标，只显示当前部门下发的）
 const approvalIndicators = computed(() => {
-  if (!selectedCollege.value) return []
+  if (!selectedCollege.value) {return []}
   // 只返回当前部门下发给该学院的指标
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.isStrategic) {return false}
+    if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
     }
@@ -79,7 +79,7 @@ const approvalIndicators = computed(() => {
 
 // 待审批数量（用于按钮显示）- 基于 progressApprovalStatus === 'pending'
 const pendingApprovalCount = computed(() => {
-  if (!selectedCollege.value) return 0
+  if (!selectedCollege.value) {return 0}
   // 统计当前部门下发给该学院的、进度待审批的指标数量
   return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'pending').length
 })
@@ -98,7 +98,7 @@ const handleApprovalRefresh = () => {
 
 // 筛选后的学院列表（用于侧边栏搜索）
 const filteredColleges = computed(() => {
-  if (!searchKeyword.value) return colleges.value
+  if (!searchKeyword.value) {return colleges.value}
   const keyword = searchKeyword.value.toLowerCase()
   return colleges.value.filter(c => c.toLowerCase().includes(keyword))
 })
@@ -106,9 +106,9 @@ const filteredColleges = computed(() => {
 // 获取学院的子指标数量（只统计当前部门下发的）
 const getCollegeChildCount = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
+    if (i.isStrategic) {return false}
     // 只统计当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
@@ -119,13 +119,13 @@ const getCollegeChildCount = (college: string) => {
 
 // 获取选中学院的所有子指标（按父指标分组，只显示当前部门下发的）
 const collegeIndicators = computed(() => {
-  if (!selectedCollege.value) return []
+  if (!selectedCollege.value) {return []}
   
   // 获取当前部门下发给该学院的子指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
+    if (i.isStrategic) {return false}
     // 只显示当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
@@ -420,7 +420,7 @@ const saveNewIndicator = () => {
 
 // 判断当前学院是否可以新增指标（没有已下发状态的指标）
 const canAddIndicator = computed(() => {
-  if (!selectedCollege.value) return false
+  if (!selectedCollege.value) {return false}
   const status = getCollegeStatus(selectedCollege.value)
   return status.distributed === 0 && status.pending === 0 && status.approved === 0
 })
@@ -465,10 +465,10 @@ const editingNewChildId = ref<string | null>(null)
 // 验证并保存新增子指标（点击外部时调用）
 const validateAndSaveNewChild = (parentId: string, childId: string) => {
   const children = newChildIndicators[parentId]
-  if (!children) return
+  if (!children) {return}
   
   const childIndex = children.findIndex(c => c.id === childId)
-  if (childIndex === -1) return
+  if (childIndex === -1) {return}
   
   const child = children[childIndex]
   
@@ -687,7 +687,7 @@ onBeforeUnmount(() => {
 
 // 双击编辑子指标
 const handleChildDblClick = (child: StrategicIndicator, field: string) => {
-  if (!canEditChild.value) return
+  if (!canEditChild.value) {return}
   
   // 检查状态：只有草稿状态才能编辑
   const status = getChildStatus(child)
@@ -725,7 +725,7 @@ const handleChildDblClick = (child: StrategicIndicator, field: string) => {
 
 // 保存子指标编辑
 const saveChildEdit = (child: StrategicIndicator, field: string) => {
-  if (editingChildId.value === null) return
+  if (editingChildId.value === null) {return}
   
   let valueToSave = editingChildValue.value
   
@@ -796,8 +796,8 @@ const cancelChildEdit = () => {
 // 辅助函数：获取当前部门下发给指定学院的子指标
 const getMyCollegeIndicators = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.isStrategic) {return false}
+    if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
@@ -963,14 +963,14 @@ const handleBatchDistribute = (college: string) => {
 const getCollegeStatus = (college: string) => {
   // 只统计当前部门下发给该学院的指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.isStrategic) {return false}
+    if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
     return i.responsibleDept === college
   })
-  if (childIndicators.length === 0) return { draft: 0, distributed: 0, pending: 0, approved: 0 }
+  if (childIndicators.length === 0) {return { draft: 0, distributed: 0, pending: 0, approved: 0 }}
   
   // 统计各状态数量
   const statusCounts = {
@@ -993,27 +993,27 @@ const getCollegeStatus = (college: string) => {
 // 计算当前选中学院的整体状态（用于表头显示）
 // 状态定义：暂无指标、待下发、进行中、待审批
 const collegeOverallStatus = computed(() => {
-  if (!selectedCollege.value) return { label: '暂无指标', type: 'info' }
+  if (!selectedCollege.value) {return { label: '暂无指标', type: 'info' }}
   
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
   
-  if (total === 0) return { label: '暂无指标', type: 'info' }
+  if (total === 0) {return { label: '暂无指标', type: 'info' }}
   
   // 优先级：待审批 > 待下发 > 进行中
   // 待审批：有学院提交的进度等待审批
-  if (status.pending > 0) return { label: '待审批', type: 'warning' }
+  if (status.pending > 0) {return { label: '待审批', type: 'warning' }}
   // 待下发：有草稿状态的指标
-  if (status.draft > 0) return { label: '待下发', type: 'info' }
+  if (status.draft > 0) {return { label: '待下发', type: 'info' }}
   // 进行中：已下发或已通过的指标（正在执行中）
-  if (status.distributed > 0 || status.approved > 0) return { label: '进行中', type: 'success' }
+  if (status.distributed > 0 || status.approved > 0) {return { label: '进行中', type: 'success' }}
   
   return { label: '暂无指标', type: 'info' }
 })
 
 // 下发/撤销统一处理函数
 const handleDistributeOrWithdraw = (command: string) => {
-  if (!selectedCollege.value) return
+  if (!selectedCollege.value) {return}
   
   if (command === 'distribute') {
     handleBatchDistribute(selectedCollege.value)
@@ -1071,20 +1071,20 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
 // 打回后回到 distributed 状态，撤销后回到 draft 状态
 const getChildStatus = (child: StrategicIndicator) => {
   const audit = child.statusAudit || []
-  if (audit.length === 0) return 'draft'  // 无审计记录时为草稿状态
+  if (audit.length === 0) {return 'draft'}  // 无审计记录时为草稿状态
   const lastAudit = audit[audit.length - 1]
-  if (!lastAudit) return 'draft'
+  if (!lastAudit) {return 'draft'}
   const lastAction = lastAudit.action
   // 下级部门提交后变为待审批
-  if (lastAction === 'submit') return 'pending'
+  if (lastAction === 'submit') {return 'pending'}
   // 审批通过
-  if (lastAction === 'approve') return 'approved'
+  if (lastAction === 'approve') {return 'approved'}
   // 打回后回到已下发状态，等待重新提交
-  if (lastAction === 'reject') return 'distributed'
+  if (lastAction === 'reject') {return 'distributed'}
   // 初始下发状态
-  if (lastAction === 'distribute') return 'distributed'
+  if (lastAction === 'distribute') {return 'distributed'}
   // 撤销后回到草稿状态
-  if (lastAction === 'withdraw') return 'draft'
+  if (lastAction === 'withdraw') {return 'draft'}
   return 'draft'
 }
 
@@ -1112,23 +1112,23 @@ const getStatusText = (status: string) => {
 
 // 格式化学院显示（完整列表）
 const formatColleges = (depts: string | string[] | undefined): string => {
-  if (!depts) return '-'
-  if (Array.isArray(depts)) return depts.join('、')
+  if (!depts) {return '-'}
+  if (Array.isArray(depts)) {return depts.join('、')}
   return depts.split(',').join('、')
 }
 
 // 格式化学院显示（简短版，超过2个显示+N）
 const formatCollegesShort = (depts: string | string[] | undefined): string => {
-  if (!depts) return '-'
+  if (!depts) {return '-'}
   const arr = Array.isArray(depts) ? depts : depts.split(',')
-  if (arr.length <= 2) return arr.join('、')
+  if (arr.length <= 2) {return arr.join('、')}
   return `${arr.slice(0, 2).join('、')} +${arr.length - 2}`
 }
 
 // 解析学院字符串为数组（用于编辑时）
 const parseColleges = (depts: string | string[] | undefined): string[] => {
-  if (!depts) return []
-  if (Array.isArray(depts)) return depts
+  if (!depts) {return []}
+  if (Array.isArray(depts)) {return depts}
   return depts.split(',')
 }
 
@@ -1188,7 +1188,7 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
 // 计算定量指标当月的目标进度
 const getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
   const milestones = child.milestones || []
-  if (milestones.length === 0) return 100
+  if (milestones.length === 0) {return 100}
   
   const currentMonth = new Date().getMonth() + 1  // 1-12
   const currentYear = timeContext.currentYear
@@ -1295,7 +1295,7 @@ const openMilestonesDialog = (child: NewChildIndicator | StrategicIndicator) => 
 
 // 获取正在编辑的子指标名称
 const getEditingChildName = (): string => {
-  if (!editingMilestonesChild.value) return ''
+  if (!editingMilestonesChild.value) {return ''}
   if ('isNew' in editingMilestonesChild.value && editingMilestonesChild.value.isNew) {
     return editingMilestonesChild.value.name || '新增指标'
   }
@@ -1304,7 +1304,7 @@ const getEditingChildName = (): string => {
 
 // 获取正在编辑的子指标类型
 const getEditingChildType = (): string => {
-  if (!editingMilestonesChild.value) return '定性'
+  if (!editingMilestonesChild.value) {return '定性'}
   if ('isNew' in editingMilestonesChild.value && editingMilestonesChild.value.isNew) {
     return editingMilestonesChild.value.type1 || '定性'
   }
@@ -1354,7 +1354,7 @@ const removeMilestone = (index: number) => {
 // 验证里程碑进度（后面的不能小于前面的）
 const validateMilestoneProgress = (index: number) => {
   const current = editingMilestones.value[index]
-  if (!current) return
+  if (!current) {return}
   
   // 检查是否小于前一个里程碑的进度
   if (index > 0) {
@@ -1379,7 +1379,7 @@ const validateMilestoneProgress = (index: number) => {
 
 // 保存里程碑
 const saveMilestones = () => {
-  if (!editingMilestonesChild.value) return
+  if (!editingMilestonesChild.value) {return}
   
   const child = editingMilestonesChild.value
   if ('isNew' in child && child.isNew) {
@@ -1451,7 +1451,7 @@ interface TableRowData {
 
 // 学院视图表格数据
 const collegeTableData = computed(() => {
-  if (!selectedCollege.value) return []
+  if (!selectedCollege.value) {return []}
   
   const data: TableRowData[] = []
   const indicators = collegeIndicators.value
@@ -1461,7 +1461,7 @@ const collegeTableData = computed(() => {
     
     // 获取下发给该学院的子指标（支持字符串或数组格式）
     const children = strategicStore.indicators.filter(i => {
-      if (i.parentIndicatorId !== indicatorId || i.isStrategic) return false
+      if (i.parentIndicatorId !== indicatorId || i.isStrategic) {return false}
       // 支持字符串或数组格式的 responsibleDept
       if (Array.isArray(i.responsibleDept)) {
         return i.responsibleDept.includes(selectedCollege.value!)
@@ -1591,7 +1591,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 状态: {{ collegeOverallStatus.label }}
               </el-tag>
             </div>
-            <div class="header-actions" v-if="canEditChild">
+            <div v-if="canEditChild" class="header-actions">
               <!-- 
                 按钮显示逻辑：
                 - 暂无指标 → 只显示"添加指标"按钮

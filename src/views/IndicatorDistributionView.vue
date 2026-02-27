@@ -13,6 +13,7 @@ import { useTimeContextStore } from '@/stores/timeContext'
 import { useOrgStore } from '@/stores/org'
 import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
+import indicatorApi from '@/api/indicator'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -65,11 +66,11 @@ const taskApprovalVisible = ref(false)
 
 // 专门用于审批抽屉的指标列表（当前选中学院的所有子指标，只显示当前部门下发的）
 const approvalIndicators = computed(() => {
-  if (!selectedCollege.value) return []
+  if (!selectedCollege.value) {return []}
   // 只返回当前部门下发给该学院的指标
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.isStrategic) {return false}
+    if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
     }
@@ -79,7 +80,7 @@ const approvalIndicators = computed(() => {
 
 // 待审批数量（用于按钮显示）- 基于 progressApprovalStatus === 'pending'
 const pendingApprovalCount = computed(() => {
-  if (!selectedCollege.value) return 0
+  if (!selectedCollege.value) {return 0}
   // 统计当前部门下发给该学院的、进度待审批的指标数量
   return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'pending').length
 })
@@ -98,7 +99,7 @@ const handleApprovalRefresh = () => {
 
 // 筛选后的学院列表（用于侧边栏搜索）
 const filteredColleges = computed(() => {
-  if (!searchKeyword.value) return colleges.value
+  if (!searchKeyword.value) {return colleges.value}
   const keyword = searchKeyword.value.toLowerCase()
   return colleges.value.filter(c => c.toLowerCase().includes(keyword))
 })
@@ -106,9 +107,9 @@ const filteredColleges = computed(() => {
 // 获取学院的子指标数量（只统计当前部门下发的）
 const getCollegeChildCount = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
+    if (i.isStrategic) {return false}
     // 只统计当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
@@ -119,13 +120,13 @@ const getCollegeChildCount = (college: string) => {
 
 // 获取选中学院的所有子指标（按父指标分组，只显示当前部门下发的）
 const collegeIndicators = computed(() => {
-  if (!selectedCollege.value) return []
+  if (!selectedCollege.value) {return []}
   
   // 获取当前部门下发给该学院的子指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
+    if (i.isStrategic) {return false}
     // 只显示当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
@@ -382,37 +383,40 @@ const saveNewIndicator = () => {
   // 创建子指标（状态为草稿）
   const parentIndicator = strategicStore.indicators.find(i => i.id.toString() === newIndicatorForm.value.parentIndicatorId)
   
-  const newIndicator: StrategicIndicator = {
-    id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
-    name: newIndicatorForm.value.name,
-    isQualitative: newIndicatorForm.value.type1 === '定性',
-    type1: newIndicatorForm.value.type1,
-    type2: parentIndicator?.type2 || '发展性',
-    progress: 0,
-    createTime: new Date().toLocaleDateString('zh-CN'),
-    weight: newIndicatorForm.value.weight,
-    remark: newIndicatorForm.value.remark,
-    canWithdraw: false,
-    taskContent: newIndicatorForm.value.taskContent,
-    milestones: newIndicatorForm.value.type1 === '定性' ? newIndicatorForm.value.milestones.map(m => ({
-      id: m.id,
-      name: m.name,
-      targetProgress: m.targetProgress,
-      deadline: m.deadline,
-      status: 'pending' as const
-    })) : [],
-    targetValue: newIndicatorForm.value.type1 === '定量' ? newIndicatorForm.value.targetProgress : newIndicatorForm.value.milestones.length,
-    unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
-    responsibleDept: selectedCollege.value!,
-    responsiblePerson: '',
-    status: 'draft',
-    isStrategic: false,
-    ownerDept: currentDept.value,
-    parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
-    year: timeContext.currentYear,
-    statusAudit: []  // 空表示草稿状态
-  }
-  strategicStore.addIndicator(newIndicator)
+    const newIndicator: StrategicIndicator = {
+      id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
+      name: newIndicatorForm.value.name,
+      isQualitative: newIndicatorForm.value.type1 === '定性',
+      type1: newIndicatorForm.value.type1,
+      type2: parentIndicator?.type2 || '发展性',
+      progress: 0,
+      createTime: new Date().toLocaleDateString('zh-CN'),
+      weight: newIndicatorForm.value.weight,
+      remark: newIndicatorForm.value.remark,
+      canWithdraw: false,
+      taskContent: newIndicatorForm.value.taskContent,
+      milestones: newIndicatorForm.value.type1 === '定性' ? newIndicatorForm.value.milestones.map(m => ({
+        id: m.id,
+        name: m.name,
+        targetProgress: m.targetProgress,
+        deadline: m.deadline,
+        status: 'pending' as const
+      })) : [],
+      targetValue: newIndicatorForm.value.type1 === '定量' ? newIndicatorForm.value.targetProgress : newIndicatorForm.value.milestones.length,
+      unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
+      responsibleDept: selectedCollege.value!,
+      responsiblePerson: '',
+      status: 'draft',
+      distributionStatus: 'DRAFT',
+      isStrategic: false,
+      ownerDept: currentDept.value,
+      parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
+      year: timeContext.currentYear,
+      statusAudit: []  // 空表示草稿状态
+    }
+    // Step1: 只保存到前端临时状态，不调用后端 createIndicator
+    // Step2: 点击"下发"按钮时，再调用 PATCH /indicators/{id}/distribution-status 接口
+    strategicStore.addDraftIndicator(newIndicator)
   
   ElMessage.success('已添加指标（草稿状态）')
   cancelAddIndicator()
@@ -420,7 +424,7 @@ const saveNewIndicator = () => {
 
 // 判断当前学院是否可以新增指标（没有已下发状态的指标）
 const canAddIndicator = computed(() => {
-  if (!selectedCollege.value) return false
+  if (!selectedCollege.value) {return false}
   const status = getCollegeStatus(selectedCollege.value)
   return status.distributed === 0 && status.pending === 0 && status.approved === 0
 })
@@ -465,10 +469,10 @@ const editingNewChildId = ref<string | null>(null)
 // 验证并保存新增子指标（点击外部时调用）
 const validateAndSaveNewChild = (parentId: string, childId: string) => {
   const children = newChildIndicators[parentId]
-  if (!children) return
+  if (!children) {return}
   
   const childIndex = children.findIndex(c => c.id === childId)
-  if (childIndex === -1) return
+  if (childIndex === -1) {return}
   
   const child = children[childIndex]
   
@@ -601,39 +605,41 @@ const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
     }
   ).then(() => {
     // 创建子指标
-    children.forEach(child => {
-      const newIndicator: StrategicIndicator = {
-        id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
-        name: child.name,
-        isQualitative: child.type1 === '定性',
-        type1: child.type1,
-        type2: parentIndicator.type2,
-        progress: 0,
-        createTime: new Date().toLocaleDateString('zh-CN'),
-        weight: child.weight,
-        remark: child.remark,
-        canWithdraw: false,
-        taskContent: parentIndicator.taskContent,
-        milestones: child.type1 === '定性' ? child.milestones.map(m => ({
-          id: m.id,
-          name: m.name,
-          targetProgress: m.progress,
-          deadline: m.expectedDate,
-          status: 'pending' as const
-        })) : [],
-        targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
-        unit: child.type1 === '定量' ? '%' : '个里程碑',
-        responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
-        responsiblePerson: '',
-        status: 'draft',
-        isStrategic: false,
-        ownerDept: currentDept.value,
-        parentIndicatorId: parentId,
-        year: timeContext.currentYear,
-        statusAudit: []  // 默认为空，状态为草稿
-      }
-      strategicStore.addIndicator(newIndicator)
-    })
+      children.forEach(child => {
+        const newIndicator: StrategicIndicator = {
+          id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
+          name: child.name,
+          isQualitative: child.type1 === '定性',
+          type1: child.type1,
+          type2: parentIndicator.type2,
+          progress: 0,
+          createTime: new Date().toLocaleDateString('zh-CN'),
+          weight: child.weight,
+          remark: child.remark,
+          canWithdraw: false,
+          taskContent: parentIndicator.taskContent,
+          milestones: child.type1 === '定性' ? child.milestones.map(m => ({
+            id: m.id,
+            name: m.name,
+            targetProgress: m.progress,
+            deadline: m.expectedDate,
+            status: 'pending' as const
+          })) : [],
+          targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
+          unit: child.type1 === '定量' ? '%' : '个里程碑',
+          responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
+          responsiblePerson: '',
+          status: 'draft',
+          distributionStatus: 'DRAFT',
+          isStrategic: false,
+          ownerDept: currentDept.value,
+          parentIndicatorId: parentId,
+          year: timeContext.currentYear,
+          statusAudit: []  // 默认为空，状态为草稿
+        }
+        // Step1: 只保存到前端临时状态，不调用后端
+        strategicStore.addDraftIndicator(newIndicator)
+      })
     
     // 清空临时数据
     delete newChildIndicators[parentId]
@@ -687,7 +693,7 @@ onBeforeUnmount(() => {
 
 // 双击编辑子指标
 const handleChildDblClick = (child: StrategicIndicator, field: string) => {
-  if (!canEditChild.value) return
+  if (!canEditChild.value) {return}
   
   // 检查状态：只有草稿状态才能编辑
   const status = getChildStatus(child)
@@ -725,7 +731,7 @@ const handleChildDblClick = (child: StrategicIndicator, field: string) => {
 
 // 保存子指标编辑
 const saveChildEdit = (child: StrategicIndicator, field: string) => {
-  if (editingChildId.value === null) return
+  if (editingChildId.value === null) {return}
   
   let valueToSave = editingChildValue.value
   
@@ -796,8 +802,8 @@ const cancelChildEdit = () => {
 // 辅助函数：获取当前部门下发给指定学院的子指标
 const getMyCollegeIndicators = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.isStrategic) {return false}
+    if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
@@ -833,10 +839,10 @@ const handleBatchApprove = (college: string) => {
         action: 'approve',
         comment: '批量审批通过'
       })
-      strategicStore.updateIndicator(indicator.id.toString(), {
-        status: 'approved',
-        canWithdraw: false
-      })
+        strategicStore.updateIndicator(indicator.id.toString(), {
+          progressApprovalStatus: 'APPROVED',
+          canWithdraw: false
+        })
     })
     ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
   })
@@ -872,17 +878,17 @@ const handleBatchReject = (college: string) => {
         action: 'reject',
         comment: value || '批量打回重新提交'
       })
-      strategicStore.updateIndicator(indicator.id.toString(), {
-        status: 'distributed',
-        canWithdraw: true
-      })
+        strategicStore.updateIndicator(indicator.id.toString(), {
+          progressApprovalStatus: 'REJECTED',
+          canWithdraw: true
+        })
     })
     ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
   })
 }
 
 // 批量撤销：针对学院下所有已下发、待审批或已通过的子指标，撤销后可编辑删除
-const handleBatchWithdraw = (college: string) => {
+const handleBatchWithdraw = async (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const withdrawableIndicators = childIndicators.filter(i => {
     const status = getChildStatus(i as StrategicIndicator)
@@ -895,17 +901,34 @@ const handleBatchWithdraw = (college: string) => {
     return
   }
   
-  ElMessageBox.confirm(
-    `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
-    '批量撤销确认',
-    {
-      confirmButtonText: '确认撤销',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    // 为每个可撤销指标添加审计日志并更新状态
-    withdrawableIndicators.forEach(indicator => {
+  try {
+    await ElMessageBox.confirm(
+      `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
+      '批量撤销确认',
+      {
+        confirmButtonText: '确认撤销',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  const errors: string[] = []
+
+  for (const indicator of withdrawableIndicators) {
+    const indicatorId = indicator.id.toString()
+    const isRealBackendId = /^\d+$/.test(indicatorId)
+
+    try {
+      if (isRealBackendId) {
+        // 调用 PATCH /indicators/{id}/distribution-status 撤回到 DRAFT
+        await indicatorApi.publishDistributionStatus(indicatorId, 'DRAFT')
+      }
+      // 临时 ID 的草稿本来就没有下发，直接更新前端状态即可
+
+      // 更新前端状态
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
@@ -913,17 +936,25 @@ const handleBatchWithdraw = (college: string) => {
         action: 'withdraw',
         comment: '批量撤销下发'
       })
-      strategicStore.updateIndicator(indicator.id.toString(), {
+      await strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'draft',
+        distributionStatus: 'DRAFT',
         canWithdraw: false
       })
-    })
-    ElMessage.success(`已批量撤销 ${withdrawableIndicators.length} 个指标`)
-  })
+    } catch (err) {
+      errors.push(indicator.name)
+    }
+  }
+
+  if (errors.length > 0) {
+    ElMessage.error(`以下指标撤销失败：${errors.join('、')}`)
+  } else {
+    ElMessage.success(`已成功撤销 ${withdrawableIndicators.length} 个指标`)
+  }
 }
 
 // 批量下发：针对学院下所有草稿状态的子指标
-const handleBatchDistribute = (college: string) => {
+const handleBatchDistribute = async (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const draftIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'draft')
   
@@ -932,17 +963,57 @@ const handleBatchDistribute = (college: string) => {
     return
   }
   
-  ElMessageBox.confirm(
-    `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
-    '批量下发确认',
-    {
-      confirmButtonText: '确认下发',
-      cancelButtonText: '取消',
-      type: 'success'
-    }
-  ).then(() => {
-    // 为每个草稿指标添加审计日志并更新状态
-    draftIndicators.forEach(indicator => {
+  try {
+    await ElMessageBox.confirm(
+      `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
+      '批量下发确认',
+      {
+        confirmButtonText: '确认下发',
+        cancelButtonText: '取消',
+        type: 'success'
+      }
+    )
+  } catch {
+    return
+  }
+
+  const errors: string[] = []
+
+  for (const indicator of draftIndicators) {
+    const indicatorId = indicator.id.toString()
+    const isRealBackendId = /^\d+$/.test(indicatorId)
+
+    try {
+      if (isRealBackendId) {
+        // 已有后端 ID：直接调用 PATCH /indicators/{id}/distribution-status
+        await indicatorApi.publishDistributionStatus(indicatorId, 'DISTRIBUTED')
+      } else {
+        // 临时 ID（本地草稿）：先调用 createIndicator 创建，再 publish
+        const activeTask = strategicStore.activeTasks[0]
+        const taskId = activeTask ? Number(activeTask.id) : 1
+        const createResp = await indicatorApi.createIndicator({
+          taskId,
+          indicatorDesc: indicator.name,
+          weightPercent: indicator.weight || 0,
+          sortOrder: 0,
+          remark: indicator.remark || '',
+          progress: indicator.progress || 0,
+          year: indicator.year || new Date().getFullYear(),
+          canWithdraw: false,
+          parentIndicatorId: indicator.parentIndicatorId ? Number(indicator.parentIndicatorId) : undefined,
+          distributionStatus: 'DRAFT' as const,
+        })
+        if (!createResp.success || !createResp.data) {
+          throw new Error(createResp.message || '创建指标失败')
+        }
+        const newBackendId = createResp.data.indicatorId.toString()
+        // 用真实 ID 替换临时 ID（纯本地操作，不调用后端）
+        strategicStore.replaceIndicatorId(indicatorId, newBackendId, { distributionStatus: 'DRAFT' })
+        // 发布状态
+        await indicatorApi.publishDistributionStatus(newBackendId, 'DISTRIBUTED')
+      }
+
+      // 更新前端状态
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
@@ -950,27 +1021,35 @@ const handleBatchDistribute = (college: string) => {
         action: 'distribute',
         comment: '批量下发'
       })
-      strategicStore.updateIndicator(indicator.id.toString(), {
+      await strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
+        distributionStatus: 'DISTRIBUTED',
         canWithdraw: true
       })
-    })
-    ElMessage.success(`已批量下发 ${draftIndicators.length} 个指标`)
-  })
+    } catch (err) {
+      errors.push(indicator.name)
+    }
+  }
+
+  if (errors.length > 0) {
+    ElMessage.error(`以下指标下发失败：${errors.join('、')}`)
+  } else {
+    ElMessage.success(`已成功下发 ${draftIndicators.length} 个指标`)
+  }
 }
 
 // 获取学院下子指标的统一状态（用于判断显示哪些批量操作按钮，只统计当前部门下发的）
 const getCollegeStatus = (college: string) => {
   // 只统计当前部门下发给该学院的指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) return false
-    if (i.ownerDept !== currentDept.value) return false
+    if (i.isStrategic) {return false}
+    if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
     return i.responsibleDept === college
   })
-  if (childIndicators.length === 0) return { draft: 0, distributed: 0, pending: 0, approved: 0 }
+  if (childIndicators.length === 0) {return { draft: 0, distributed: 0, pending: 0, approved: 0 }}
   
   // 统计各状态数量
   const statusCounts = {
@@ -993,27 +1072,27 @@ const getCollegeStatus = (college: string) => {
 // 计算当前选中学院的整体状态（用于表头显示）
 // 状态定义：暂无指标、待下发、进行中、待审批
 const collegeOverallStatus = computed(() => {
-  if (!selectedCollege.value) return { label: '暂无指标', type: 'info' }
+  if (!selectedCollege.value) {return { label: '暂无指标', type: 'info' }}
   
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
   
-  if (total === 0) return { label: '暂无指标', type: 'info' }
+  if (total === 0) {return { label: '暂无指标', type: 'info' }}
   
   // 优先级：待审批 > 待下发 > 进行中
   // 待审批：有学院提交的进度等待审批
-  if (status.pending > 0) return { label: '待审批', type: 'warning' }
+  if (status.pending > 0) {return { label: '待审批', type: 'warning' }}
   // 待下发：有草稿状态的指标
-  if (status.draft > 0) return { label: '待下发', type: 'info' }
+  if (status.draft > 0) {return { label: '待下发', type: 'info' }}
   // 进行中：已下发或已通过的指标（正在执行中）
-  if (status.distributed > 0 || status.approved > 0) return { label: '进行中', type: 'success' }
+  if (status.distributed > 0 || status.approved > 0) {return { label: '进行中', type: 'success' }}
   
   return { label: '暂无指标', type: 'info' }
 })
 
 // 下发/撤销统一处理函数
 const handleDistributeOrWithdraw = (command: string) => {
-  if (!selectedCollege.value) return
+  if (!selectedCollege.value) {return}
   
   if (command === 'distribute') {
     handleBatchDistribute(selectedCollege.value)
@@ -1070,21 +1149,29 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
 // 状态流转：draft(草稿) → distributed(已下发) → pending(待审批，下级提交后) → approved(已通过)
 // 打回后回到 distributed 状态，撤销后回到 draft 状态
 const getChildStatus = (child: StrategicIndicator) => {
+  // 优先使用后端持久化的 distributionStatus（页面刷新后仍准确）
+  if (child.distributionStatus) {
+    const distributionStatusMap: Record<string, string> = {
+      'DRAFT': 'draft',
+      'DISTRIBUTED': 'distributed',
+      'PENDING': 'pending',
+      'APPROVED': 'approved',
+      'REJECTED': 'distributed',
+    }
+    return distributionStatusMap[child.distributionStatus] ?? 'draft'
+  }
+
+  // fallback：后端尚未返回 distributionStatus 时，从 statusAudit 本地推导
   const audit = child.statusAudit || []
-  if (audit.length === 0) return 'draft'  // 无审计记录时为草稿状态
+  if (audit.length === 0) {return 'draft'}
   const lastAudit = audit[audit.length - 1]
-  if (!lastAudit) return 'draft'
+  if (!lastAudit) {return 'draft'}
   const lastAction = lastAudit.action
-  // 下级部门提交后变为待审批
-  if (lastAction === 'submit') return 'pending'
-  // 审批通过
-  if (lastAction === 'approve') return 'approved'
-  // 打回后回到已下发状态，等待重新提交
-  if (lastAction === 'reject') return 'distributed'
-  // 初始下发状态
-  if (lastAction === 'distribute') return 'distributed'
-  // 撤销后回到草稿状态
-  if (lastAction === 'withdraw') return 'draft'
+  if (lastAction === 'submit') {return 'pending'}
+  if (lastAction === 'approve') {return 'approved'}
+  if (lastAction === 'reject') {return 'distributed'}
+  if (lastAction === 'distribute') {return 'distributed'}
+  if (lastAction === 'withdraw') {return 'draft'}
   return 'draft'
 }
 
@@ -1112,23 +1199,23 @@ const getStatusText = (status: string) => {
 
 // 格式化学院显示（完整列表）
 const formatColleges = (depts: string | string[] | undefined): string => {
-  if (!depts) return '-'
-  if (Array.isArray(depts)) return depts.join('、')
+  if (!depts) {return '-'}
+  if (Array.isArray(depts)) {return depts.join('、')}
   return depts.split(',').join('、')
 }
 
 // 格式化学院显示（简短版，超过2个显示+N）
 const formatCollegesShort = (depts: string | string[] | undefined): string => {
-  if (!depts) return '-'
+  if (!depts) {return '-'}
   const arr = Array.isArray(depts) ? depts : depts.split(',')
-  if (arr.length <= 2) return arr.join('、')
+  if (arr.length <= 2) {return arr.join('、')}
   return `${arr.slice(0, 2).join('、')} +${arr.length - 2}`
 }
 
 // 解析学院字符串为数组（用于编辑时）
 const parseColleges = (depts: string | string[] | undefined): string[] => {
-  if (!depts) return []
-  if (Array.isArray(depts)) return depts
+  if (!depts) {return []}
+  if (Array.isArray(depts)) {return depts}
   return depts.split(',')
 }
 
@@ -1188,7 +1275,7 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
 // 计算定量指标当月的目标进度
 const getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
   const milestones = child.milestones || []
-  if (milestones.length === 0) return 100
+  if (milestones.length === 0) {return 100}
   
   const currentMonth = new Date().getMonth() + 1  // 1-12
   const currentYear = timeContext.currentYear
@@ -1295,7 +1382,7 @@ const openMilestonesDialog = (child: NewChildIndicator | StrategicIndicator) => 
 
 // 获取正在编辑的子指标名称
 const getEditingChildName = (): string => {
-  if (!editingMilestonesChild.value) return ''
+  if (!editingMilestonesChild.value) {return ''}
   if ('isNew' in editingMilestonesChild.value && editingMilestonesChild.value.isNew) {
     return editingMilestonesChild.value.name || '新增指标'
   }
@@ -1304,7 +1391,7 @@ const getEditingChildName = (): string => {
 
 // 获取正在编辑的子指标类型
 const getEditingChildType = (): string => {
-  if (!editingMilestonesChild.value) return '定性'
+  if (!editingMilestonesChild.value) {return '定性'}
   if ('isNew' in editingMilestonesChild.value && editingMilestonesChild.value.isNew) {
     return editingMilestonesChild.value.type1 || '定性'
   }
@@ -1354,7 +1441,7 @@ const removeMilestone = (index: number) => {
 // 验证里程碑进度（后面的不能小于前面的）
 const validateMilestoneProgress = (index: number) => {
   const current = editingMilestones.value[index]
-  if (!current) return
+  if (!current) {return}
   
   // 检查是否小于前一个里程碑的进度
   if (index > 0) {
@@ -1379,7 +1466,7 @@ const validateMilestoneProgress = (index: number) => {
 
 // 保存里程碑
 const saveMilestones = () => {
-  if (!editingMilestonesChild.value) return
+  if (!editingMilestonesChild.value) {return}
   
   const child = editingMilestonesChild.value
   if ('isNew' in child && child.isNew) {
@@ -1451,7 +1538,7 @@ interface TableRowData {
 
 // 学院视图表格数据
 const collegeTableData = computed(() => {
-  if (!selectedCollege.value) return []
+  if (!selectedCollege.value) {return []}
   
   const data: TableRowData[] = []
   const indicators = collegeIndicators.value
@@ -1461,7 +1548,7 @@ const collegeTableData = computed(() => {
     
     // 获取下发给该学院的子指标（支持字符串或数组格式）
     const children = strategicStore.indicators.filter(i => {
-      if (i.parentIndicatorId !== indicatorId || i.isStrategic) return false
+      if (i.parentIndicatorId !== indicatorId || i.isStrategic) {return false}
       // 支持字符串或数组格式的 responsibleDept
       if (Array.isArray(i.responsibleDept)) {
         return i.responsibleDept.includes(selectedCollege.value!)
@@ -1591,7 +1678,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 状态: {{ collegeOverallStatus.label }}
               </el-tag>
             </div>
-            <div class="header-actions" v-if="canEditChild">
+            <div v-if="canEditChild" class="header-actions">
               <!-- 
                 按钮显示逻辑：
                 - 暂无指标 → 只显示"添加指标"按钮

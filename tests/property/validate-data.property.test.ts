@@ -143,10 +143,10 @@ function injectOrphanRecord(
       return { state: newState, injectedOrphan: { table: 'indicator', recordId: 1000, foreignKey, invalidValue: invalidId } }
     } else {
       const target = newState.indicators[0]!
-      if (foreignKey === 'owner_org_id') target.owner_org_id = invalidId
-      else if (foreignKey === 'target_org_id') target.target_org_id = invalidId
-      else if (foreignKey === 'task_id') target.task_id = invalidId
-      else if (foreignKey === 'parent_indicator_id') target.parent_indicator_id = invalidId
+      if (foreignKey === 'owner_org_id') {target.owner_org_id = invalidId}
+      else if (foreignKey === 'target_org_id') {target.target_org_id = invalidId}
+      else if (foreignKey === 'task_id') {target.task_id = invalidId}
+      else if (foreignKey === 'parent_indicator_id') {target.parent_indicator_id = invalidId}
       return { state: newState, injectedOrphan: { table: 'indicator', recordId: target.indicator_id, foreignKey, invalidValue: invalidId } }
     }
   } else {
@@ -161,8 +161,8 @@ function injectOrphanRecord(
       return { state: newState, injectedOrphan: { table: 'milestone', recordId: 1000, foreignKey, invalidValue: invalidId } }
     } else {
       const target = newState.milestones[0]!
-      if (foreignKey === 'indicator_id') target.indicator_id = invalidId
-      else if (foreignKey === 'inherited_from') target.inherited_from = invalidId
+      if (foreignKey === 'indicator_id') {target.indicator_id = invalidId}
+      else if (foreignKey === 'inherited_from') {target.inherited_from = invalidId}
       return { state: newState, injectedOrphan: { table: 'milestone', recordId: target.milestone_id, foreignKey, invalidValue: invalidId } }
     }
   }

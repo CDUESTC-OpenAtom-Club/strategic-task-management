@@ -57,6 +57,7 @@ export {
   StrategicIndicatorSchema,
   StrategicTaskSchema,
   DashboardDataSchema,
+  DistributionStatusSchema,
   validateUser,
   validateIndicator,
   validateMilestone,
@@ -78,7 +79,8 @@ export type {
   StatusAuditEntry,
   StrategicIndicator,
   StrategicTask,
-  DashboardData
+  DashboardData,
+  DistributionStatus
 } from './schemas'
 
 // ============================================================================

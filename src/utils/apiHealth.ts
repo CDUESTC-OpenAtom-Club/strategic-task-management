@@ -89,11 +89,19 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       }
     }
 
+    // 提取后端返回的详细错误信息
+    const responseData = error.response?.data
+    const detailedMessage = responseData?.message || error.message
+    
     return {
       service: 'Backend API',
       status: 'error',
-      message: `后端服务异常: ${error.message}`,
-      details: { error: error.message, response: error.response?.data },
+      message: `后端服务异常: ${detailedMessage}`,
+      details: { 
+        error: error.message, 
+        response: responseData,
+        code: responseData?.code
+      },
       timestamp: new Date()
     }
   }
@@ -246,16 +254,63 @@ export async function checkAuthFlow(credentials?: {
  */
 export async function runFullHealthCheck(): Promise<HealthCheckResult[]> {
   logger.debug('🏥 [Health Check] 开始完整健康检查...')
-
+  
   const results: HealthCheckResult[] = []
-
+  
   // 检查后端服务
   results.push(await checkBackendHealth())
-
+  
   // 如果后端服务正常，检查认证流程
   if (results[0].status !== 'error') {
     results.push(await checkAuthFlow())
   }
-
+  
   return results
+}
+
+/**
+ * 在开发环境下自动运行健康检查
+ */
+export function autoHealthCheck() {
+  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'true') {
+    logger.debug('🏥 [Health Check] 开发环境，自动运行健康检查...')
+    
+    // 延迟1秒执行，确保应用已初始化
+    setTimeout(async () => {
+      const results = await runFullHealthCheck()
+      
+      logger.info('🏥 健康检查报告')
+      logger.info('整体状态:', results.every(r => r.status === 'success') ? '健康' : '有问题')
+      logger.debug('详细结果:', results.map(r => ({
+        服务: r.service,
+        状态: r.status,
+        消息: r.message
+      })))
+      
+      // 如果有严重问题，显示警告
+      const hasError = results.some(r => r.status === 'error')
+      if (hasError) {
+        logger.warn('⚠️ 检测到后端服务问题，请检查')
+        logger.warn('1. 后端服务是否运行在 http://localhost:8080')
+        logger.warn('2. 数据库连接是否正常')
+        logger.warn('3. 查看后端日志获取详细错误信息')
+        
+        ElNotification({
+          title: '后端服务异常',
+          message: '检测到后端服务问题，请检查后端是否正常运行',
+          type: 'error',
+          duration: 0,
+          position: 'bottom-right'
+        })
+      } else {
+        ElNotification({
+          title: '系统就绪',
+          message: '前后端连接正常，所有服务运行正常',
+          type: 'success',
+          duration: 3000,
+          position: 'bottom-right'
+        })
+      }
+    }, 1000)
+  }
 }
