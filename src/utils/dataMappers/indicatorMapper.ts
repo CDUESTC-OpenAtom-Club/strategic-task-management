@@ -113,15 +113,30 @@ const BACKEND_FIELDS = [
 export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Record<string, any> {
   const request: Record<string, any> = {}
 
+  console.log('[indicatorMapper] Converting updates:', updates)
+  console.log('[indicatorMapper] FRONTEND_TO_BACKEND mapping:', FRONTEND_TO_BACKEND)
+
   for (const [key, value] of Object.entries(updates)) {
-    if (value === undefined) {continue}
+    console.log(`[indicatorMapper] Processing key: ${key}, value:`, value, `(type: ${typeof value})`)
+    
+    // 跳过 undefined，但允许 null（用于清空字段）
+    if (value === undefined) {
+      console.log(`[indicatorMapper] Skipping ${key} because value is undefined`)
+      continue
+    }
 
     const backendKey = FRONTEND_TO_BACKEND[key]
+    console.log(`[indicatorMapper] Backend key for ${key}:`, backendKey)
+    
     if (backendKey) {
       request[backendKey] = value
+      console.log(`[indicatorMapper] Added to request: ${backendKey} =`, value)
+    } else {
+      console.log(`[indicatorMapper] No backend mapping found for ${key}`)
     }
   }
 
+  console.log('[indicatorMapper] Final request:', request)
   return request
 }
 

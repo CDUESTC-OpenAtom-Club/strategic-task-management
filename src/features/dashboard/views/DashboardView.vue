@@ -19,6 +19,8 @@ import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/stores/org'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/composables/useLoadingState'
+// 导入 echarts
+import * as echarts from 'echarts'
 
 // 帮助提示内容
 const helpTexts = {

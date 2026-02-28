@@ -117,8 +117,8 @@
     const list = indicators.value
     if (list.length === 0) {return { label: '暂无指标', type: 'info' }}
     
-    const hasPending = list.some(i => i.progressApprovalStatus === 'pending')
-    const hasRejected = list.some(i => i.progressApprovalStatus === 'rejected')
+    const hasPending = list.some(i => i.progressApprovalStatus === 'PENDING')
+    const hasRejected = list.some(i => i.progressApprovalStatus === 'REJECTED')
     const allDistributed = list.every(i => !i.canWithdraw)
     
     if (hasPending) {return { label: '待审批', type: 'warning' }}
@@ -128,8 +128,16 @@
   })
 
   // 判断当前部门是否有指标已下发（用于控制下发/撤回按钮和编辑权限）
+  // 基于 statusAudit 判断状态，而不是 canWithdraw 字段
   const hasDistributedIndicators = computed(() => {
-    return indicators.value.some(i => !i.canWithdraw)
+    return indicators.value.some(i => {
+      const audit = i.statusAudit || []
+      if (audit.length === 0) return false // 无审计记录 = 草稿状态 = 未下发
+      const lastAudit = audit[audit.length - 1]
+      const lastAction = lastAudit?.action
+      // 已下发状态：最后一次操作是 distribute（下发）或 reject（打回）或 approve（审批通过）
+      return lastAction === 'distribute' || lastAction === 'reject' || lastAction === 'approve' || lastAction === 'submit'
+    })
   })
 
   // 判断是否可以编辑（未下发状态才能编辑）
@@ -268,7 +276,7 @@
   const getTaskStatus = (row: StrategicIndicator) => {
     const group = getTaskGroup(row)
     const allDistributed = group.rows.every(r => !r.canWithdraw)
-    const hasPendingApproval = group.rows.some(r => r.progressApprovalStatus === 'pending')
+    const hasPendingApproval = group.rows.some(r => r.progressApprovalStatus === 'PENDING')
     
     if (hasPendingApproval) {
       return { label: '待审批', type: 'warning', canWithdraw: false }
@@ -956,7 +964,7 @@
   // 判断当前选中部门是否有待审批的指标（用于按钮显示和状态判断）
   const hasPendingApproval = computed(() => {
     if (!selectedDepartment.value) {return false}
-    return approvalIndicators.value.some(i => i.progressApprovalStatus === 'pending')
+    return approvalIndicators.value.some(i => i.progressApprovalStatus === 'PENDING')
   })
 
   // 待审批数量：如果部门有任何一个指标待审批，则显示该部门的总指标数（因为要一起审批）
@@ -1057,13 +1065,9 @@
     ).then(async () => {
       try {
         if (isApprove) {
-          // 审批通过：更新实际进度，清除待审批状态
+          // 审批通过：只需要更新审批状态，后端会自动处理进度复制和清空逻辑
           await strategicStore.updateIndicator(indicator.id.toString(), {
-            progress: pendingProgress,
-            progressApprovalStatus: 'approved',
-            pendingProgress: undefined,
-            pendingRemark: undefined,
-            pendingAttachments: undefined
+            progressApprovalStatus: 'APPROVED'
           })
 
           // 添加审计日志
@@ -1083,7 +1087,7 @@
         } else {
           // 审批驳回：设置驳回状态，保留待审批数据供查看
           await strategicStore.updateIndicator(indicator.id.toString(), {
-            progressApprovalStatus: 'rejected'
+            progressApprovalStatus: 'REJECTED'
           })
 
           // 添加审计日志
@@ -1129,7 +1133,13 @@
   
   // 确认下发（支持单个和整体下发）
   const confirmDistribute = () => {
+    console.log('[DEBUG] confirmDistribute 被调用')
+    console.log('[DEBUG] distributeTarget:', distributeTarget.value)
+    console.log('[DEBUG] currentDistributeGroup:', currentDistributeGroup.value)
+    console.log('[DEBUG] currentDistributeItem:', currentDistributeItem.value)
+    
     if (distributeTarget.value.length === 0) {
+      console.log('[DEBUG] 没有选择下发目标部门')
       ElMessage.warning('请选择下发目标部门')
       return
     }
@@ -1151,8 +1161,26 @@
         try {
           // 为每个目标部门创建指标副本
           for (const row of pendingRows) {
+            // 构建审计记录
+            const newAuditEntry = {
+              id: `audit-${row.id}-${Date.now()}`,
+              operator: authStore.user?.id || 'admin',
+              operatorName: authStore.user?.name || '管理员',
+              operatorDept: authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
+              action: 'distribute' as const,
+              comment: `下发到 ${distributeTarget.value.join('、')}`,
+              timestamp: new Date()
+            }
+            
+            // 将新的审计记录添加到现有记录中
+            const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
+            
             // 更新原指标状态
-            await strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
+            await strategicStore.updateIndicator(row.id.toString(), { 
+              canWithdraw: true,
+              status: 'distributed',
+              statusAudit: updatedStatusAudit
+            })
             
             // 为每个额外的目标部门创建副本（第一个部门使用原指标）
             for (const [index, dept] of distributeTarget.value.entries()) {
@@ -1169,9 +1197,10 @@
                   id: `${Date.now()}-${index}-${row.id}`,
                   responsibleDept: dept,
                   ownerDept: dept,
-                  canWithdraw: false,
+                  canWithdraw: true,
+                  status: 'distributed',
                   progress: 0,
-                  statusAudit: []
+                  statusAudit: [newAuditEntry]
                 })
               }
             }
@@ -1203,8 +1232,27 @@
     ).then(async () => {
       try {
         const row = currentDistributeItem.value!
+        
+        // 构建审计记录
+        const newAuditEntry = {
+          id: `audit-${row.id}-${Date.now()}`,
+          operator: authStore.user?.id || 'admin',
+          operatorName: authStore.user?.name || '管理员',
+          operatorDept: authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
+          action: 'distribute' as const,
+          comment: `下发到 ${distributeTarget.value.join('、')}`,
+          timestamp: new Date()
+        }
+        
+        // 将新的审计记录添加到现有记录中
+        const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
+        
         // 更新原指标状态
-        await strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
+        await strategicStore.updateIndicator(row.id.toString(), { 
+          canWithdraw: true,
+          status: 'distributed',
+          statusAudit: updatedStatusAudit
+        })
         
         // 为每个目标部门处理
         for (const [index, dept] of distributeTarget.value.entries()) {
@@ -1221,9 +1269,10 @@
               id: `${Date.now()}-${index}-${row.id}`,
               responsibleDept: dept,
               ownerDept: dept,
-              canWithdraw: false,
+              canWithdraw: true,
+              status: 'distributed',
               progress: 0,
-              statusAudit: []
+              statusAudit: [newAuditEntry]
             })
           }
         }
@@ -1282,7 +1331,17 @@
 
   // 全部下发（下发当前界面所有未下发的指标）
   const handleDistributeAll = async () => {
-    const pendingRows = indicators.value.filter(r => r.canWithdraw && r.name) // 只下发有核心指标的记录
+    // 基于 statusAudit 判断草稿状态
+    const pendingRows = indicators.value.filter(r => {
+      if (!r.name) return false // 只下发有核心指标的记录
+      const audit = r.statusAudit || []
+      if (audit.length === 0) return true // 无审计记录 = 草稿状态
+      const lastAudit = audit[audit.length - 1]
+      const lastAction = lastAudit?.action
+      // 草稿状态：最后一次操作是 withdraw（撤回）或无操作
+      return lastAction === 'withdraw' || audit.length === 0
+    })
+    
     if (pendingRows.length === 0) {
       ElMessage.warning('当前没有待下发的指标')
       return
@@ -1305,11 +1364,29 @@
       })
       
       try {
-        // 1. 先调用后端 API 更新所有指标
+        // 1. 先调用后端 API 更新所有指标（添加审计记录）
         await Promise.all(
-          pendingRows.map(row => 
-            strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
-          )
+          pendingRows.map(row => {
+            // 构建审计记录
+            const newAuditEntry = {
+              id: `audit-${row.id}-${Date.now()}`,
+              operator: authStore.user?.id || 'admin',
+              operatorName: authStore.user?.name || '管理员',
+              operatorDept: authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
+              action: 'distribute' as const,
+              comment: '批量下发',
+              timestamp: new Date()
+            }
+            
+            // 将新的审计记录添加到现有记录中
+            const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
+            
+            return strategicStore.updateIndicator(row.id.toString(), { 
+              canWithdraw: true,
+              status: 'distributed',
+              statusAudit: updatedStatusAudit
+            })
+          })
         )
         
         // 2. 重新从后端加载数据，确保前端状态与后端一致
@@ -1337,7 +1414,16 @@
 
   // 全部撤回（撤回当前界面所有已下发的指标）
   const handleWithdrawAll = async () => {
-    const distributedRows = indicators.value.filter(r => !r.canWithdraw)
+    // 基于 statusAudit 判断已下发状态
+    const distributedRows = indicators.value.filter(r => {
+      const audit = r.statusAudit || []
+      if (audit.length === 0) return false // 无审计记录 = 草稿状态 = 未下发
+      const lastAudit = audit[audit.length - 1]
+      const lastAction = lastAudit?.action
+      // 已下发状态：最后一次操作是 distribute（下发）或 reject（打回）或 approve（审批通过）
+      return lastAction === 'distribute' || lastAction === 'reject' || lastAction === 'approve' || lastAction === 'submit'
+    })
+    
     if (distributedRows.length === 0) {
       ElMessage.warning('当前没有已下发的指标')
       return
@@ -1360,11 +1446,29 @@
       })
       
       try {
-        // 1. 先调用后端 API 更新所有指标
+        // 1. 先调用后端 API 更新所有指标（添加审计记录）
         await Promise.all(
-          distributedRows.map(row => 
-            strategicStore.updateIndicator(row.id.toString(), { canWithdraw: true })
-          )
+          distributedRows.map(row => {
+            // 构建审计记录
+            const newAuditEntry = {
+              id: `audit-${row.id}-${Date.now()}`,
+              operator: authStore.user?.id || 'admin',
+              operatorName: authStore.user?.name || '管理员',
+              operatorDept: authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
+              action: 'withdraw' as const,
+              comment: '批量撤回',
+              timestamp: new Date()
+            }
+            
+            // 将新的审计记录添加到现有记录中
+            const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
+            
+            return strategicStore.updateIndicator(row.id.toString(), { 
+              canWithdraw: false,
+              status: 'draft',
+              statusAudit: updatedStatusAudit
+            })
+          })
         )
         
         // 2. 重新从后端加载数据，确保前端状态与后端一致
@@ -1924,10 +2028,10 @@
                       {{ currentIndicator.canWithdraw ? '待下发' : '已下发' }}
                     </el-tag>
                     <!-- 进度审批状态标签 -->
-                    <el-tag v-if="currentIndicator.progressApprovalStatus === 'pending'" type="warning" size="small">
+                    <el-tag v-if="currentIndicator.progressApprovalStatus === 'PENDING'" type="warning" size="small">
                       待审批
                     </el-tag>
-                    <el-tag v-else-if="currentIndicator.progressApprovalStatus === 'rejected'" type="danger" size="small">
+                    <el-tag v-else-if="currentIndicator.progressApprovalStatus === 'REJECTED'" type="danger" size="small">
                       已驳回
                     </el-tag>
                   </div>

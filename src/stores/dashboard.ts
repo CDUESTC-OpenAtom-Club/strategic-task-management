@@ -442,6 +442,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const target = indicator.responsibleDept
 
       if (!source || !target) {return} // Skip indicators without complete department info
+      if (source === target) {return} // 跳过自循环
 
       nodes.add(source)
       nodes.add(target)
@@ -450,16 +451,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
       linkMap.set(key, (linkMap.get(key) || 0) + 1)
     })
 
-    const links: SankeyLink[] = []
-    linkMap.forEach((count, key) => {
-      const [source, target] = key.split('->')
-      links.push({ source, target, value: count })
-    })
-
-    // 为节点分配明确的层级（depth），确保职能部门和学院分层显示
-    const nodeList = Array.from(nodes).map(name => {
-      let depth: number | undefined
-
+    // 为节点分配明确的层级（depth）
+    const nodeDepthMap = new Map<string, number>()
+    
+    nodes.forEach(name => {
+      let depth: number
       // 战略发展部在最左侧（第0层）
       if (name === '战略发展部') {
         depth = 0
@@ -472,12 +468,28 @@ export const useDashboardStore = defineStore('dashboard', () => {
       else {
         depth = 1
       }
+      nodeDepthMap.set(name, depth)
+    })
 
-      return {
-        name,
-        depth
+    // 过滤掉会导致循环的链接（source 的 depth 必须小于 target 的 depth）
+    const links: SankeyLink[] = []
+    linkMap.forEach((count, key) => {
+      const [source, target] = key.split('->')
+      const sourceDepth = nodeDepthMap.get(source) ?? 1
+      const targetDepth = nodeDepthMap.get(target) ?? 1
+      
+      // 只保留正向流转的链接（从低层级到高层级）
+      if (sourceDepth < targetDepth) {
+        links.push({ source, target, value: count })
+      } else {
+        console.warn(`[Dashboard] 跳过反向链接: ${source} (depth=${sourceDepth}) -> ${target} (depth=${targetDepth})`)
       }
     })
+
+    const nodeList = Array.from(nodes).map(name => ({
+      name,
+      depth: nodeDepthMap.get(name)
+    }))
 
     return {
       nodes: nodeList,

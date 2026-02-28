@@ -89,7 +89,7 @@ const approvalIndicators = computed(() => {
 const pendingApprovalCount = computed(() => {
   if (!selectedCollege.value) {return 0}
   // 统计当前部门下发给该学院的、进度待审批的指标数量
-  return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'pending').length
+  return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'PENDING').length
 })
 
 // 打开任务审批抽屉
@@ -829,7 +829,9 @@ const cancelChildEdit = () => {
 // 辅助函数：获取当前部门下发给指定学院的子指标
 const getMyCollegeIndicators = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
+    // 战略发展部：查看战略指标（isStrategic = true）
+    // 职能部门：查看职能指标（isStrategic = false）
+    // 不再过滤 isStrategic，因为战略发展部需要看到战略指标
     if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
@@ -856,31 +858,53 @@ const handleBatchApprove = (college: string) => {
       cancelButtonText: '取消',
       type: 'success'
     }
-  ).then(() => {
-    // 为每个待审批指标添加审计日志并更新状态
-    pendingIndicators.forEach(indicator => {
-      // 构建新的审计记录
-      const newAuditEntry = {
-        id: `audit-${indicator.id}-${Date.now()}`,
-        operator: authStore.user?.id || 'admin',
-        operatorName: authStore.user?.name || '管理员',
-        operatorDept: currentDept.value,
-        action: 'approve' as const,
-        comment: '批量审批通过',
-        timestamp: new Date()
-      }
+  ).then(async () => {
+    try {
+      // 为每个待审批指标添加审计日志并更新状态
+      await Promise.all(pendingIndicators.map(async indicator => {
+        // 从 store 中获取最新的指标数据，确保 pendingProgress 是最新的
+        const latestIndicator = strategicStore.indicators.find(i => i.id === indicator.id)
+        if (!latestIndicator) {
+          logger.warn(`[IndicatorDistribution] Indicator ${indicator.id} not found in store`)
+          return
+        }
+        
+        // 构建新的审计记录
+        const newAuditEntry = {
+          id: `audit-${indicator.id}-${Date.now()}`,
+          operator: authStore.user?.id || 'admin',
+          operatorName: authStore.user?.name || '管理员',
+          operatorDept: currentDept.value,
+          action: 'approve' as const,
+          comment: '批量审批通过',
+          timestamp: new Date()
+        }
+        
+        // 将新的审计记录添加到现有记录中
+        const updatedStatusAudit = [...(latestIndicator.statusAudit || []), newAuditEntry]
+        
+        // 一次性更新状态和审计记录
+        // 审批通过后，将 pendingProgress 复制到 progress，并清空待审批字段
+        await strategicStore.updateIndicator(indicator.id.toString(), {
+          progressApprovalStatus: 'APPROVED',
+          progress: latestIndicator.pendingProgress ?? latestIndicator.progress,  // 使用最新的待审批进度
+          pendingProgress: undefined,  // 清空待审批进度
+          pendingRemark: undefined,    // 清空待审批备注
+          pendingAttachments: undefined,  // 清空待审批附件
+          statusAudit: updatedStatusAudit
+        })
+      }))
       
-      // 将新的审计记录添加到现有记录中
-      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
-      
-      // 一次性更新状态和审计记录
-      strategicStore.updateIndicator(indicator.id.toString(), {
-        status: 'approved',
-        canWithdraw: false,
-        statusAudit: updatedStatusAudit
-      })
-    })
-    ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
+      ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
+    } catch (error) {
+      logger.error('[IndicatorDistribution] 批量审批失败:', error)
+      ElMessage.error('审批失败，请重试')
+    } finally {
+      // 无论成功还是失败，都刷新页面
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
+    }
   })
 }
 
@@ -904,31 +928,45 @@ const handleBatchReject = (college: string) => {
       inputType: 'textarea',
       inputPlaceholder: '请输入打回原因（选填）'
     }
-  ).then(({ value }) => {
-    // 为每个待审批指标添加审计日志并更新状态
-    pendingIndicators.forEach(indicator => {
-      // 构建新的审计记录
-      const newAuditEntry = {
-        id: `audit-${indicator.id}-${Date.now()}`,
-        operator: authStore.user?.id || 'admin',
-        operatorName: authStore.user?.name || '管理员',
-        operatorDept: currentDept.value,
-        action: 'reject' as const,
-        comment: value || '批量打回重新提交',
-        timestamp: new Date()
-      }
+  ).then(async ({ value }) => {
+    try {
+      // 为每个待审批指标添加审计日志并更新状态
+      await Promise.all(pendingIndicators.map(async indicator => {
+        // 构建新的审计记录
+        const newAuditEntry = {
+          id: `audit-${indicator.id}-${Date.now()}`,
+          operator: authStore.user?.id || 'admin',
+          operatorName: authStore.user?.name || '管理员',
+          operatorDept: currentDept.value,
+          action: 'reject' as const,
+          comment: value || '批量打回重新提交',
+          timestamp: new Date()
+        }
+        
+        // 将新的审计记录添加到现有记录中
+        const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+        
+        // 一次性更新状态和审计记录
+        // 打回后，清空待审批字段，设置状态为 REJECTED
+        await strategicStore.updateIndicator(indicator.id.toString(), {
+          progressApprovalStatus: 'REJECTED',
+          pendingProgress: undefined,  // 清空待审批进度
+          pendingRemark: undefined,    // 清空待审批备注
+          pendingAttachments: undefined,  // 清空待审批附件
+          statusAudit: updatedStatusAudit
+        })
+      }))
       
-      // 将新的审计记录添加到现有记录中
-      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
-      
-      // 一次性更新状态和审计记录
-      strategicStore.updateIndicator(indicator.id.toString(), {
-        status: 'distributed',
-        canWithdraw: true,
-        statusAudit: updatedStatusAudit
-      })
-    })
-    ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
+      ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
+    } catch (error) {
+      logger.error('[IndicatorDistribution] 批量打回失败:', error)
+      ElMessage.error('打回失败，请重试')
+    } finally {
+      // 无论成功还是失败，都刷新页面
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
+    }
   })
 }
 
@@ -974,7 +1012,7 @@ const handleBatchWithdraw = (college: string) => {
       // 一次性更新状态和审计记录
       strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'draft',
-        canWithdraw: false,
+        canWithdraw: true,  // 撤销下发后回到草稿状态，允许删除
         statusAudit: updatedStatusAudit
       })
     })
@@ -984,10 +1022,14 @@ const handleBatchWithdraw = (college: string) => {
 
 // 批量下发：针对学院下所有草稿状态的子指标
 const handleBatchDistribute = (college: string) => {
+  console.log('[DEBUG] handleBatchDistribute 被调用, college:', college)
   const childIndicators = getMyCollegeIndicators(college)
+  console.log('[DEBUG] childIndicators 数量:', childIndicators.length)
   const draftIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'draft')
+  console.log('[DEBUG] draftIndicators 数量:', draftIndicators.length)
   
   if (draftIndicators.length === 0) {
+    console.log('[DEBUG] 没有可下发的子指标，显示警告')
     ElMessage.warning('没有可下发的子指标')
     return
   }
@@ -1020,7 +1062,7 @@ const handleBatchDistribute = (college: string) => {
       // 一次性更新状态和审计记录
       strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
-        canWithdraw: true,
+        canWithdraw: false,  // 已下发的指标不允许删除
         statusAudit: updatedStatusAudit
       })
     })
@@ -1039,6 +1081,21 @@ const getCollegeStatus = (college: string) => {
     }
     return i.responsibleDept === college
   })
+  
+  console.log('[DEBUG] getCollegeStatus:', {
+    college,
+    currentDept: currentDept.value,
+    totalIndicators: strategicStore.indicators.length,
+    filteredCount: childIndicators.length,
+    sampleIndicators: childIndicators.slice(0, 3).map(i => ({
+      id: i.id,
+      name: i.name,
+      ownerDept: i.ownerDept,
+      responsibleDept: i.responsibleDept,
+      statusAudit: i.statusAudit
+    }))
+  })
+  
   if (childIndicators.length === 0) {return { draft: 0, distributed: 0, pending: 0, approved: 0 }}
   
   // 统计各状态数量
@@ -1051,10 +1108,13 @@ const getCollegeStatus = (college: string) => {
   
   childIndicators.forEach(i => {
     const status = getChildStatus(i as StrategicIndicator) as keyof typeof statusCounts
+    console.log('[DEBUG] 指标状态:', { id: i.id, name: i.name.substring(0, 20), status })
     if (status in statusCounts) {
       statusCounts[status]++
     }
   })
+  
+  console.log('[DEBUG] statusCounts:', statusCounts)
   
   return statusCounts
 }
@@ -1066,6 +1126,12 @@ const collegeOverallStatus = computed(() => {
   
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
+  
+  console.log('[DEBUG] collegeOverallStatus 计算:', {
+    college: selectedCollege.value,
+    status,
+    total
+  })
   
   if (total === 0) {return { label: '暂无指标', type: 'info' }}
   
@@ -1097,28 +1163,43 @@ const handleApprove = (indicator: StrategicIndicator) => {
     confirmButtonText: '通过',
     cancelButtonText: '取消',
     type: 'success'
-  }).then(() => {
-    // 构建新的审计记录
-    const newAuditEntry = {
-      id: `audit-${indicator.id}-${Date.now()}`,
-      operator: authStore.user?.id || 'admin',
-      operatorName: authStore.user?.name || '管理员',
-      operatorDept: currentDept.value,
-      action: 'approve' as const,
-      comment: '审批通过',
-      timestamp: new Date()
+  }).then(async () => {
+    try {
+      // 构建新的审计记录
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
+        operator: authStore.user?.id || 'admin',
+        operatorName: authStore.user?.name || '管理员',
+        operatorDept: currentDept.value,
+        action: 'approve' as const,
+        comment: '审批通过',
+        timestamp: new Date()
+      }
+      
+      // 将新的审计记录添加到现有记录中
+      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+      
+      // 一次性更新状态和审计记录
+      // 审批通过后，将 pendingProgress 复制到 progress，并清空待审批字段
+      await strategicStore.updateIndicator(indicator.id.toString(), {
+        progressApprovalStatus: 'APPROVED',
+        progress: indicator.pendingProgress ?? indicator.progress,  // 使用待审批进度更新当前进度
+        pendingProgress: undefined,  // 清空待审批进度
+        pendingRemark: undefined,    // 清空待审批备注
+        pendingAttachments: undefined,  // 清空待审批附件
+        statusAudit: updatedStatusAudit
+      })
+      
+      ElMessage.success('审批通过')
+    } catch (error) {
+      logger.error('[IndicatorDistribution] 审批失败:', error)
+      ElMessage.error('审批失败，请重试')
+    } finally {
+      // 无论成功还是失败，都刷新页面
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
     }
-    
-    // 将新的审计记录添加到现有记录中
-    const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
-    
-    // 一次性更新状态和审计记录
-    strategicStore.updateIndicator(indicator.id.toString(), {
-      status: 'approved',
-      canWithdraw: false,
-      statusAudit: updatedStatusAudit
-    })
-    ElMessage.success('审批通过')
   })
 }
 
@@ -1130,28 +1211,42 @@ const handleReject = (indicator: StrategicIndicator) => {
     type: 'warning',
     inputType: 'textarea',
     inputPlaceholder: '请输入打回原因（选填）'
-  }).then(({ value }) => {
-    // 构建新的审计记录
-    const newAuditEntry = {
-      id: `audit-${indicator.id}-${Date.now()}`,
-      operator: authStore.user?.id || 'admin',
-      operatorName: authStore.user?.name || '管理员',
-      operatorDept: currentDept.value,
-      action: 'reject' as const,
-      comment: value || '打回重新提交',
-      timestamp: new Date()
+  }).then(async ({ value }) => {
+    try {
+      // 构建新的审计记录
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
+        operator: authStore.user?.id || 'admin',
+        operatorName: authStore.user?.name || '管理员',
+        operatorDept: currentDept.value,
+        action: 'reject' as const,
+        comment: value || '打回重新提交',
+        timestamp: new Date()
+      }
+      
+      // 将新的审计记录添加到现有记录中
+      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+      
+      // 一次性更新状态和审计记录
+      // 打回后，清空待审批字段，设置状态为 REJECTED
+      await strategicStore.updateIndicator(indicator.id.toString(), {
+        progressApprovalStatus: 'REJECTED',
+        pendingProgress: undefined,  // 清空待审批进度
+        pendingRemark: undefined,    // 清空待审批备注
+        pendingAttachments: undefined,  // 清空待审批附件
+        statusAudit: updatedStatusAudit
+      })
+      
+      ElMessage.success('已打回，等待下级部门重新提交')
+    } catch (error) {
+      logger.error('[IndicatorDistribution] 打回失败:', error)
+      ElMessage.error('打回失败，请重试')
+    } finally {
+      // 无论成功还是失败，都刷新页面
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
     }
-    
-    // 将新的审计记录添加到现有记录中
-    const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
-    
-    // 一次性更新状态和审计记录
-    strategicStore.updateIndicator(indicator.id.toString(), {
-      status: 'distributed',
-      canWithdraw: true,
-      statusAudit: updatedStatusAudit
-    })
-    ElMessage.success('已打回，等待下级部门重新提交')
   })
 }
 

@@ -50,7 +50,7 @@ const pendingApprovals = computed(() => {
   // 使用 Map 去重，key 为指标 id
   const uniqueMap = new Map()
   props.indicators
-    .filter(indicator => indicator.progressApprovalStatus === 'pending')  // 只显示待审批的
+    .filter(indicator => indicator.progressApprovalStatus === 'PENDING')  // 只显示待审批的
     .forEach(indicator => {
       if (!uniqueMap.has(indicator.id)) {
         uniqueMap.set(indicator.id, indicator)
@@ -169,13 +169,9 @@ const handleBatchApprove = () => {
     let successCount = 0
 
     pendingApprovals.value.forEach((indicator) => {
-      // 更新指标进度
+      // 审批通过：只需要更新审批状态，后端会自动处理进度复制和清空逻辑
       strategicStore.updateIndicator(indicator.id.toString(), {
-        progress: indicator.pendingProgress || indicator.progress,
-        progressApprovalStatus: 'approved',
-        pendingProgress: undefined,
-        pendingRemark: undefined,
-        pendingAttachments: undefined,
+        progressApprovalStatus: 'APPROVED'  // 必须使用大写，数据库约束要求
       })
 
       // 添加审计日志

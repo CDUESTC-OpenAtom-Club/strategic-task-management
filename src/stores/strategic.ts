@@ -137,6 +137,29 @@ export const useStrategicStore = defineStore('strategic', () => {
       if (response.success && response.data) {
         const converted = response.data.map(vo => strategicApi.convertIndicatorVOToStrategicIndicator(vo))
         logger.info(`[Strategic Store] Loaded ${converted.length} indicators from API`)
+        
+        // 调试：检查 canWithdraw 字段
+        const zhanlue = converted.filter(i => i.ownerDept === '战略发展部')
+        const canWithdrawStats = {
+          total: zhanlue.length,
+          canWithdrawFalse: zhanlue.filter(i => i.canWithdraw === false).length,
+          canWithdrawTrue: zhanlue.filter(i => i.canWithdraw === true).length
+        }
+        logger.info(`[Strategic Store] 战略发展部 canWithdraw 统计:`, canWithdrawStats)
+        
+        // 显示一个 canWithdraw = false 的指标
+        const falseOne = zhanlue.find(i => i.canWithdraw === false)
+        if (falseOne) {
+          logger.info(`[Strategic Store] canWithdraw=false 示例:`, {
+            id: falseOne.id,
+            name: falseOne.name,
+            canWithdraw: falseOne.canWithdraw,
+            responsibleDept: falseOne.responsibleDept
+          })
+        } else {
+          logger.warn(`[Strategic Store] ⚠️ 没有找到 canWithdraw=false 的指标！`)
+        }
+        
         return converted
       }
       
@@ -440,25 +463,16 @@ export const useStrategicStore = defineStore('strategic', () => {
         const { default: indicatorApi } = await import('@/api/indicator')
 
         // 使用字段映射器构建后端更新请求
+        logger.debug(`[Strategic Store] Original updates for indicator ${id}:`, updates)
         const updateRequest = convertToUpdateRequest(updates)
+        logger.debug(`[Strategic Store] Converted update request for indicator ${id}:`, updateRequest)
 
         await indicatorApi.updateIndicator(id, updateRequest)
         logger.info(`[Strategic Store] Successfully synced indicator ${id} to backend`, updateRequest)
         
-        // 重新加载这个指标的数据，确保前端和后端同步
-        try {
-          const response = await indicatorApi.getIndicatorById(id)
-          if (response.success && response.data) {
-            const { default: strategicApi } = await import('@/api/strategic')
-            const updatedIndicator = strategicApi.convertIndicatorVOToStrategicIndicator(response.data)
-            // 更新本地状态
-            Object.assign(indicator, updatedIndicator)
-            indicators.value = [...indicators.value]
-            logger.info(`[Strategic Store] Reloaded indicator ${id} from backend, milestones count:`, updatedIndicator.milestones?.length || 0)
-          }
-        } catch (reloadErr) {
-          logger.warn(`[Strategic Store] Failed to reload indicator ${id} after update:`, reloadErr)
-        }
+        // ❌ 移除重新加载逻辑，避免覆盖本地更新
+        // 前端已经更新了本地状态，不需要重新从后端加载
+        // 如果需要同步，应该在批量操作完成后统一重新加载
       } catch (err) {
         logger.error(`[Strategic Store] Failed to sync indicator ${id} to backend:`, err)
         // 如果后端同步失败，回滚本地状态

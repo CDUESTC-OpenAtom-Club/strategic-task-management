@@ -78,11 +78,11 @@ const approvalIndicators = computed(() => {
   }) as StrategicIndicator[]
 })
 
-// 待审批数量（用于按钮显示）- 基于 progressApprovalStatus === 'pending'
+// 待审批数量（用于按钮显示）- 基于 progressApprovalStatus === 'PENDING'
 const pendingApprovalCount = computed(() => {
   if (!selectedCollege.value) {return 0}
   // 统计当前部门下发给该学院的、进度待审批的指标数量
-  return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'pending').length
+  return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'PENDING').length
 })
 
 // 打开任务审批抽屉

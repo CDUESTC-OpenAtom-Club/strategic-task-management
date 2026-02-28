@@ -21,7 +21,7 @@ export type UserRole = z.infer<typeof UserRoleSchema>
 export const ApprovalStatusSchema = z.enum(['pending', 'approved', 'rejected'])
 export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>
 
-export const ProgressApprovalStatusSchema = z.enum(['none', 'draft', 'pending', 'approved', 'rejected'])
+export const ProgressApprovalStatusSchema = z.enum(['NONE', 'DRAFT', 'PENDING', 'APPROVED', 'REJECTED'])
 export type ProgressApprovalStatus = z.infer<typeof ProgressApprovalStatusSchema>
 
 export const IndicatorTypeSchema = z.enum(['quantitative', 'qualitative'])
@@ -138,10 +138,10 @@ export const StrategicIndicatorSchema = z.object({
   parentIndicatorId: z.string().optional(),
   year: z.number().int().min(2020).max(2100).optional(),
   statusAudit: z.array(StatusAuditEntrySchema).default([]),
-  progressApprovalStatus: ProgressApprovalStatusSchema.optional(),
+  progressApprovalStatus: ProgressApprovalStatusSchema.optional().default('NONE'),
   pendingProgress: z.number().min(0).max(100).optional(),
   pendingRemark: z.string().optional(),
-  pendingAttachments: z.array(z.string().url()).optional()
+  pendingAttachments: z.array(z.string()).optional()
 })
 
 export type StrategicIndicator = z.infer<typeof StrategicIndicatorSchema>

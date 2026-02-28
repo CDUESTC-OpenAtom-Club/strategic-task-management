@@ -129,13 +129,14 @@ export type EntityValidationRules = Record<string, ValidationRule>
 /**
  * 进度审批状态枚举值
  * @requirement 2.6 - progressApprovalStatus enum validation
+ * 注意：必须使用大写，与数据库约束一致
  */
 export const PROGRESS_APPROVAL_STATUS_VALUES = [
-  'none',
-  'draft', 
-  'pending', 
-  'approved', 
-  'rejected'
+  'NONE',
+  'DRAFT', 
+  'PENDING', 
+  'APPROVED', 
+  'REJECTED'
 ] as const
 
 /**
@@ -611,7 +612,7 @@ export const indicatorDefaultValues: Record<string, unknown> = {
   progress: 0,
   weight: 0,
   milestones: [],
-  progressApprovalStatus: 'none',
+  progressApprovalStatus: 'NONE',
   isQualitative: false,
   isStrategic: false,
   targetValue: 0,

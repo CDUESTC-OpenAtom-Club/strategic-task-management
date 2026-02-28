@@ -84,12 +84,12 @@ const { validateMilestone, safeGet, fillDefaults, validateEnum } = useDataValida
 /**
  * 默认审批状态值 - 当状态无效时使用
  */
-const DEFAULT_APPROVAL_STATUS: ProgressApprovalStatusValue = 'none'
+const DEFAULT_APPROVAL_STATUS: ProgressApprovalStatusValue = 'NONE'  // 使用大写
 
 /**
  * 安全获取审批状态值
  * 
- * 检查 progressApprovalStatus 是否为有效枚举值，无效时返回默认值 'none'
+ * 检查 progressApprovalStatus 是否为有效枚举值，无效时返回默认值 'NONE'
  * 确保 UI 不会因为无效状态值而崩溃
  * 
  * @param status - 原始状态值
@@ -344,7 +344,8 @@ const indicators = computed(() => {
       name: i.name,
       ownerDept: i.ownerDept,
       responsibleDept: i.responsibleDept,
-      isStrategic: i.isStrategic
+      isStrategic: i.isStrategic,
+      statusAudit: i.statusAudit
     })))
     
     list = list.filter(i => {
@@ -353,11 +354,26 @@ const indicators = computed(() => {
       
       // 职能部门：只显示战略指标（排除自己下发给学院的子指标）
       // 二级学院：显示所有指标（包括职能部门下发的子指标）
+      let roleMatch = false
       if (props.viewingRole === 'functional_dept') {
-        return isResponsible && i.isStrategic === true
+        roleMatch = isResponsible && i.isStrategic === true
       } else {
-        return isResponsible
+        roleMatch = isResponsible
       }
+      
+      if (!roleMatch) return false
+      
+      // 过滤状态：只显示已下发的指标（排除草稿状态）
+      // 基于 statusAudit 判断状态
+      const audit = i.statusAudit || []
+      if (audit.length === 0) return false // 无审计记录 = 草稿状态 = 不显示
+      
+      const lastAudit = audit[audit.length - 1]
+      const lastAction = lastAudit?.action
+      
+      // 显示已下发状态的指标：distribute（已下发）、submit（已提交）、reject（已打回）、approve（已审批）、revoke（已撤回）
+      // 不显示 withdraw（已撤销下发）状态的指标
+      return lastAction === 'distribute' || lastAction === 'submit' || lastAction === 'reject' || lastAction === 'approve' || lastAction === 'revoke'
     })
     
     console.log('[IndicatorListView] 筛选后指标数:', list.length)
@@ -366,7 +382,8 @@ const indicators = computed(() => {
       name: i.name,
       ownerDept: i.ownerDept,
       responsibleDept: i.responsibleDept,
-      isStrategic: i.isStrategic
+      isStrategic: i.isStrategic,
+      lastAction: i.statusAudit && i.statusAudit.length > 0 ? i.statusAudit[i.statusAudit.length - 1].action : 'none'
     })))
   }
 
@@ -501,7 +518,7 @@ const handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndi
       for (const row of pendingRows) {
         // 更新指标状态为待审批
         await strategicStore.updateIndicator(row.id.toString(), {
-          progressApprovalStatus: 'pending'
+          progressApprovalStatus: 'PENDING'
         })
 
         // 添加审计日志
@@ -528,9 +545,9 @@ const handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndi
 
 // 按任务组批量撤回（职能部门/二级学院专用）
 const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
-  // 找出所有待审批（pending）的指标
+  // 找出所有待审批（PENDING）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = group.rows.filter(r => isApprovalStatus(r, 'pending'))
+  const pendingRows = group.rows.filter(r => isApprovalStatus(r, 'PENDING'))  // 使用大写
   
   if (pendingRows.length === 0) {
     ElMessage.warning('该任务下没有待审批的指标')
@@ -554,7 +571,7 @@ const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIn
       // 在这里我们改回 none，但保留 pendingProgress 等字段，这样“填报”按钮会显示这些值。
       // 实际上 updateIndicator 会合并对象。
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'none'
+        progressApprovalStatus: 'DRAFT'
       })
 
       // 添加审计日志
@@ -564,8 +581,8 @@ const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIn
         operatorDept: authStore.userDepartment || '未知部门',
         action: 'revoke',
         comment: '批量撤回进度填报',
-        previousStatus: 'pending',
-        newStatus: 'none'
+        previousStatus: 'PENDING',
+        newStatus: 'DRAFT'
       })
     })
 
@@ -603,11 +620,12 @@ const handleBatchSubmitAll = () => {
     }
   ).then(({ value: submitComment }) => {
     pendingRows.forEach(row => {
-      // 提交：将状态改为 pending，并将 pendingProgress 等数据提交审批
+      // 提交：只改变状态为 PENDING，不修改 progress 字段
+      // progress 字段只有在审批通过后才由后端将 pendingProgress 复制过来
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'pending',
-        progress: row.pendingProgress || row.progress || 0,
-        progressComment: row.pendingProgressComment || row.progressComment || ''
+        progressApprovalStatus: 'PENDING'
+        // ❌ 不要修改 progress 字段！
+        // ❌ 不要修改 progressComment 字段！
       })
 
       // 添加审计日志
@@ -618,10 +636,9 @@ const handleBatchSubmitAll = () => {
         action: 'submit',
         comment: submitComment || '批量提交进度填报',
         previousStatus: row.progressApprovalStatus,
-        newStatus: 'pending',
+        newStatus: 'PENDING',
         previousProgress: row.progress,
-        newProgress: row.pendingProgress,
-        progressComment: row.pendingProgressComment
+        newProgress: row.pendingProgress
       })
     })
 
@@ -631,9 +648,9 @@ const handleBatchSubmitAll = () => {
 
 // 全局批量撤回（职能部门/二级学院专用）
 const handleBatchRevokeAll = () => {
-  // 找出所有待审批（pending）的指标
+  // 找出所有待审批（PENDING）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'pending'))
+  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))  // 使用大写
   
   if (pendingRows.length === 0) {
     ElMessage.warning('没有待审批的指标')
@@ -652,9 +669,9 @@ const handleBatchRevokeAll = () => {
     }
   ).then(() => {
     pendingRows.forEach(row => {
-      // 撤回：将状态改回 none
+      // 撤回：将状态改回 DRAFT（草稿状态），而不是 NONE
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'none'
+        progressApprovalStatus: 'DRAFT'
       })
 
       // 添加审计日志
@@ -664,8 +681,8 @@ const handleBatchRevokeAll = () => {
         operatorDept: authStore.userDepartment || '未知部门',
         action: 'revoke',
         comment: '批量撤回进度填报',
-        previousStatus: 'pending',
-        newStatus: 'none'
+        previousStatus: 'PENDING',
+        newStatus: 'DRAFT'
       })
     })
 
@@ -1271,12 +1288,11 @@ const formatMilestoneDate = (deadline: string) => {
 // 打开填报弹窗
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
-  // 如果已有保存的填报数据，则加载之前的数据；否则使用当前进度
-  const hasPendingData = row.pendingProgress !== undefined && row.pendingProgress !== null
+  // 优先使用 pendingProgress 和 pendingRemark（草稿数据），如果没有则使用已审批通过的数据
   reportForm.value = {
-    newProgress: hasPendingData ? row.pendingProgress : (row.progress || 0),
+    newProgress: row.pendingProgress !== null && row.pendingProgress !== undefined ? row.pendingProgress : (row.progress || 0),
     remark: row.pendingRemark || '',
-    attachments: row.pendingAttachments || []
+    attachments: []
   }
   reportDialogVisible.value = true
 }
@@ -1292,12 +1308,17 @@ const closeReportDialog = () => {
   }
 }
 
-// 保存进度填报（设为待提交状态）
-const submitProgressReport = () => {
+// 保存进度填报（使用 pending 字段保存待审批数据）
+const submitProgressReport = async () => {
   if (!currentReportIndicator.value) {return}
 
   const indicator = currentReportIndicator.value
-  const currentProgress = indicator.progress || 0
+  // 根据审批状态决定当前进度的基准：
+  // - PENDING: 使用 pendingProgress（待审批进度）作为基准
+  // - 其他状态（DRAFT/NONE/APPROVED/REJECTED）: 使用 progress（已审批进度）作为基准
+  const currentProgress = indicator.progressApprovalStatus === 'PENDING' && indicator.pendingProgress !== null && indicator.pendingProgress !== undefined
+    ? indicator.pendingProgress 
+    : (indicator.progress || 0)
 
   // 验证：进度只能递增
   if (reportForm.value.newProgress < currentProgress) {
@@ -1317,35 +1338,36 @@ const submitProgressReport = () => {
     return
   }
 
-  // 直接保存，设为待提交状态
-  strategicStore.updateIndicator(indicator.id.toString(), {
-    progressApprovalStatus: 'draft',  // 待提交状态
+  console.log('[DEBUG] 保存进度填报:', {
+    indicatorId: indicator.id,
     pendingProgress: reportForm.value.newProgress,
-    pendingRemark: reportForm.value.remark,
-    pendingAttachments: reportForm.value.attachments
+    pendingRemark: reportForm.value.remark
   })
 
-  ElMessage.success('进度已保存，可在批量操作中提交')
-  closeReportDialog()
+  try {
+    // 使用 pending 字段保存待审批数据
+    await strategicStore.updateIndicator(indicator.id.toString(), {
+      pendingProgress: reportForm.value.newProgress,
+      pendingRemark: reportForm.value.remark,
+      pendingAttachments: JSON.stringify([]),  // 暂时不支持附件
+      progressApprovalStatus: 'DRAFT'  // 必须使用大写，数据库约束要求
+    })
+
+    ElMessage.success('进度已保存，可在批量操作中提交')
+    closeReportDialog()
+  } catch (err) {
+    console.error('[ERROR] 保存进度失败:', err)
+    ElMessage.error('保存失败，请稍后重试')
+  }
 }
 
 
-// 检查指标是否已填报（有待提交的进度数据或状态为draft/pending）
+// 检查指标是否已填报（有 pendingProgress 或 progressApprovalStatus 为 DRAFT/PENDING 表示已填报）
+// 检查指标是否已填报（progressApprovalStatus 为 DRAFT 或 PENDING 表示已填报）
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const isIndicatorFilled = (row: StrategicIndicator): boolean => {
-  // 状态为 draft 或 pending 表示已填报
-  if (isApprovalStatus(row, ['draft', 'pending'])) {
-    return true
-  }
-  // 有待提交的进度数据（包括0）也表示已填报
-  if (row.pendingProgress !== undefined && row.pendingProgress !== null) {
-    return true
-  }
-  // 有待提交的备注也表示已填报
-  if (row.pendingRemark && row.pendingRemark.trim()) {
-    return true
-  }
-  return false
+  // 状态为 DRAFT 或 PENDING 表示已填报
+  return isApprovalStatus(row, ['DRAFT', 'PENDING'])
 }
 
 // 检查所有指标是否都已填报
@@ -1358,7 +1380,7 @@ const allIndicatorsFilled = computed(() => {
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const allIndicatorsSubmitted = computed(() => {
   if (indicators.value.length === 0) {return false}
-  return indicators.value.every(row => isApprovalStatus(row, 'pending'))
+  return indicators.value.every(row => isApprovalStatus(row, 'PENDING'))  // 使用大写
 })
 
 // 获取未填报的指标数量
@@ -1367,7 +1389,7 @@ const unfilledIndicatorsCount = computed(() => {
 })
 
 // 一键提交所有指标（职能部门/二级学院专用）
-const handleSubmitAll = () => {
+const handleSubmitAll = async () => {
   if (indicators.value.length === 0) {
     ElMessage.warning('没有可提交的指标')
     return
@@ -1382,54 +1404,85 @@ const handleSubmitAll = () => {
 
   const indicatorNames = indicators.value.map(ind => ind.name).join('、')
 
-  ElMessageBox.prompt(
-    `确认一键提交所有 ${indicators.value.length} 个指标？\n\n指标列表：${indicatorNames}\n\n注意：提交后将无法修改，需等待上级部门审批。\n\n请输入提交备注：`,
-    '一键提交确认',
-    {
-      confirmButtonText: '确定提交',
-      cancelButtonText: '取消',
-      inputPlaceholder: '请输入提交备注',
-      inputType: 'textarea',
-      inputValidator: (value) => {
-        if (!value || !value.trim()) {
-          return '请输入提交备注'
+  try {
+    const { value: submitComment } = await ElMessageBox.prompt(
+      `确认一键提交所有 ${indicators.value.length} 个指标？\n\n指标列表：${indicatorNames}\n\n注意：提交后将无法修改，需等待上级部门审批。\n\n请输入提交备注：`,
+      '一键提交确认',
+      {
+        confirmButtonText: '确定提交',
+        cancelButtonText: '取消',
+        inputPlaceholder: '请输入提交备注',
+        inputType: 'textarea',
+        inputValidator: (value) => {
+          if (!value || !value.trim()) {
+            return '请输入提交备注'
+          }
+          return true
         }
-        return true
       }
-    }
-  ).then(({ value: submitComment }) => {
-    indicators.value.forEach(row => {
-      // 提交：将状态改为 pending，使用当前进度数据
-      strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'pending',
-        // 如果有待提交的进度数据就用待提交的，否则用当前进度
-        progress: row.pendingProgress || row.progress || 0,
-        progressComment: row.pendingProgressComment || row.progressComment || ''
-      })
+    )
 
-      // 添加审计日志
-      strategicStore.addStatusAuditEntry(row.id.toString(), {
-        operator: authStore.userName || 'unknown',
-        operatorName: authStore.userName || '未知用户',
-        operatorDept: authStore.userDepartment || '未知部门',
-        action: 'submit',
-        comment: submitComment || '一键提交所有指标进度',
-        previousStatus: row.progressApprovalStatus,
-        newStatus: 'pending',
-        previousProgress: row.progress,
-        newProgress: row.pendingProgress || row.progress,
-        progressComment: row.pendingProgressComment || row.progressComment
-      })
+    // 显示加载状态
+    const loading = ElMessage({
+      message: '正在提交指标...',
+      type: 'info',
+      duration: 0
     })
 
-    ElMessage.success(`成功提交所有${indicators.value.length}项指标进度`)
-  })
+    try {
+      // 使用 Promise.all 等待所有更新完成
+      await Promise.all(
+        indicators.value.map(async (row) => {
+          // 构建审计记录
+          const newAuditEntry = {
+            id: `audit-${row.id}-${Date.now()}`,
+            operator: authStore.user?.id || 'admin',
+            operatorName: authStore.user?.name || '管理员',
+            operatorDept: authStore.userDepartment || '未知部门',
+            action: 'submit' as const,
+            comment: submitComment || '一键提交所有指标进度',
+            timestamp: new Date(),
+            previousStatus: row.progressApprovalStatus,
+            newStatus: 'PENDING' as const,  // 使用大写
+            previousProgress: row.progress,
+            newProgress: row.pendingProgress || row.progress  // 使用待审批进度
+          }
+
+          // 将新的审计记录添加到现有记录中
+          const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
+
+          // 提交：将状态改为 PENDING（不修改 progress，等待审批通过后由后端更新）
+          return strategicStore.updateIndicator(row.id.toString(), {
+            progressApprovalStatus: 'PENDING',  // 必须使用大写，数据库约束要求
+            statusAudit: updatedStatusAudit
+          })
+        })
+      )
+
+      // 注意：不需要重新加载数据，因为 updateIndicator 已经会重新加载每个指标
+
+      loading.close()
+      ElMessage.success(`成功提交所有 ${indicators.value.length} 项指标进度`)
+    } catch (err) {
+      loading.close()
+      const errorMsg = err instanceof Error ? err.message : '未知错误'
+      ElMessage.error({
+        message: `提交失败: ${errorMsg}`,
+        duration: 5000,
+        showClose: true
+      })
+      console.error('Submit all failed:', err)
+      // 注意：不需要重新加载数据，updateIndicator 失败时会自动回滚
+    }
+  } catch {
+    // 用户取消操作
+  }
 }
 
 // 一键撤回所有已提交的指标
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const handleWithdrawAll = () => {
-  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'pending'))
+  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))  // 使用大写
   
   if (pendingRows.length === 0) {
     ElMessage.warning('没有待审批的指标可撤回')
@@ -1450,7 +1503,7 @@ const handleWithdrawAll = () => {
     pendingRows.forEach(row => {
       // 撤回：将状态改回 draft，保留填报数据供修改
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'draft'
+        progressApprovalStatus: 'DRAFT'
       })
 
       // 添加审计日志
@@ -1460,8 +1513,8 @@ const handleWithdrawAll = () => {
         operatorDept: authStore.userDepartment || '未知部门',
         action: 'revoke',
         comment: '一键撤回所有指标进度',
-        previousStatus: 'pending',
-        newStatus: 'draft'
+        previousStatus: 'PENDING',
+        newStatus: 'DRAFT'
       })
     })
 
@@ -1713,7 +1766,16 @@ const handleWithdrawAll = () => {
               </el-table-column>
               <el-table-column prop="progress" label="进度" width="120" align="center">
                 <template #default="{ row }">
-                  <span class="progress-number" :class="getProgressStatusClass(row)">{{ row.progress || 0 }}</span>
+                  <!-- 根据审批状态决定显示哪个进度：
+                       - DRAFT: 显示已审批进度（progress），因为待审批进度还未提交
+                       - PENDING: 显示待审批进度（pendingProgress），表示等待审批中
+                       - APPROVED/REJECTED/NONE: 显示已审批进度（progress）
+                  -->
+                  <span class="progress-number" :class="getProgressStatusClass(row)">
+                    {{ row.progressApprovalStatus === 'PENDING' && row.pendingProgress !== null && row.pendingProgress !== undefined 
+                       ? row.pendingProgress 
+                       : (row.progress || 0) }}
+                  </span>
                 </template>
               </el-table-column>
               <el-table-column v-if="showResponsibleDeptColumn" prop="responsibleDept" label="责任部门" min-width="140">
@@ -1947,7 +2009,12 @@ const handleWithdrawAll = () => {
           </div>
           <div class="info-row">
             <span class="info-label">当前进度：</span>
-            <span class="info-value highlight">{{ currentReportIndicator.progress || 0 }}%</span>
+            <!-- 优先显示待审批进度 -->
+            <span class="info-value highlight">
+              {{ currentReportIndicator.pendingProgress !== null && currentReportIndicator.pendingProgress !== undefined 
+                ? currentReportIndicator.pendingProgress 
+                : (currentReportIndicator.progress || 0) }}%
+            </span>
           </div>
           <div class="info-row">
             <span class="info-label">目标值：</span>

@@ -24,7 +24,11 @@ export function hasBackendUpdates(updates: Partial<StrategicIndicator>): boolean
     'progress',
     'status',
     'year',
-    'statusAudit'
+    'statusAudit',
+    'progressApprovalStatus',  // 进度审批状态
+    'pendingProgress',         // 待审批进度
+    'pendingRemark',           // 待审批备注
+    'pendingAttachments'       // 待审批附件
   ]
 
   // 检查是否有任何需要同步的字段
@@ -50,7 +54,12 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): an
     'description',
     'progress',
     'status',
-    'year'
+    'year',
+    'canWithdraw',
+    'progressApprovalStatus',  // 进度审批状态
+    'pendingProgress',         // 待审批进度
+    'pendingRemark',           // 待审批备注
+    'pendingAttachments'       // 待审批附件
   ]
 
   directFields.forEach(field => {
@@ -114,4 +123,3 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): an
 
   return request
 }
-

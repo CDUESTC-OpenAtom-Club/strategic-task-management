@@ -143,17 +143,15 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     sortOrder: m.sortOrder
   })) || []
 
-  // 转换进度审批状态
-  const convertProgressApprovalStatus = (status?: string): 'none' | 'draft' | 'pending' | 'approved' | 'rejected' => {
-    if (!status) {return 'none'}
-    const map: Record<string, 'none' | 'draft' | 'pending' | 'approved' | 'rejected'> = {
-      'NONE': 'none',
-      'DRAFT': 'draft',
-      'PENDING': 'pending',
-      'APPROVED': 'approved',
-      'REJECTED': 'rejected'
+  // 转换进度审批状态（保持大写，与数据库约束一致）
+  const convertProgressApprovalStatus = (status?: string): 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' => {
+    if (!status) {return 'NONE'}
+    // 直接返回大写值，不再转换
+    const upperStatus = status.toUpperCase()
+    if (['NONE', 'DRAFT', 'PENDING', 'APPROVED', 'REJECTED'].includes(upperStatus)) {
+      return upperStatus as 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
     }
-    return map[status] || 'none'
+    return 'NONE'
   }
 
   // 解析 statusAudit JSON
@@ -195,7 +193,8 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     unit: vo.unit ?? '%',
     responsibleDept: vo.responsibleDept ?? vo.targetOrgName,
     responsiblePerson: vo.responsiblePerson ?? '',
-    status: vo.status === 'ACTIVE' ? 'active' : 'archived',
+    // 修复：正确处理所有状态值，后端返回的是小写字符串
+    status: (vo.status?.toLowerCase() as 'draft' | 'active' | 'archived' | 'distributed' | 'pending' | 'approved') ?? 'active',
     isStrategic: vo.isStrategic ?? (vo.level === 'STRAT_TO_FUNC'),
     ownerDept: vo.ownerDept ?? vo.ownerOrgName,
     year: vo.year,
