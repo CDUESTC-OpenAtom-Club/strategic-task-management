@@ -254,11 +254,10 @@ const approvalIndicators = computed(() => {
   // 审批人：返回待审批的指标 + 有历史记录的指标（确保历史记录能正常显示）
   // 填报人：返回所有有审批状态的指标（用于查看审批进度）
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
+  // 战略发展部：显示所有战略指标（isStrategic === true）
   if (isStrategicDept.value) {
-    return list.filter(i => 
-      isApprovalStatus(i, 'pending') || 
-      (i.statusAudit && i.statusAudit.length > 0)
-    )
+    // 战略发展部显示所有战略指标
+    return list.filter(i => i.isStrategic === true)
   } else {
     // 使用安全的状态获取，过滤掉 draft 和 none 状态
     return list.filter(i => {
@@ -333,15 +332,42 @@ const indicators = computed(() => {
   })
 
   // 根据当前角色过滤数据
-  // 如果不是战略发展部，只显示下发给当前部门的指标（responsibleDept 或 ownerDept 匹配）
+  // 指标填报页面：只显示当前部门作为责任部门的战略指标（需要填报的指标）
+  // - 职能部门：显示战略发展部下发给自己的战略指标（responsibleDept 匹配 且 isStrategic = true）
+  // - 二级学院：显示职能部门下发给自己的子指标（responsibleDept 匹配）
   if (!isStrategicDept.value && props.viewingDept) {
+    console.log('[IndicatorListView] 筛选前指标数:', list.length)
+    console.log('[IndicatorListView] 当前部门:', props.viewingDept)
+    console.log('[IndicatorListView] 当前角色:', props.viewingRole)
+    console.log('[IndicatorListView] 前3个指标:', list.slice(0, 3).map(i => ({
+      id: i.id,
+      name: i.name,
+      ownerDept: i.ownerDept,
+      responsibleDept: i.responsibleDept,
+      isStrategic: i.isStrategic
+    })))
+    
     list = list.filter(i => {
-      // 匹配责任部门（当前部门负责的指标）
+      // 只匹配责任部门（当前部门负责填报的指标）
       const isResponsible = i.responsibleDept === props.viewingDept
-      // 匹配下发部门（当前部门下发的指标）
-      const isOwner = i.ownerDept === props.viewingDept
-      return isResponsible || isOwner
+      
+      // 职能部门：只显示战略指标（排除自己下发给学院的子指标）
+      // 二级学院：显示所有指标（包括职能部门下发的子指标）
+      if (props.viewingRole === 'functional_dept') {
+        return isResponsible && i.isStrategic === true
+      } else {
+        return isResponsible
+      }
     })
+    
+    console.log('[IndicatorListView] 筛选后指标数:', list.length)
+    console.log('[IndicatorListView] 筛选后前3个指标:', list.slice(0, 3).map(i => ({
+      id: i.id,
+      name: i.name,
+      ownerDept: i.ownerDept,
+      responsibleDept: i.responsibleDept,
+      isStrategic: i.isStrategic
+    })))
   }
 
   // 应用筛选条件

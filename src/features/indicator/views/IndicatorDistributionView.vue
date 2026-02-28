@@ -27,7 +27,16 @@ const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
 
 // 当前用户部门（优先使用视角切换的部门）
-const currentDept = computed(() => props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || '')
+const currentDept = computed(() => {
+  const dept = props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || ''
+  console.log('[IndicatorDistribution] currentDept 计算:', {
+    'props.viewingDept': props.viewingDept,
+    'authStore.effectiveDepartment': authStore.effectiveDepartment,
+    'authStore.userDepartment': authStore.userDepartment,
+    '最终值': dept
+  })
+  return dept
+})
 
 // 判断是否为战略发展部（只能查看，不能编辑）
 const isStrategicDept = computed(() => {
@@ -63,12 +72,11 @@ const currentAuditIndicator = ref<StrategicIndicator | null>(null)
 // 任务审批抽屉状态
 const taskApprovalVisible = ref(false)
 
-// 专门用于审批抽屉的指标列表（当前选中学院的所有子指标，只显示当前部门下发的）
+// 专门用于审批抽屉的指标列表（当前选中学院的所有指标，只显示当前部门下发的）
 const approvalIndicators = computed(() => {
   if (!selectedCollege.value) {return []}
   // 只返回当前部门下发给该学院的指标
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
     if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
@@ -103,10 +111,9 @@ const filteredColleges = computed(() => {
   return colleges.value.filter(c => c.toLowerCase().includes(keyword))
 })
 
-// 获取学院的子指标数量（只统计当前部门下发的）
+// 获取学院的指标数量（只统计当前部门下发的）
 const getCollegeChildCount = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
     // 只统计当前部门下发的指标
     if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
@@ -117,13 +124,12 @@ const getCollegeChildCount = (college: string) => {
   }).length
 }
 
-// 获取选中学院的所有子指标（按父指标分组，只显示当前部门下发的）
+// 获取选中学院的所有指标（当前部门下发的）
 const collegeIndicators = computed(() => {
   if (!selectedCollege.value) {return []}
   
-  // 获取当前部门下发给该学院的子指标
-  const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
+  // 获取当前部门下发给该学院的所有指标
+  const indicators = strategicStore.indicators.filter(i => {
     // 只显示当前部门下发的指标
     if (i.ownerDept !== currentDept.value) {return false}
     // 支持字符串或数组格式的 responsibleDept
@@ -133,13 +139,40 @@ const collegeIndicators = computed(() => {
     return i.responsibleDept === selectedCollege.value
   })
   
-  // 获取这些子指标的父指标
-  const parentIds = new Set(childIndicators.map(c => c.parentIndicatorId).filter(Boolean))
-  const parentIndicators = strategicStore.indicators.filter(i =>
-    i.isStrategic && parentIds.has(i.id.toString())
-  )
+  console.log('[IndicatorDistribution] 当前部门:', currentDept.value)
+  console.log('[IndicatorDistribution] 选中学院:', selectedCollege.value)
+  console.log('[IndicatorDistribution] 筛选后的指标数:', indicators.length)
+  if (indicators.length > 0) {
+    const indicatorData = indicators.map(i => ({
+      id: i.id,
+      name: i.name,
+      parentIndicatorId: i.parentIndicatorId || 'null'
+    }))
+    console.table(indicatorData)
+    
+    // 统计名称重复情况
+    const nameCount = new Map<string, number>()
+    indicators.forEach(i => {
+      const count = nameCount.get(i.name) || 0
+      nameCount.set(i.name, count + 1)
+    })
+    const nameStats = Array.from(nameCount.entries()).map(([name, count]) => ({ name, count }))
+    console.log('=== 名称重复统计 ===')
+    console.table(nameStats)
+  }
   
-  return parentIndicators
+  // 继续原来的日志（如果有的话）
+  if (indicators.length > 0 && false) {
+    console.log('[IndicatorDistribution] 第一个指标(旧):', {
+      id: indicators[0].id,
+      name: indicators[0].name,
+      indicatorDesc: (indicators[0] as any).indicatorDesc,
+      ownerDept: indicators[0].ownerDept,
+      responsibleDept: indicators[0].responsibleDept
+    })
+  }
+  
+  return indicators
 })
 
 // 获取指标的子指标（只显示当前部门下发的）
@@ -327,7 +360,7 @@ const generateMonthlyMilestonesForForm = () => {
     
     newIndicatorForm.value.milestones.push({
       id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      name: `${indicatorName} - ${month}月`,  // 在名字后面加上月份
       targetProgress: progress,
       deadline: deadline
     })
@@ -826,16 +859,25 @@ const handleBatchApprove = (college: string) => {
   ).then(() => {
     // 为每个待审批指标添加审计日志并更新状态
     pendingIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+      // 构建新的审计记录
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
-        action: 'approve',
-        comment: '批量审批通过'
-      })
+        action: 'approve' as const,
+        comment: '批量审批通过',
+        timestamp: new Date()
+      }
+      
+      // 将新的审计记录添加到现有记录中
+      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+      
+      // 一次性更新状态和审计记录
       strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'approved',
-        canWithdraw: false
+        canWithdraw: false,
+        statusAudit: updatedStatusAudit
       })
     })
     ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
@@ -865,16 +907,25 @@ const handleBatchReject = (college: string) => {
   ).then(({ value }) => {
     // 为每个待审批指标添加审计日志并更新状态
     pendingIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+      // 构建新的审计记录
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
-        action: 'reject',
-        comment: value || '批量打回重新提交'
-      })
+        action: 'reject' as const,
+        comment: value || '批量打回重新提交',
+        timestamp: new Date()
+      }
+      
+      // 将新的审计记录添加到现有记录中
+      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+      
+      // 一次性更新状态和审计记录
       strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
-        canWithdraw: true
+        canWithdraw: true,
+        statusAudit: updatedStatusAudit
       })
     })
     ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
@@ -906,16 +957,25 @@ const handleBatchWithdraw = (college: string) => {
   ).then(() => {
     // 为每个可撤销指标添加审计日志并更新状态
     withdrawableIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+      // 构建新的审计记录
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
-        action: 'withdraw',
-        comment: '批量撤销下发'
-      })
+        action: 'withdraw' as const,
+        comment: '批量撤销下发',
+        timestamp: new Date()
+      }
+      
+      // 将新的审计记录添加到现有记录中
+      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+      
+      // 一次性更新状态和审计记录
       strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'draft',
-        canWithdraw: false
+        canWithdraw: false,
+        statusAudit: updatedStatusAudit
       })
     })
     ElMessage.success(`已批量撤销 ${withdrawableIndicators.length} 个指标`)
@@ -943,16 +1003,25 @@ const handleBatchDistribute = (college: string) => {
   ).then(() => {
     // 为每个草稿指标添加审计日志并更新状态
     draftIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+      // 构建新的审计记录
+      const newAuditEntry = {
+        id: `audit-${indicator.id}-${Date.now()}`,
         operator: authStore.user?.id || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
-        action: 'distribute',
-        comment: '批量下发'
-      })
+        action: 'distribute' as const,
+        comment: '批量下发',
+        timestamp: new Date()
+      }
+      
+      // 将新的审计记录添加到现有记录中
+      const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+      
+      // 一次性更新状态和审计记录
       strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
-        canWithdraw: true
+        canWithdraw: true,
+        statusAudit: updatedStatusAudit
       })
     })
     ElMessage.success(`已批量下发 ${draftIndicators.length} 个指标`)
@@ -963,7 +1032,7 @@ const handleBatchDistribute = (college: string) => {
 const getCollegeStatus = (college: string) => {
   // 只统计当前部门下发给该学院的指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
+    // 移除 isStrategic 过滤，因为职能部门下发给学院的指标也是战略指标
     if (i.ownerDept !== currentDept.value) {return false}
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
@@ -1029,12 +1098,25 @@ const handleApprove = (indicator: StrategicIndicator) => {
     cancelButtonText: '取消',
     type: 'success'
   }).then(() => {
-    strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+    // 构建新的审计记录
+    const newAuditEntry = {
+      id: `audit-${indicator.id}-${Date.now()}`,
       operator: authStore.user?.id || 'admin',
       operatorName: authStore.user?.name || '管理员',
       operatorDept: currentDept.value,
-      action: 'approve',
-      comment: '审批通过'
+      action: 'approve' as const,
+      comment: '审批通过',
+      timestamp: new Date()
+    }
+    
+    // 将新的审计记录添加到现有记录中
+    const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+    
+    // 一次性更新状态和审计记录
+    strategicStore.updateIndicator(indicator.id.toString(), {
+      status: 'approved',
+      canWithdraw: false,
+      statusAudit: updatedStatusAudit
     })
     ElMessage.success('审批通过')
   })
@@ -1049,12 +1131,25 @@ const handleReject = (indicator: StrategicIndicator) => {
     inputType: 'textarea',
     inputPlaceholder: '请输入打回原因（选填）'
   }).then(({ value }) => {
-    strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+    // 构建新的审计记录
+    const newAuditEntry = {
+      id: `audit-${indicator.id}-${Date.now()}`,
       operator: authStore.user?.id || 'admin',
       operatorName: authStore.user?.name || '管理员',
       operatorDept: currentDept.value,
-      action: 'reject',
-      comment: value || '打回重新提交'
+      action: 'reject' as const,
+      comment: value || '打回重新提交',
+      timestamp: new Date()
+    }
+    
+    // 将新的审计记录添加到现有记录中
+    const updatedStatusAudit = [...(indicator.statusAudit || []), newAuditEntry]
+    
+    // 一次性更新状态和审计记录
+    strategicStore.updateIndicator(indicator.id.toString(), {
+      status: 'distributed',
+      canWithdraw: true,
+      statusAudit: updatedStatusAudit
     })
     ElMessage.success('已打回，等待下级部门重新提交')
   })
@@ -1330,6 +1425,12 @@ const addMilestone = () => {
 const generateMonthlyMilestones = () => {
   const currentYear = new Date().getFullYear()
   const indicatorName = getEditingChildName() || '指标完成'
+  
+  // 保存现有里程碑的ID（如果有的话）
+  const existingIds = editingMilestones.value
+    .filter(m => m.id && !m.id.startsWith('ms-'))
+    .map(m => m.id)
+  
   editingMilestones.value = []
   
   for (let month = 1; month <= 12; month++) {
@@ -1337,9 +1438,12 @@ const generateMonthlyMilestones = () => {
     const deadline = `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
     const progress = Math.round((month / 12) * 100)
     
+    // 如果有现有的ID，使用它；否则使用临时ID
+    const milestoneId = existingIds[month - 1] || `ms-${Date.now()}-${month}`
+    
     editingMilestones.value.push({
-      id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      id: milestoneId,
+      name: `${indicatorName} - ${month}月`,  // 在名字后面加上月份
       expectedDate: deadline,
       progress: progress
     })
@@ -1382,8 +1486,13 @@ const saveMilestones = () => {
   if (!editingMilestonesChild.value) {return}
   
   const child = editingMilestonesChild.value
+  console.log('[saveMilestones] 开始保存里程碑')
+  console.log('[saveMilestones] child:', child)
+  console.log('[saveMilestones] editingMilestones:', editingMilestones.value)
+  
   if ('isNew' in child && child.isNew) {
     child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
+    console.log('[saveMilestones] 新增指标，只更新本地状态')
   } else {
     const updates: Partial<StrategicIndicator> = {
       targetValue: editingMilestones.value.length,
@@ -1395,6 +1504,15 @@ const saveMilestones = () => {
         status: 'pending' as const
       }))
     }
+    console.log('[saveMilestones] 更新已有指标，调用 updateIndicator')
+    console.log('[saveMilestones] indicatorId:', (child as StrategicIndicator).id)
+    console.log('[saveMilestones] updates:', updates)
+    console.log('[saveMilestones] 里程碑详情:', editingMilestones.value.map(m => ({
+      id: m.id,
+      name: m.name,
+      idType: typeof m.id,
+      isNumeric: !isNaN(parseInt(m.id))
+    })))
     strategicStore.updateIndicator((child as StrategicIndicator).id.toString(), updates)
   }
   
@@ -1456,59 +1574,43 @@ const collegeTableData = computed(() => {
   const data: TableRowData[] = []
   const indicators = collegeIndicators.value
   
-  indicators.forEach((indicator) => {
-    const indicatorId = indicator.id.toString()
-    
-    // 获取下发给该学院的子指标（支持字符串或数组格式）
-    const children = strategicStore.indicators.filter(i => {
-      if (i.parentIndicatorId !== indicatorId || i.isStrategic) {return false}
-      // 支持字符串或数组格式的 responsibleDept
-      if (Array.isArray(i.responsibleDept)) {
-        return i.responsibleDept.includes(selectedCollege.value!)
-      }
-      return i.responsibleDept === selectedCollege.value
+  console.log('[collegeTableData] 开始计算表格数据')
+  console.log('[collegeTableData] collegeIndicators 数量:', indicators.length)
+  
+  // 检查是否有重复的指标ID
+  const idSet = new Set()
+  const duplicates: any[] = []
+  indicators.forEach(ind => {
+    if (idSet.has(ind.id)) {
+      duplicates.push({ id: ind.id, name: ind.name })
+    }
+    idSet.add(ind.id)
+  })
+  if (duplicates.length > 0) {
+    console.warn('[collegeTableData] 发现重复的指标ID:', duplicates)
+  }
+  
+  // 直接将这些指标作为数据行显示，不再查找子指标
+  indicators.forEach((indicator, idx) => {
+    console.log(`[collegeTableData] 添加指标 ${idx + 1}:`, {
+      id: indicator.id,
+      name: indicator.name,
+      parentIndicatorId: indicator.parentIndicatorId,
+      level: indicator.level
     })
     
-    // 获取新增的子指标（只显示分配给当前学院的）
-    const newChildren = (newChildIndicators[indicatorId] || []).filter(
-      nc => nc.college.includes(selectedCollege.value!)
-    )
-    
-    // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
-    if (children.length === 0 && newChildren.length === 0) {
-      data.push({
-        type: 'indicator-only',
-        taskTitle: indicator.taskContent || '',
-        indicator,
-        parentIndicatorId: indicatorId
-      })
-    } else {
-      // 添加已有子指标行
-      children.forEach(child => {
-        data.push({
-          type: 'child',
-          taskTitle: indicator.taskContent || '',
-          indicator,
-          child,
-          parentIndicatorId: indicatorId
-        })
-      })
-      
-      // 添加新增的子指标行
-      newChildren.forEach((newChild, newIdx) => {
-        // 查找原始索引
-        const originalIdx = (newChildIndicators[indicatorId] || []).findIndex(nc => nc.id === newChild.id)
-        data.push({
-          type: 'new-child',
-          taskTitle: indicator.taskContent || '',
-          indicator,
-          child: newChild,
-          parentIndicatorId: indicatorId,
-          rowIndex: originalIdx >= 0 ? originalIdx : newIdx
-        })
-      })
-    }
+    // 直接添加为 child 类型（可编辑的指标行）
+    data.push({
+      type: 'child',
+      taskTitle: indicator.taskContent || '',
+      indicator: indicator,  // 父指标信息（用于显示任务标题）
+      child: indicator,      // 子指标就是自己
+      parentIndicatorId: indicator.parentIndicatorId?.toString() || indicator.id.toString()
+    })
   })
+  
+  console.log('[collegeTableData] 最终表格数据行数:', data.length)
+  console.log('[collegeTableData] 前3行数据:', data.slice(0, 3))
   
   return data
 })

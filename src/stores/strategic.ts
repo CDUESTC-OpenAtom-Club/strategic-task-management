@@ -444,6 +444,21 @@ export const useStrategicStore = defineStore('strategic', () => {
 
         await indicatorApi.updateIndicator(id, updateRequest)
         logger.info(`[Strategic Store] Successfully synced indicator ${id} to backend`, updateRequest)
+        
+        // 重新加载这个指标的数据，确保前端和后端同步
+        try {
+          const response = await indicatorApi.getIndicatorById(id)
+          if (response.success && response.data) {
+            const { default: strategicApi } = await import('@/api/strategic')
+            const updatedIndicator = strategicApi.convertIndicatorVOToStrategicIndicator(response.data)
+            // 更新本地状态
+            Object.assign(indicator, updatedIndicator)
+            indicators.value = [...indicators.value]
+            logger.info(`[Strategic Store] Reloaded indicator ${id} from backend, milestones count:`, updatedIndicator.milestones?.length || 0)
+          }
+        } catch (reloadErr) {
+          logger.warn(`[Strategic Store] Failed to reload indicator ${id} after update:`, reloadErr)
+        }
       } catch (err) {
         logger.error(`[Strategic Store] Failed to sync indicator ${id} to backend:`, err)
         // 如果后端同步失败，回滚本地状态

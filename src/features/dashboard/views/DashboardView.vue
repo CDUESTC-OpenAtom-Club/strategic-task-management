@@ -591,6 +591,11 @@ const collegeBarData = computed(() => {
   }
 
   // 职能部门视角：只看自己下发的
+  if (!ownerDept) {
+    console.warn('[collegeBarData] 职能部门视角但 currentDepartment 为空,返回空数组')
+    return []
+  }
+  
   return getCollegeStatsForFunctionalDept(ownerDept, collegeSelectedMonth.value, currentYear)
 })
 
