@@ -6,7 +6,7 @@
 import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Plus, Promotion, Check, Close, View, Search, RefreshLeft, Timer, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { StrategicIndicator, StrategicTask } from '@/types'
+import type { StrategicIndicator } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
@@ -29,12 +29,6 @@ const orgStore = useOrgStore()
 // 当前用户部门（优先使用视角切换的部门）
 const currentDept = computed(() => {
   const dept = props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || ''
-  console.log('[IndicatorDistribution] currentDept 计算:', {
-    'props.viewingDept': props.viewingDept,
-    'authStore.effectiveDepartment': authStore.effectiveDepartment,
-    'authStore.userDepartment': authStore.userDepartment,
-    '最终值': dept
-  })
   return dept
 })
 
@@ -50,7 +44,7 @@ const isFunctionalDept = computed(() => {
 })
 
 // 只读模式：战略发展部或者历史快照模式
-const isReadOnly = computed(() => timeContext.isReadOnly || isStrategicDept.value)
+const _isReadOnly = computed(() => timeContext.isReadOnly || isStrategicDept.value)
 
 // 是否可以编辑子指标（只有职能部门可以）
 const canEditChild = computed(() => isFunctionalDept.value && !timeContext.isReadOnly)
@@ -139,44 +133,11 @@ const collegeIndicators = computed(() => {
     return i.responsibleDept === selectedCollege.value
   })
   
-  console.log('[IndicatorDistribution] 当前部门:', currentDept.value)
-  console.log('[IndicatorDistribution] 选中学院:', selectedCollege.value)
-  console.log('[IndicatorDistribution] 筛选后的指标数:', indicators.length)
-  if (indicators.length > 0) {
-    const indicatorData = indicators.map(i => ({
-      id: i.id,
-      name: i.name,
-      parentIndicatorId: i.parentIndicatorId || 'null'
-    }))
-    console.table(indicatorData)
-    
-    // 统计名称重复情况
-    const nameCount = new Map<string, number>()
-    indicators.forEach(i => {
-      const count = nameCount.get(i.name) || 0
-      nameCount.set(i.name, count + 1)
-    })
-    const nameStats = Array.from(nameCount.entries()).map(([name, count]) => ({ name, count }))
-    console.log('=== 名称重复统计 ===')
-    console.table(nameStats)
-  }
-  
-  // 继续原来的日志（如果有的话）
-  if (indicators.length > 0 && false) {
-    console.log('[IndicatorDistribution] 第一个指标(旧):', {
-      id: indicators[0].id,
-      name: indicators[0].name,
-      indicatorDesc: (indicators[0] as any).indicatorDesc,
-      ownerDept: indicators[0].ownerDept,
-      responsibleDept: indicators[0].responsibleDept
-    })
-  }
-  
   return indicators
 })
 
 // 获取指标的子指标（只显示当前部门下发的）
-const getChildIndicators = (parentId: string) => {
+const _getChildIndicators = (parentId: string) => {
   return strategicStore.indicators.filter(i => 
     i.parentIndicatorId === parentId && !i.isStrategic && i.ownerDept === currentDept.value
   )
@@ -219,10 +180,10 @@ interface NewIndicatorItem {
 }
 
 // 弹框中的新增指标列表
-const newIndicatorList = ref<NewIndicatorItem[]>([])
+const _newIndicatorList = ref<NewIndicatorItem[]>([])
 
 // 当前正在选择关联指标的新增指标索引
-const selectingParentForIndex = ref<number>(-1)
+const _selectingParentForIndex = ref<number>(-1)
 
 // 战略任务和指标数据（用于选择关联指标弹框）
 const strategicTasksWithIndicators = computed(() => {
@@ -274,7 +235,7 @@ const selectParentTableData = computed((): SelectParentTableRow[] => {
 })
 
 // 选择关联指标弹框 - 单元格合并方法
-const selectParentSpanMethod = ({ row, columnIndex }: { row: SelectParentTableRow; columnIndex: number }) => {
+const _selectParentSpanMethod = ({ row, columnIndex }: { row: SelectParentTableRow; columnIndex: number }) => {
   // 第一列（战略任务）需要合并
   if (columnIndex === 0) {
     if (row.isFirstOfTask) {
@@ -452,7 +413,7 @@ const saveNewIndicator = () => {
 }
 
 // 判断当前学院是否可以新增指标（没有已下发状态的指标）
-const canAddIndicator = computed(() => {
+const _canAddIndicator = computed(() => {
   if (!selectedCollege.value) {return false}
   const status = getCollegeStatus(selectedCollege.value)
   return status.distributed === 0 && status.pending === 0 && status.approved === 0
@@ -485,7 +446,7 @@ interface NewChildIndicator {
 }
 
 // 导出供模板使用
-type NewChild = NewChildIndicator
+type _NewChild = NewChildIndicator
 
 const newChildIndicators = reactive<Record<string, NewChildIndicator[]>>({})
 
@@ -526,7 +487,7 @@ const handleNewChildRowClick = (childId: string, parentId: string) => {
 }
 
 // 添加新的子指标行
-const addNewChildRow = (parentIndicatorId: string) => {
+const _addNewChildRow = (parentIndicatorId: string) => {
   if (!canEditChild.value) {
     ElMessage.warning('您没有权限添加子指标')
     return
@@ -598,7 +559,7 @@ const removeChildIndicator = (child: StrategicIndicator) => {
 }
 
 // 获取所有待下发的子指标数量
-const getPendingChildCount = (parentId: string) => {
+const _getPendingChildCount = (parentId: string) => {
   return (newChildIndicators[parentId] || []).length
 }
 
@@ -1127,12 +1088,6 @@ const collegeOverallStatus = computed(() => {
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
   
-  console.log('[DEBUG] collegeOverallStatus 计算:', {
-    college: selectedCollege.value,
-    status,
-    total
-  })
-  
   if (total === 0) {return { label: '暂无指标', type: 'info' }}
   
   // 优先级：待审批 > 待下发 > 进行中
@@ -1345,7 +1300,7 @@ const generateMonthlyMilestonesForExisting = (childName: string): { id: string; 
     
     milestones.push({
       id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      name: `${indicatorName} - ${month}月`,
       targetProgress: progress,
       deadline: deadline,
       status: 'pending'
@@ -1367,7 +1322,7 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
     
     milestones.push({
       id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      name: `${indicatorName} - ${month}月`,
       expectedDate: expectedDate,
       progress: progress
     })
@@ -1581,13 +1536,9 @@ const saveMilestones = () => {
   if (!editingMilestonesChild.value) {return}
   
   const child = editingMilestonesChild.value
-  console.log('[saveMilestones] 开始保存里程碑')
-  console.log('[saveMilestones] child:', child)
-  console.log('[saveMilestones] editingMilestones:', editingMilestones.value)
   
   if ('isNew' in child && child.isNew) {
     child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
-    console.log('[saveMilestones] 新增指标，只更新本地状态')
   } else {
     const updates: Partial<StrategicIndicator> = {
       targetValue: editingMilestones.value.length,

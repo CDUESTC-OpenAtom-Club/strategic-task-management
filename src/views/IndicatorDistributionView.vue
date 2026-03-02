@@ -1242,7 +1242,7 @@ const generateMonthlyMilestonesForExisting = (childName: string): { id: string; 
     
     milestones.push({
       id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      name: `${indicatorName} - ${month}月`,
       targetProgress: progress,
       deadline: deadline,
       status: 'pending'
@@ -1264,7 +1264,7 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
     
     milestones.push({
       id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      name: `${indicatorName} - ${month}月`,
       expectedDate: expectedDate,
       progress: progress
     })
@@ -1426,7 +1426,7 @@ const generateMonthlyMilestones = () => {
     
     editingMilestones.value.push({
       id: `ms-${Date.now()}-${month}`,
-      name: indicatorName,
+      name: `${indicatorName} - ${month}月`,
       expectedDate: deadline,
       progress: progress
     })

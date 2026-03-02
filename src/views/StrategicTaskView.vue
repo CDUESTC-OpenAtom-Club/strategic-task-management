@@ -397,8 +397,8 @@
       const progress = Math.round((month / 12) * 100)
       
       editingMilestones.value.push({
-        id: Date.now() + month,
-        name: indicatorName,
+        id: 0,  // 使用 0 表示新里程碑，后端会创建新记录
+        name: `${indicatorName} - ${month}月`,
         targetProgress: progress,
         deadline: deadline,
         status: 'pending'
@@ -432,8 +432,18 @@
     }
 
     try {
-      // 更新指标的里程碑
-      await strategicStore.updateIndicator(editingMilestoneIndicator.value.id.toString(), {
+      // 从当前指标列表中查找最新的指标对象（使用 indicator_desc 匹配）
+      const currentIndicator = indicators.value.find(
+        i => i.indicator_desc === editingMilestoneIndicator.value?.indicator_desc
+      )
+      
+      if (!currentIndicator) {
+        ElMessage.error('找不到对应的指标，请刷新页面后重试')
+        return
+      }
+      
+      // 使用最新的指标 ID 进行更新
+      await strategicStore.updateIndicator(currentIndicator.id.toString(), {
         milestones: [...editingMilestones.value]
       })
 
@@ -579,8 +589,8 @@
       const progress = Math.round((month / 12) * 100)
       
       newRow.value.milestones.push({
-        id: Date.now() + month,
-        name: indicatorName,
+        id: 0,  // 使用 0 表示新里程碑，后端会创建新记录
+        name: `${indicatorName} - ${month}月`,
         targetProgress: progress,
         deadline: deadline,
         status: 'pending'
@@ -1133,13 +1143,7 @@
   
   // 确认下发（支持单个和整体下发）
   const confirmDistribute = () => {
-    console.log('[DEBUG] confirmDistribute 被调用')
-    console.log('[DEBUG] distributeTarget:', distributeTarget.value)
-    console.log('[DEBUG] currentDistributeGroup:', currentDistributeGroup.value)
-    console.log('[DEBUG] currentDistributeItem:', currentDistributeItem.value)
-    
     if (distributeTarget.value.length === 0) {
-      console.log('[DEBUG] 没有选择下发目标部门')
       ElMessage.warning('请选择下发目标部门')
       return
     }
