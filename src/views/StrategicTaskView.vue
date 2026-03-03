@@ -90,7 +90,7 @@
   // 选中的部门 - 默认选中第一个
   const selectedDepartment = ref('')
 
-  // 初始化选中部门
+  // 初始化选中部门 - 默认选中第一个职能部门
   watch(functionalDepartments, (newDeps) => {
     if (newDeps.length > 0 && !selectedDepartment.value) {
       selectedDepartment.value = newDeps[0]
@@ -146,6 +146,20 @@
     if (!canEdit.value) {return false}
     return !hasDistributedIndicators.value
   })
+  
+  // 判断单个指标是否可以删除（未下发状态才能删除）
+  const canDeleteIndicator = (indicator: StrategicIndicator): boolean => {
+    if (isReadOnly.value) return false
+    if (!canEdit.value) return false
+    
+    const audit = indicator.statusAudit || []
+    if (audit.length === 0) return true // 无审计记录 = 草稿状态 = 可删除
+    
+    const lastAudit = audit[audit.length - 1]
+    const lastAction = lastAudit?.action
+    // 未下发状态才能删除
+    return lastAction !== 'distribute' && lastAction !== 'submit' && lastAction !== 'approve'
+  }
   
   // 表格引用和选中的指标
   const tableRef = ref<InstanceType<typeof ElTable>>()
@@ -211,11 +225,20 @@
       .filter(i => !i.year || i.year === timeContext.currentYear)
     
     // 根据选中的部门筛选指标
-    // 战略发展部视角：只显示下发给该职能部门的战略指标（responsibleDept 匹配且 isStrategic=true）
-    if (selectedDepartment.value) {
+    // 战略发展部视角：显示所有 ownerDept = '战略发展部' 的战略指标
+    // 如果选择了具体部门，则只显示下发给该部门的指标
+    if (selectedDepartment.value && selectedDepartment.value !== '战略发展部') {
+      // 选择了其他部门：只显示下发给该部门的指标
       list = list.filter(i => 
-        i.responsibleDept === selectedDepartment.value && 
+        i.ownerDept === '战略发展部' &&  // 由战略发展部创建的指标
+        i.responsibleDept === selectedDepartment.value &&  // 下发给选中部门的指标
         i.isStrategic === true  // 只显示战略指标，不显示子指标
+      )
+    } else {
+      // 没有选择部门，或选择的是战略发展部自己：显示所有战略发展部创建的战略指标
+      list = list.filter(i => 
+        i.ownerDept === '战略发展部' && 
+        i.isStrategic === true
       )
     }
     
@@ -783,8 +806,8 @@
         milestones: [...newRow.value.milestones],
         targetValue: 100,
         unit: '%',
-        responsibleDept: selectedDepartment.value || authStore.userDepartment || '未分配',
-        ownerDept: selectedDepartment.value || authStore.userDepartment || '未分配',
+        responsibleDept: selectedDepartment.value || '战略发展部',  // 责任部门是选中的部门
+        ownerDept: '战略发展部',  // 创建者始终是战略发展部
         responsiblePerson: authStore.userName || '未分配',
         status: 'active',
         isStrategic: true,
@@ -1189,18 +1212,17 @@
             // 为每个额外的目标部门创建副本（第一个部门使用原指标）
             for (const [index, dept] of distributeTarget.value.entries()) {
               if (index === 0) {
-                // 第一个部门更新原指标的责任部门
+                // 第一个部门更新原指标的责任部门（ownerDept 保持为战略发展部）
                 await strategicStore.updateIndicator(row.id.toString(), { 
-                  responsibleDept: dept,
-                  ownerDept: dept
+                  responsibleDept: dept
                 })
               } else {
-                // 其他部门创建新的指标副本
+                // 其他部门创建新的指标副本（ownerDept 保持为战略发展部）
                 strategicStore.addIndicator({
                   ...row,
                   id: `${Date.now()}-${index}-${row.id}`,
                   responsibleDept: dept,
-                  ownerDept: dept,
+                  ownerDept: '战略发展部',
                   canWithdraw: true,
                   status: 'distributed',
                   progress: 0,
@@ -1261,18 +1283,17 @@
         // 为每个目标部门处理
         for (const [index, dept] of distributeTarget.value.entries()) {
           if (index === 0) {
-            // 第一个部门更新原指标的责任部门
+            // 第一个部门更新原指标的责任部门（ownerDept 保持为战略发展部）
             await strategicStore.updateIndicator(row.id.toString(), { 
-              responsibleDept: dept,
-              ownerDept: dept
+              responsibleDept: dept
             })
           } else {
-            // 其他部门创建新的指标副本
+            // 其他部门创建新的指标副本（ownerDept 保持为战略发展部）
             strategicStore.addIndicator({
               ...row,
               id: `${Date.now()}-${index}-${row.id}`,
               responsibleDept: dept,
-              ownerDept: dept,
+              ownerDept: '战略发展部',
               canWithdraw: true,
               status: 'distributed',
               progress: 0,
@@ -1702,7 +1723,7 @@
         <svg class="toggle-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         </svg>
-        <span class="toggle-hint">{{ selectedDepartment || '部门' }}</span>
+        <span class="toggle-hint">{{ selectedDepartment || '全部' }}</span>
       </div>
   
       <!-- 右侧详情区域 - Excel风格 -->
@@ -1903,7 +1924,7 @@
                           @dblclick="handleEditMilestones(row)"
                         >
                           <span class="milestone-count">
-                            {{ row.milestones?.length || 0 }} 个里程碑
+                            {{ row.milestones?.length ? `${row.milestones.length} 个里程碑` : '未设置' }}
                           </span>
                         </div>
                       </template>
@@ -1957,7 +1978,7 @@
                   <template #default="{ row }">
                     <div class="action-buttons-inline">
                       <el-button link type="primary" size="small" @click="handleViewDetail(row)">查看</el-button>
-                      <el-button v-if="row.canWithdraw && !isReadOnly" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
+                      <el-button v-if="canDeleteIndicator(row)" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
                     </div>
                   </template>
                 </el-table-column>

@@ -47,6 +47,20 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
 
 export const milestoneApi = {
   /**
+   * 创建新里程碑
+   */
+  async createMilestone(request: {
+    indicatorId: number
+    milestoneName: string
+    targetProgress: number
+    dueDate: string
+    status: string
+    sortOrder: number
+  }): Promise<ApiResponse<Milestone>> {
+    return apiClient.post<ApiResponse<Milestone>>('/milestones', request)
+  },
+
+  /**
    * 获取指标的所有里程碑
    */
   async getMilestonesByIndicator(indicatorId: string): Promise<ApiResponse<Milestone[]>> {

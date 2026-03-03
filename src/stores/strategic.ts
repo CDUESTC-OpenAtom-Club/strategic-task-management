@@ -391,10 +391,16 @@ export const useStrategicStore = defineStore('strategic', () => {
       try {
         // 调用后端 API 持久化数据（创建时带 distributionStatus: 'DRAFT'）
         const { default: indicatorApi } = await import('@/api/indicator')
+        const { useOrgStore } = await import('@/stores/org')
+        const orgStore = useOrgStore()
 
         // 获取当前活动的任务 ID，如果没有则使用第一个任务
         const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
         const taskId = activeTask ? Number(activeTask.id) : 1
+
+        // 根据 responsibleDept 获取对应的 orgId
+        const targetDept = orgStore.getDepartmentByName(indicator.responsibleDept || '战略发展部')
+        const targetOrgId = targetDept?.id || 35
 
         // 将 StrategicIndicator 映射到 IndicatorCreateRequest
         const request = {
@@ -409,18 +415,67 @@ export const useStrategicStore = defineStore('strategic', () => {
           canWithdraw: indicator.canWithdraw !== false,
           // 草稿状态：告知后端这是草稿，尚未正式下发
           distributionStatus: 'DRAFT' as const,
+          // 添加必需的组织ID字段
+          ownerOrgId: 35, // 战略发展部
+          targetOrgId, // 根据 responsibleDept 动态获取
+          level: 'PRIMARY', // 一级指标
+          // 里程碑数据
+          milestones: indicator.milestones?.map((ms, index) => ({
+            milestoneId: null, // 新建里程碑，ID 为 null
+            milestoneName: ms.name,
+            targetProgress: ms.targetProgress || 0,
+            dueDate: ms.deadline,
+            status: ms.status === 'completed' ? 'COMPLETED' : ms.status === 'overdue' ? 'DELAYED' : 'NOT_STARTED',
+            weightPercent: ms.weightPercent || 0,
+            sortOrder: ms.sortOrder !== undefined ? ms.sortOrder : index
+          })) || []
         }
 
         const response = await indicatorApi.createIndicator(request)
 
         if (response.success && response.data) {
-          // 用后端返回的真实 ID 更新本地指标，同时记录真实 ID
+          const createdIndicatorId = response.data.indicatorId
+
+          // 如果有里程碑，创建里程碑
+          if (indicator.milestones && indicator.milestones.length > 0) {
+            try {
+              const { default: milestoneApi } = await import('@/api/milestone')
+              
+              // 批量创建里程碑
+              for (const ms of indicator.milestones) {
+                await milestoneApi.createMilestone({
+                  indicatorId: createdIndicatorId,
+                  milestoneName: ms.name,
+                  targetProgress: ms.targetProgress || 0,
+                  dueDate: ms.deadline,
+                  status: ms.status === 'completed' ? 'COMPLETED' : ms.status === 'overdue' ? 'DELAYED' : 'NOT_STARTED',
+                  sortOrder: ms.sortOrder || 0
+                })
+              }
+              logger.info(`[Strategic Store] Created ${indicator.milestones.length} milestones for indicator ${createdIndicatorId}`)
+            } catch (milestoneErr) {
+              logger.error('[Strategic Store] Failed to create milestones:', milestoneErr)
+              // 里程碑创建失败不影响指标创建
+            }
+          }
+
+          // 用后端返回的完整数据替换本地指标
           const index = indicators.value.findIndex(i => i.id === tempId)
           if (index !== -1) {
-            indicators.value[index] = {
-              ...indicators.value[index],
-              id: response.data.indicatorId.toString(),
-              distributionStatus: response.data.distributionStatus ?? 'DRAFT',
+            // 从后端 VO 转换为前端 StrategicIndicator
+            const { default: strategicApi } = await import('@/api/strategic')
+            const convertedIndicator = strategicApi.convertIndicatorVOToStrategicIndicator(response.data)
+            // 如果创建了里程碑，需要重新加载指标以获取里程碑数据
+            if (indicator.milestones && indicator.milestones.length > 0) {
+              // 重新从后端获取完整数据（包含里程碑）
+              const reloadResponse = await indicatorApi.getIndicatorById(createdIndicatorId)
+              if (reloadResponse.success && reloadResponse.data) {
+                indicators.value[index] = strategicApi.convertIndicatorVOToStrategicIndicator(reloadResponse.data)
+              } else {
+                indicators.value[index] = convertedIndicator
+              }
+            } else {
+              indicators.value[index] = convertedIndicator
             }
           }
 
