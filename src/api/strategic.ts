@@ -187,6 +187,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     remark: vo.remark || '',
     canWithdraw: vo.canWithdraw ?? (vo.level === 'STRAT_TO_FUNC'),
     taskContent: vo.taskName,
+    taskId: vo.taskId,  // 添加 taskId 映射
     milestones,
     targetValue: vo.targetValue ?? 100,
     actualValue: vo.actualValue,
@@ -244,7 +245,8 @@ export const strategicApi = {
     // 获取所有任务，然后按年份过滤
     const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
     if (response.success && response.data) {
-      const filteredTasks = response.data.filter(t => t.year === year)
+      // 如果 task.year 为 null，则认为它适用于所有年份
+      const filteredTasks = response.data.filter(t => !t.year || t.year === year)
       return { ...response, data: filteredTasks }
     }
     return response

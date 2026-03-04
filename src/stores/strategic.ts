@@ -384,6 +384,8 @@ export const useStrategicStore = defineStore('strategic', () => {
   }
 
     const addIndicator = async (indicator: StrategicIndicator) => {
+      logger.info(`[Strategic Store] addIndicator called with taskContent: ${indicator.taskContent}`)
+      
       // 先进行乐观更新：添加到本地状态
       const tempId = indicator.id
       indicators.value.push(indicator)
@@ -394,13 +396,56 @@ export const useStrategicStore = defineStore('strategic', () => {
         const { useOrgStore } = await import('@/stores/org')
         const orgStore = useOrgStore()
 
-        // 获取当前活动的任务 ID，如果没有则使用第一个任务
-        const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
-        const taskId = activeTask ? Number(activeTask.id) : 1
+        // 根据 taskContent 查找对应的真实 taskId
+        let taskId = 1 // 默认值
+        
+        logger.info(`[Strategic Store] indicator.taskContent = "${indicator.taskContent}", type: ${typeof indicator.taskContent}`)
+        
+        if (indicator.taskContent) {
+          logger.info(`[Strategic Store] Looking for taskId for taskContent: ${indicator.taskContent}`)
+          logger.info(`[Strategic Store] Total indicators in store: ${indicators.value.length}`)
+          
+          // 优先从现有指标中查找匹配的 taskContent，获取其 taskId
+          // 这样可以确保新指标使用与现有指标相同的 taskId
+          const existingIndicator = indicators.value.find(i => i.taskContent === indicator.taskContent)
+          if (existingIndicator && existingIndicator.taskId) {
+            taskId = Number(existingIndicator.taskId)
+            logger.info(`[Strategic Store] Found taskId ${taskId} from existing indicator (id: ${existingIndicator.id}) for taskContent: ${indicator.taskContent}`)
+          } else {
+            logger.warn(`[Strategic Store] No existing indicator found with taskContent: ${indicator.taskContent}`)
+            
+            // 如果现有指标中找不到，再从 activeTasks 中查找
+            logger.info(`[Strategic Store] Searching in activeTasks (${activeTasks.value.length} tasks)`)
+            activeTasks.value.forEach(t => {
+              logger.info(`[Strategic Store]   - Task: id=${t.id}, title=${t.title}`)
+            })
+            
+            const matchingTask = activeTasks.value.find(t => t.title === indicator.taskContent)
+            if (matchingTask) {
+              taskId = Number(matchingTask.id)
+              logger.info(`[Strategic Store] Found task with id ${taskId} for taskContent: ${indicator.taskContent}`)
+            } else {
+              // 如果都找不到，使用默认 taskId = 1
+              logger.warn(`[Strategic Store] No matching task found for taskContent: ${indicator.taskContent}, using default taskId: 1`)
+            }
+          }
+        } else {
+          // 如果没有 taskContent，使用第一个活动任务的 ID
+          const activeTask = activeTasks.value.length > 0 ? activeTasks.value[0] : null
+          taskId = activeTask ? Number(activeTask.id) : 1
+          logger.info(`[Strategic Store] No taskContent provided, using taskId: ${taskId}`)
+        }
 
         // 根据 responsibleDept 获取对应的 orgId
         const targetDept = orgStore.getDepartmentByName(indicator.responsibleDept || '战略发展部')
         const targetOrgId = targetDept?.id || 35
+
+        // 根据 ownerDept 获取对应的 orgId
+        const ownerDept = orgStore.getDepartmentByName(indicator.ownerDept || '战略发展部')
+        const ownerOrgId = ownerDept?.id || 35
+
+        // 记录最终使用的 taskId 和 taskContent
+        logger.info(`[Strategic Store] Creating indicator with taskId: ${taskId}, taskContent: ${indicator.taskContent}`)
 
         // 将 StrategicIndicator 映射到 IndicatorCreateRequest
         const request = {
@@ -416,7 +461,7 @@ export const useStrategicStore = defineStore('strategic', () => {
           // 草稿状态：告知后端这是草稿，尚未正式下发
           distributionStatus: 'DRAFT' as const,
           // 添加必需的组织ID字段
-          ownerOrgId: 35, // 战略发展部
+          ownerOrgId, // 使用当前部门的 ID
           targetOrgId, // 根据 responsibleDept 动态获取
           level: 'PRIMARY', // 一级指标
           // 里程碑数据
@@ -430,6 +475,8 @@ export const useStrategicStore = defineStore('strategic', () => {
             sortOrder: ms.sortOrder !== undefined ? ms.sortOrder : index
           })) || []
         }
+
+        logger.info(`[Strategic Store] Request payload:`, JSON.stringify(request, null, 2))
 
         const response = await indicatorApi.createIndicator(request)
 

@@ -22,6 +22,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { StrategicIndicator, StatusAuditEntry } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
+import { useTimeContextStore } from '@/stores/timeContext'
 
 const props = defineProps<{
   visible: boolean
@@ -165,32 +166,42 @@ const handleBatchApprove = () => {
       cancelButtonText: '取消',
       type: 'success',
     }
-  ).then(() => {
+  ).then(async () => {
     let successCount = 0
 
-    pendingApprovals.value.forEach((indicator) => {
-      // 审批通过：只需要更新审批状态，后端会自动处理进度复制和清空逻辑
-      strategicStore.updateIndicator(indicator.id.toString(), {
-        progressApprovalStatus: 'APPROVED'  // 必须使用大写，数据库约束要求
-      })
+    // 批量更新所有指标
+    for (const indicator of pendingApprovals.value) {
+      try {
+        // 审批通过：只需要更新审批状态，后端会自动处理进度复制和清空逻辑
+        await strategicStore.updateIndicator(indicator.id.toString(), {
+          progressApprovalStatus: 'APPROVED'  // 必须使用大写，数据库约束要求
+        })
 
-      // 添加审计日志
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.userName || 'unknown',
-        operatorName: authStore.userName || '未知用户',
-        operatorDept: authStore.userDepartment || '战略发展部',
-        action: 'approve',
-        comment: '一键审批通过',
-        previousProgress: indicator.progress,
-        newProgress: indicator.pendingProgress || indicator.progress,
-        previousStatus: 'pending_approval',
-        newStatus: 'active',
-      })
+        // 添加审计日志
+        strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+          operator: authStore.userName || 'unknown',
+          operatorName: authStore.userName || '未知用户',
+          operatorDept: authStore.userDepartment || '战略发展部',
+          action: 'approve',
+          comment: '一键审批通过',
+          previousProgress: indicator.progress,
+          newProgress: indicator.pendingProgress || indicator.progress,
+          previousStatus: 'pending_approval',
+          newStatus: 'active',
+        })
 
-      successCount++
-    })
+        successCount++
+      } catch (err) {
+        console.error('审批失败:', err)
+      }
+    }
 
     ElMessage.success(`已成功审批通过 ${successCount} 条记录`)
+    
+    // 刷新指标数据以显示最新进度
+    const timeContext = useTimeContextStore()
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    
     emit('refresh')
   })
 }

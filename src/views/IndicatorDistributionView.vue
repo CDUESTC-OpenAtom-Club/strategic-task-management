@@ -1425,7 +1425,7 @@ const generateMonthlyMilestones = () => {
     const progress = Math.round((month / 12) * 100)
     
     editingMilestones.value.push({
-      id: `ms-${Date.now()}-${month}`,
+      id: `-${month}`,  // 使用负数字符串作为临时 ID，后端会识别为新里程碑
       name: `${indicatorName} - ${month}月`,
       expectedDate: deadline,
       progress: progress
@@ -1465,29 +1465,53 @@ const validateMilestoneProgress = (index: number) => {
 }
 
 // 保存里程碑
-const saveMilestones = () => {
+const saveMilestones = async () => {
   if (!editingMilestonesChild.value) {return}
   
   const child = editingMilestonesChild.value
   if ('isNew' in child && child.isNew) {
     child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
+    milestonesDialogVisible.value = false
+    editingMilestonesChild.value = null
+    editingMilestones.value = []
   } else {
-    const updates: Partial<StrategicIndicator> = {
-      targetValue: editingMilestones.value.length,
-      milestones: editingMilestones.value.map(m => ({
-        id: m.id,
-        name: m.name,
-        targetProgress: m.progress,
-        deadline: m.expectedDate,
-        status: 'pending' as const
-      }))
+    try {
+      const indicator = child as StrategicIndicator
+      const updates: Partial<StrategicIndicator> = {
+        targetValue: editingMilestones.value.length,
+        milestones: editingMilestones.value.map(m => ({
+          id: m.id,
+          name: m.name,
+          targetProgress: m.progress,
+          deadline: m.expectedDate,
+          status: 'pending' as const
+        }))
+      }
+      
+      logger.info(`[IndicatorDistributionView] Saving ${editingMilestones.value.length} milestones for indicator ${indicator.id}`)
+      
+      await strategicStore.updateIndicator(indicator.id.toString(), updates)
+      
+      logger.info(`[IndicatorDistributionView] Reloading indicators after milestone update...`)
+      
+      // 重新加载指标数据以获取后端更新后的里程碑
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+      
+      // 验证重新加载后的里程碑数量
+      const reloadedIndicator = strategicStore.indicators.find(i => i.id === indicator.id)
+      if (reloadedIndicator) {
+        logger.info(`[IndicatorDistributionView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`)
+      }
+      
+      ElMessage.success('里程碑已更新')
+      milestonesDialogVisible.value = false
+      editingMilestonesChild.value = null
+      editingMilestones.value = []
+    } catch (error) {
+      console.error('Failed to save milestones:', error)
+      ElMessage.error('里程碑更新失败')
     }
-    strategicStore.updateIndicator((child as StrategicIndicator).id.toString(), updates)
   }
-  
-  milestonesDialogVisible.value = false
-  editingMilestonesChild.value = null
-  editingMilestones.value = []
 }
 
 // 格式化里程碑显示
@@ -2079,10 +2103,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
             <!-- 新增指标表单 -->
             <div v-if="isAddingIndicator" class="add-row-form">
               <h3 class="form-title">新增子指标</h3>
-              <el-form label-width="100px">
+              <el-form label-width="180px" class="no-wrap-labels">
                 <el-row :gutter="16">
                   <el-col :span="12">
-                    <el-form-item label="关联核心指标" required>
+                    <el-form-item label="关联指标" required class="no-wrap-label">
                       <el-select
                         v-model="newIndicatorForm.parentIndicatorId"
                         filterable
@@ -3584,6 +3608,18 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   margin: 0 0 var(--spacing-lg) 0;
 }
 
+/* 强制表单标签不换行 */
+.no-wrap-labels :deep(.el-form-item__label) {
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+
+.no-wrap-label :deep(.el-form-item__label) {
+  white-space: nowrap !important;
+  overflow: visible !important;
+  min-width: 150px !important;
+}
+
 /* 里程碑表单区域 */
 .milestone-form-area {
   display: flex;
@@ -3633,5 +3669,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 .milestone-hint {
   font-size: 12px;
   color: var(--text-placeholder);
+}
+</style>
+
+
+<style>
+/* 全局样式：强制表单标签不换行 */
+.add-row-form .el-form-item__label {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow: visible !important;
 }
 </style>

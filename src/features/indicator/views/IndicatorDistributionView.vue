@@ -187,8 +187,11 @@ const _selectingParentForIndex = ref<number>(-1)
 
 // 战略任务和指标数据（用于选择关联指标弹框）
 const strategicTasksWithIndicators = computed(() => {
-  // 获取所有战略指标，按任务分组
-  const indicators = strategicStore.indicators.filter(i => i.isStrategic)
+  // 获取当前部门接收到的战略指标（responsible_dept = 当前部门）
+  // 这些是从战略发展部下发给当前部门的指标
+  const indicators = strategicStore.indicators.filter(i => 
+    i.isStrategic && i.responsibleDept === currentDept.value
+  )
   const taskMap = new Map<string, StrategicIndicator[]>()
   
   indicators.forEach(indicator => {
@@ -388,13 +391,13 @@ const saveNewIndicator = () => {
     remark: newIndicatorForm.value.remark,
     canWithdraw: false,
     taskContent: newIndicatorForm.value.taskContent,
-    milestones: newIndicatorForm.value.type1 === '定性' ? newIndicatorForm.value.milestones.map(m => ({
+    milestones: newIndicatorForm.value.milestones.map(m => ({
       id: m.id,
       name: m.name,
       targetProgress: m.targetProgress,
       deadline: m.deadline,
       status: 'pending' as const
-    })) : [],
+    })),
     targetValue: newIndicatorForm.value.type1 === '定量' ? newIndicatorForm.value.targetProgress : newIndicatorForm.value.milestones.length,
     unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
     responsibleDept: selectedCollege.value!,
@@ -2140,7 +2143,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
             <!-- 新增指标表单 -->
             <div v-if="isAddingIndicator" class="add-row-form">
               <h3 class="form-title">新增子指标</h3>
-              <el-form label-width="100px">
+              <el-form label-width="140px">
                 <el-row :gutter="16">
                   <el-col :span="12">
                     <el-form-item label="关联核心指标" required>
@@ -2150,6 +2153,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         placeholder="选择关联的核心指标"
                         style="width: 100%"
                         @change="(val: string) => {
+                          if (!strategicTasksWithIndicators.value) return
                           const indicator = strategicTasksWithIndicators.value
                             .flatMap(t => t.indicators)
                             .find(i => i.id.toString() === val)
@@ -3643,6 +3647,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   font-weight: 600;
   color: var(--color-primary-dark);
   margin: 0 0 var(--spacing-lg) 0;
+}
+
+/* 强制表单标签不换行 */
+.add-row-form :deep(.el-form-item__label) {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
 }
 
 /* 里程碑表单区域 */

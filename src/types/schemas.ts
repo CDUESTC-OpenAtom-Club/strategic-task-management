@@ -134,6 +134,7 @@ export const StrategicIndicatorSchema = z.object({
   approvalStatus: ApprovalStatusSchema.optional(),
   alertLevel: AlertLevelSchema.optional(),
   taskContent: z.string().optional(),
+  taskId: z.number().optional(),  // 添加 taskId 字段，对应后端的 task_id
   ownerDept: z.string().optional(),
   parentIndicatorId: z.string().optional(),
   year: z.number().int().min(2020).max(2100).optional(),

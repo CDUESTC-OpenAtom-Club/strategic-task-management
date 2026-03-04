@@ -432,34 +432,6 @@ const overallStatus = computed(() => {
 })
 
 // 计算单元格合并信息
-const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
-  const dataList = indicators.value
-
-  // 只有战略任务列（第0列）需要合并
-  if (columnIndex === 0) {
-    const currentTask = row.taskContent || '未关联任务'
-
-    // 计算当前任务在列表中的起始位置
-    let startIndex = rowIndex
-    while (startIndex > 0 && (dataList[startIndex - 1].taskContent || '未关联任务') === currentTask) {
-      startIndex--
-    }
-
-    // 如果是该任务的第一行，计算合并行数
-    if (startIndex === rowIndex) {
-      let count = 1
-      while (rowIndex + count < dataList.length && (dataList[rowIndex + count].taskContent || '未关联任务') === currentTask) {
-        count++
-      }
-      return { rowspan: count, colspan: 1 }
-    } else {
-      // 不是第一行，隐藏该单元格
-      return { rowspan: 0, colspan: 0 }
-    }
-  }
-  return { rowspan: 1, colspan: 1 }
-}
-
 // 获取当前行所属的任务组
 const getTaskGroup = (row: StrategicIndicator) => {
   const taskContent = row.taskContent || '未命名任务'
@@ -1651,14 +1623,13 @@ const handleWithdrawAll = () => {
             <el-table
               ref="tableRef"
               :data="indicators"
-              :span-method="getSpanMethod"
               border
               highlight-current-row
               class="unified-table"
               @selection-change="handleSelectionChange"
             >
 
-              <el-table-column prop="taskContent" label="战略任务" width="200">
+              <el-table-column v-if="props.viewingRole !== 'secondary_college'" prop="taskContent" label="战略任务" width="200">
                 <template #default="{ row }">
                   <el-tooltip :content="row.type2 === '发展性' ? '发展性任务' : '基础性任务'" placement="top">
                     <span
@@ -1766,15 +1737,11 @@ const handleWithdrawAll = () => {
               </el-table-column>
               <el-table-column prop="progress" label="进度" width="120" align="center">
                 <template #default="{ row }">
-                  <!-- 根据审批状态决定显示哪个进度：
-                       - DRAFT: 显示已审批进度（progress），因为待审批进度还未提交
-                       - PENDING: 显示待审批进度（pendingProgress），表示等待审批中
-                       - APPROVED/REJECTED/NONE: 显示已审批进度（progress）
+                  <!-- 始终显示已审批通过的进度（progress），不显示待审批进度
+                       待审批进度可以在详情或审批记录中查看
                   -->
                   <span class="progress-number" :class="getProgressStatusClass(row)">
-                    {{ row.progressApprovalStatus === 'PENDING' && row.pendingProgress !== null && row.pendingProgress !== undefined 
-                       ? row.pendingProgress 
-                       : (row.progress || 0) }}
+                    {{ row.progress || 0 }}
                   </span>
                 </template>
               </el-table-column>

@@ -388,10 +388,28 @@
       return
     }
     
+    logger.info(`[StrategicTaskView] Opening milestone editor for indicator:`, {
+      id: row.id,
+      name: row.name,
+      indicator_desc: row.indicator_desc,
+      responsibleDept: row.responsibleDept,
+      milestonesCount: row.milestones?.length || 0
+    })
+    
     editingMilestoneIndicator.value = row
     // 深拷贝里程碑数据
     editingMilestones.value = JSON.parse(JSON.stringify(row.milestones || []))
     milestoneEditDialogVisible.value = true
+  }
+
+  // 通过索引编辑里程碑（避免表格合并导致的行数据错位）
+  const handleEditMilestonesByIndex = (index: number) => {
+    const row = indicators.value[index]
+    if (!row) {
+      logger.error(`[StrategicTaskView] Cannot find indicator at index ${index}`)
+      return
+    }
+    handleEditMilestones(row)
   }
 
   // 添加里程碑（编辑弹窗内）
@@ -420,7 +438,7 @@
       const progress = Math.round((month / 12) * 100)
       
       editingMilestones.value.push({
-        id: 0,  // 使用 0 表示新里程碑，后端会创建新记录
+        id: -month,  // 使用负数作为临时 ID，避免 Vue key 重复，后端会识别为新里程碑
         name: `${indicatorName} - ${month}月`,
         targetProgress: progress,
         deadline: deadline,
@@ -455,9 +473,9 @@
     }
 
     try {
-      // 从当前指标列表中查找最新的指标对象（使用 indicator_desc 匹配）
+      // 从当前指标列表中查找最新的指标对象（使用 id 匹配）
       const currentIndicator = indicators.value.find(
-        i => i.indicator_desc === editingMilestoneIndicator.value?.indicator_desc
+        i => i.id === editingMilestoneIndicator.value?.id
       )
       
       if (!currentIndicator) {
@@ -465,10 +483,38 @@
         return
       }
       
+      logger.info(`[StrategicTaskView] Saving ${editingMilestones.value.length} milestones for indicator ${currentIndicator.id}`)
+      
       // 使用最新的指标 ID 进行更新
       await strategicStore.updateIndicator(currentIndicator.id.toString(), {
         milestones: [...editingMilestones.value]
       })
+
+      logger.info(`[StrategicTaskView] Reloading indicators after milestone update...`)
+      
+      // 重新加载指标数据以获取后端更新后的里程碑
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+      
+      // 验证重新加载后的里程碑数量
+      const reloadedIndicator = indicators.value.find(i => i.id === currentIndicator.id)
+      if (reloadedIndicator) {
+        logger.info(`[StrategicTaskView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`)
+        logger.info(`[StrategicTaskView] Indicator details:`, {
+          id: reloadedIndicator.id,
+          name: reloadedIndicator.name,
+          indicator_desc: reloadedIndicator.indicator_desc,
+          responsibleDept: reloadedIndicator.responsibleDept,
+          milestonesCount: reloadedIndicator.milestones?.length
+        })
+      } else {
+        logger.warn(`[StrategicTaskView] Could not find indicator ${currentIndicator.id} after reload!`)
+      }
+      
+      // 额外验证：检查 store 中的原始数据
+      const storeIndicator = strategicStore.indicators.find(i => i.id === currentIndicator.id)
+      if (storeIndicator) {
+        logger.info(`[StrategicTaskView] Store indicator ${storeIndicator.id} has ${storeIndicator.milestones?.length || 0} milestones`)
+      }
 
       ElMessage.success('里程碑已更新')
       milestoneEditDialogVisible.value = false
@@ -526,16 +572,15 @@
   const groupedDevelopmentIndicators = computed(() => groupIndicatorsByTask(developmentIndicators.value))
   const groupedBasicIndicators = computed(() => groupIndicatorsByTask(basicIndicators.value))
   
-  // 获取已有的任务名称列表（去重，只包含未下发的任务）
+  // 获取已有的任务名称列表（从当前部门的指标中提取）
   const existingTaskNames = computed(() => {
-    const taskSet = new Set<string>()
-    indicators.value.forEach(i => {
-      // 只添加未下发的任务（canWithdraw 为 true）
-      if (i.taskContent && i.taskContent !== '未命名任务' && i.canWithdraw) {
-        taskSet.add(i.taskContent)
-      }
-    })
-    return Array.from(taskSet)
+    // 从当前显示的指标中提取已使用的 taskContent（战略任务名称）
+    const taskNames = indicators.value
+      .filter(i => i.taskContent && i.taskContent !== '未命名任务')
+      .map(i => i.taskContent)
+    
+    // 去重
+    return [...new Set(taskNames)]
   })
 
   // 获取任务名称对应的任务类型映射
@@ -758,6 +803,7 @@
   
   // 在指定类别中添加新指标
   const addIndicatorToCategory = (category: '发展性' | '基础性') => {
+    logger.info(`[StrategicTaskView] addIndicatorToCategory called with category: ${category}`)
     newRow.value.type2 = category
     isAddingOrEditing.value = true
   }
@@ -790,6 +836,9 @@
     })
 
     try {
+      // 添加日志记录 taskContent
+      logger.info(`[StrategicTaskView] Saving indicator with taskContent: "${newRow.value.taskContent}"`)
+      
       // 调用 Store 添加指标（现在是异步的，会调用后端 API）
       await strategicStore.addIndicator({
         id: Date.now().toString(),
@@ -1117,6 +1166,10 @@
           })
 
           ElMessage.success('审批通过，进度已更新')
+          
+          // 刷新指标数据以显示最新进度
+          const timeContext = useTimeContextStore()
+          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
         } else {
           // 审批驳回：设置驳回状态，保留待审批数据供查看
           await strategicStore.updateIndicator(indicator.id.toString(), {
@@ -1910,7 +1963,7 @@
                 </el-table-column>
                 <!-- 目标进度列 -->
                 <el-table-column label="里程碑" width="120" align="center">
-                  <template #default="{ row }">
+                  <template #default="{ row, $index }">
                     <el-popover
                       placement="left"
                       :width="320"
@@ -1921,7 +1974,7 @@
                         <div 
                           class="milestone-cell"
                           :class="{ 'editable': canEditIndicators }"
-                          @dblclick="handleEditMilestones(row)"
+                          @dblclick="handleEditMilestonesByIndex($index)"
                         >
                           <span class="milestone-count">
                             {{ row.milestones?.length ? `${row.milestones.length} 个里程碑` : '未设置' }}
@@ -1970,6 +2023,7 @@
                         @blur="saveIndicatorEdit(row, 'progress')"
                         @keyup.enter="saveIndicatorEdit(row, 'progress')"
                       />
+                      <!-- 始终显示已审批通过的进度（progress），不显示待审批进度 -->
                       <span v-else class="progress-number">{{ row.progress || 0 }}</span>
                     </div>
                   </template>
