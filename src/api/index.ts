@@ -1,13 +1,7 @@
 import axios from 'axios'
-import type { AxiosError } from 'axios'
 import type { ApiResponse } from '@/types'
-import { logger } from '@/utils/logger'
-import { formatErrorMessage, isRetryableError, getErrorSeverity } from './errorHandler'
-import type { ExtendedErrorInfo } from '@/types/error'
-import { refreshCache, refreshCachePattern, cacheManager, getFromCache } from '@/utils/cache'
-import { useAuthStore } from '@/stores/auth'
-import { 
-  createRequestInterceptor, 
+import {
+  createRequestInterceptor,
   createRequestErrorInterceptor,
   createResponseInterceptor,
   createResponseErrorInterceptor
@@ -27,16 +21,10 @@ const api = axios.create({
 // ============================================================================
 
 // 请求拦截器: Token注入和Mock模式处理
-api.interceptors.request.use(
-  createRequestInterceptor(),
-  createRequestErrorInterceptor()
-)
+api.interceptors.request.use(createRequestInterceptor(), createRequestErrorInterceptor())
 
 // 响应拦截器: Mock模式处理和错误处理
-api.interceptors.response.use(
-  createResponseInterceptor(),
-  createResponseErrorInterceptor()
-)
+api.interceptors.response.use(createResponseInterceptor(), createResponseErrorInterceptor())
 
 // ============================================================================
 // API 服务方法
@@ -112,3 +100,6 @@ export default api
 export { formatErrorMessage, isRetryableError, getErrorSeverity } from './errorHandler'
 export type { ExtendedErrorInfo } from '@/types/error'
 export { refreshCache, refreshCachePattern, cacheManager, getFromCache } from '@/utils/cache'
+
+// 导出用户API
+export { userApi } from './user'

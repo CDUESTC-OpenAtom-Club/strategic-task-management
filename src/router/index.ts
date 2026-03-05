@@ -6,7 +6,7 @@ import './nprogress.css'
 // 确保从 localStorage 恢复认证状态
 const ensureAuthRestored = () => {
   const authStore = useAuthStore()
-  
+
   // 如果有 token 但没有 user 或 user 没有 id，尝试从 localStorage 恢复
   if (authStore.token && (!authStore.user || !authStore.user.id)) {
     const savedUser = localStorage.getItem('currentUser')
@@ -67,6 +67,21 @@ const routes: RouteRecordRaw[] = [
     name: 'Profile',
     component: () => import('@/views/ProfileView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin/console',
+    name: 'AdminConsole',
+    component: () => import('@/views/AdminConsoleView.vue'),
+    meta: {
+      requiresAuth: true,
+      roles: ['strategic_dept']
+    }
+  },
+  {
+    path: '/403',
+    name: 'Forbidden',
+    component: () => import('@/views/403View.vue'),
+    meta: { requiresAuth: false }
   },
 
   // ============================================================
@@ -193,6 +208,11 @@ router.beforeEach((to, _from, next) => {
 
     // 如果当前有效角色不在允许的角色列表中，才重定向
     if (currentRole && !(to.meta['roles'] as string[]).includes(currentRole)) {
+      // 对于管理员页面，显示403
+      if (to.path.startsWith('/admin')) {
+        next('/403')
+        return
+      }
       next('/dashboard')
       return
     }

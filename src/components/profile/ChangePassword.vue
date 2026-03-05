@@ -1,12 +1,6 @@
 <template>
   <div class="change-password">
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="120px"
-      class="password-form"
-    >
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="password-form">
       <el-form-item label="原密码" prop="oldPassword">
         <el-input
           v-model="form.oldPassword"
@@ -49,12 +43,8 @@
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">
-          修改密码
-        </el-button>
-        <el-button @click="handleReset">
-          重置
-        </el-button>
+        <el-button type="primary" :loading="loading" @click="handleSubmit"> 修改密码 </el-button>
+        <el-button @click="handleReset"> 重置 </el-button>
       </el-form-item>
     </el-form>
 
@@ -72,7 +62,13 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
+import api from '@/api'
+
+const router = useRouter()
+const authStore = useAuthStore()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -122,23 +118,33 @@ const rules = {
     { validator: validatePass, trigger: 'blur' },
     { min: 8, message: '新密码长度至少8个字符', trigger: 'blur' }
   ],
-  confirmPassword: [
-    { validator: validateConfirmPass, trigger: 'blur' }
-  ]
+  confirmPassword: [{ validator: validateConfirmPass, trigger: 'blur' }]
 }
 
 const checkPasswordStrength = (password: string) => {
   let score = 0
 
   // Length check
-  if (password.length >= 8) {score++}
-  if (password.length >= 12) {score++}
+  if (password.length >= 8) {
+    score++
+  }
+  if (password.length >= 12) {
+    score++
+  }
 
   // Character variety checks
-  if (/[a-z]/.test(password)) {score++} // lowercase
-  if (/[A-Z]/.test(password)) {score++} // uppercase
-  if (/[0-9]/.test(password)) {score++} // number
-  if (/[^A-Za-z0-9]/.test(password)) {score++} // special character
+  if (/[a-z]/.test(password)) {
+    score++
+  } // lowercase
+  if (/[A-Z]/.test(password)) {
+    score++
+  } // uppercase
+  if (/[0-9]/.test(password)) {
+    score++
+  } // number
+  if (/[^A-Za-z0-9]/.test(password)) {
+    score++
+  } // special character
 
   const strengthMap = [
     { width: '20%', class: 'weak', text: '弱' },
@@ -154,7 +160,9 @@ const checkPasswordStrength = (password: string) => {
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
@@ -166,23 +174,36 @@ const handleSubmit = async () => {
 
     loading.value = true
 
-    // TODO: Call API to change password
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 调用API修改密码
+    const response = await api.put('/api/user/password', {
+      oldPassword: form.oldPassword,
+      newPassword: form.newPassword
+    })
 
-    ElMessage.success('密码修改成功，请重新登录')
+    if (response.data?.success || response.success) {
+      ElMessage.success('密码修改成功，请重新登录')
 
-    // Reset form
-    handleReset()
-  } catch (error) {
-    console.error('Form validation error:', error)
+      // 清空表单
+      handleReset()
+
+      // 延迟1秒后退出登录
+      setTimeout(() => {
+        authStore.logout()
+        router.push('/login')
+      }, 1000)
+    }
+  } catch (error: any) {
+    console.error('修改密码失败:', error)
+    ElMessage.error(error.response?.data?.message || error.message || '修改密码失败，请重试')
   } finally {
     loading.value = false
   }
 }
 
 const handleReset = () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
   formRef.value.resetFields()
   passwordStrength.value = { width: '0%', class: '', text: '弱', score: 0 }
 }
@@ -229,15 +250,15 @@ const handleReset = () => {
 }
 
 .strength-bar.weak {
-  background: #F56C6C;
+  background: #f56c6c;
 }
 
 .strength-bar.medium {
-  background: #E6A23C;
+  background: #e6a23c;
 }
 
 .strength-bar.strong {
-  background: #67C23A;
+  background: #67c23a;
 }
 
 .strength-text {
@@ -247,15 +268,15 @@ const handleReset = () => {
 }
 
 .strength-text.weak {
-  color: #F56C6C;
+  color: #f56c6c;
 }
 
 .strength-text.medium {
-  color: #E6A23C;
+  color: #e6a23c;
 }
 
 .strength-text.strong {
-  color: #67C23A;
+  color: #67c23a;
 }
 
 .password-tips {

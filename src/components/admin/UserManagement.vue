@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   ElCard,
   ElTable,
@@ -16,7 +16,6 @@ import {
   ElFormItem,
   ElSwitch,
   ElIcon,
-  ElTooltip,
   ElTreeSelect,
   type FormInstance,
   type FormRules
@@ -33,6 +32,12 @@ import {
   Key
 } from '@element-plus/icons-vue'
 import type { UserManagementItem, UserForm, Organization, UserRole } from '@/types'
+import api from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { useAuditLogStore } from '@/stores/auditLog'
+
+const authStore = useAuthStore()
+const auditLogStore = useAuditLogStore()
 
 /**
  * 用户管理组件
@@ -80,7 +85,6 @@ const organizationTree = ref<Organization[]>([])
 const organizationLoading = ref(false)
 
 // 密码相关
-const showPasswordInput = ref(false)
 const passwordForm = ref<{
   userId: string | number
   newPassword: string
@@ -102,11 +106,12 @@ const filteredUsers = computed(() => {
   // 关键词搜索
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
-    result = result.filter(u =>
-      u.username.toLowerCase().includes(keyword) ||
-      u.realName.toLowerCase().includes(keyword) ||
-      u.orgName.toLowerCase().includes(keyword) ||
-      (u.email && u.email.toLowerCase().includes(keyword))
+    result = result.filter(
+      u =>
+        u.username.toLowerCase().includes(keyword) ||
+        u.realName.toLowerCase().includes(keyword) ||
+        u.orgName.toLowerCase().includes(keyword) ||
+        (u.email && u.email.toLowerCase().includes(keyword))
     )
   }
 
@@ -188,15 +193,9 @@ const userFormRules: FormRules = {
     { required: true, message: '请输入真实姓名', trigger: 'blur' },
     { min: 2, max: 20, message: '姓名长度为2-20个字符', trigger: 'blur' }
   ],
-  email: [
-    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
-  ],
-  phone: [
-    { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }
-  ],
-  orgId: [
-    { required: true, message: '请选择所属组织', trigger: 'change' }
-  ],
+  email: [{ type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }],
+  orgId: [{ required: true, message: '请选择所属组织', trigger: 'change' }],
   roles: [
     {
       validator: (rule, value, callback) => {
@@ -216,7 +215,11 @@ const passwordFormRules: FormRules = {
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
     { min: 8, message: '密码至少8个字符', trigger: 'blur' },
-    { pattern: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]/, message: '密码需包含字母和数字', trigger: 'blur' }
+    {
+      pattern: /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]/,
+      message: '密码需包含字母和数字',
+      trigger: 'blur'
+    }
   ],
   confirmPassword: [
     { required: true, message: '请确认新密码', trigger: 'blur' },
@@ -239,55 +242,32 @@ const passwordFormRules: FormRules = {
 const loadUsers = async () => {
   loading.value = true
   try {
-    // TODO: 调用实际API
-    // const response = await api.getUsers()
-    // users.value = response.data
+    // 调用真实API
+    const params = {
+      page: 0,
+      size: 100, // 获取所有用户
+      sortBy: 'id',
+      sortOrder: 'asc'
+    }
+    const response = await api.get('/admin/users', { params })
 
-    // 模拟数据
-    users.value = [
-      {
-        id: 1,
-        username: 'admin',
-        realName: '系统管理员',
-        email: 'admin@school.edu',
-        phone: '13800138000',
-        orgId: 'org-001',
-        orgName: '战略发展部',
-        roles: ['strategic_dept'],
-        status: 'active',
-        lastLoginAt: '2025-01-15 10:30:00',
-        createdAt: '2024-01-01 00:00:00',
-        updatedAt: '2025-01-15 10:30:00'
-      },
-      {
-        id: 2,
-        username: 'dean_academic',
-        realName: '教务处长',
-        email: 'dean@school.edu',
-        phone: '13800138001',
-        orgId: 'org-002',
-        orgName: '教务处',
-        roles: ['functional_dept'],
-        status: 'active',
-        lastLoginAt: '2025-01-14 16:20:00',
-        createdAt: '2024-03-15 00:00:00',
-        updatedAt: '2025-01-14 16:20:00'
-      },
-      {
-        id: 3,
-        username: 'cs_college',
-        realName: '计算机学院',
-        email: 'cs@school.edu',
-        orgId: 'org-101',
-        orgName: '计算机科学与技术学院',
-        roles: ['secondary_college'],
-        status: 'active',
-        lastLoginAt: '2025-01-15 09:15:00',
-        createdAt: '2024-05-20 00:00:00',
-        updatedAt: '2025-01-15 09:15:00'
-      }
-    ]
+    // 转换响应格式
+    users.value = response.data.content.map(user => ({
+      id: user.id,
+      username: user.username,
+      realName: user.realName,
+      email: user.email || '',
+      phone: user.phone || '',
+      orgId: String(user.orgId),
+      orgName: user.orgName,
+      roles: user.roles.map((r: any) => r.roleCode),
+      status: user.status,
+      lastLoginAt: user.lastLoginAt || '',
+      createdAt: user.createdAt || '',
+      updatedAt: user.updatedAt || ''
+    }))
   } catch (error) {
+    console.error('加载用户列表失败:', error)
     ElMessage.error('加载用户列表失败')
   } finally {
     loading.value = false
@@ -321,7 +301,12 @@ const loadOrganizations = async () => {
         name: '二级学院',
         type: 'secondary_college',
         children: [
-          { id: 'org-101', name: '计算机科学与技术学院', type: 'secondary_college', parentId: 'org-003' },
+          {
+            id: 'org-101',
+            name: '计算机科学与技术学院',
+            type: 'secondary_college',
+            parentId: 'org-003'
+          },
           { id: 'org-102', name: '外国语学院', type: 'secondary_college', parentId: 'org-003' },
           { id: 'org-103', name: '经济管理学院', type: 'secondary_college', parentId: 'org-003' }
         ]
@@ -378,7 +363,9 @@ const resetUserForm = () => {
 
 // 保存用户
 const handleSave = async () => {
-  if (!userFormRef.value) {return}
+  if (!userFormRef.value) {
+    return
+  }
 
   try {
     await userFormRef.value.validate()
@@ -390,18 +377,30 @@ const handleSave = async () => {
   loading.value = true
 
   try {
+    // 准备请求数据
+    const userData: any = {
+      username: userForm.value.username,
+      realName: userForm.value.realName,
+      email: userForm.value.email,
+      phone: userForm.value.phone,
+      orgId: Number(userForm.value.orgId),
+      roleIds: userForm.value.roles
+    }
+
     if (dialogMode.value === 'create') {
-      // TODO: 调用创建用户API
+      userData.password = userForm.value.password
+      await api.post('/admin/users', userData)
       ElMessage.success('用户创建成功')
     } else {
-      // TODO: 调用更新用户API
+      await api.put(`/admin/users/${editingUserId.value}`, userData)
       ElMessage.success('用户信息更新成功')
     }
 
     showUserDialog.value = false
     await loadUsers()
-  } catch (error) {
-    ElMessage.error('操作失败，请重试')
+  } catch (error: any) {
+    console.error('保存失败:', error)
+    ElMessage.error(error.response?.data?.message || '操作失败，请重试')
   } finally {
     loading.value = false
   }
@@ -429,11 +428,17 @@ const toggleUserStatus = async (user: UserManagementItem) => {
       }
     )
 
-    // TODO: 调用API更新状态
-    user.status = newStatus
+    await api.patch(`/admin/users/${user.id}/status`, null, {
+      params: { isActive: newStatus === 'active' }
+    })
+
     ElMessage.success(`${actionText}成功`)
-  } catch {
-    // 用户取消
+    await loadUsers()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('状态更新失败:', error)
+      ElMessage.error(error.response?.data?.message || '操作失败')
+    }
   }
 }
 
@@ -450,11 +455,14 @@ const handleDelete = async (user: UserManagementItem) => {
       }
     )
 
-    // TODO: 调用删除API
-    users.value = users.value.filter(u => u.id !== user.id)
+    await api.delete(`/admin/users/${user.id}`)
     ElMessage.success('删除成功')
-  } catch {
-    // 用户取消
+    await loadUsers()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+      ElMessage.error(error.response?.data?.message || '删除失败')
+    }
   }
 }
 
@@ -470,7 +478,9 @@ const openPasswordDialog = (user: UserManagementItem) => {
 
 // 重置密码
 const handleResetPassword = async () => {
-  if (!passwordFormRef.value) {return}
+  if (!passwordFormRef.value) {
+    return
+  }
 
   try {
     await passwordFormRef.value.validate()
@@ -479,12 +489,38 @@ const handleResetPassword = async () => {
     return
   }
 
+  loading.value = true
+
   try {
-    // TODO: 调用重置密码API
-    ElMessage.success('密码重置成功')
-    showPasswordDialog.value = false
-  } catch (error) {
-    ElMessage.error('密码重置失败')
+    // 调用管理员重置密码API
+    const response = await api.put(`/api/admin/users/${passwordForm.value.userId}/password`, {
+      newPassword: passwordForm.value.newPassword
+    })
+
+    if (response.success) {
+      ElMessage.success('密码重置成功，用户下次登录需使用新密码')
+      showPasswordDialog.value = false
+
+      // 记录审计日志
+      try {
+        auditLogStore.logAction({
+          entityType: 'user',
+          entityId: String(passwordForm.value.userId),
+          entityName: `用户ID: ${passwordForm.value.userId}`,
+          action: 'reset_password',
+          operator: authStore.user?.id || '',
+          operatorName: authStore.user?.name || '',
+          dataAfter: { action: '密码已重置', timestamp: new Date().toISOString() }
+        })
+      } catch (logError) {
+        console.warn('记录审计日志失败:', logError)
+      }
+    }
+  } catch (error: any) {
+    console.error('重置密码失败:', error)
+    ElMessage.error(error.response?.data?.message || error.message || '密码重置失败，请重试')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -520,9 +556,7 @@ onMounted(() => {
         <p class="page-desc">管理系统用户账号、角色分配及权限控制</p>
       </div>
       <div class="header-actions">
-        <ElButton type="primary" :icon="Plus" @click="openCreateDialog">
-          创建用户
-        </ElButton>
+        <ElButton type="primary" :icon="Plus" @click="openCreateDialog"> 创建用户 </ElButton>
         <ElButton :icon="Refresh" @click="handleRefresh">刷新</ElButton>
       </div>
     </div>
@@ -537,11 +571,7 @@ onMounted(() => {
           clearable
           class="search-input"
         />
-        <ElSelect
-          v-model="filterRole"
-          placeholder="角色筛选"
-          class="filter-select"
-        >
+        <ElSelect v-model="filterRole" placeholder="角色筛选" class="filter-select">
           <ElOption
             v-for="option in roleOptions"
             :key="option.value"
@@ -549,11 +579,7 @@ onMounted(() => {
             :value="option.value"
           />
         </ElSelect>
-        <ElSelect
-          v-model="filterStatus"
-          placeholder="状态筛选"
-          class="filter-select"
-        >
+        <ElSelect v-model="filterStatus" placeholder="状态筛选" class="filter-select">
           <ElOption
             v-for="option in statusOptions"
             :key="option.value"
@@ -583,19 +609,25 @@ onMounted(() => {
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value success">{{ filteredUsers.filter(u => u.status === 'active').length }}</div>
+          <div class="stat-value success">
+            {{ filteredUsers.filter(u => u.status === 'active').length }}
+          </div>
           <div class="stat-label">启用用户</div>
         </div>
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value warning">{{ filteredUsers.filter(u => u.roles.includes('strategic_dept')).length }}</div>
+          <div class="stat-value warning">
+            {{ filteredUsers.filter(u => u.roles.includes('strategic_dept')).length }}
+          </div>
           <div class="stat-label">战略部门</div>
         </div>
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value info">{{ filteredUsers.filter(u => u.roles.includes('secondary_college')).length }}</div>
+          <div class="stat-value info">
+            {{ filteredUsers.filter(u => u.roles.includes('secondary_college')).length }}
+          </div>
           <div class="stat-label">二级学院</div>
         </div>
       </ElCard>
@@ -603,12 +635,7 @@ onMounted(() => {
 
     <!-- 用户列表表格 -->
     <ElCard class="table-card" shadow="never">
-      <ElTable
-        v-loading="loading"
-        :data="filteredUsers"
-        stripe
-        class="user-table"
-      >
+      <ElTable v-loading="loading" :data="filteredUsers" stripe class="user-table">
         <ElTableColumn prop="username" label="用户名" width="140">
           <template #default="{ row }">
             <div class="username-cell">
@@ -653,16 +680,9 @@ onMounted(() => {
           </template>
         </ElTableColumn>
 
-        <ElTableColumn label="状态" width="90" align="center">
+        <ElTableColumn label="状态" width="150" align="center">
           <template #default="{ row }">
-            <ElTag
-              :type="getStatusConfig(row.status).type as any"
-              effect="light"
-              size="small"
-            >
-              <el-icon class="status-icon">
-                <component :is="getStatusConfig(row.status).icon" />
-              </el-icon>
+            <ElTag :type="getStatusConfig(row.status).type as any" effect="light" size="small">
               {{ getStatusConfig(row.status).label }}
             </ElTag>
           </template>
@@ -678,20 +698,10 @@ onMounted(() => {
         <ElTableColumn label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
-              <ElButton
-                type="primary"
-                link
-                :icon="Edit"
-                @click="openEditDialog(row)"
-              >
+              <ElButton type="primary" link :icon="Edit" @click="openEditDialog(row)">
                 编辑
               </ElButton>
-              <ElButton
-                type="warning"
-                link
-                :icon="Key"
-                @click="openPasswordDialog(row)"
-              >
+              <ElButton type="warning" link :icon="Key" @click="openPasswordDialog(row)">
                 重置密码
               </ElButton>
               <ElButton
@@ -701,12 +711,7 @@ onMounted(() => {
               >
                 {{ row.status === 'active' ? '禁用' : '启用' }}
               </ElButton>
-              <ElButton
-                type="danger"
-                link
-                :icon="Delete"
-                @click="handleDelete(row)"
-              >
+              <ElButton type="danger" link :icon="Delete" @click="handleDelete(row)">
                 删除
               </ElButton>
             </div>
@@ -719,9 +724,11 @@ onMounted(() => {
         <el-empty :image-size="120">
           <template #description>
             <p class="empty-text">
-              {{ searchKeyword || filterRole !== 'all' || filterStatus !== 'all'
-                ? '没有找到匹配的用户'
-                : '暂无用户数据' }}
+              {{
+                searchKeyword || filterRole !== 'all' || filterStatus !== 'all'
+                  ? '没有找到匹配的用户'
+                  : '暂无用户数据'
+              }}
             </p>
           </template>
           <ElButton
@@ -767,9 +774,7 @@ onMounted(() => {
               <el-icon><User /></el-icon>
             </template>
           </ElInput>
-          <div v-if="dialogMode === 'edit'" class="form-hint">
-            用户名创建后不可修改
-          </div>
+          <div v-if="dialogMode === 'edit'" class="form-hint">用户名创建后不可修改</div>
         </ElFormItem>
 
         <!-- 密码（仅创建时显示） -->
@@ -785,29 +790,17 @@ onMounted(() => {
 
         <!-- 真实姓名 -->
         <ElFormItem label="真实姓名" prop="realName">
-          <ElInput
-            v-model="userForm.realName"
-            placeholder="请输入真实姓名"
-            maxlength="20"
-          />
+          <ElInput v-model="userForm.realName" placeholder="请输入真实姓名" maxlength="20" />
         </ElFormItem>
 
         <!-- 邮箱 -->
         <ElFormItem label="邮箱" prop="email">
-          <ElInput
-            v-model="userForm.email"
-            type="email"
-            placeholder="请输入邮箱地址"
-          />
+          <ElInput v-model="userForm.email" type="email" placeholder="请输入邮箱地址" />
         </ElFormItem>
 
         <!-- 手机号 -->
         <ElFormItem label="手机号" prop="phone">
-          <ElInput
-            v-model="userForm.phone"
-            placeholder="请输入手机号"
-            maxlength="11"
-          />
+          <ElInput v-model="userForm.phone" placeholder="请输入手机号" maxlength="11" />
         </ElFormItem>
 
         <!-- 权限配置区域标题 -->
@@ -833,12 +826,7 @@ onMounted(() => {
 
         <!-- 角色 -->
         <ElFormItem label="角色" prop="roles" required>
-          <ElSelect
-            v-model="userForm.roles"
-            multiple
-            placeholder="请选择角色"
-            class="roles-select"
-          >
+          <ElSelect v-model="userForm.roles" multiple placeholder="请选择角色" class="roles-select">
             <ElOption
               v-for="opt in roleOptions.slice(1)"
               :key="opt.value"
@@ -852,9 +840,7 @@ onMounted(() => {
               </div>
             </ElOption>
           </ElSelect>
-          <div class="form-hint">
-            可选择多个角色，用户将拥有所有角色的权限
-          </div>
+          <div class="form-hint">可选择多个角色，用户将拥有所有角色的权限</div>
         </ElFormItem>
 
         <!-- 状态 -->
@@ -921,9 +907,7 @@ onMounted(() => {
 
       <template #footer>
         <ElButton @click="showPasswordDialog = false">取消</ElButton>
-        <ElButton type="primary" @click="handleResetPassword">
-          确认重置
-        </ElButton>
+        <ElButton type="primary" @click="handleResetPassword"> 确认重置 </ElButton>
       </template>
     </ElDialog>
   </div>

@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Aim, Switch } from '@element-plus/icons-vue'
+import { Aim, Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import YearSelector from '@/components/common/YearSelector.vue'
-import { useAppLayout, useNavigation, useDepartmentSwitcher, useNotificationCenter } from '@/composables/layout'
+import {
+  useAppLayout,
+  useNavigation,
+  useDepartmentSwitcher,
+  useNotificationCenter
+} from '@/composables/layout'
 import { initApprovalNotifications } from '@/features/approval/services/approvalNotifications'
 import { disconnectWebSocket } from '@/shared/services/websocket'
 
@@ -13,20 +19,9 @@ const router = useRouter()
 const isDev = import.meta.env.DEV
 
 // 使用 Layout Composables
-const {
-  isLoggedIn,
-  currentUser,
-  isStrategicDept,
-  strategicDeptName,
-  handleLogout
-} = useAppLayout()
+const { isLoggedIn, currentUser, isStrategicDept, strategicDeptName, handleLogout } = useAppLayout()
 
-const {
-  viewingDept,
-  viewingRole,
-  viewingDeptName,
-  deptOptions
-} = useDepartmentSwitcher()
+const { viewingDept, viewingRole, viewingDeptName, deptOptions } = useDepartmentSwitcher()
 
 const { tabs, activeTab, handleTabClick } = useNavigation(viewingRole)
 
@@ -51,11 +46,30 @@ watch(viewingDept, () => {
   }
 })
 
-// 处理退出登录（导航到登录页）
-const onLogout = () => {
-  handleLogout()
-  disconnectWebSocket()
-  router.push('/login')
+// 处理下拉菜单命令
+const handleDropdownCommand = async (command: string) => {
+  switch (command) {
+    case 'console':
+      router.push('/admin/console')
+      break
+    case 'changePassword':
+      router.push('/profile?tab=password')
+      break
+    case 'logout':
+      try {
+        await ElMessageBox.confirm('确定要退出登录吗?', '退出确认', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        handleLogout()
+        disconnectWebSocket()
+        router.push('/login')
+      } catch {
+        // 用户取消
+      }
+      break
+  }
 }
 </script>
 
@@ -96,10 +110,21 @@ const onLogout = () => {
                 :value="dept.value"
               >
                 <span>{{ dept.label }}</span>
-                <el-tag v-if="dept.role === 'strategic_dept'" size="small" type="primary" style="margin-left: 8px;">管理</el-tag>
+                <el-tag
+                  v-if="dept.role === 'strategic_dept'"
+                  size="small"
+                  type="primary"
+                  style="margin-left: 8px"
+                  >管理</el-tag
+                >
               </el-option>
             </el-select>
-            <el-tag v-if="viewingDept !== strategicDeptName" type="warning" size="small" class="viewing-tag">
+            <el-tag
+              v-if="viewingDept !== strategicDeptName"
+              type="warning"
+              size="small"
+              class="viewing-tag"
+            >
               查看中: {{ viewingDeptName }}
             </el-tag>
           </div>
@@ -111,13 +136,28 @@ const onLogout = () => {
           <el-badge :value="unreadCount" :max="99" class="notification-badge">
             <el-button :icon="Bell" circle @click="handleNotificationClick" />
           </el-badge>
-          <el-dropdown @command="onLogout">
+          <el-dropdown @command="handleDropdownCommand">
             <el-avatar class="user-avatar" :size="32">
               {{ currentUser?.name?.charAt(0)?.toUpperCase() || 'U' }}
             </el-avatar>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                <!-- 管理员专属菜单 -->
+                <el-dropdown-item v-if="isStrategicDept" command="console">
+                  <el-icon><Monitor /></el-icon>
+                  控制台
+                </el-dropdown-item>
+
+                <!-- 所有用户可见 -->
+                <el-dropdown-item command="changePassword">
+                  <el-icon><Lock /></el-icon>
+                  修改密码
+                </el-dropdown-item>
+
+                <el-dropdown-item command="logout" :divided="isStrategicDept">
+                  <el-icon><SwitchButton /></el-icon>
+                  退出登录
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -153,7 +193,11 @@ const onLogout = () => {
 
       <!-- 内容区域 - 使用 router-view -->
       <div class="content-area">
-        <router-view :viewing-role="viewingRole" :viewing-dept="viewingDept" :selected-role="viewingRole || ''" />
+        <router-view
+          :viewing-role="viewingRole"
+          :viewing-dept="viewingDept"
+          :selected-role="viewingRole || ''"
+        />
       </div>
     </main>
   </div>
