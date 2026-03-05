@@ -1070,7 +1070,9 @@
   }
 
   // 审批后刷新
-  const handleApprovalRefresh = () => {
+  const handleApprovalRefresh = async () => {
+    // 刷新待审批计划数量
+    await loadPendingPlanApprovalCount()
     // 强制关闭并重新打开抽屉以刷新数据
     taskApprovalVisible.value = false
     nextTick(() => {
@@ -1759,45 +1761,37 @@
   }
   
   /**
-   * 获取待审批数量
+   * 获取待审批计划数量
    */
-  const pendingApprovalCount = ref(0)
+  const pendingPlanApprovalCount = ref(0)
   
   /**
-   * 加载待审批数量
+   * 加载待审批计划数量
    */
-  const loadPendingApprovalCount = async () => {
+  const loadPendingPlanApprovalCount = async () => {
     try {
       const userId = authStore.user?.id || 1
       const response = await approvalApi.countPendingApprovals(userId)
       if (response.success && response.data !== undefined) {
-        pendingApprovalCount.value = response.data
+        pendingPlanApprovalCount.value = response.data
       }
     } catch (error) {
-      logger.error('[StrategicTaskView] 加载待审批数量失败:', error)
+      logger.error('[StrategicTaskView] 加载待审批计划数量失败:', error)
     }
   }
   
   /**
-   * 打开审批抽屉
+   * 打开计划审批抽屉（新功能）
    */
   const planApprovalVisible = ref(false)
   
-  const handleOpenApproval = () => {
+  const handleOpenPlanApproval = () => {
     planApprovalVisible.value = true
   }
   
-  // 审批抽屉刷新回调
-  const handleApprovalRefresh = async () => {
-    // 刷新待审批数量
-    await loadPendingApprovalCount()
-    // 刷新指标数据
-    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-  }
-  
-  // 组件挂载时加载待审批数量
+  // 组件挂载时加载待审批计划数量
   onMounted(() => {
-    loadPendingApprovalCount()
+    loadPendingPlanApprovalCount()
   })
   
   // 任务类别颜色映射
