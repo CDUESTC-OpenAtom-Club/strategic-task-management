@@ -11,17 +11,17 @@ export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
   // Set third parameter to '' to load all env variables including those without VITE_ prefix
   const env = loadEnv(mode, process.cwd(), '')
-  
+
   // 检查是否启用Mock模式
   const useMock = env.VITE_USE_MOCK === 'true'
-  
+
   console.log('🔧 Vite Config:', {
     mode,
     useMock,
     viteUseMock: env.VITE_USE_MOCK,
     apiTarget: env.VITE_API_TARGET || 'http://localhost:8080'
   })
-  
+
   if (!useMock) {
     console.log(
       '🔗 [Proxy Enabled] API requests will be forwarded to:',
@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
   } else {
     console.log('🎭 [Mock Mode] Using local mock data')
   }
-  
+
   return {
     plugins: [
       // 在Mock模式下添加Mock API插件
@@ -66,7 +66,8 @@ export default defineConfig(({ mode }) => {
       }
     },
     server: {
-      port: 3500,
+      port: Number(env.VITE_DEV_SERVER_PORT) || 3500,
+      open: env.VITE_DEV_AUTO_OPEN === 'true',
       // 只在非Mock模式下配置代理
       proxy: useMock
         ? undefined
@@ -77,13 +78,13 @@ export default defineConfig(({ mode }) => {
               secure: false,
               rewrite: path => path,
               configure: (proxy, options) => {
-                proxy.on('error', (err, req, res) => {
+                proxy.on('error', (err, _req, _res) => {
                   console.error('⚠️ [Proxy Error]', err.message)
                 })
-                proxy.on('proxyReq', (proxyReq, req, res) => {
+                proxy.on('proxyReq', (proxyReq, req, _res) => {
                   console.log('📤 [Proxy Request]', req.method, req.url, '→', options.target)
                 })
-                proxy.on('proxyRes', (proxyRes, req, res) => {
+                proxy.on('proxyRes', (proxyRes, req, _res) => {
                   console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url)
                 })
               }

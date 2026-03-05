@@ -1,16 +1,16 @@
 /**
  * 简化的 API Client
- * 
+ *
  * 这是一个纯粹的网络请求封装层，只负责：
  * 1. Token 注入
  * 2. 错误转换
  * 3. 基础的请求/响应拦截
- * 
+ *
  * 不包含：
  * - 自动重试（应在业务层显式处理）
  * - 请求去重（应在业务层显式处理）
  * - 复杂的 Mock 切换逻辑
- * 
+ *
  * **Validates: Requirements 2.3, 2.6, 2.7**
  */
 
@@ -44,7 +44,7 @@ export interface ApiClientConfig {
 
 /**
  * 简化的 API Client 类
- * 
+ *
  * 提供基础的 HTTP 请求功能，包含 Token 注入和错误转换
  */
 export class ApiClient {
@@ -53,7 +53,7 @@ export class ApiClient {
   constructor(config: ApiClientConfig) {
     this.client = axios.create({
       baseURL: config.baseURL,
-      timeout: config.timeout || 10000,
+      timeout: config.timeout || Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000,
       headers: {
         'Content-Type': 'application/json'
       }
@@ -84,7 +84,7 @@ export class ApiClient {
 
         return config
       },
-      (error) => {
+      error => {
         logger.error('[API] Request error:', error)
         return Promise.reject(error)
       }
@@ -113,7 +113,7 @@ export class ApiClient {
         // 转换为统一的错误格式
         const appError = this.transformError(error)
         logger.error('[API] Error:', appError)
-        
+
         return Promise.reject(appError)
       }
     )
@@ -121,7 +121,7 @@ export class ApiClient {
 
   /**
    * 将 HTTP 错误转换为应用错误格式
-   * 
+   *
    * @param error Axios 错误对象
    * @returns 统一的应用错误格式
    */
@@ -178,5 +178,5 @@ export class ApiClient {
  */
 export const apiClient = new ApiClient({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 10000
+  timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000
 })
