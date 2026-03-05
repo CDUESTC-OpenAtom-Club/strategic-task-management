@@ -392,3 +392,177 @@ export const strategicApi = {
 }
 
 export default strategicApi
+
+/**
+ * ==========================================
+ * 审批流程 API
+ * ==========================================
+ */
+
+/**
+ * 提交计划进行审批
+ * @param planId 计划ID
+ * @param userId 提交用户ID
+ */
+async function submitPlanForApproval(planId: number, userId: number): Promise<ApiResponse<any>> {
+  logger.info('[API] Submitting plan for approval', { planId, userId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.post<ApiResponse<any>>(`/plans/approval/${planId}/submit`, null, {
+        params: { userId }
+      })
+    )
+    
+    logger.info('[API] Successfully submitted plan for approval', { planId })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to submit plan for approval', { error, planId, userId })
+    throw error
+  }
+}
+
+/**
+ * 审批通过
+ * @param instanceId 审批实例ID
+ * @param approverId 审批人ID
+ * @param comment 审批意见（可选）
+ */
+async function approvePlan(instanceId: number, approverId: number, comment?: string): Promise<ApiResponse<string>> {
+  logger.info('[API] Approving plan', { instanceId, approverId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.post<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/approve`, {
+        approverId,
+        comment
+      })
+    )
+    
+    logger.info('[API] Successfully approved plan', { instanceId })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to approve plan', { error, instanceId, approverId })
+    throw error
+  }
+}
+
+/**
+ * 审批拒绝
+ * @param instanceId 审批实例ID
+ * @param approverId 审批人ID
+ * @param comment 拒绝原因（必填）
+ */
+async function rejectPlan(instanceId: number, approverId: number, comment: string): Promise<ApiResponse<string>> {
+  logger.info('[API] Rejecting plan', { instanceId, approverId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.post<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/reject`, {
+        approverId,
+        comment
+      })
+    )
+    
+    logger.info('[API] Successfully rejected plan', { instanceId })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to reject plan', { error, instanceId, approverId })
+    throw error
+  }
+}
+
+/**
+ * 获取用户待审批列表
+ * @param userId 用户ID
+ */
+async function getPendingApprovals(userId: number): Promise<ApiResponse<any[]>> {
+  logger.info('[API] Getting pending approvals', { userId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.get<ApiResponse<any[]>>('/plans/approval/pending', {
+        params: { userId }
+      })
+    )
+    
+    logger.info('[API] Successfully got pending approvals', { count: response.data?.length || 0 })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to get pending approvals', { error, userId })
+    throw error
+  }
+}
+
+/**
+ * 获取计划审批状态
+ * @param planId 计划ID
+ */
+async function getPlanApprovalStatus(planId: number): Promise<ApiResponse<any>> {
+  logger.info('[API] Getting plan approval status', { planId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.get<ApiResponse<any>>(`/plans/approval/plans/${planId}/status`)
+    )
+    
+    logger.info('[API] Successfully got plan approval status', { planId })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to get plan approval status', { error, planId })
+    throw error
+  }
+}
+
+/**
+ * 获取待审批数量
+ * @param userId 用户ID
+ */
+async function countPendingApprovals(userId: number): Promise<ApiResponse<number>> {
+  logger.info('[API] Counting pending approvals', { userId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.get<ApiResponse<number>>('/plans/approval/pending/count', {
+        params: { userId }
+      })
+    )
+    
+    logger.info('[API] Successfully counted pending approvals', { count: response.data })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to count pending approvals', { error, userId })
+    throw error
+  }
+}
+
+/**
+ * 获取当前审批步骤描述
+ * @param instanceId 审批实例ID
+ */
+async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> {
+  logger.info('[API] Getting current step', { instanceId })
+  
+  try {
+    const response = await withRetry(() => 
+      apiClient.get<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/current-step`)
+    )
+    
+    logger.info('[API] Successfully got current step', { instanceId })
+    return response
+  } catch (error) {
+    logger.error('[API] Failed to get current step', { error, instanceId })
+    throw error
+  }
+}
+
+// 导出审批相关API
+export const approvalApi = {
+  submitPlanForApproval,
+  approvePlan,
+  rejectPlan,
+  getPendingApprovals,
+  getPlanApprovalStatus,
+  countPendingApprovals,
+  getCurrentStep
+}
