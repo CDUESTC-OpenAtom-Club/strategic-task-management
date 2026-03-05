@@ -1257,7 +1257,7 @@
             
             // 更新原指标状态
             await strategicStore.updateIndicator(row.id.toString(), { 
-              canWithdraw: true,
+              canWithdraw: false,
               status: 'distributed',
               statusAudit: updatedStatusAudit
             })
@@ -1276,7 +1276,7 @@
                   id: `${Date.now()}-${index}-${row.id}`,
                   responsibleDept: dept,
                   ownerDept: '战略发展部',
-                  canWithdraw: true,
+                  canWithdraw: false,
                   status: 'distributed',
                   progress: 0,
                   statusAudit: [newAuditEntry]
@@ -1328,7 +1328,7 @@
         
         // 更新原指标状态
         await strategicStore.updateIndicator(row.id.toString(), { 
-          canWithdraw: true,
+          canWithdraw: false,
           status: 'distributed',
           statusAudit: updatedStatusAudit
         })
@@ -1347,7 +1347,7 @@
               id: `${Date.now()}-${index}-${row.id}`,
               responsibleDept: dept,
               ownerDept: '战略发展部',
-              canWithdraw: true,
+              canWithdraw: false,
               status: 'distributed',
               progress: 0,
               statusAudit: [newAuditEntry]
@@ -1460,7 +1460,7 @@
             const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
             
             return strategicStore.updateIndicator(row.id.toString(), { 
-              canWithdraw: true,
+              canWithdraw: false,
               status: 'distributed',
               statusAudit: updatedStatusAudit
             })
@@ -1542,7 +1542,7 @@
             const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
             
             return strategicStore.updateIndicator(row.id.toString(), { 
-              canWithdraw: false,
+              canWithdraw: true,
               status: 'draft',
               statusAudit: updatedStatusAudit
             })
@@ -1614,7 +1614,7 @@
         // 1. 先调用后端 API 更新所有指标
         await Promise.all(
           distributedRows.map(row => 
-            strategicStore.updateIndicator(row.id.toString(), { canWithdraw: true })
+            strategicStore.updateIndicator(row.id.toString(), { canWithdraw: false })
           )
         )
         

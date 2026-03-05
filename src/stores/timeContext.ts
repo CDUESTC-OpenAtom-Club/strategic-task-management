@@ -54,8 +54,8 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   // 始终保存当前真实年份，用于下次检测是否跨年
   localStorage.setItem('strategic-real-year', currentRealYear.toString())
 
-  // 当前选中的年份（默认为当前真实年份，或用户上次选择的年份）
-  const currentYear = ref<number>(realCurrentYear)  // 直接使用真实年份
+  // 当前选中的年份（使用计算出的初始年份）
+  const currentYear = ref<number>(initialYear)
 
   // 可用年份列表（从后端获取或本地生成）
   const availableYears = ref<number[]>([])

@@ -263,20 +263,17 @@ export const strategicApi = {
    * 获取指定年份的指标（包含里程碑）
    */
   async getIndicatorsByYear(year: number): Promise<ApiResponse<IndicatorVO[]>> {
-    // 获取所有指标，然后按年份过滤
-    const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
-    if (response.success && response.data) {
-      const filteredIndicators = response.data.filter(i => i.year === year)
-      return { ...response, data: filteredIndicators }
-    }
-    return response
+    // 直接使用后端的年份过滤参数
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params: { year } })
   },
 
   /**
    * 获取所有指标
+   * @param year 可选的年份过滤参数
    */
-  async getAllIndicators(): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+  async getAllIndicators(year?: number): Promise<ApiResponse<IndicatorVO[]>> {
+    const params = year ? { year } : {}
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params })
   },
 
   /**

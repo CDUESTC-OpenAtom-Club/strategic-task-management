@@ -110,9 +110,11 @@ export interface MilestoneVO {
 export const indicatorApi = {
   /**
    * 获取所有活跃指标
+   * @param year 可选的年份过滤参数
    */
-  async getAllIndicators(): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+  async getAllIndicators(year?: number): Promise<ApiResponse<IndicatorVO[]>> {
+    const params = year ? { year } : {}
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params })
   },
 
   /**

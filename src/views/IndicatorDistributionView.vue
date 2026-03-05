@@ -840,8 +840,7 @@ const handleBatchApprove = (college: string) => {
         comment: '批量审批通过'
       })
         strategicStore.updateIndicator(indicator.id.toString(), {
-          progressApprovalStatus: 'APPROVED',
-          canWithdraw: false
+          progressApprovalStatus: 'APPROVED'
         })
     })
     ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
@@ -879,8 +878,7 @@ const handleBatchReject = (college: string) => {
         comment: value || '批量打回重新提交'
       })
         strategicStore.updateIndicator(indicator.id.toString(), {
-          progressApprovalStatus: 'REJECTED',
-          canWithdraw: true
+          progressApprovalStatus: 'REJECTED'
         })
     })
     ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
@@ -939,7 +937,7 @@ const handleBatchWithdraw = async (college: string) => {
       await strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'draft',
         distributionStatus: 'DRAFT',
-        canWithdraw: false
+        canWithdraw: true
       })
     } catch (err) {
       errors.push(indicator.name)
@@ -1024,7 +1022,7 @@ const handleBatchDistribute = async (college: string) => {
       await strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
         distributionStatus: 'DISTRIBUTED',
-        canWithdraw: true
+        canWithdraw: false
       })
     } catch (err) {
       errors.push(indicator.name)
