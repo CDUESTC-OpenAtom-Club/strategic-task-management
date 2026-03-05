@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Aim, Switch } from '@element-plus/icons-vue'
 import YearSelector from '@/components/common/YearSelector.vue'
 import { useAppLayout, useNavigation, useDepartmentSwitcher, useNotificationCenter } from '@/composables/layout'
+import { initApprovalNotifications } from '@/features/approval/services/approvalNotifications'
+import { disconnectWebSocket } from '@/shared/services/websocket'
 
 const router = useRouter()
 
@@ -30,6 +32,18 @@ const { tabs, activeTab, handleTabClick } = useNavigation(viewingRole)
 
 const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
 
+// 初始化审批通知
+onMounted(() => {
+  if (isLoggedIn.value) {
+    initApprovalNotifications()
+  }
+})
+
+// 清理WebSocket连接
+onUnmounted(() => {
+  disconnectWebSocket()
+})
+
 // 切换视角时导航到第一个可用的标签页
 watch(viewingDept, () => {
   if (tabs.value.length > 0) {
@@ -40,6 +54,7 @@ watch(viewingDept, () => {
 // 处理退出登录（导航到登录页）
 const onLogout = () => {
   handleLogout()
+  disconnectWebSocket()
   router.push('/login')
 }
 </script>
