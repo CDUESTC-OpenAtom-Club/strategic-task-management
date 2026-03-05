@@ -9,6 +9,7 @@
   import { useTimeContextStore } from '@/stores/timeContext'
   import { useOrgStore } from '@/stores/org'
   import { logger } from '@/utils/logger'
+  import { approvalApi } from '@/features/task/api/strategicApi'
   import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
   import MilestoneList from '@/components/milestone/MilestoneList.vue'
@@ -1686,6 +1687,110 @@
     })
   }
   
+  // ================== 审批流程相关 ==================
+  
+  /**
+   * 提交计划进行审批
+   * 将当前部门的所有指标作为一个计划提交审批
+   */
+  const handleSubmitPlanForApproval = async () => {
+    // 检查是否有指标
+    if (indicators.value.length === 0) {
+      ElMessage.warning('当前没有指标，无法提交审批')
+      return
+    }
+    
+    // 检查权重总和是否为100
+    if (departmentTotalWeight.value !== 100) {
+      ElMessage.warning(`权重总和必须为100%，当前为${departmentTotalWeight.value}%`)
+      return
+    }
+    
+    // 检查是否所有指标都已下发
+    const unDistributedCount = indicators.value.filter(i => i.canWithdraw).length
+    if (unDistributedCount > 0) {
+      ElMessage.warning(`还有${unDistributedCount}个指标未下发，请先完成下发`)
+      return
+    }
+    
+    try {
+      await ElMessageBox.confirm(
+        `确认提交当前部门的${indicators.value.length}个指标进行审批？`,
+        '提交审批确认',
+        {
+          confirmButtonText: '确认提交',
+          cancelButtonText: '取消',
+          type: 'info'
+        }
+      )
+      
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在提交审批...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      })
+      
+      try {
+        // 调用后端API提交审批
+        // 注意：这里需要planId，实际应该从当前年度计划中获取
+        // 暂时使用timeContext.currentYear作为planId的替代
+        const planId = timeContext.currentYear
+        const userId = authStore.user?.id || 1
+        
+        const response = await approvalApi.submitPlanForApproval(planId, userId)
+        
+        if (response.success) {
+          ElMessage.success('已成功提交审批，等待上级审批')
+          // 刷新数据
+          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        } else {
+          ElMessage.error(response.message || '提交审批失败')
+        }
+      } catch (error: any) {
+        logger.error('[StrategicTaskView] 提交审批失败:', error)
+        ElMessage.error(error.message || '提交审批失败，请稍后重试')
+      } finally {
+        loading.close()
+      }
+    } catch {
+      // 用户取消
+    }
+  }
+  
+  /**
+   * 获取待审批数量
+   */
+  const pendingApprovalCount = ref(0)
+  
+  /**
+   * 加载待审批数量
+   */
+  const loadPendingApprovalCount = async () => {
+    try {
+      const userId = authStore.user?.id || 1
+      const response = await approvalApi.countPendingApprovals(userId)
+      if (response.success && response.data !== undefined) {
+        pendingApprovalCount.value = response.data
+      }
+    } catch (error) {
+      logger.error('[StrategicTaskView] 加载待审批数量失败:', error)
+    }
+  }
+  
+  /**
+   * 打开审批抽屉
+   */
+  const handleOpenApproval = () => {
+    // 这里应该打开审批抽屉组件
+    // 暂时显示提示信息
+    ElMessage.info('审批功能开发中...')
+  }
+  
+  // 组件挂载时加载待审批数量
+  onMounted(() => {
+    loadPendingApprovalCount()
+  })
+  
   // 任务类别颜色映射
   const getCategoryColor = (type2: string) => {
     return type2 === '发展性' ? '#409EFF' : '#67C23A'
@@ -1803,15 +1908,26 @@
               <el-icon><component :is="hasDistributedIndicators ? RefreshLeft : Promotion" /></el-icon>
               {{ hasDistributedIndicators ? '撤回' : '下发' }}
             </el-button>
-                  <!-- 审批按钮 -->
-                  <el-button 
-                    size="small" 
-                    :type="pendingApprovalCount > 0 ? 'primary' : 'default'"
-                    @click="handleOpenApproval"
-                  >
-                    <el-icon><Check /></el-icon>
-                    审批{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
-                  </el-button>
+            <!-- 提交审批按钮 -->
+            <el-button 
+              v-if="canEdit && hasDistributedIndicators"
+              type="primary" 
+              size="small" 
+              :disabled="isReadOnly || departmentTotalWeight !== 100"
+              @click.stop="handleSubmitPlanForApproval"
+            >
+              <el-icon><Check /></el-icon>
+              提交审批
+            </el-button>
+            <!-- 审批按钮 -->
+            <el-button 
+              size="small" 
+              :type="pendingApprovalCount > 0 ? 'primary' : 'default'"
+              @click="handleOpenApproval"
+            >
+              <el-icon><Check /></el-icon>
+              审批{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
+            </el-button>
             <el-button size="small">
               <el-icon><Download /></el-icon>
               导出
