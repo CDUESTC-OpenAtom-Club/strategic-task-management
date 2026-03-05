@@ -12,6 +12,7 @@
   import { approvalApi } from '@/features/task/api/strategicApi'
   import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
+  import PlanApprovalDrawer from '@/features/approval/components/PlanApprovalDrawer.vue'
   import MilestoneList from '@/components/milestone/MilestoneList.vue'
 
   // 使用共享 Store
@@ -1780,10 +1781,18 @@
   /**
    * 打开审批抽屉
    */
+  const planApprovalVisible = ref(false)
+  
   const handleOpenApproval = () => {
-    // 这里应该打开审批抽屉组件
-    // 暂时显示提示信息
-    ElMessage.info('审批功能开发中...')
+    planApprovalVisible.value = true
+  }
+  
+  // 审批抽屉刷新回调
+  const handleApprovalRefresh = async () => {
+    // 刷新待审批数量
+    await loadPendingApprovalCount()
+    // 刷新指标数据
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
   }
   
   // 组件挂载时加载待审批数量
@@ -2795,6 +2804,13 @@
         :department-name="'战略发展部'"
         :show-approval-section="true"
         @close="taskApprovalVisible = false"
+        @refresh="handleApprovalRefresh"
+      />
+
+      <!-- 计划审批抽屉 -->
+      <PlanApprovalDrawer
+        v-model:visible="planApprovalVisible"
+        @close="planApprovalVisible = false"
         @refresh="handleApprovalRefresh"
       />
 
