@@ -10,6 +10,7 @@
   import { useOrgStore } from '@/stores/org'
   import { logger } from '@/utils/logger'
   import { approvalApi } from '@/features/task/api/strategicApi'
+  import { getStatusText, getStatusType, getStatusIcon } from '@/utils/indicatorStatus'
   import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
   import PlanApprovalDrawer from '@/features/approval/components/PlanApprovalDrawer.vue'
@@ -1475,7 +1476,11 @@
         await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
         
         loading.close()
-        ElMessage.success(`已成功下发 ${pendingRows.length} 个指标`)
+        ElMessage.success({
+          message: `已成功下发 ${pendingRows.length} 个指标，已自动提交审批，当前状态：待审核`,
+          duration: 5000,
+          showClose: true
+        })
         updateEditTime()
       } catch (err) {
         loading.close()
@@ -1693,74 +1698,6 @@
   // ================== 审批流程相关 ==================
   
   /**
-   * 提交计划进行审批
-   * 将当前部门的所有指标作为一个计划提交审批
-   */
-  const handleSubmitPlanForApproval = async () => {
-    // 检查是否有指标
-    if (indicators.value.length === 0) {
-      ElMessage.warning('当前没有指标，无法提交审批')
-      return
-    }
-    
-    // 检查权重总和是否为100
-    if (departmentTotalWeight.value !== 100) {
-      ElMessage.warning(`权重总和必须为100%，当前为${departmentTotalWeight.value}%`)
-      return
-    }
-    
-    // 检查是否所有指标都已下发
-    const unDistributedCount = indicators.value.filter(i => i.canWithdraw).length
-    if (unDistributedCount > 0) {
-      ElMessage.warning(`还有${unDistributedCount}个指标未下发，请先完成下发`)
-      return
-    }
-    
-    try {
-      await ElMessageBox.confirm(
-        `确认提交当前部门的${indicators.value.length}个指标进行审批？`,
-        '提交审批确认',
-        {
-          confirmButtonText: '确认提交',
-          cancelButtonText: '取消',
-          type: 'info'
-        }
-      )
-      
-      const loading = ElLoading.service({
-        lock: true,
-        text: '正在提交审批...',
-        background: 'rgba(0, 0, 0, 0.7)'
-      })
-      
-      try {
-        // 调用后端API提交审批
-        // 注意：这里需要planId，实际应该从当前年度计划中获取
-        // 暂时使用timeContext.currentYear作为planId的替代
-        const planId = timeContext.currentYear
-        const userId = authStore.user?.id || 1
-        
-        const response = await approvalApi.submitPlanForApproval(planId, userId)
-        
-        if (response.success) {
-          ElMessage.success('已成功提交审批，等待上级审批')
-          // 刷新数据
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-        } else {
-          ElMessage.error(response.message || '提交审批失败')
-        }
-      } catch (error: any) {
-        logger.error('[StrategicTaskView] 提交审批失败:', error)
-        ElMessage.error(error.message || '提交审批失败，请稍后重试')
-      } finally {
-        loading.close()
-      }
-    } catch {
-      // 用户取消
-    }
-  }
-  
-  /**
    * 获取待审批计划数量
    */
   const pendingPlanApprovalCount = ref(0)
@@ -1910,17 +1847,6 @@
             >
               <el-icon><component :is="hasDistributedIndicators ? RefreshLeft : Promotion" /></el-icon>
               {{ hasDistributedIndicators ? '撤回' : '下发' }}
-            </el-button>
-            <!-- 提交审批按钮 -->
-            <el-button 
-              v-if="canEdit && hasDistributedIndicators"
-              type="primary" 
-              size="small" 
-              :disabled="isReadOnly || departmentTotalWeight !== 100"
-              @click.stop="handleSubmitPlanForApproval"
-            >
-              <el-icon><Check /></el-icon>
-              提交审批
             </el-button>
             <!-- 审批按钮 -->
             <el-button 
@@ -2128,6 +2054,14 @@
                         </div>
                       </div>
                     </el-popover>
+                  </template>
+                </el-table-column>
+                <!-- 状态列 -->
+                <el-table-column label="状态" width="110" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="getStatusType(row.displayStatus)" size="small">
+                      {{ getStatusIcon(row.displayStatus) }} {{ getStatusText(row.displayStatus) }}
+                    </el-tag>
                   </template>
                 </el-table-column>
                 <el-table-column prop="progress" label="进度" width="120" align="center">

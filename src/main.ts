@@ -48,3 +48,26 @@ performanceMonitor.init({
 // 开发环境下自动运行API健康检查
 console.log('🚀 [Main] 应用已启动')
 autoHealthCheck()
+
+// 开发环境下暴露调试工具到全局
+if (import.meta.env.DEV) {
+  // 暴露 stores 到全局，方便在控制台调试
+  import('./stores/auth').then(({ useAuthStore }) => {
+    const authStore = useAuthStore()
+    ;(window as any).__DEBUG__ = {
+      authStore,
+      tokenManager: null,
+      pinia,
+    }
+    
+    // 延迟加载 tokenManager
+    import('./utils/tokenManager').then(({ tokenManager }) => {
+      ;(window as any).__DEBUG__.tokenManager = tokenManager
+    })
+    
+    console.log('%c🔧 调试工具已加载', 'color: #E6A23C; font-size: 14px; font-weight: bold')
+    console.log('%c使用 window.__DEBUG__ 访问调试工具', 'color: #909399; font-size: 12px')
+    console.log('%c示例: window.__DEBUG__.authStore.user', 'color: #909399; font-size: 12px')
+    console.log('%c示例: window.__DEBUG__.tokenManager.getAccessToken()', 'color: #909399; font-size: 12px')
+  })
+}

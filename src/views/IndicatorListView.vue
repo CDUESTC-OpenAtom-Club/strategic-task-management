@@ -661,7 +661,7 @@ const newRow = ref({
   taskContent: '',
   name: '',
   type1: '定性' as '定性' | '定量',
-  type2: '发展性' as '发展性' | '基础性',
+  type2: '基础性' as '发展性' | '基础性',
   weight: '',
   remark: '',
   milestones: [] as Milestone[]
@@ -790,7 +790,7 @@ const addIndicatorToCategory = (category: '发展性' | '基础性') => {
 
 const cancelAdd = () => {
   isAddingOrEditing.value = false
-  newRow.value = { taskContent: '', name: '', type1: '定性', type2: '发展性', weight: '', remark: '', milestones: [] }
+  newRow.value = { taskContent: '', name: '', type1: '定性', type2: '基础性', weight: '', remark: '', milestones: [] }
 }
 
 const saveNewRow = () => {

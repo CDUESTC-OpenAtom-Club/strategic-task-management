@@ -150,7 +150,7 @@ const getRoleConfig = (role: UserRole) => {
     functional_dept: { label: '职能部门', type: 'warning' },
     secondary_college: { label: '二级学院', type: 'info' }
   }
-  return configs[role]
+  return configs[role] || { label: role, type: 'default' }
 }
 
 // 获取状态配置
@@ -160,7 +160,7 @@ const getStatusConfig = (status: 'active' | 'disabled' | 'locked') => {
     disabled: { label: '禁用', type: 'danger', icon: Lock },
     locked: { label: '锁定', type: 'warning', icon: Lock }
   }
-  return configs[status]
+  return configs[status] || { label: status, type: 'info', icon: User }
 }
 
 // 对话框标题
@@ -252,7 +252,13 @@ const loadUsers = async () => {
     const response = await api.get('/admin/users', { params })
 
     // 转换响应格式
-    users.value = response.data.content.map(user => ({
+    // 注意：响应拦截器已将后端的 ApiResponse.data 包装到 response.data.data 中
+    const pageData = response.data.data
+    if (!pageData || !pageData.content) {
+      throw new Error('响应数据格式错误')
+    }
+
+    users.value = pageData.content.map(user => ({
       id: user.id,
       username: user.username,
       realName: user.realName,

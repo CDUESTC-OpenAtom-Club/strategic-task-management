@@ -399,28 +399,7 @@ export default strategicApi
  * ==========================================
  */
 
-/**
- * 提交计划进行审批
- * @param planId 计划ID
- * @param userId 提交用户ID
- */
-async function submitPlanForApproval(planId: number, userId: number): Promise<ApiResponse<any>> {
-  logger.info('[API] Submitting plan for approval', { planId, userId })
-  
-  try {
-    const response = await withRetry(() => 
-      apiClient.post<ApiResponse<any>>(`/plans/approval/${planId}/submit`, null, {
-        params: { userId }
-      })
-    )
-    
-    logger.info('[API] Successfully submitted plan for approval', { planId })
-    return response
-  } catch (error) {
-    logger.error('[API] Failed to submit plan for approval', { error, planId, userId })
-    throw error
-  }
-}
+
 
 /**
  * 审批通过
@@ -558,7 +537,6 @@ async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> 
 
 // 导出审批相关API
 export const approvalApi = {
-  submitPlanForApproval,
   approvePlan,
   rejectPlan,
   getPendingApprovals,

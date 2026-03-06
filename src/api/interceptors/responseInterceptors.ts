@@ -233,12 +233,25 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     }
 
     // ========================================================================
-    // 401 AUTH ERROR HANDLING
+    // 401 AUTH ERROR HANDLING WITH AUTO REFRESH
     // ========================================================================
     if (error.response?.status === 401) {
       logger.warn('🔒 [API Auth] 401 未授权')
-      const isLoginRequest = error.config?.url?.includes('/auth/login')
-      if (!isLoginRequest) {
+      
+      const originalRequest = error.config as any
+      const isLoginRequest = originalRequest?.url?.includes('/auth/login')
+      const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
+      
+      // 登录和刷新请求失败，直接返回错误（不尝试刷新）
+      if (isLoginRequest || isRefreshRequest) {
+        logger.debug('🔒 [API Auth] 登录/刷新请求失败，不尝试刷新')
+        return Promise.reject(error)
+      }
+      
+      // 防止重复刷新（如果已经尝试过刷新但仍然失败）
+      if (originalRequest._retry) {
+        logger.warn('🔒 [API Auth] Token 刷新后仍然失败，跳转登录')
+        
         const { useAuthStore } = await import('@/stores/auth')
         const authStore = useAuthStore()
         authStore.logout()
@@ -255,6 +268,59 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
             window.location.href = '/login'
           }
         }, 100)
+        
+        return Promise.reject(error)
+      }
+      
+      // 标记为已重试，防止无限循环
+      originalRequest._retry = true
+      
+      try {
+        logger.debug('🔄 [API Auth] 尝试刷新 Token...')
+        
+        // 刷新 Token
+        const { tokenManager } = await import('@/utils/tokenManager')
+        const newToken = await tokenManager.refreshAccessToken()
+        
+        logger.debug('✅ [API Auth] Token 刷新成功，重试原请求')
+        
+        // 更新 auth store 中的 token
+        const { useAuthStore } = await import('@/stores/auth')
+        const authStore = useAuthStore()
+        authStore.token = newToken
+        
+        // 同步到 localStorage（确保刷新后状态一致）
+        localStorage.setItem('token', newToken)
+        
+        // 更新原请求的 Authorization 头
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        
+        // 重新发起原请求
+        const axios = (await import('axios')).default
+        return axios.request(originalRequest)
+        
+      } catch (refreshError) {
+        logger.error('❌ [API Auth] Token 刷新失败:', refreshError)
+        
+        // 刷新失败，清除登录状态
+        const { useAuthStore } = await import('@/stores/auth')
+        const authStore = useAuthStore()
+        authStore.logout()
+        
+        const { ElMessage } = await import('element-plus')
+        ElMessage.warning({
+          message: '登录已过期，请重新登录',
+          duration: 3000,
+          showClose: true
+        })
+        
+        setTimeout(() => {
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login'
+          }
+        }, 100)
+        
+        return Promise.reject(refreshError)
       }
     }
 

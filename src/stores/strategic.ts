@@ -128,11 +128,13 @@ export const useStrategicStore = defineStore('strategic', () => {
   // ============ Actions ============
   
   /**
-   * 从 API 加载指标数据
+   * 从 API 加载指标数据（带重试机制）
    */
-  const loadIndicatorsFromApi = async (year: number): Promise<StrategicIndicator[]> => {
+  const loadIndicatorsFromApi = async (year: number, retryCount = 0): Promise<StrategicIndicator[]> => {
+    const maxRetries = 2
+    
     try {
-      logger.info(`[Strategic Store] Loading indicators for year ${year} from API...`)
+      logger.info(`[Strategic Store] Loading indicators for year ${year} from API... (attempt ${retryCount + 1}/${maxRetries + 1})`)
       const response = await strategicApi.getIndicatorsByYear(year)
       if (response.success && response.data) {
         const converted = response.data.map(vo => strategicApi.convertIndicatorVOToStrategicIndicator(vo))
@@ -170,18 +172,29 @@ export const useStrategicStore = defineStore('strategic', () => {
       
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
       return []
-    } catch (err) {
+    } catch (err: any) {
+      // 检查是否是超时错误且还有重试次数
+      const isTimeout = err.message?.includes('timeout') || err.code === 'ECONNABORTED'
+      if (isTimeout && retryCount < maxRetries) {
+        logger.warn(`[Strategic Store] Request timeout, retrying... (${retryCount + 1}/${maxRetries})`)
+        // 等待一段时间后重试（指数退避）
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return loadIndicatorsFromApi(year, retryCount + 1)
+      }
+      
       logger.error(`[Strategic Store] Failed to load indicators for year ${year} from API:`, err)
       throw err
     }
   }
 
   /**
-   * 从 API 加载任务数据
+   * 从 API 加载任务数据（带重试机制）
    */
-  const loadTasksFromApi = async (year: number): Promise<StrategicTask[]> => {
+  const loadTasksFromApi = async (year: number, retryCount = 0): Promise<StrategicTask[]> => {
+    const maxRetries = 2
+    
     try {
-      logger.info(`[Strategic Store] Loading tasks for year ${year} from API...`)
+      logger.info(`[Strategic Store] Loading tasks for year ${year} from API... (attempt ${retryCount + 1}/${maxRetries + 1})`)
       const response = await strategicApi.getTasksByYear(year)
       if (response.success && response.data) {
         const converted = response.data.map(vo => strategicApi.convertTaskVOToStrategicTask(vo))
@@ -196,7 +209,16 @@ export const useStrategicStore = defineStore('strategic', () => {
       
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
       return []
-    } catch (err) {
+    } catch (err: any) {
+      // 检查是否是超时错误且还有重试次数
+      const isTimeout = err.message?.includes('timeout') || err.code === 'ECONNABORTED'
+      if (isTimeout && retryCount < maxRetries) {
+        logger.warn(`[Strategic Store] Request timeout, retrying... (${retryCount + 1}/${maxRetries})`)
+        // 等待一段时间后重试（指数退避）
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return loadTasksFromApi(year, retryCount + 1)
+      }
+      
       logger.error(`[Strategic Store] Failed to load tasks for year ${year} from API:`, err)
       throw err
     }
@@ -235,20 +257,26 @@ export const useStrategicStore = defineStore('strategic', () => {
         return
       } catch (err: any) {
         logger.error(`[Strategic Store] API failed:`, err)
-        // 优先使用详细的错误消息
-        const errorMsg = err.details?.message || err.message || 'API 请求失败'
+        
+        // 构建用户友好的错误消息
+        let errorMsg = 'API 请求失败'
+        
+        if (err.message?.includes('timeout') || err.code === 'ECONNABORTED') {
+          errorMsg = '请求超时，服务器响应时间过长。可能原因：数据量较大或网络连接不稳定。'
+        } else if (err.code === 503 || err.code === 500 || err.code === 504) {
+          const errorDetail = JSON.stringify(err.details || '')
+          if (errorDetail.includes('JDBC') || errorDetail.includes('Connection') || errorDetail.includes('timeout')) {
+            errorMsg = '数据库连接失败，请检查后端数据库配置或网络连通性。'
+          } else {
+            errorMsg = '服务器内部错误，请稍后重试或联系管理员。'
+          }
+        } else {
+          errorMsg = err.details?.message || err.message || 'API 请求失败'
+        }
+        
         error.value = errorMsg
         loadingState.value.error = errorMsg
         dataSource.value = 'fallback' // 数据来源：降级
-        
-        // 如果是 503 或 500，且包含数据库错误信息，给出更明确的提示
-        const errorDetail = JSON.stringify(err.details || '');
-        if ((err.code === 503 || err.code === 500 || err.code === 504) && 
-            (errorDetail.includes('JDBC') || errorDetail.includes('Connection') || errorDetail.includes('timeout') || err.message.includes('status code 500'))) {
-          const dbError = '数据库连接失败，请检查后端数据库配置（.env）或网络连通性。';
-          error.value = dbError;
-          loadingState.value.error = dbError;
-        }
         
         // API失败，清空数据
         indicators.value = []

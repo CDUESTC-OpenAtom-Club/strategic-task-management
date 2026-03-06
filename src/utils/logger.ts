@@ -113,7 +113,18 @@ export function filterSensitiveData(obj: unknown, visited: WeakSet<object> = new
  * @returns 过滤后的参数
  */
 function filterLogArgs(args: unknown[]): unknown[] {
-  return args.map(arg => filterSensitiveData(arg))
+  return args.map(arg => {
+    // 特殊处理 Error 对象，确保错误信息被正确显示
+    if (arg instanceof Error) {
+      return {
+        name: arg.name,
+        message: arg.message,
+        stack: arg.stack,
+        ...filterSensitiveData(arg)
+      }
+    }
+    return filterSensitiveData(arg)
+  })
 }
 
 /**

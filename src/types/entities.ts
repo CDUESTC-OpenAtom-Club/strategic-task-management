@@ -173,6 +173,8 @@ export interface Indicator {
   statusAudit: StatusAuditEntry[]
   /** 状态 (后端: status) */
   status: IndicatorStatus
+  /** 显示状态 (根据审批状态计算) */
+  displayStatus?: 'DRAFT' | 'PENDING_APPROVAL' | 'DISTRIBUTED'
   /** 备注 (后端: remark) */
   remark: string | null
   /** 创建时间 (后端: created_at) */
