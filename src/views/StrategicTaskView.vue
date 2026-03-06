@@ -135,7 +135,7 @@
   const hasDistributedIndicators = computed(() => {
     return indicators.value.some(i => {
       const audit = i.statusAudit || []
-      if (audit.length === 0) return false // 无审计记录 = 草稿状态 = 未下发
+      if (audit.length === 0) {return false} // 无审计记录 = 草稿状态 = 未下发
       const lastAudit = audit[audit.length - 1]
       const lastAction = lastAudit?.action
       // 已下发状态：最后一次操作是 distribute（下发）或 reject（打回）或 approve（审批通过）
@@ -152,11 +152,11 @@
   
   // 判断单个指标是否可以删除（未下发状态才能删除）
   const canDeleteIndicator = (indicator: StrategicIndicator): boolean => {
-    if (isReadOnly.value) return false
-    if (!canEdit.value) return false
+    if (isReadOnly.value) {return false}
+    if (!canEdit.value) {return false}
     
     const audit = indicator.statusAudit || []
-    if (audit.length === 0) return true // 无审计记录 = 草稿状态 = 可删除
+    if (audit.length === 0) {return true} // 无审计记录 = 草稿状态 = 可删除
     
     const lastAudit = audit[audit.length - 1]
     const lastAction = lastAudit?.action
@@ -1416,9 +1416,9 @@
   const handleDistributeAll = async () => {
     // 基于 statusAudit 判断草稿状态
     const pendingRows = indicators.value.filter(r => {
-      if (!r.name) return false // 只下发有核心指标的记录
+      if (!r.name) {return false} // 只下发有核心指标的记录
       const audit = r.statusAudit || []
-      if (audit.length === 0) return true // 无审计记录 = 草稿状态
+      if (audit.length === 0) {return true} // 无审计记录 = 草稿状态
       const lastAudit = audit[audit.length - 1]
       const lastAction = lastAudit?.action
       // 草稿状态：最后一次操作是 withdraw（撤回）或无操作
@@ -1504,7 +1504,7 @@
     // 基于 statusAudit 判断已下发状态
     const distributedRows = indicators.value.filter(r => {
       const audit = r.statusAudit || []
-      if (audit.length === 0) return false // 无审计记录 = 草稿状态 = 未下发
+      if (audit.length === 0) {return false} // 无审计记录 = 草稿状态 = 未下发
       const lastAudit = audit[audit.length - 1]
       const lastAction = lastAudit?.action
       // 已下发状态：最后一次操作是 distribute（下发）或 reject（打回）或 approve（审批通过）

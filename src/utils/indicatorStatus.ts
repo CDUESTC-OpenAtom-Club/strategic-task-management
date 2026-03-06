@@ -37,7 +37,7 @@ export const STATUS_ICON_MAP: Record<IndicatorDisplayStatus, string> = {
  * 获取状态显示文本
  */
 export function getStatusText(status?: IndicatorDisplayStatus): string {
-  if (!status) return '未知'
+  if (!status) {return '未知'}
   return STATUS_TEXT_MAP[status] || status
 }
 
@@ -45,7 +45,7 @@ export function getStatusText(status?: IndicatorDisplayStatus): string {
  * 获取状态类型（用于 el-tag）
  */
 export function getStatusType(status?: IndicatorDisplayStatus): 'info' | 'warning' | 'success' {
-  if (!status) return 'info'
+  if (!status) {return 'info'}
   return STATUS_TYPE_MAP[status] || 'info'
 }
 
@@ -53,7 +53,7 @@ export function getStatusType(status?: IndicatorDisplayStatus): 'info' | 'warnin
  * 获取状态图标
  */
 export function getStatusIcon(status?: IndicatorDisplayStatus): string {
-  if (!status) return ''
+  if (!status) {return ''}
   return STATUS_ICON_MAP[status] || ''
 }
 
@@ -61,6 +61,6 @@ export function getStatusIcon(status?: IndicatorDisplayStatus): string {
  * 获取完整的状态显示文本（包含图标）
  */
 export function getFullStatusText(status?: IndicatorDisplayStatus): string {
-  if (!status) return '未知'
+  if (!status) {return '未知'}
   return `${getStatusIcon(status)} ${getStatusText(status)}`
 }

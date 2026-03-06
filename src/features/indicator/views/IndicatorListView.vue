@@ -361,12 +361,12 @@ const indicators = computed(() => {
         roleMatch = isResponsible
       }
       
-      if (!roleMatch) return false
+      if (!roleMatch) {return false}
       
       // 过滤状态：只显示已下发的指标（排除草稿状态）
       // 基于 statusAudit 判断状态
       const audit = i.statusAudit || []
-      if (audit.length === 0) return false // 无审计记录 = 草稿状态 = 不显示
+      if (audit.length === 0) {return false} // 无审计记录 = 草稿状态 = 不显示
       
       const lastAudit = audit[audit.length - 1]
       const lastAction = lastAudit?.action
