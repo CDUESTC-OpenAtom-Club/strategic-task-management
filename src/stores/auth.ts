@@ -4,7 +4,7 @@ import type { User, UserRole } from '@/types'
 import api from '@/api'
 import { logger } from '@/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/utils/tokenManager'
-import { parseLoginResponse, mapOrgTypeToRole } from '@/utils/authHelpers'
+import { parseLoginResponse, mapOrgTypeToRole as _mapOrgTypeToRole } from '@/utils/authHelpers'
 import { useTimeContextStore } from './timeContext'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -26,10 +26,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
     return user.value.role || null
   })
-  const userName = computed(() => user.value?.name || (user.value as any)?.realName || '')
-  const userDepartment = computed(
-    () => user.value?.department || (user.value as any)?.orgName || ''
-  )
+  const userName = computed(() => {
+    if (!user.value) {return ''}
+    return user.value.name || (user.value as { realName?: string }).realName || ''
+  })
+  const userDepartment = computed(() => {
+    if (!user.value) {return ''}
+    return user.value.department || (user.value as { orgName?: string }).orgName || ''
+  })
 
   // 当前有效角色（考虑视角切换）
   const effectiveRole = computed(() => viewingAsRole.value || user.value?.role || null)
@@ -101,7 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
           error: parseResult.error || '登录失败：服务器响应格式错误'
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('❌ [Auth] 登录异常:', error)
       logger.error('❌ [Auth] 错误详情:', {
         message: error.message,
@@ -318,4 +322,4 @@ export const useAuthStore = defineStore('auth', () => {
 })
 
 // 重新导出 mapOrgTypeToRole 以保持兼容性
-export { mapOrgTypeToRole } from '@/utils/authHelpers'
+export { mapOrgTypeToRole as _mapOrgTypeToRole } from '@/utils/authHelpers'

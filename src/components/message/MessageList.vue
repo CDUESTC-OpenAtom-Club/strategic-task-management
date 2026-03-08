@@ -84,7 +84,7 @@ interface Emits {
   (e: 'view', message: Message): void
 }
 
-const props = defineProps<Props>()
+const _props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const getMessageTypeTag = (type: MessageType): string => {

@@ -44,7 +44,7 @@ export const useOrgStore = defineStore('org', () => {
     }
 
     loading.value = true
-    const attemptNum = retryCount + 1
+    const _attemptNum = retryCount + 1
 
     try {
       const depts = await orgApi.getAllDepartments()

@@ -224,7 +224,7 @@ export const validatePercentage = (value: number): boolean => {
   return value >= 0 && value <= 100
 }
 
-export const validateRequired = (value: any): boolean => {
+export const validateRequired = (value: unknown): boolean => {
   if (value === null || value === undefined) {return false}
   if (typeof value === 'string') {return value.trim().length > 0}
   if (Array.isArray(value)) {return value.length > 0}
@@ -287,7 +287,7 @@ export const uniqueBy = <T>(array: T[], key: keyof T): T[] => {
 // URL 工具
 // ============================================================================
 
-export const buildUrl = (baseUrl: string, params: Record<string, any>): string => {
+export const buildUrl = (baseUrl: string, params: Record<string, unknown>): string => {
   const url = new URL(baseUrl)
   Object.entries(params).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== '') {
@@ -340,7 +340,7 @@ export const storage = {
 // 函数工具
 // ============================================================================
 
-export const debounce = <T extends (...args: any[]) => any>(
+export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void => {
@@ -353,7 +353,7 @@ export const debounce = <T extends (...args: any[]) => any>(
   }
 }
 
-export const throttle = <T extends (...args: any[]) => any>(
+export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number
 ): (...args: Parameters<T>) => void => {
@@ -374,7 +374,7 @@ export const deepClone = <T>(obj: T): T => {
   if (typeof obj === 'object') {
     const clonedObj = {} as T
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
         clonedObj[key] = deepClone(obj[key])
       }
     }

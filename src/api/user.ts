@@ -1,5 +1,5 @@
 import api from './index'
-import type { ApiResponse } from '@/types'
+import type { ApiResponse, User } from '@/types'
 
 /**
  * 用户密码相关API
@@ -31,7 +31,7 @@ export const userApi = {
   /**
    * 获取所有用户列表 (管理员)
    */
-  async getAllUsers(): Promise<ApiResponse<any[]>> {
+  async getAllUsers(): Promise<ApiResponse<User[]>> {
     return api.get('/admin/users')
   }
 }

@@ -21,7 +21,7 @@ import { logger } from '@/utils/logger'
  * @param maxRetries 最大重试次数（默认3次）
  * @returns 函数执行结果
  */
-async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promise<T> {
+async function _withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promise<T> {
   let lastError: Error
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -97,10 +97,21 @@ export const milestoneApi = {
   },
 
   /**
-   * 获取权重验证结果
+   * @deprecated 权重系统已废弃，改用 targetProgress (0-100)
+   * 此方法保留用于向后兼容，但后端不再验证权重总和
    */
-  async validateWeights(indicatorId: string): Promise<ApiResponse<{ isValid: boolean; actualSum: number; expectedSum: number; message: string }>> {
-    return apiClient.get(`/milestones/indicator/${indicatorId}/weight-validation`)
+  async validateWeights(_indicatorId: string): Promise<ApiResponse<{ isValid: boolean; actualSum: number; expectedSum: number; message: string }>> {
+    // 返回模拟的成功响应，不再调用后端
+    return Promise.resolve({
+      success: true,
+      data: {
+        isValid: true,
+        actualSum: 0,
+        expectedSum: 0,
+        message: '权重系统已废弃，改用目标进度 (targetProgress)'
+      },
+      message: '权重系统已废弃'
+    })
   },
 }
 

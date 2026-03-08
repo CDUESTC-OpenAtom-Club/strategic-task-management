@@ -23,12 +23,15 @@ export function runPageDataCheck(): void {
   const indicators = strategicStore.indicators
   const dataSource = strategicStore.dataSource
 
-  console.log('🔍 开始页面数据检查...')
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('🔍 开始页面数据检查...')
+  }
 
   const results = [
     pageDataChecker.checkDashboardData(indicators, dataSource),
     pageDataChecker.checkIndicatorListData(indicators, dataSource),
-    pageDataChecker.checkStrategicTaskData(indicators, dataSource)
+    pageDataChecker.checkPlanData(indicators, dataSource)
   ]
 
   const report = pageDataChecker.generateReport(results)
@@ -45,9 +48,11 @@ export function runPageDataCheck(): void {
 export function initDevTools(): void {
   if (import.meta.env.DEV) {
     // 注册到 window 对象，方便在控制台调用
-    (window as any).__checkPageData = runPageDataCheck
+    (window as Window & { __checkPageData: typeof runPageDataCheck }).__checkPageData = runPageDataCheck
     
+    // eslint-disable-next-line no-console
     console.log('🛠️ 开发工具已加载')
+    // eslint-disable-next-line no-console
     console.log('   - window.__checkPageData() - 运行页面数据检查')
   }
 }

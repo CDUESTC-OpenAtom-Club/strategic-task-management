@@ -203,6 +203,7 @@ function createLogger(): ExtendedLogger {
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`
 
     // 根据级别调用对应的 console 方法
+    /* eslint-disable no-console */
     switch (level) {
       case 'debug':
         console.debug(prefix, message, ...filteredArgs)
@@ -217,6 +218,7 @@ function createLogger(): ExtendedLogger {
         console.error(prefix, message, ...filteredArgs)
         break
     }
+    /* eslint-enable no-console */
   }
 
   return {

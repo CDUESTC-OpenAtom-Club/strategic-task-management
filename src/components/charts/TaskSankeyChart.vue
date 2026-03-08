@@ -39,7 +39,7 @@ const chartOption = computed(() => ({
   tooltip: {
     trigger: 'item',
     triggerOn: 'mousemove',
-    formatter: (params: any) => {
+    formatter: (params: { dataType: string; data: { source: string; target: string; value: number }; name?: string; value?: number }) => {
       if (params.dataType === 'edge') {
         // 链接tooltip - 根据源节点判断显示任务数还是指标数
         // 战略发展部 -> 职能部门 显示"任务数"
@@ -72,7 +72,7 @@ const chartOption = computed(() => ({
     emphasis: {
       focus: 'adjacency'
     },
-    data: props.data.nodes.map((node: any) => ({
+    data: props.data.nodes.map((node: { depth: number; [key: string]: unknown }) => ({
       ...node,
       // 根据层级设置不同的颜色
       itemStyle: {
@@ -92,7 +92,7 @@ const chartOption = computed(() => ({
       fontSize: 12,
       fontWeight: 'bold',
       color: '#333',
-      formatter: (params: any) => {
+      formatter: (params: { name: string }) => {
         const name = params.name
         // 限制名称长度
         return name.length > 10 ? name.substring(0, 10) + '...' : name
@@ -107,7 +107,7 @@ const chartOption = computed(() => ({
 }))
 
 // 处理图表点击事件
-const handleChartClick = (params: any) => {
+const handleChartClick = (params: { dataType: string; name: string; source?: string; target?: string }) => {
   if (params.dataType === 'node') {
     // 节点点击
     emit('nodeClick', params.name)

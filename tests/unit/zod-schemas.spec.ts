@@ -16,7 +16,6 @@ import {
   validateMilestone,
   validateLoginCredentials
 } from '@/types/schemas'
-import type { User, StrategicIndicator, Milestone, LoginCredentials } from '@/types'
 
 describe('Zod Schemas', () => {
   describe('UserRoleSchema', () => {

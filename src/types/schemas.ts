@@ -151,6 +151,7 @@ export type StrategicIndicator = z.infer<typeof StrategicIndicatorSchema>
 // 战略任务 Schema
 // ============================================================================
 
+// eslint-disable-next-line no-restricted-syntax -- Backend-aligned schema
 export const StrategicTaskSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1).max(200),
@@ -167,6 +168,7 @@ export const StrategicTaskSchema = z.object({
   parentTaskId: z.string().optional()
 })
 
+// eslint-disable-next-line no-restricted-syntax -- Backend-aligned type uses strategic_task terminology
 export type StrategicTask = z.infer<typeof StrategicTaskSchema>
 
 // ============================================================================

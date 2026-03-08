@@ -139,21 +139,21 @@ export class ApiClient {
   /**
    * GET 请求
    */
-  async get<T>(url: string, params?: any): Promise<T> {
+  async get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
     return this.client.get(url, { params })
   }
 
   /**
    * POST 请求
    */
-  async post<T>(url: string, data?: any): Promise<T> {
+  async post<T>(url: string, data?: unknown): Promise<T> {
     return this.client.post(url, data)
   }
 
   /**
    * PUT 请求
    */
-  async put<T>(url: string, data?: any): Promise<T> {
+  async put<T>(url: string, data?: unknown): Promise<T> {
     return this.client.put(url, data)
   }
 
@@ -167,7 +167,7 @@ export class ApiClient {
   /**
    * PATCH 请求
    */
-  async patch<T>(url: string, data?: any): Promise<T> {
+  async patch<T>(url: string, data?: unknown): Promise<T> {
     return this.client.patch(url, data)
   }
 }

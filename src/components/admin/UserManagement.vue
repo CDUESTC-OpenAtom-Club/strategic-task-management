@@ -155,7 +155,7 @@ const getRoleConfig = (role: UserRole) => {
 
 // 获取状态配置
 const getStatusConfig = (status: 'active' | 'disabled' | 'locked') => {
-  const configs: Record<string, { label: string; type: string; icon: any }> = {
+  const configs: Record<string, { label: string; type: string; icon: typeof Unlock | typeof Lock | typeof User }> = {
     active: { label: '启用', type: 'success', icon: Unlock },
     disabled: { label: '禁用', type: 'danger', icon: Lock },
     locked: { label: '锁定', type: 'warning', icon: Lock }
@@ -266,7 +266,7 @@ const loadUsers = async () => {
       phone: user.phone || '',
       orgId: String(user.orgId),
       orgName: user.orgName,
-      roles: user.roles.map((r: any) => r.roleCode),
+      roles: user.roles.map((r: { roleCode: string }) => r.roleCode),
       status: user.status,
       lastLoginAt: user.lastLoginAt || '',
       createdAt: user.createdAt || '',
@@ -384,7 +384,7 @@ const handleSave = async () => {
 
   try {
     // 准备请求数据
-    const userData: any = {
+    const userData: Record<string, unknown> = {
       username: userForm.value.username,
       realName: userForm.value.realName,
       email: userForm.value.email,
@@ -404,7 +404,7 @@ const handleSave = async () => {
 
     showUserDialog.value = false
     await loadUsers()
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('保存失败:', error)
     ElMessage.error(error.response?.data?.message || '操作失败，请重试')
   } finally {
@@ -440,7 +440,7 @@ const toggleUserStatus = async (user: UserManagementItem) => {
 
     ElMessage.success(`${actionText}成功`)
     await loadUsers()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
       console.error('状态更新失败:', error)
       ElMessage.error(error.response?.data?.message || '操作失败')
@@ -464,7 +464,7 @@ const handleDelete = async (user: UserManagementItem) => {
     await api.delete(`/admin/users/${user.id}`)
     ElMessage.success('删除成功')
     await loadUsers()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)
       ElMessage.error(error.response?.data?.message || '删除失败')
@@ -522,7 +522,7 @@ const handleResetPassword = async () => {
         console.warn('记录审计日志失败:', logError)
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('重置密码失败:', error)
     ElMessage.error(error.response?.data?.message || error.message || '密码重置失败，请重试')
   } finally {

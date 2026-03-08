@@ -3,6 +3,7 @@
  * 拦截 API 请求并返回模拟数据
  */
 
+import type { InternalAxiosRequestConfig } from 'axios'
 import { logger } from '@/utils/logger'
 import {
   mockUsers,
@@ -49,9 +50,9 @@ export class MockApiHandler {
   /**
    * 处理 API 请求
    */
-  static async handleRequest(config: any): Promise<any> {
+  static async handleRequest(config: InternalAxiosRequestConfig): Promise<unknown> {
     const { method, url, data } = config
-    const { path, query } = parsePath(url)
+    const { path, query } = parsePath(url || '')
 
     logger.debug('🎭 [Mock API] 请求拦截:', {
       method: method?.toUpperCase(),
@@ -64,7 +65,7 @@ export class MockApiHandler {
     await delay(MOCK_DELAY)
 
     try {
-      let response: any
+      let response: unknown
 
       // ============================================
       // 认证相关 API
@@ -154,8 +155,8 @@ export class MockApiHandler {
   // 认证处理器
   // ============================================
 
-  private static async handleLogin(data: any) {
-    const { username, password } = data
+  private static async handleLogin(data: Record<string, unknown>) {
+    const { username, password: _password } = data as { username: string; password: string }
 
     // Mock 登录：任意用户名密码都可以登录
     let user = mockUsers.admin
@@ -207,7 +208,7 @@ export class MockApiHandler {
   // 战略指标处理器
   // ============================================
 
-  private static async handleGetIndicators(query: any) {
+  private static async handleGetIndicators(query: Record<string, string>) {
     const { year = '2025' } = query
     logger.debug(`🎭 [Mock API] 获取 ${year} 年度指标列表`)
 
@@ -228,7 +229,7 @@ export class MockApiHandler {
     return createMockResponse(indicator, '获取指标成功')
   }
 
-  private static async handleCreateIndicator(data: any) {
+  private static async handleCreateIndicator(data: Record<string, unknown>) {
     logger.info('🎭 [Mock API] 创建指标:', data)
 
     const newIndicator = {
@@ -242,7 +243,7 @@ export class MockApiHandler {
     return createMockResponse(newIndicator, '创建指标成功')
   }
 
-  private static async handleUpdateIndicator(id: string, data: any) {
+  private static async handleUpdateIndicator(id: string, data: Record<string, unknown>) {
     logger.info('🎭 [Mock API] 更新指标:', id, data)
 
     return createMockResponse({
@@ -262,7 +263,7 @@ export class MockApiHandler {
   // 任务处理器
   // ============================================
 
-  private static async handleGetTasks(query: any) {
+  private static async handleGetTasks(query: Record<string, string>) {
     const { indicatorId } = query
 
     let tasks = mockTasks
@@ -286,7 +287,7 @@ export class MockApiHandler {
     return createMockResponse(task, '获取任务成功')
   }
 
-  private static async handleCreateTask(data: any) {
+  private static async handleCreateTask(data: Record<string, unknown>) {
     logger.info('🎭 [Mock API] 创建任务:', data)
 
     const newTask = {
@@ -305,7 +306,7 @@ export class MockApiHandler {
   // 里程碑处理器
   // ============================================
 
-  private static async handleGetMilestones(query: any) {
+  private static async handleGetMilestones(query: Record<string, string>) {
     const { indicatorId } = query
 
     let milestones = mockMilestones

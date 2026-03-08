@@ -30,7 +30,6 @@ import {
   groupBy,
   sortBy
 } from '@/utils/formatters'
-import type { AlertLevel, UserRole } from '@/types'
 
 describe('Formatters - Date Functions', () => {
   describe('formatDate', () => {

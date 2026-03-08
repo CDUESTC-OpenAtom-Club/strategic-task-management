@@ -6,10 +6,12 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
+/* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type { ApiResponse, StrategicTask, StrategicIndicator } from '@/types'
-import { logger } from '@/utils/logger'
+/* eslint-enable no-restricted-syntax */
 
 // 后端返回的战略任务 VO
+// eslint-disable-next-line no-restricted-syntax -- Backend VO uses strategic_task terminology
 export interface StrategicTaskVO {
   taskId: number
   cycleId: number
@@ -79,14 +81,13 @@ export interface MilestoneVO {
   milestoneName: string
   milestoneDesc?: string
   dueDate: string
-  weightPercent: number
+  targetProgress: number  // 主字段：目标进度 (0-100)
+  weightPercent?: number  // 已废弃：保留用于向后兼容
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
   sortOrder: number
   inheritedFromId?: number
   createdAt: string
   updatedAt: string
-  // 新增字段 (前端数据对齐 2026-01-19)
-  targetProgress?: number
   isPaired?: boolean
 }
 
@@ -103,6 +104,7 @@ export interface AssessmentCycleVO {
 /**
  * 将后端 VO 转换为前端 StrategicTask 类型
  */
+// eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
 function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
   return {
     id: String(vo.taskId),
@@ -155,7 +157,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
   }
 
   // 解析 statusAudit JSON
-  let statusAudit: any[] = []
+  let statusAudit: Array<Record<string, unknown>> = []
   if (vo.statusAudit) {
     try {
       statusAudit = JSON.parse(vo.statusAudit)
@@ -241,8 +243,10 @@ export const strategicApi = {
   /**
    * 获取指定年份的战略任务（通过 cycle）
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
     // 获取所有任务，然后按年份过滤
+    // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
     const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
     if (response.success && response.data) {
       // 如果 task.year 为 null，则认为它适用于所有年份
@@ -255,7 +259,9 @@ export const strategicApi = {
   /**
    * 获取所有战略任务
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getAllTasks(): Promise<ApiResponse<StrategicTaskVO[]>> {
+    // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
     return apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
   },
 
@@ -264,7 +270,7 @@ export const strategicApi = {
    */
   async getIndicatorsByYear(year: number): Promise<ApiResponse<IndicatorVO[]>> {
     // 直接使用后端的年份过滤参数
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params: { year } })
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { year })
   },
 
   /**
@@ -273,7 +279,7 @@ export const strategicApi = {
    */
   async getAllIndicators(year?: number): Promise<ApiResponse<IndicatorVO[]>> {
     const params = year ? { year } : {}
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params })
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', params)
   },
 
   /**
@@ -284,6 +290,7 @@ export const strategicApi = {
   },
 
   // 转换函数导出
+  // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
   convertTaskVOToStrategicTask,
   convertIndicatorVOToStrategicIndicator
 }

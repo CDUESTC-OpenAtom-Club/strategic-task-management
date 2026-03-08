@@ -290,25 +290,27 @@ describe('Property 13: 里程碑数据完整性', () => {
     })
   })
 
-  describe('13.5 权重总和', () => {
+  describe('13.5 目标进度范围验证', () => {
     /**
      * **Feature: data-alignment-sop, Property 13: 里程碑数据完整性**
      * 
-     * For any indicator, the sum of milestone weights SHALL equal 100%.
+     * 注意：权重系统已废弃，改用 targetProgress (0-100)
+     * 每个里程碑的 targetProgress 应该在 0-100 范围内
      * 
      * **Validates: Requirements 7.4**
      */
-    it('should have milestone weights summing to 100', () => {
-      // Quarterly milestones each have 25% weight
-      const milestones = [
-        { weight: 25 },
-        { weight: 25 },
-        { weight: 25 },
-        { weight: 25 }
-      ]
-      
-      const totalWeight = milestones.reduce((sum, m) => sum + m.weight, 0)
-      expect(totalWeight).toBe(100)
+    it('should have targetProgress in valid range (0-100)', () => {
+      fc.assert(
+        fc.property(
+          milestoneArb,
+          (milestone) => {
+            expect(milestone.targetProgress).toBeGreaterThanOrEqual(0)
+            expect(milestone.targetProgress).toBeLessThanOrEqual(100)
+            return true
+          }
+        ),
+        { numRuns: 100 }
+      )
     })
   })
 })

@@ -9,7 +9,7 @@ import {
   ElEmpty,
   ElScrollbar,
   ElTooltip,
-  ElAvatar,
+  ElAvatar as _ElAvatar,
   ElTag,
   ElInput,
   ElDropdown,
@@ -29,7 +29,7 @@ import {
   Warning,
   InfoFilled,
   WarnTriangleFilled,
-  CircleClose
+  CircleClose as _CircleClose
 } from '@element-plus/icons-vue'
 import type { Message, MessageType, AlertLevel } from '@/types'
 
@@ -54,9 +54,10 @@ const searchKeyword = ref('')
 
 // 消息分类类型
 type MessageCategory = 'all' | 'unread' | 'approval' | 'system' | 'task' | 'alert'
+import type { Component } from 'vue'
 
 // 分类配置
-const categories: Array<{ key: MessageCategory; label: string; icon: any; filter?: (m: Message) => boolean }> = [
+const categories: Array<{ key: MessageCategory; label: string; icon: Component; filter?: (m: Message) => boolean }> = [
   { key: 'all', label: '全部消息', icon: Bell },
   { key: 'unread', label: '待处理', icon: Select, filter: (m) => !m.isRead },
   { key: 'approval', label: '审批消息', icon: Check, filter: (m) => m.type === 'approval' },

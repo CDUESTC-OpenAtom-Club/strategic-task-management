@@ -5,11 +5,11 @@
  */
 import { ref, computed } from 'vue'
 import {
-  Check, Close, View, Document, Clock,
-  User, OfficeBuilding, TrendCharts, Warning
+  Check, Close, View, Document, Clock as _Clock,
+  User, OfficeBuilding, TrendCharts, Warning as _Warning
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { StrategicIndicator, StatusAuditEntry } from '@/types'
+import type { StrategicIndicator, StatusAuditEntry as _StatusAuditEntry } from '@/types'
 
 const props = defineProps<{
   indicator: StrategicIndicator
@@ -30,7 +30,7 @@ const showApprovalForm = ref(false)
 const approvalAction = ref<'approve' | 'reject'>('approve')
 
 // 计算进度状态
-const progressStatus = computed(() => {
+const _progressStatus = computed(() => {
   const progress = props.indicator.progress || 0
   if (progress >= 80) {return 'success'}
   if (progress >= 50) {return 'warning'}

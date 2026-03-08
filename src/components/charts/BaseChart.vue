@@ -8,7 +8,7 @@
   - 提供统一的样式和配置
 -->
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref as _ref, watch as _watch, onMounted as _onMounted, onUnmounted as _onUnmounted } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -52,13 +52,13 @@ const props = withDefaults(defineProps<BaseChartProps>(), {
 
 const emit = defineEmits<{
   /** 图表就绪事件 */
-  ready: [instance: any]
+  ready: [instance: unknown]
   /** 图表点击事件 */
-  click: [params: any]
+  click: [params: Record<string, unknown>]
   /** 图表鼠标悬停事件 */
-  mouseover: [params: any]
+  mouseover: [params: Record<string, unknown>]
   /** 图图鼠标离开事件 */
-  mouseout: [params: any]
+  mouseout: [params: Record<string, unknown>]
 }>()
 
 /** 图表容器样式 */
@@ -68,25 +68,25 @@ const chartStyle = computed(() => ({
 }))
 
 /** 是否显示内容 */
-const showContent = computed(() => !props.loading && !props.empty)
+const _showContent = computed(() => !props.loading && !props.empty)
 
 /** 处理图表就绪 */
-const handleReady = (instance: any) => {
+const handleReady = (instance: unknown) => {
   emit('ready', instance)
 }
 
 /** 处理图表点击 */
-const handleClick = (params: any) => {
+const handleClick = (params: Record<string, unknown>) => {
   emit('click', params)
 }
 
 /** 处理鼠标悬停 */
-const handleMouseover = (params: any) => {
+const handleMouseover = (params: Record<string, unknown>) => {
   emit('mouseover', params)
 }
 
 /** 处理鼠标离开 */
-const handleMouseout = (params: any) => {
+const handleMouseout = (params: Record<string, unknown>) => {
   emit('mouseout', params)
 }
 </script>

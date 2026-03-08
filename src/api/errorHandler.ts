@@ -26,7 +26,7 @@ export function generateRequestId(): string {
 /**
  * 为请求配置添加请求ID
  */
-export function addRequestId(config: any): void {
+export function addRequestId(config: Record<string, unknown>): void {
   const requestId = generateRequestId()
   config.headers = config.headers || {}
   config.headers['X-Request-ID'] = requestId
@@ -160,7 +160,7 @@ export function transformError(error: unknown): { message: string; code?: string
   if (error instanceof Error) {
     return {
       message: error.message,
-      code: (error as any).code
+      code: (error as Error & { code?: string }).code
     }
   }
 

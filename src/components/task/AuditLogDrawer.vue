@@ -11,7 +11,7 @@ import {
   Edit,
   Refresh,
   User,
-  Clock,
+  Clock as _Clock,
   ChatDotRound,
 } from "@element-plus/icons-vue";
 import type { StrategicIndicator, StatusAuditEntry } from "@/types";

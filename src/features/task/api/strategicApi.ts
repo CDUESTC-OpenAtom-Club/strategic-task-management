@@ -6,16 +6,20 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
+/* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type { 
   ApiResponse, 
   StrategicTask, 
   StrategicIndicator,
   CreateStrategicTaskRequest,
-  UpdateStrategicTaskRequest
+  UpdateStrategicTaskRequest,
+  PendingApproval
 } from '@/types'
+/* eslint-enable no-restricted-syntax */
 import { logger } from '@/utils/logger'
 
 // 后端返回的战略任务 VO
+// eslint-disable-next-line no-restricted-syntax -- Backend VO uses strategic_task terminology
 export interface StrategicTaskVO {
   taskId: number
   cycleId: number
@@ -103,12 +107,12 @@ async function withRetry<T>(
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> {
-  let lastError: any
+  let lastError: unknown
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation()
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error
       
       // 如果是 4xx 错误，不重试
@@ -134,6 +138,7 @@ async function withRetry<T>(
 /**
  * 将后端 VO 转换为前端 StrategicTask 类型
  */
+// eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
 function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
   return {
     id: String(vo.taskId),
@@ -188,7 +193,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
   }
 
   // 解析 statusAudit JSON
-  let statusAudit: any[] = []
+  let statusAudit: Array<Record<string, unknown>> = []
   if (vo.statusAudit) {
     try {
       statusAudit = JSON.parse(vo.statusAudit)
@@ -275,9 +280,11 @@ export const strategicApi = {
   /**
    * 获取指定年份的战略任务（通过 cycle）
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
     try {
       // 先获取所有任务，然后按年份过滤
+      // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
       const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
       if (response.success && response.data) {
         const filteredTasks = response.data.filter(t => t.year === year)
@@ -292,7 +299,9 @@ export const strategicApi = {
   /**
    * 获取所有战略任务
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getAllTasks(): Promise<ApiResponse<StrategicTaskVO[]>> {
+    // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
     return apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
   },
 
@@ -332,11 +341,13 @@ export const strategicApi = {
   /**
    * 创建新的战略任务
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async createTask(request: CreateStrategicTaskRequest): Promise<ApiResponse<StrategicTaskVO>> {
     logger.info('[API] Creating new strategic task', { request })
     
     try {
       const response = await withRetry(() => 
+        // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
         apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
       )
       
@@ -351,11 +362,13 @@ export const strategicApi = {
   /**
    * 更新现有的战略任务
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async updateTask(taskId: number, request: UpdateStrategicTaskRequest): Promise<ApiResponse<StrategicTaskVO>> {
     logger.info('[API] Updating strategic task', { taskId, request })
     
     try {
       const response = await withRetry(() => 
+        // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
         apiClient.put<ApiResponse<StrategicTaskVO>>(`/tasks/${taskId}`, request)
       )
       
@@ -387,6 +400,7 @@ export const strategicApi = {
   },
 
   // 转换函数导出
+  // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
   convertTaskVOToStrategicTask,
   convertIndicatorVOToStrategicIndicator
 }
@@ -455,12 +469,12 @@ async function rejectPlan(instanceId: number, approverId: number, comment: strin
  * 获取用户待审批列表
  * @param userId 用户ID
  */
-async function getPendingApprovals(userId: number): Promise<ApiResponse<any[]>> {
+async function getPendingApprovals(userId: number): Promise<ApiResponse<PendingApproval[]>> {
   logger.info('[API] Getting pending approvals', { userId })
   
   try {
     const response = await withRetry(() => 
-      apiClient.get<ApiResponse<any[]>>('/plans/approval/pending', {
+      apiClient.get<ApiResponse<PendingApproval[]>>('/plans/approval/pending', {
         params: { userId }
       })
     )
@@ -477,12 +491,12 @@ async function getPendingApprovals(userId: number): Promise<ApiResponse<any[]>> 
  * 获取计划审批状态
  * @param planId 计划ID
  */
-async function getPlanApprovalStatus(planId: number): Promise<ApiResponse<any>> {
+async function getPlanApprovalStatus(planId: number): Promise<ApiResponse<unknown>> {
   logger.info('[API] Getting plan approval status', { planId })
   
   try {
     const response = await withRetry(() => 
-      apiClient.get<ApiResponse<any>>(`/plans/approval/plans/${planId}/status`)
+      apiClient.get<ApiResponse<unknown>>(`/plans/approval/plans/${planId}/status`)
     )
     
     logger.info('[API] Successfully got plan approval status', { planId })
@@ -499,14 +513,12 @@ async function getPlanApprovalStatus(planId: number): Promise<ApiResponse<any>> 
  */
 async function countPendingApprovals(userId: number): Promise<ApiResponse<number>> {
   logger.info('[API] Counting pending approvals', { userId })
-  
+
   try {
-    const response = await withRetry(() => 
-      apiClient.get<ApiResponse<number>>('/plans/approval/pending/count', {
-        params: { userId }
-      })
+    const response = await withRetry(() =>
+      apiClient.get<ApiResponse<number>>('/plans/approval/pending/count', { userId })
     )
-    
+
     logger.info('[API] Successfully counted pending approvals', { count: response.data })
     return response
   } catch (error) {

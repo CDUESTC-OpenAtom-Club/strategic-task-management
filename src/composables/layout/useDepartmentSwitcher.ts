@@ -24,7 +24,7 @@ export interface DepartmentOption {
 }
 
 export function useDepartmentSwitcher() {
-  const router = useRouter()
+  const _router = useRouter()
   const authStore = useAuthStore()
   const orgStore = useOrgStore()
 

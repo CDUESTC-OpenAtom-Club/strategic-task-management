@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted as _onMounted } from 'vue'
 import {
   ElForm,
   ElFormItem,
@@ -12,11 +12,11 @@ import {
   ElTag,
   ElIcon,
   type UploadUserFile,
-  type UploadFile,
+  type UploadFile as _UploadFile,
   type UploadProps
 } from 'element-plus'
-import { Delete, UploadFilled, Paperclip } from '@element-plus/icons-vue'
-import type { Indicator, IndicatorFill, IndicatorFillForm, Milestone } from '@/types'
+import { Delete as _Delete, UploadFilled, Paperclip } from '@element-plus/icons-vue'
+import type { Indicator, IndicatorFill, IndicatorFillForm, Milestone as _Milestone } from '@/types'
 import { usePlanStore } from '@/stores/plan'
 import { logger } from '@/utils/logger'
 

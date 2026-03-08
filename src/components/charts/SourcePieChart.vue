@@ -43,7 +43,7 @@ const chartOption = computed(() => ({
   },
   tooltip: {
     trigger: 'item',
-    formatter: (params: any) => {
+    formatter: (params: { name: string; value: number; percent: number }) => {
       return `
         <div style="padding: 8px;">
           <div style="font-weight: bold; margin-bottom: 4px;">${params.name}</div>
@@ -143,7 +143,7 @@ const chartOption = computed(() => ({
 }))
 
 // 处理图表点击事件
-const handleChartClick = (params: any) => {
+const handleChartClick = (params: { componentType: string; name: string }) => {
   if (params.componentType === 'series') {
     emit('click', params.name)
   }

@@ -21,8 +21,8 @@ export const useAuditLogStore = defineStore('auditLog', () => {
     action: AuditAction
     operator: string
     operatorName: string
-    dataBefore?: Record<string, any>
-    dataAfter?: Record<string, any>
+    dataBefore?: Record<string, unknown>
+    dataAfter?: Record<string, unknown>
   }) => {
     const changes = calculateChanges(params.dataBefore, params.dataAfter)
     
@@ -46,8 +46,8 @@ export const useAuditLogStore = defineStore('auditLog', () => {
 
   // 计算数据变更
   const calculateChanges = (
-    before?: Record<string, any>, 
-    after?: Record<string, any>
+    before?: Record<string, unknown>, 
+    after?: Record<string, unknown>
   ): FieldChange[] => {
     if (!before || !after) {return []}
     

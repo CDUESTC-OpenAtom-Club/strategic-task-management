@@ -24,7 +24,6 @@ import {
   DEFAULT_IDEMPOTENCY_CONFIG
 } from '@/utils/idempotency'
 import {
-  cacheManager,
   generateCacheKey,
   shouldCache,
   getCacheValidationHeaders
@@ -54,7 +53,12 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
   } = config
 
   return async (axiosConfig: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> => {
-    const config = axiosConfig as any
+    const config = axiosConfig as InternalAxiosRequestConfig & {
+      _mockMode?: boolean
+      _startTime?: number
+      _cacheKey?: string
+      _useCache?: boolean
+    }
 
     // ========================================================================
     // MOCK MODE - 拦截请求并返回模拟数据
@@ -114,14 +118,17 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     const localToken = localStorage.getItem('token')
     const token = storeToken || localToken
     
-    // 强制输出到console，用于调试
-    console.log('[RequestInterceptor] Token检查:', {
-      url: config.url,
-      hasStoreToken: !!storeToken,
-      hasLocalToken: !!localToken,
-      willUseToken: !!token,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
-    })
+    // Debug logging for token checks (development only)
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[RequestInterceptor] Token检查:', {
+        url: config.url,
+        hasStoreToken: !!storeToken,
+        hasLocalToken: !!localToken,
+        willUseToken: !!token,
+        tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
+      })
+    }
     
     logger.debug('🔍 [API Auth] Token检查:', {
       hasStoreToken: !!storeToken,
@@ -132,7 +139,10 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
-      console.log('[RequestInterceptor] ✅ Authorization头已添加:', config.url)
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log('[RequestInterceptor] ✅ Authorization头已添加:', config.url)
+      }
       logger.debug('🔐 [API Auth] Token已添加', {
         source: storeToken ? 'authStore' : 'localStorage',
         tokenPreview: token.substring(0, 20) + '...',
@@ -186,7 +196,7 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
  * 创建请求错误拦截器
  */
 export function createRequestErrorInterceptor() {
-  return (error: any): Promise<never> => {
+  return (error: unknown): Promise<never> => {
     logger.error('❌ [API Request Error]', error)
     return Promise.reject(error)
   }

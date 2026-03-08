@@ -86,7 +86,7 @@ const passwordStrength = ref({
   score: 0
 })
 
-const validatePass = (rule: any, value: string, callback: Function) => {
+const validatePass = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   if (value === '') {
     callback(new Error('请输入新密码'))
   } else {
@@ -99,7 +99,7 @@ const validatePass = (rule: any, value: string, callback: Function) => {
   }
 }
 
-const validateConfirmPass = (rule: any, value: string, callback: Function) => {
+const validateConfirmPass = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   if (value === '') {
     callback(new Error('请再次输入新密码'))
   } else if (value !== form.newPassword) {
@@ -192,7 +192,7 @@ const handleSubmit = async () => {
         router.push('/login')
       }, 1000)
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('修改密码失败:', error)
     ElMessage.error(error.response?.data?.message || error.message || '修改密码失败，请重试')
   } finally {

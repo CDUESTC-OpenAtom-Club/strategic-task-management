@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   ElCard,
   ElButton,
-  ElIcon,
+  ElIcon as _ElIcon,
   ElEmpty,
   ElSkeleton,
   ElTag,

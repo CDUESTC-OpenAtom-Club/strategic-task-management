@@ -13,7 +13,7 @@ import {
   ElSkeleton
 } from 'element-plus'
 import { ArrowLeft, Edit, Upload, Document } from '@element-plus/icons-vue'
-import type { Plan, Task, Indicator } from '@/types'
+import type { Plan, Task as _Task, Indicator as _Indicator } from '@/types'
 import { usePlanStore } from '@/stores/plan'
 import { useAuthStore } from '@/stores/auth'
 
@@ -81,7 +81,6 @@ const handleEdit = () => {
 
 const handleSubmit = () => {
   // TODO: 实现提交逻辑
-  console.log('Submit plan:', planId.value)
 }
 
 // 加载 Plan 详情

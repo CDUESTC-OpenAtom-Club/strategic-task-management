@@ -6,7 +6,7 @@
 import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Plus, Promotion, Check, Close, View, Search, RefreshLeft, Timer, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { StrategicIndicator, StrategicTask } from '@/types'
+import type { StrategicIndicator } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
@@ -42,7 +42,7 @@ const isFunctionalDept = computed(() => {
 })
 
 // 只读模式：战略发展部或者历史快照模式
-const isReadOnly = computed(() => timeContext.isReadOnly || isStrategicDept.value)
+const _isReadOnly = computed(() => timeContext.isReadOnly || isStrategicDept.value)
 
 // 是否可以编辑子指标（只有职能部门可以）
 const canEditChild = computed(() => isFunctionalDept.value && !timeContext.isReadOnly)
@@ -144,7 +144,7 @@ const collegeIndicators = computed(() => {
 })
 
 // 获取指标的子指标（只显示当前部门下发的）
-const getChildIndicators = (parentId: string) => {
+const _getChildIndicators = (parentId: string) => {
   return strategicStore.indicators.filter(i => 
     i.parentIndicatorId === parentId && !i.isStrategic && i.ownerDept === currentDept.value
   )
@@ -187,13 +187,13 @@ interface NewIndicatorItem {
 }
 
 // 弹框中的新增指标列表
-const newIndicatorList = ref<NewIndicatorItem[]>([])
+const _newIndicatorList = ref<NewIndicatorItem[]>([])
 
 // 当前正在选择关联指标的新增指标索引
-const selectingParentForIndex = ref<number>(-1)
+const _selectingParentForIndex = ref<number>(-1)
 
-// 战略任务和指标数据（用于选择关联指标弹框）
-const strategicTasksWithIndicators = computed(() => {
+// 计划和指标数据（用于选择关联指标弹框）
+const plansWithIndicators = computed(() => {
   // 获取所有战略指标，按任务分组
   const indicators = strategicStore.indicators.filter(i => i.isStrategic)
   const taskMap = new Map<string, StrategicIndicator[]>()
@@ -225,7 +225,7 @@ interface SelectParentTableRow {
 const selectParentTableData = computed((): SelectParentTableRow[] => {
   const data: SelectParentTableRow[] = []
   
-  strategicTasksWithIndicators.value.forEach(task => {
+  plansWithIndicators.value.forEach(task => {
     const taskIndicators = task.indicators
     taskIndicators.forEach((indicator, index) => {
       data.push({
@@ -242,7 +242,7 @@ const selectParentTableData = computed((): SelectParentTableRow[] => {
 })
 
 // 选择关联指标弹框 - 单元格合并方法
-const selectParentSpanMethod = ({ row, columnIndex }: { row: SelectParentTableRow; columnIndex: number }) => {
+const _selectParentSpanMethod = ({ row, columnIndex }: { row: SelectParentTableRow; columnIndex: number }) => {
   // 第一列（战略任务）需要合并
   if (columnIndex === 0) {
     if (row.isFirstOfTask) {
@@ -423,7 +423,7 @@ const saveNewIndicator = () => {
 }
 
 // 判断当前学院是否可以新增指标（没有已下发状态的指标）
-const canAddIndicator = computed(() => {
+const _canAddIndicator = computed(() => {
   if (!selectedCollege.value) {return false}
   const status = getCollegeStatus(selectedCollege.value)
   return status.distributed === 0 && status.pending === 0 && status.approved === 0
@@ -456,7 +456,7 @@ interface NewChildIndicator {
 }
 
 // 导出供模板使用
-type NewChild = NewChildIndicator
+type _NewChild = NewChildIndicator
 
 const newChildIndicators = reactive<Record<string, NewChildIndicator[]>>({})
 
@@ -497,7 +497,7 @@ const handleNewChildRowClick = (childId: string, parentId: string) => {
 }
 
 // 添加新的子指标行
-const addNewChildRow = (parentIndicatorId: string) => {
+const _addNewChildRow = (parentIndicatorId: string) => {
   if (!canEditChild.value) {
     ElMessage.warning('您没有权限添加子指标')
     return
@@ -569,12 +569,12 @@ const removeChildIndicator = (child: StrategicIndicator) => {
 }
 
 // 获取所有待下发的子指标数量
-const getPendingChildCount = (parentId: string) => {
+const _getPendingChildCount = (parentId: string) => {
   return (newChildIndicators[parentId] || []).length
 }
 
 // 下发所有新增的子指标
-const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
+const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
   const parentId = parentIndicator.id.toString()
   const children = newChildIndicators[parentId] || []
   
@@ -654,7 +654,7 @@ const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
 // 当前编辑的子指标
 const editingChildId = ref<string | null>(null)
 const editingChildField = ref<string | null>(null)
-const editingChildValue = ref<any>(null)
+const editingChildValue = ref<Record<string, unknown> | null>(null)
 
 // 学院下拉菜单是否打开
 const collegeDropdownVisible = ref(false)
@@ -765,12 +765,12 @@ const saveChildEdit = (child: StrategicIndicator, field: string) => {
 }
 
 // 学院选择器下拉框可见性变化
-const handleCollegeSelectClose = (visible: boolean) => {
+const _handleCollegeSelectClose = (visible: boolean) => {
   collegeDropdownVisible.value = visible
 }
 
 // 学院选择器失焦处理
-const handleCollegeSelectBlur = (child: StrategicIndicator) => {
+const _handleCollegeSelectBlur = (child: StrategicIndicator) => {
   // 延迟检查，确保 mousedown 事件先处理完成
   setTimeout(() => {
     // 如果正在与 select 或 dropdown 交互，不保存
@@ -812,7 +812,7 @@ const getMyCollegeIndicators = (college: string) => {
 }
 
 // 批量审批：针对学院下所有待审批的子指标
-const handleBatchApprove = (college: string) => {
+const _handleBatchApprove = (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const pendingIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'pending')
   
@@ -848,7 +848,7 @@ const handleBatchApprove = (college: string) => {
 }
 
 // 批量打回：针对学院下所有待审批的子指标
-const handleBatchReject = (college: string) => {
+const _handleBatchReject = (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const pendingIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'pending')
   
@@ -1089,7 +1089,7 @@ const collegeOverallStatus = computed(() => {
 })
 
 // 下发/撤销统一处理函数
-const handleDistributeOrWithdraw = (command: string) => {
+const _handleDistributeOrWithdraw = (command: string) => {
   if (!selectedCollege.value) {return}
   
   if (command === 'distribute') {
@@ -1100,7 +1100,7 @@ const handleDistributeOrWithdraw = (command: string) => {
 }
 
 // 审批通过（保留给单个指标，但现在已移至批量操作）
-const handleApprove = (indicator: StrategicIndicator) => {
+const _handleApprove = (indicator: StrategicIndicator) => {
   ElMessageBox.confirm('确认通过该学院的进度提交？', '审批确认', {
     confirmButtonText: '通过',
     cancelButtonText: '取消',
@@ -1118,7 +1118,7 @@ const handleApprove = (indicator: StrategicIndicator) => {
 }
 
 // 打回（保留给单个指标，但现在已移至批量操作）
-const handleReject = (indicator: StrategicIndicator) => {
+const _handleReject = (indicator: StrategicIndicator) => {
   ElMessageBox.prompt('请输入打回原因', '打回确认', {
     confirmButtonText: '确认打回',
     cancelButtonText: '取消',
@@ -1174,7 +1174,7 @@ const getChildStatus = (child: StrategicIndicator) => {
 }
 
   // 获取状态标签类型
-  const getStatusTagType = (status: string) => {
+  const _getStatusTagType = (status: string) => {
     switch (status) {
       case 'draft': return 'info'            // 草稿 - 灰色 (Element Plus info 是灰色)
       case 'distributed': return 'primary'   // 已下发 - 蓝色 (Element Plus primary 是蓝色)
@@ -1185,7 +1185,7 @@ const getChildStatus = (child: StrategicIndicator) => {
   }
 
 // 获取状态文本
-const getStatusText = (status: string) => {
+const _getStatusText = (status: string) => {
   switch (status) {
     case 'draft': return '草稿'
     case 'distributed': return '已下发'
@@ -1196,14 +1196,14 @@ const getStatusText = (status: string) => {
 }
 
 // 格式化学院显示（完整列表）
-const formatColleges = (depts: string | string[] | undefined): string => {
+const _formatColleges = (depts: string | string[] | undefined): string => {
   if (!depts) {return '-'}
   if (Array.isArray(depts)) {return depts.join('、')}
   return depts.split(',').join('、')
 }
 
 // 格式化学院显示（简短版，超过2个显示+N）
-const formatCollegesShort = (depts: string | string[] | undefined): string => {
+const _formatCollegesShort = (depts: string | string[] | undefined): string => {
   if (!depts) {return '-'}
   const arr = Array.isArray(depts) ? depts : depts.split(',')
   if (arr.length <= 2) {return arr.join('、')}
@@ -1218,12 +1218,12 @@ const parseColleges = (depts: string | string[] | undefined): string[] => {
 }
 
 // 获取任务类型对应的颜色（基于指标的type2：发展性/基础性）
-const getTaskTypeColor = (type2: string) => {
+const _getTaskTypeColor = (type2: string) => {
   return type2 === '发展性' ? '#409EFF' : '#67C23A'
 }
 
 // 获取指标类型颜色（定性/定量）
-const getIndicatorTypeColor = (type1: string) => {
+const _getIndicatorTypeColor = (type1: string) => {
   return type1 === '定性' ? 'var(--color-qualitative, #9333ea)' : 'var(--color-quantitative, #0891b2)'
 }
 
@@ -1271,7 +1271,7 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
 }
 
 // 计算定量指标当月的目标进度
-const getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
+const _getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
   const milestones = child.milestones || []
   if (milestones.length === 0) {return 100}
   
@@ -1315,7 +1315,7 @@ const getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndic
 }
 
 // 处理子指标类型变更
-const handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, newType: '定量' | '定性') => {
+const _handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, newType: '定量' | '定性') => {
   // 检查状态：只有草稿状态才能编辑
   if (!('isNew' in child && child.isNew)) {
     const status = getChildStatus(child as StrategicIndicator)
@@ -1513,7 +1513,7 @@ const saveMilestones = async () => {
 }
 
 // 格式化里程碑显示
-const formatMilestones = (child: StrategicIndicator | NewChildIndicator): string => {
+const _formatMilestones = (child: StrategicIndicator | NewChildIndicator): string => {
   if ('isNew' in child && child.isNew) {
     return `${child.milestones?.length || 0} 个里程碑`
   }
@@ -2111,14 +2111,14 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         placeholder="选择关联的核心指标"
                         style="width: 100%"
                         @change="(val: string) => {
-                          const indicator = strategicTasksWithIndicators.value
+                          const indicator = plansWithIndicators.value
                             .flatMap(t => t.indicators)
                             .find(i => i.id.toString() === val)
                           if (indicator) selectParentIndicator(indicator)
                         }"
                       >
                         <el-option-group
-                          v-for="task in strategicTasksWithIndicators"
+                          v-for="task in plansWithIndicators"
                           :key="task.taskContent"
                           :label="task.taskContent"
                         >

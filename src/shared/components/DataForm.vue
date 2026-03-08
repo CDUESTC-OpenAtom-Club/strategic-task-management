@@ -8,7 +8,7 @@
   - 支持字段联动
 -->
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick as _nextTick } from 'vue'
 import type { FormInstance, FormRules, FormItemProp } from 'element-plus'
 
 /** 表单字段类型 */
@@ -40,9 +40,9 @@ export interface FormField {
   /** 是否必填 */
   required?: boolean
   /** 验证规则 */
-  rules?: any[]
+  rules?: FormRules[string]
   /** 选项列表 (用于 select, radio, checkbox) */
-  options?: Array<{ label: string; value: any; disabled?: boolean }>
+  options?: Array<{ label: string; value: string | number | boolean; disabled?: boolean }>
   /** 字段宽度 */
   width?: string | number
   /** 占用的列数 (24栅格系统) */
@@ -66,13 +66,13 @@ export interface FormField {
   /** 自定义插槽名称 */
   slot?: string
   /** 是否显示 */
-  visible?: boolean | ((data: any) => boolean)
+  visible?: boolean | ((data: Record<string, unknown>) => boolean)
   /** 字段联动配置 */
   linkage?: {
     /** 联动触发字段 */
     trigger: string
     /** 联动条件 */
-    condition: (triggerValue: any, formData: any) => boolean
+    condition: (triggerValue: unknown, formData: Record<string, unknown>) => boolean
     /** 联动结果 */
     result: Partial<FormField>
   }
@@ -85,7 +85,7 @@ export interface FormAction {
   /** 按钮类型 */
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   /** 按钮图标 */
-  icon?: any
+  icon?: string
   /** 是否禁用 */
   disabled?: boolean
   /** 是否加载中 */
@@ -93,13 +93,13 @@ export interface FormAction {
   /** 点击事件 */
   handler: () => void | Promise<void>
   /** 显示条件 */
-  visible?: boolean | ((formData: any) => boolean)
+  visible?: boolean | ((formData: Record<string, unknown>) => boolean)
 }
 
 /** Props */
 export interface DataFormProps {
   /** 表单数据 */
-  model: Record<string, any>
+  model: Record<string, unknown>
   /** 字段配置 */
   fields: FormField[]
   /** 表单规则 */
@@ -129,11 +129,11 @@ const props = withDefaults(defineProps<DataFormProps>(), {
 
 const emit = defineEmits<{
   /** 提交事件 */
-  submit: [model: Record<string, any>]
+  submit: [model: Record<string, unknown>]
   /** 重置事件 */
   reset: []
   /** 字段值变化事件 */
-  'field-change': [prop: string, value: any]
+  'field-change': [prop: string, value: unknown]
   /** 取消事件 */
   cancel: []
 }>()
@@ -180,7 +180,7 @@ const visibleFields = computed(() => {
 })
 
 /** 处理字段值变化 */
-const handleFieldChange = (prop: string, value: any) => {
+const handleFieldChange = (prop: string, value: unknown) => {
   emit('field-change', prop, value)
 }
 

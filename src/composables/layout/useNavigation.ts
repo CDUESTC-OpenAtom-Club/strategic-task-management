@@ -12,13 +12,14 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { UserRole } from '@/types'
-import { DataAnalysis, Document, Edit, List, Promotion } from '@element-plus/icons-vue'
+import type { Component } from 'vue'
+import { DataAnalysis, Document as _Document, Edit, List, Promotion } from '@element-plus/icons-vue'
 
 /** 标签页配置接口 */
 export interface TabConfig {
   id: string
   label: string
-  icon: any
+  icon: Component
   path: string
 }
 

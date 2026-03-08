@@ -321,8 +321,8 @@ export interface AuditLog {
   entityId: number
   action: AuditAction
   operatorId: number
-  changesBefore: Record<string, any> | null
-  changesAfter: Record<string, any> | null
+  changesBefore: Record<string, unknown> | null
+  changesAfter: Record<string, unknown> | null
   ipAddress: string | null
   userAgent: string | null
   createdAt: string
@@ -391,7 +391,7 @@ export interface ApiError {
   message: string
   error: {
     code: string
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   }
   timestamp: string
 }
@@ -453,20 +453,22 @@ export interface FilterState {
 // Type Guards
 // ============================================
 
-export function isApiError(response: any): response is ApiError {
-  return response && response.success === false && 'error' in response
+export function isApiError(response: unknown): response is ApiError {
+  return response !== null && typeof response === 'object' && 'success' in response && response.success === false && 'error' in response
 }
 
-export function isApiResponse<T>(response: any): response is ApiResponse<T> {
-  return response && response.success === true && 'data' in response
+export function isApiResponse<T>(response: unknown): response is ApiResponse<T> {
+  return response !== null && typeof response === 'object' && 'success' in response && response.success === true && 'data' in response
 }
 
-export function isPaginatedResponse<T>(response: any): response is PaginatedResponse<T> {
+export function isPaginatedResponse<T>(response: unknown): response is PaginatedResponse<T> {
   return (
-    response &&
+    response !== null &&
+    typeof response === 'object' &&
+    'success' in response &&
     response.success === true &&
     'data' in response &&
-    Array.isArray(response.data) &&
+    Array.isArray((response as PaginatedResponse<T>).data) &&
     'pagination' in response
   )
 }

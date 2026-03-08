@@ -34,13 +34,13 @@ export interface ResponseInterceptorConfig {
  * 创建响应成功拦截器
  */
 export function createResponseInterceptor(config: ResponseInterceptorConfig = {}) {
-  const { useMock = USE_MOCK } = config
+  const { useMock: _useMock = USE_MOCK } = config
 
   return async (response: AxiosResponse): Promise<AxiosResponse> => {
     // ========================================================================
     // MOCK MODE - 返回模拟数据
     // ========================================================================
-    if ((response.config as any)._mockMode) {
+    if ((response.config as InternalAxiosRequestConfig & { _mockMode?: boolean })._mockMode) {
       logger.debug('🎭 [Mock Mode] 返回模拟响应')
       const mockResponse = await MockApiHandler.handleRequest(response.config)
 
@@ -168,7 +168,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
         status: 200,
         statusText: 'OK',
         data: mockResponse
-      } as any
+      } as unknown as never
     }
     // ========================================================================
 
@@ -238,7 +238,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     if (error.response?.status === 401) {
       logger.warn('🔒 [API Auth] 401 未授权')
       
-      const originalRequest = error.config as any
+      const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
       const isLoginRequest = originalRequest?.url?.includes('/auth/login')
       const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
       

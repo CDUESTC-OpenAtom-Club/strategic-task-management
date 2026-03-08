@@ -86,8 +86,6 @@ function handleMessage(event: MessageEvent): void {
     
     // Dispatch custom event for other components to listen
     window.dispatchEvent(new CustomEvent('approval-notification', { detail: message }))
-    
-    console.log('[WebSocket] Received notification:', message)
   } catch (error) {
     console.error('[WebSocket] Failed to parse message:', error)
   }
@@ -124,7 +122,10 @@ function showBrowserNotification(message: NotificationMessage): void {
 function handleOpen(): void {
   connectionState.value = 'connected'
   reconnectAttempts = 0
-  console.log('[WebSocket] Connected')
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[WebSocket] Connected')
+  }
 }
 
 /**
@@ -136,7 +137,10 @@ function handleClose(): void {
   
   // Attempt reconnection
   if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-    console.log(`[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log(`[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+    }
     reconnectTimer = setTimeout(() => {
       reconnectAttempts++
       connectWebSocket()
@@ -159,7 +163,10 @@ function handleError(error: Event): void {
  */
 export function connectWebSocket(): void {
   if (ws.value?.readyState === WebSocket.OPEN) {
-    console.log('[WebSocket] Already connected')
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[WebSocket] Already connected')
+    }
     return
   }
   
@@ -180,7 +187,10 @@ export function connectWebSocket(): void {
     ws.value.onclose = handleClose
     ws.value.onerror = handleError
     
-    console.log('[WebSocket] Connecting to:', url)
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.log('[WebSocket] Connecting to:', url)
+    }
   } catch (error) {
     connectionState.value = 'error'
     console.error('[WebSocket] Connection failed:', error)
@@ -202,7 +212,10 @@ export function disconnectWebSocket(): void {
   }
   
   connectionState.value = 'disconnected'
-  console.log('[WebSocket] Disconnected')
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[WebSocket] Disconnected')
+  }
 }
 
 /**

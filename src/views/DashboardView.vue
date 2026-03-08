@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { Download, TrendCharts, DataAnalysis, Warning, Aim, Refresh, Filter, QuestionFilled, Top, Bottom, Lightning, Close } from '@element-plus/icons-vue'
+import { Download, Warning, Aim, Refresh, QuestionFilled, Top, Close } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -13,9 +13,7 @@ import DepartmentProgressChart from '@/components/charts/DepartmentProgressChart
 // 新增图表组件
 import TaskSankeyChart from '@/components/charts/TaskSankeyChart.vue'
 import SourcePieChart from '@/components/charts/SourcePieChart.vue'
-import DashboardFilters from '@/components/common/DashboardFilters.vue'
 import * as XLSX from 'xlsx'
-import type { ECharts } from 'echarts'
 import { ElMessage } from 'element-plus'
 import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/stores/org'
@@ -91,7 +89,7 @@ const statusColors = {
 }
 
 // 计算指标状态的函数
-const getIndicatorStatus = (indicator: any): IndicatorStatus => {
+const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -173,7 +171,7 @@ const getStatusClass = (status: IndicatorStatus): string => {
 }
 
 // 获取当月目标进度（离今天最近的里程碑的目标进度）
-const getCurrentTargetProgress = (indicator: any): number | null => {
+const getCurrentTargetProgress = (indicator: Indicator): number | null => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -204,7 +202,7 @@ const getCurrentTargetProgress = (indicator: any): number | null => {
 }
 
 // 获取当前里程碑序号信息（如 "2/5" 表示第2个里程碑，共5个）
-const getCurrentMilestoneIndex = (indicator: any): string | null => {
+const getCurrentMilestoneIndex = (indicator: Indicator): string | null => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -290,7 +288,7 @@ const selectedDeptStats = computed(() => {
 })
 
 // 获取任意部门的指标状态统计（用于tooltip显示）
-const getDeptStats = (deptName: string) => {
+const _getDeptStats = (deptName: string) => {
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
   const currentYear = timeContext.currentYear
@@ -316,7 +314,7 @@ const getDeptStats = (deptName: string) => {
 }
 
 // 计算指标在指定月份的状态（用于堆叠柱状图）
-const getIndicatorStatusAtMonth = (indicator: any, month: number, year: number): IndicatorStatus => {
+const getIndicatorStatusAtMonth = (indicator: Indicator, month: number, year: number): IndicatorStatus => {
   const milestones = indicator.milestones || []
   if (milestones.length === 0) {
     return 'normal'
@@ -517,7 +515,7 @@ const getCollegeStatsForFunctionalDept = (ownerDept: string, month: number, year
     }))
 
   // 按学院分组统计
-  const collegeMap = new Map<string, any>()
+  const collegeMap = new Map<string, Record<string, unknown>>()
   indicators.forEach(i => {
     const college = i.responsibleDept
     if (!collegeMap.has(college)) {
@@ -568,7 +566,7 @@ const collegeBarData = computed(() => {
       }))
 
     // 按学院分组统计（所有来源部门）
-    const collegeMap = new Map<string, any>()
+    const collegeMap = new Map<string, Record<string, unknown>>()
     indicators.forEach(i => {
       const college = i.responsibleDept
       if (!collegeMap.has(college)) {
@@ -791,7 +789,7 @@ const availableFunctionalDepts = computed(() => {
 })
 
 // 处理排名图表点击事件
-const handleBenchmarkClick = (deptName: string) => {
+const _handleBenchmarkClick = (deptName: string) => {
   if (selectedBenchmarkDept.value === deptName) {
     // 再次点击同一部门，取消选中
     handleCloseIndicatorCard()
@@ -837,7 +835,7 @@ const orgStore = useOrgStore()
  * - 空状态处理：数据为空时显示空状态提示
  */
 const { 
-  isLoading: pageLoading, 
+  isLoading: _pageLoading, 
   hasError: pageHasError, 
   errorMessage: pageErrorMessage,
   showSkeleton,
@@ -915,13 +913,13 @@ const currentRole = computed<UserRole>(() =>
 const currentDepartment = computed(() => props.viewingDept || authStore.effectiveDepartment || '')
 
 // 是否显示筛选功能（二级学院不显示）
-const showFilterFeature = computed(() => currentRole.value !== 'secondary_college')
+const _showFilterFeature = computed(() => currentRole.value !== 'secondary_college')
 
 // 是否可以查看所有部门（只有战略发展部可以）
 const canViewAllDepartments = computed(() => currentRole.value === 'strategic_dept')
 
 // 部门完成情况卡片标题（根据下钻状态动态显示）
-const getDepartmentCardTitle = computed(() => {
+const _getDepartmentCardTitle = computed(() => {
   if (dashboardStore.currentOrgLevel === 'functional' && dashboardStore.selectedFunctionalDept) {
     return `${dashboardStore.selectedFunctionalDept} 任务下发情况`
   }
@@ -929,7 +927,7 @@ const getDepartmentCardTitle = computed(() => {
 })
 
 // 排名看板标题（根据角色动态显示）
-const getBenchmarkTitle = computed(() => {
+const _getBenchmarkTitle = computed(() => {
   if (currentRole.value === 'strategic_dept') {
     return '职能部门执行排名'
   } else if (currentRole.value === 'functional_dept') {
@@ -948,7 +946,7 @@ const filterForm = ref({
 })
 
 // 部门选项（使用完整配置，根据角色权限过滤）
-const departmentOptions = computed(() => {
+const _departmentOptions = computed(() => {
   // 战略发展部可以看所有部门
   if (currentRole.value === 'strategic_dept') {
     return orgStore.getAllDepartmentNames()
@@ -1009,7 +1007,7 @@ const applyFilters = () => {
 }
 
 // 重置筛选
-const resetFilters = () => {
+const _resetFilters = () => {
   filterForm.value = { department: '', indicatorType: '', alertLevel: '' }
   dashboardStore.resetFilters()
   showFilterPanel.value = false
@@ -1027,7 +1025,7 @@ const handleBreadcrumbNavigate = (index: number) => {
 }
 
 // 判断是否有活跃筛选
-const hasActiveFilters = computed(() => {
+const _hasActiveFilters = computed(() => {
   return dashboardStore.filters.department || 
          dashboardStore.filters.indicatorType || 
          dashboardStore.filters.alertLevel
@@ -1037,7 +1035,7 @@ const hasActiveFilters = computed(() => {
 const handleExport = () => {
   try {
     const role = authStore.user?.role
-    let exportData: any[]
+    let exportData: Record<string, unknown>[]
     let fileName: string
     let sheetName: string
 
@@ -1186,14 +1184,14 @@ const handleSourceClick = (source: string) => {
 }
 
 // 应用筛选（集成新筛选组件）
-const handleFilterApply = () => {
+const _handleFilterApply = () => {
   ElMessage.success('筛选已应用')
 }
 
 // KPI 卡片数据（带趋势）
-const kpiCards = computed(() => {
+const _kpiCards = computed(() => {
   const data = dashboardData.value
-  const indicators = dashboardStore.visibleIndicators
+  const _indicators = dashboardStore.visibleIndicators
   
   // 计算上期数据（模拟趋势）
   const lastMonthScore = Math.max(0, data.totalScore - Math.floor(Math.random() * 10) + 5)
@@ -1273,7 +1271,7 @@ const delayedTasks = computed(() => {
 })
 
 // 催办任务
-const handleUrge = (task: any) => {
+const handleUrge = (task: Task) => {
   if (task.reminded) {return}
   task.reminded = true
   ElMessage.success(`已向 ${task.dept} 发送催办通知`)
@@ -1324,7 +1322,7 @@ const benchmarkData = computed(() => {
 })
 
 // 雷达图统计数据
-const radarStats = computed(() => {
+const _radarStats = computed(() => {
   const data = radarData.value
   if (!data || data.length === 0) {return { avgMatch: 0, volatility: 0 }}
   const avg = data.reduce((a, b) => a + b.value, 0) / data.length
@@ -1388,10 +1386,10 @@ const initRadarChart = () => {
 }
 
 // Benchmark 图表视图模式
-const benchmarkViewMode = ref<'completion' | 'benchmark'>('completion')
+const _benchmarkViewMode = ref<'completion' | 'benchmark'>('completion')
 
 // 动态计算图表高度（每个部门30px，最小400px）
-const benchmarkChartHeight = computed(() => {
+const _benchmarkChartHeight = computed(() => {
   const dataLength = benchmarkData.value.length
   return Math.max(400, dataLength * 30)
 })
@@ -1402,7 +1400,7 @@ const initBenchmarkChart = () => {
 
   // 根据下钻状态选择数据源
   const data = isDrillDown.value ? monthlyStackedData.value : stackedBarData.value
-  const xAxisLabel = isDrillDown.value ? `${drilledDept.value} - 月度趋势` : '职能部门'
+  const _xAxisLabel = isDrillDown.value ? `${drilledDept.value} - 月度趋势` : '职能部门'
 
   if (!data || data.length === 0) {
     // 数据为空时，清空图表
@@ -1427,7 +1425,7 @@ const initBenchmarkChart = () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params: any) => {
+      formatter: (params: { name: string; value: number; percent?: number; seriesName?: string }) => {
         if (!Array.isArray(params) || params.length === 0) {return ''}
         const dataIndex = params[0].dataIndex
         const dataItem = data[dataIndex]
@@ -1549,7 +1547,7 @@ const initBenchmarkChart = () => {
 
   // 添加点击事件
   benchmarkChartInstance.off('click')
-  benchmarkChartInstance.on('click', (params: any) => {
+  benchmarkChartInstance.on('click', (params: { name: string; dataIndex?: number }) => {
     if (params.componentType === 'series') {
       const dataItem = data[params.dataIndex]
 
@@ -1632,7 +1630,7 @@ watch(() => timeContext.currentYear, () => {
 // 解决异步加载数据后图表不更新的问题
 watch(
   () => strategicStore.indicators.length,
-  (newLength, oldLength) => {
+  (newLength, _oldLength) => {
     if (newLength > 0) {
       nextTick(() => {
         initCollegeChart()
@@ -1749,7 +1747,7 @@ const initCollegeChart = () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params: any) => {
+      formatter: (params: { name: string; value: number; percent?: number; seriesName?: string }) => {
         if (!Array.isArray(params) || params.length === 0) {return ''}
         const dataIndex = params[0].dataIndex
         const dataItem = data[dataIndex]
@@ -1869,7 +1867,7 @@ const initCollegeChart = () => {
 
   // 点击事件
   collegeChartInstance.off('click')
-  collegeChartInstance.on('click', (params: any) => {
+  collegeChartInstance.on('click', (params: { name: string; dataIndex?: number }) => {
     if (params.componentType === 'series') {
       const dataItem = data[params.dataIndex]
 
@@ -1962,7 +1960,7 @@ const initCollegeRankingChart = () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params: any) => {
+      formatter: (params: { name: string; value: number; percent?: number; seriesName?: string }) => {
         const item = params[0]
         const dataItem = data[item.dataIndex]
         const fullName = dataItem?.fullName || item.name
@@ -1986,7 +1984,7 @@ const initCollegeRankingChart = () => {
     },
     xAxis: {
       type: 'value',
-      max: (value: any) => {
+      max: (_value: number) => {
         const max = Math.max(...data.map(d => d.value))
         return Math.ceil(max * 1.2)
       },
@@ -2016,7 +2014,7 @@ const initCollegeRankingChart = () => {
       barGap: '30%',
       itemStyle: {
         borderRadius: [0, 4, 4, 0],
-        color: (params: any) => {
+        color: (params: { dataIndex: number }) => {
           const value = params.value as number
           if (value >= 80) {return '#67c23a'}
           if (value >= 60) {return '#409eff'}

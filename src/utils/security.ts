@@ -56,7 +56,7 @@ export function validateSecurityConfig(): { valid: boolean; missing: string[] } 
  * 用于敏感操作的额外安全验证
  * @throws Error 如果 VITE_API_SECRET 未配置
  */
-export async function generateSignature(data: any, timestamp: number): Promise<string> {
+export async function generateSignature(data: unknown, timestamp: number): Promise<string> {
   const payload = JSON.stringify(data || {})
   const message = `${timestamp}:${payload}`
   
@@ -153,7 +153,7 @@ export async function decryptData(encryptedData: string, key: string): Promise<s
  * @throws Error 如果使用加密功能但 VITE_STORAGE_KEY 未配置
  */
 export const secureStorage = {
-  async setItem(key: string, value: any, encrypt = false): Promise<void> {
+  async setItem(key: string, value: unknown, encrypt = false): Promise<void> {
     const data = JSON.stringify(value)
     if (encrypt) {
       const encrypted = await encryptData(data, getStorageKey())

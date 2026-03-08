@@ -106,7 +106,8 @@ export interface MilestoneVO {
   milestoneName: string
   milestoneDesc?: string
   dueDate: string
-  weightPercent: number
+  targetProgress: number  // 主字段：目标进度 (0-100)
+  weightPercent?: number  // 已废弃：保留用于向后兼容
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
   sortOrder: number
   inheritedFromId?: number

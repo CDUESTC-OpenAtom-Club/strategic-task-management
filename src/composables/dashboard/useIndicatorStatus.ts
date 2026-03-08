@@ -10,7 +10,7 @@
  */
 
 import type { StrategicIndicator } from '@/types'
-import type { IndicatorStatus, STATUS_COLORS } from './useDashboardState'
+import type { IndicatorStatus, STATUS_COLORS as _STATUS_COLORS } from './useDashboardState'
 
 /**
  * 计算指标状态

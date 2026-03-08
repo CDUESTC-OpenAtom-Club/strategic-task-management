@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Edit, Promotion, RefreshLeft, Document } from '@element-plus/icons-vue'
+import { ref, computed, watch as _watch } from 'vue'
+import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-plus/icons-vue'
 import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuditLogStore } from '@/stores/auditLog'

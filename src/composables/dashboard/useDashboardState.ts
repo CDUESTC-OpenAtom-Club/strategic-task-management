@@ -12,7 +12,7 @@
 
 import { ref, type Ref } from 'vue'
 import type { ECharts } from 'echarts'
-import type { UserRole } from '@/types'
+import type { _UserRole } from '@/types'
 
 /** 指标状态类型 */
 export type IndicatorStatus = 'normal' | 'ahead' | 'warning' | 'delayed'

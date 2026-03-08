@@ -12,13 +12,13 @@ import {
   ElTabs,
   ElTabPane,
   ElTag,
-  ElAvatar,
+  ElAvatar as _ElAvatar,
   ElProgress,
   ElScrollbar,
-  ElDescriptions,
-  ElDescriptionsItem,
-  ElTimeline,
-  ElTimelineItem
+  ElDescriptions as _ElDescriptions,
+  ElDescriptionsItem as _ElDescriptionsItem,
+  ElTimeline as _ElTimeline,
+  ElTimelineItem as _ElTimelineItem
 } from 'element-plus'
 import {
   Document,
@@ -26,13 +26,13 @@ import {
   Plus,
   Refresh,
   Clock,
-  Check,
-  Close,
+  Check as _Check,
+  Close as _Close,
   CircleCheck,
-  Download,
-  Paperclip
+  Download as _Download,
+  Paperclip as _Paperclip
 } from '@element-plus/icons-vue'
-import type { Plan, Task, Indicator, IndicatorFill, Milestone } from '@/types'
+import type { Plan, Task as _Task, Indicator as _Indicator, IndicatorFill, Milestone } from '@/types'
 import IndicatorFillForm from '@/components/indicator/IndicatorFillForm.vue'
 import IndicatorFillHistory from '@/components/indicator/IndicatorFillHistory.vue'
 
@@ -96,7 +96,7 @@ const currentKey = computed(() => {
 })
 
 // 填报统计
-const fillStats = computed(() => {
+const _fillStats = computed(() => {
   if (!selectedIndicator.value) {return null}
   const indicator = selectedIndicator.value
   return {
@@ -218,7 +218,7 @@ const loadPlan = async () => {
 }
 
 // 树节点点击
-const handleNodeClick = (data: any) => {
+const handleNodeClick = (data: unknown) => {
   if (data.type === 'task') {
     selectedTaskId.value = data.id
     // 展开第一个指标
@@ -255,12 +255,12 @@ const viewHistory = () => {
 }
 
 // 填报成功回调
-const handleFillSaved = (fill: IndicatorFill) => {
+const handleFillSaved = (_fill: IndicatorFill) => {
   activeTab.value = 'history'
 }
 
 // 填报提交回调
-const handleFillSubmitted = (fill: IndicatorFill) => {
+const handleFillSubmitted = (_fill: IndicatorFill) => {
   activeTab.value = 'history'
 }
 

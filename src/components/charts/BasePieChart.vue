@@ -8,7 +8,7 @@
   - 支持数据更新动画
 -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref as _ref } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
@@ -24,7 +24,7 @@ export interface PieDataItem {
   name: string
   value: number
   color?: string
-  itemStyle?: any
+  itemStyle?: Record<string, unknown>
 }
 
 /** Props */
@@ -72,12 +72,12 @@ const emit = defineEmits<{
 }>()
 
 /** 数据总计 */
-const total = computed(() => props.data.reduce((sum, item) => sum + item.value, 0))
+const _total = computed(() => props.data.reduce((sum, item) => sum + item.value, 0))
 
 /** 图表配置 */
 const chartOption = computed<EChartsOption>(() => {
   // 图例位置配置
-  const legendConfig: any = {
+  const legendConfig: Record<string, unknown> = {
     show: props.showLegend,
     orient: props.legendPosition === 'top' || props.legendPosition === 'bottom' ? 'horizontal' : 'vertical',
     itemWidth: 10,
@@ -102,7 +102,7 @@ const chartOption = computed<EChartsOption>(() => {
   }
 
   // 构建图形数组
-  const graphics: any[] = []
+  const graphics: Record<string, unknown>[] = []
 
   // 添加中心文字
   if (props.showCenterText && props.centerBottomText !== undefined) {
@@ -139,7 +139,7 @@ const chartOption = computed<EChartsOption>(() => {
   return {
     tooltip: {
       trigger: 'item',
-      formatter: (params: any) => {
+      formatter: (params: { name: string; value: number; percent: number }) => {
         return `${params.name}<br/>数量: ${params.value}个<br/>占比: ${params.percent}%`
       }
     },
@@ -186,7 +186,7 @@ const chartOption = computed<EChartsOption>(() => {
 })
 
 /** 处理图表点击 */
-const handleChartClick = (params: any) => {
+const handleChartClick = (params: { dataIndex: number }) => {
   if (!props.clickable) {return}
 
   const index = params.dataIndex

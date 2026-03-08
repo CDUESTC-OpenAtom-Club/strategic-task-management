@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElButton, ElIcon, ElCard, ElMessage } from 'element-plus'
+import { ElButton, ElIcon as _ElIcon, ElCard, ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { Indicator } from '@/types'
 import { usePlanStore } from '@/stores/plan'
@@ -23,7 +23,7 @@ import { logger } from '@/utils/logger'
 
 const router = useRouter()
 const route = useRoute()
-const planStore = usePlanStore()
+const _planStore = usePlanStore()
 
 // 状态
 const loading = ref(true)
@@ -39,12 +39,12 @@ const handleBack = () => {
   router.back()
 }
 
-const handleSaved = (fill: any) => {
+const handleSaved = (fill: unknown) => {
   currentFill.value = fill
   // 刷新历史记录
 }
 
-const handleSubmitted = (fill: any) => {
+const handleSubmitted = (fill: unknown) => {
   currentFill.value = fill
   // 返回上一页或跳转到详情页
   router.back()
@@ -58,7 +58,7 @@ const toggleHistory = () => {
   showHistory.value = !showHistory.value
 }
 
-const handleSelectHistory = (fill: any) => {
+const handleSelectHistory = (fill: unknown) => {
   currentFill.value = fill
   showHistory.value = false
 }

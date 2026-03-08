@@ -37,10 +37,10 @@ export function getFallbackConfig(): FallbackConfig {
  *
  * ⚠️ 现在始终返回 false，不再使用降级机制
  *
- * @param error Axios 错误对象
+ * @param _error Axios 错误对象
  * @returns 始终返回 false
  */
-export function shouldFallback(error?: AxiosError | null): boolean {
+export function shouldFallback(_error?: AxiosError | null): boolean {
   // 降级机制已禁用，所有数据从后端API获取
   return false
 }
@@ -59,8 +59,8 @@ export function logFallback(url: string, reason: string): void {
  *
  * @returns 始终返回 null
  */
-export function getMockData<T>(url: string): ApiResponse<T> | null {
-  logger.warn(`[Fallback] 模拟数据已废弃，请使用后端API: ${url}`)
+export function getMockData<T>(_url: string): ApiResponse<T> | null {
+  logger.warn(`[Fallback] 模拟数据已废弃，请使用后端API: ${_url}`)
   return null
 }
 
@@ -99,7 +99,7 @@ export class FallbackService {
   /**
    * 判断是否应该降级
    */
-  shouldFallback(error?: AxiosError | null): boolean {
+  shouldFallback(_error?: AxiosError | null): boolean {
     return false  // 降级已禁用
   }
 
@@ -114,7 +114,7 @@ export class FallbackService {
   /**
    * 记录降级日志
    */
-  logFallback(url: string, reason: string): void {
+  logFallback(url: string, _reason: string): void {
     logger.warn(`[Fallback] 已禁用: ${url}`)
   }
 

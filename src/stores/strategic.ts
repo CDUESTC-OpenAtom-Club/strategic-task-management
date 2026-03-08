@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+/* eslint-disable no-restricted-syntax -- Backend-aligned types use strategic_task terminology */
 import type { StrategicTask, StrategicIndicator, Milestone, StatusAuditEntry, CreateStrategicTaskRequest, UpdateStrategicTaskRequest } from '@/types'
+/* eslint-enable no-restricted-syntax */
 import { useTimeContextStore } from './timeContext'
 import strategicApi from '@/api/strategic'
 import { useDataValidator, type ValidationResult } from '@/composables/useDataValidator'
@@ -30,8 +32,10 @@ export interface DataHealthStatus {
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
   // 初始化为空数组，从API加载数据
+  /* eslint-disable no-restricted-syntax -- Backend-aligned types in state */
   const tasks = ref<StrategicTask[]>([])
   const indicators = ref<StrategicIndicator[]>([])
+  /* eslint-enable no-restricted-syntax */
   
   // Loading 状态
   const loading = ref(false)
@@ -172,9 +176,10 @@ export const useStrategicStore = defineStore('strategic', () => {
       
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
       return []
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 检查是否是超时错误且还有重试次数
-      const isTimeout = err.message?.includes('timeout') || err.code === 'ECONNABORTED'
+      const error = err as { message?: string; code?: string }
+      const isTimeout = error.message?.includes('timeout') || error.code === 'ECONNABORTED'
       if (isTimeout && retryCount < maxRetries) {
         logger.warn(`[Strategic Store] Request timeout, retrying... (${retryCount + 1}/${maxRetries})`)
         // 等待一段时间后重试（指数退避）
@@ -190,6 +195,7 @@ export const useStrategicStore = defineStore('strategic', () => {
   /**
    * 从 API 加载任务数据（带重试机制）
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTask
   const loadTasksFromApi = async (year: number, retryCount = 0): Promise<StrategicTask[]> => {
     const maxRetries = 2
     
@@ -197,6 +203,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       logger.info(`[Strategic Store] Loading tasks for year ${year} from API... (attempt ${retryCount + 1}/${maxRetries + 1})`)
       const response = await strategicApi.getTasksByYear(year)
       if (response.success && response.data) {
+        // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
         const converted = response.data.map(vo => strategicApi.convertTaskVOToStrategicTask(vo))
         logger.info(`[Strategic Store] Loaded ${converted.length} tasks from API`)
         return converted
@@ -209,9 +216,10 @@ export const useStrategicStore = defineStore('strategic', () => {
       
       logger.warn(`[Strategic Store] API returned no data for year ${year}`)
       return []
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 检查是否是超时错误且还有重试次数
-      const isTimeout = err.message?.includes('timeout') || err.code === 'ECONNABORTED'
+      const error = err as { message?: string; code?: string }
+      const isTimeout = error.message?.includes('timeout') || error.code === 'ECONNABORTED'
       if (isTimeout && retryCount < maxRetries) {
         logger.warn(`[Strategic Store] Request timeout, retrying... (${retryCount + 1}/${maxRetries})`)
         // 等待一段时间后重试（指数退避）
@@ -255,7 +263,7 @@ export const useStrategicStore = defineStore('strategic', () => {
         loadingState.value.indicators = false
         loadingState.value.tasks = false
         return
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.error(`[Strategic Store] API failed:`, err)
         
         // 构建用户友好的错误消息
@@ -304,10 +312,12 @@ export const useStrategicStore = defineStore('strategic', () => {
 
   // ============ CRUD Actions ============
   
+  // eslint-disable-next-line no-restricted-syntax -- Backend-aligned type
   const addTask = (task: StrategicTask) => {
     tasks.value.push(task)
   }
 
+  // eslint-disable-next-line no-restricted-syntax -- Backend-aligned type
   const updateTask = (id: string, updates: Partial<StrategicTask>) => {
     const task = getTaskById(id)
     if (task) {
@@ -325,6 +335,7 @@ export const useStrategicStore = defineStore('strategic', () => {
   /**
    * 创建新的战略任务并同步到后端
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTask
   const createTask = async (request: CreateStrategicTaskRequest): Promise<StrategicTask> => {
     logger.info('[Strategic Store] Creating new strategic task', { request })
     
@@ -334,6 +345,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       
       if (response.success && response.data) {
         // 转换后端返回的数据为前端格式
+        // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
         const newTask = strategicApi.convertTaskVOToStrategicTask(response.data)
         
         // 添加到本地状态
@@ -354,6 +366,7 @@ export const useStrategicStore = defineStore('strategic', () => {
   /**
    * 更新现有战略任务并同步到后端
    */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTask
   const updateTaskWithBackend = async (taskId: number, request: UpdateStrategicTaskRequest): Promise<StrategicTask> => {
     logger.info('[Strategic Store] Updating strategic task', { taskId, request })
     
@@ -363,6 +376,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       
       if (response.success && response.data) {
         // 转换后端返回的数据为前端格式
+        // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
         const updatedTask = strategicApi.convertTaskVOToStrategicTask(response.data)
         
         // 更新本地状态

@@ -13,7 +13,8 @@ const api = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  withCredentials: true // 允许发送 HttpOnly Cookie (用于 refresh token)
 })
 
 // ============================================================================
@@ -30,17 +31,17 @@ api.interceptors.response.use(createResponseInterceptor(), createResponseErrorIn
 // API 服务方法
 // ============================================================================
 export const apiService = {
-  async get<T>(url: string, params?: any): Promise<ApiResponse<T>> {
+  async get<T>(url: string, params?: Record<string, unknown>): Promise<ApiResponse<T>> {
     const response = await api.get(url, { params })
     return response.data
   },
 
-  async post<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
     const response = await api.post(url, data)
     return response.data
   },
 
-  async put<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  async put<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
     const response = await api.put(url, data)
     return response.data
   },
@@ -50,7 +51,7 @@ export const apiService = {
     return response.data
   },
 
-  async patch<T>(url: string, data?: any): Promise<ApiResponse<T>> {
+  async patch<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
     const response = await api.patch(url, data)
     return response.data
   },
@@ -58,7 +59,7 @@ export const apiService = {
   async upload<T>(
     url: string,
     file: File,
-    additionalData?: Record<string, any>
+    additionalData?: Record<string, unknown>
   ): Promise<ApiResponse<T>> {
     const formData = new FormData()
     formData.append('file', file)

@@ -32,8 +32,11 @@ app.mount('#app')
 const version = import.meta.env.VITE_APP_VERSION || '1.0.1'
 const buildTime = new Date().toISOString()
 if (import.meta.env.DEV) {
+  // eslint-disable-next-line no-console
   console.log(`%c🚀 战略指标管理系统 SISM v${version}`, 'color: #409EFF; font-size: 16px; font-weight: bold')
+  // eslint-disable-next-line no-console
   console.log(`%c📅 构建时间: ${buildTime}`, 'color: #67C23A; font-size: 12px')
+  // eslint-disable-next-line no-console
   console.log(`%c🌍 环境: ${import.meta.env.MODE}`, 'color: #E6A23C; font-size: 12px')
 }
 
@@ -49,6 +52,7 @@ performanceMonitor.init({
 
 // 开发环境下自动运行API健康检查
 if (import.meta.env.DEV) {
+  // eslint-disable-next-line no-console
   console.log('🚀 [Main] 应用已启动')
 }
 autoHealthCheck()
@@ -58,7 +62,12 @@ if (import.meta.env.DEV) {
   // 暴露 stores 到全局，方便在控制台调试
   import('./stores/auth').then(({ useAuthStore }) => {
     const authStore = useAuthStore()
-    ;(window as any).__DEBUG__ = {
+    interface DebugTools {
+      authStore: ReturnType<typeof useAuthStore>
+      tokenManager: unknown
+      pinia: typeof pinia
+    }
+    ;(window as Window & { __DEBUG__: DebugTools }).__DEBUG__ = {
       authStore,
       tokenManager: null,
       pinia,
@@ -66,12 +75,16 @@ if (import.meta.env.DEV) {
     
     // 延迟加载 tokenManager
     import('./utils/tokenManager').then(({ tokenManager }) => {
-      ;(window as any).__DEBUG__.tokenManager = tokenManager
+      ;(window as Window & { __DEBUG__: DebugTools }).__DEBUG__.tokenManager = tokenManager
     })
     
+    // eslint-disable-next-line no-console
     console.log('%c🔧 调试工具已加载', 'color: #E6A23C; font-size: 14px; font-weight: bold')
+    // eslint-disable-next-line no-console
     console.log('%c使用 window.__DEBUG__ 访问调试工具', 'color: #909399; font-size: 12px')
+    // eslint-disable-next-line no-console
     console.log('%c示例: window.__DEBUG__.authStore.user', 'color: #909399; font-size: 12px')
+    // eslint-disable-next-line no-console
     console.log('%c示例: window.__DEBUG__.tokenManager.getAccessToken()', 'color: #909399; font-size: 12px')
   })
 }

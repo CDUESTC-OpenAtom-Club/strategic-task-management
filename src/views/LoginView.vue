@@ -207,7 +207,7 @@ const defaultBgImages: BgImage[] = [
 ]
 
 // 从 Unsplash API 获取随机风景图（备用方案）
-const fetchBgImages = async () => {
+const _fetchBgImages = async () => {
   try {
     // 使用 Unsplash Source API（无需 API Key）
     // 主题：university, campus, architecture, nature
@@ -347,7 +347,7 @@ const handleLogin = async () => {
         ElMessage.error(`${errorMsg}，剩余尝试次数：${remainingAttempts.value}`)
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('❌ [Login] 登录异常:', error)
     loginErrorCount.value++
     
@@ -355,7 +355,7 @@ const handleLogin = async () => {
       startAutoUnlock()
       ElMessage.error('登录失败次数过多，账户已被临时锁定')
     } else {
-      const errorMsg = error.message || error.error || '登录失败，请检查网络连接'
+      const errorMsg = (error as { message?: string; error?: string }).message || (error as { message?: string; error?: string }).error || '登录失败，请检查网络连接'
       ElMessage.error(`${errorMsg}，剩余尝试次数：${remainingAttempts.value}`)
     }
   } finally {

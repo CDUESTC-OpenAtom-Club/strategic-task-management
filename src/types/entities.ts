@@ -96,6 +96,7 @@ export enum UserRole {
  *
  * @requirement 后端字段完全对齐
  */
+// eslint-disable-next-line no-restricted-syntax -- Backend-aligned type uses strategic_task terminology
 export interface StrategicTask {
   /** 任务ID (后端: task_id) */
   taskId: number
@@ -379,6 +380,7 @@ export interface ApiResponse<T> {
 /**
  * 创建战略任务请求
  */
+// eslint-disable-next-line no-restricted-syntax -- Backend API request type
 export interface CreateStrategicTaskRequest {
   cycleId: number
   taskName: string
@@ -392,6 +394,7 @@ export interface CreateStrategicTaskRequest {
 /**
  * 更新战略任务请求
  */
+// eslint-disable-next-line no-restricted-syntax -- Backend API request type
 export interface UpdateStrategicTaskRequest {
   taskId: number
   taskName?: string

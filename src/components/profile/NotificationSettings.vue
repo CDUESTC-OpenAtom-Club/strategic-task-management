@@ -142,7 +142,7 @@ const handleSubmit = async () => {
 
   try {
     // TODO: Call API to save notification settings
-    const settings = {
+    const _settings = {
       userId: authStore.user?.id,
       ...form
     }

@@ -15,7 +15,7 @@ import { logger } from '@/utils/logger'
 /** 登录响应数据接口 */
 export interface LoginResponseData {
   token: string
-  user: any
+  user: Record<string, unknown>
 }
 
 /** 解析结果接口 */
@@ -51,7 +51,7 @@ export function mapOrgTypeToRole(orgType: string): UserRole | null {
 /**
  * 映射后端用户数据到前端 User 类型
  */
-export function mapBackendUser(userData: any): User {
+export function mapBackendUser(userData: Record<string, unknown>): User {
   const mappedRole = mapOrgTypeToRole(userData.orgType || userData.role)
 
   return {
@@ -74,7 +74,7 @@ export function mapBackendUser(userData: any): User {
  * - 格式4: { data: { token, user } }
  * - 格式5: 直接在 response.data 中
  */
-export function parseLoginResponse(response: any): ParseResult {
+export function parseLoginResponse(response: Record<string, unknown>): ParseResult {
   let loginData: LoginResponseData | null = null
 
   // API拦截器返回 response.data，所以：

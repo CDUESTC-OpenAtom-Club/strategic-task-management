@@ -9,7 +9,7 @@ const props = defineProps<{
   rejectionReason?: string
 }>()
 
-const getNodeIcon = (status: WorkflowNode['status']) => {
+const _getNodeIcon = (status: WorkflowNode['status']) => {
   switch (status) {
     case 'completed': return Check
     case 'current': return Loading
@@ -18,7 +18,7 @@ const getNodeIcon = (status: WorkflowNode['status']) => {
   }
 }
 
-const getNodeClass = (status: WorkflowNode['status']) => {
+const _getNodeClass = (status: WorkflowNode['status']) => {
   return `node-${status}`
 }
 

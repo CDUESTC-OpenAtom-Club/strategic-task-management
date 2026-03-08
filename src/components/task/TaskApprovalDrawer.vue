@@ -48,7 +48,7 @@ const drawerVisible = computed({
 
 // 待审批记录（只显示 pending 状态的指标，去重后显示）
 const pendingApprovals = computed(() => {
-  // 使用 Map 去重，key 为指标 id
+  // 使用 Map 去重，key as _key 为指标 id
   const uniqueMap = new Map()
   props.indicators
     .filter(indicator => indicator.progressApprovalStatus === 'PENDING')  // 只显示待审批的
@@ -81,10 +81,10 @@ const currentSubmissions = computed(() => {
 // 历史审批记录（按审批批次分组，包含完整流程）
 const historyApprovalBatches = computed(() => {
   // 收集所有审批批次
-  const batches: any[] = []
+  const batches: Record<string, unknown>[] = []
   
   // 按时间戳分组审批操作
-  const approvalGroups: Record<string, any[]> = {}
+  const approvalGroups: Record<string, Record<string, unknown>[]> = {}
   
   props.indicators.forEach((indicator) => {
     if (indicator.statusAudit && indicator.statusAudit.length > 0) {
@@ -106,8 +106,8 @@ const historyApprovalBatches = computed(() => {
   })
   
   // 为每个审批批次找到对应的提交记录
-  Object.entries(approvalGroups).forEach(([key, approvalActions]) => {
-    const submitters: any[] = []
+  Object.entries(approvalGroups).forEach(([_key, approvalActions]) => {
+    const submitters: Record<string, unknown>[] = []
     
     // 查找这些指标的提交记录
     approvalActions.forEach((approval) => {
@@ -288,7 +288,7 @@ const formatTime = (timestamp: Date | string) => {
 }
 
 // 格式化相对时间
-const formatRelativeTime = (timestamp: Date | string) => {
+const _formatRelativeTime = (timestamp: Date | string) => {
   const date = new Date(timestamp)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
@@ -304,7 +304,7 @@ const formatRelativeTime = (timestamp: Date | string) => {
 }
 
 // 关闭抽屉
-const handleClose = (done?: any) => {
+const handleClose = (done?: () => void) => {
   drawerVisible.value = false
   emit('close')
   if (typeof done === 'function') {

@@ -563,7 +563,7 @@ export const planApi = {
         cycle: newPlan.cycle,
         orgId: newPlan.org_id as number,
         orgName: '',
-        status: (newPlan.status?.toUpperCase() as any) || 'DRAFT',
+        status: (newPlan.status?.toUpperCase() as 'DRAFT' | 'ACTIVE' | 'ARCHIVED') || 'DRAFT',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: newPlan.createdBy || 'current_user',
@@ -598,7 +598,7 @@ export const planApi = {
           timestamp: new Date()
         }
       }
-      return { success: false, data: null as any, message: 'Plan not found', timestamp: new Date() }
+      return { success: false, data: null as never, message: 'Plan not found', timestamp: new Date() }
     }
 
     return withRetry(async () => {
@@ -789,7 +789,7 @@ export const indicatorFillApi = {
           timestamp: new Date()
         }
       }
-      return { success: false, data: null as any, message: 'Fill not found', timestamp: new Date() }
+      return { success: false, data: null as never, message: 'Fill not found', timestamp: new Date() }
     }
 
     return withRetry(async () => {
@@ -830,7 +830,7 @@ export const indicatorFillApi = {
           timestamp: new Date()
         }
       }
-      return { success: false, data: null as any, message: 'Fill not found', timestamp: new Date() }
+      return { success: false, data: null as never, message: 'Fill not found', timestamp: new Date() }
     }
 
     return withRetry(async () => {
@@ -928,7 +928,7 @@ export const planFillApi = {
           timestamp: new Date()
         }
       }
-      return { success: false, data: null as any, message: 'Fill not found', timestamp: new Date() }
+      return { success: false, data: null as never, message: 'Fill not found', timestamp: new Date() }
     }
 
     return withRetry(async () => {

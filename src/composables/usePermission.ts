@@ -12,7 +12,7 @@
 
 import { computed, type ComputedRef } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import type { PermissionCode, UserRoleWithPermission, Plan, PlanFill, Indicator, IndicatorFill } from '@/types'
+import type { PermissionCode, UserRoleWithPermission as _UserRoleWithPermission, Plan, PlanFill, Indicator, IndicatorFill } from '@/types'
 
 /**
  * 权限检查结果
@@ -332,10 +332,10 @@ export function usePermission(): UsePermissionReturn {
 
   /**
    * 检查是否可以填报 Indicator
-   * @param indicator - Indicator 对象
+   * @param _indicator - Indicator 对象
    * @returns 是否可以填报
    */
-  const canFillIndicator = (indicator: Indicator): boolean => {
+  const canFillIndicator = (_indicator: Indicator): boolean => {
     // 必须有填报权限
     if (!hasPermission(PermissionCode.INDICATOR_FILL)) {return false}
 
@@ -349,10 +349,10 @@ export function usePermission(): UsePermissionReturn {
 
   /**
    * 检查是否可以查看 Indicator
-   * @param indicator - Indicator 对象
+   * @param _indicator - Indicator 对象
    * @returns 是否可以查看
    */
-  const canViewIndicator = (indicator: Indicator): boolean => {
+  const canViewIndicator = (_indicator: Indicator): boolean => {
     // 所有有权限的用户都可以查看指标
     return hasPermission(PermissionCode.INDICATOR_VIEW)
   }

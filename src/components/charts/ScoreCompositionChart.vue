@@ -5,7 +5,7 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getColorByIndex, getGradientColor } from '@/utils/colors'
+import { getColorByIndex as _getColorByIndex, getGradientColor } from '@/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
@@ -20,12 +20,12 @@ const props = withDefaults(defineProps<{
 })
 
 const totalScore = computed(() => props.basicScore + props.developmentScore)
-const maxTotalScore = computed(() => props.maxBasicScore + props.maxDevelopmentScore)
+const _maxTotalScore = computed(() => props.maxBasicScore + props.maxDevelopmentScore)
 
 const chartOption = computed(() => ({
   tooltip: {
     trigger: 'item',
-    formatter: (params: any) => {
+    formatter: (params: { name: string; value: number; percent: number }) => {
       const max = params.name === '基础性指标' ? props.maxBasicScore : props.maxDevelopmentScore
       return `${params.name}<br/>得分: ${params.value}分 / ${max}分<br/>占比: ${params.percent}%`
     }

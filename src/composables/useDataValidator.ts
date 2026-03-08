@@ -583,7 +583,7 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
    * @requirement 2.6 - progressApprovalStatus enum validation
    */
   function validateEnum<T>(value: unknown, validValues: readonly T[]): boolean {
-    return validValues.includes(value as T)
+    return validValues.includes(value as T as _T)
   }
 
   /**
@@ -649,7 +649,7 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
    * const allValid = results.every(r => r.isValid)
    * ```
    */
-  function validateArray<T>(
+  function validateArray<_T>(
     items: unknown[],
     validator: (item: unknown) => ValidationResult
   ): ValidationResult[] {

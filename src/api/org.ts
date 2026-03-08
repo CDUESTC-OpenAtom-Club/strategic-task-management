@@ -126,7 +126,7 @@ export const orgApi = {
 
       // Direct transformation without Zod validation to avoid issues
       if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
-        return response.data.map((org: any) => {
+        return response.data.map((org: Record<string, unknown>) => {
           const id = org.id || org.orgId
           const name = org.name || org.orgName
           const type = org.type || org.orgType

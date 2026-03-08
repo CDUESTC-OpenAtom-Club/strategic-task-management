@@ -8,7 +8,7 @@
   - 支持筛选
   - 支持加载状态和空状态
 -->
-<script setup lang="ts" generic="T extends Record<string, any>">
+<script setup lang="ts" generic="T extends Record<string, unknown>">
 import { ref, computed, watch } from 'vue'
 import type { TableColumnCtx } from 'element-plus'
 
@@ -29,7 +29,7 @@ export interface TableColumn {
   /** 是否可排序 */
   sortable?: boolean
   /** 格式化函数 */
-  formatter?: (row: T, column: TableColumnCtx<T>, cellValue: any, index: number) => string
+  formatter?: (row: T, column: TableColumnCtx<T>, cellValue: unknown, index: number) => string
   /** 自定义插槽名称 */
   slot?: string
   /** 子列 (用于分组表头) */
@@ -94,11 +94,11 @@ const props = withDefaults(defineProps<DataTableProps<T>>(), {
 
 const emit = defineEmits<{
   /** 行点击事件 */
-  'row-click': [row: T, column: any, event: Event]
+  'row-click': [row: T, column: TableColumnCtx<T>, event: Event]
   /** 选择变化事件 */
   'selection-change': [selection: T[]]
   /** 排序变化事件 */
-  'sort-change': [sort: { column: any; prop: string; order: string | null }]
+  'sort-change': [sort: { column: TableColumnCtx<T>; prop: string; order: string | null }]
   /** 分页变化事件 */
   'page-change': [page: number]
   /** 每页条数变化事件 */
@@ -125,7 +125,7 @@ watch(() => props.pagination, (newPagination) => {
 }, { deep: true })
 
 /** 处理行点击 */
-const handleRowClick = (row: T, column: any, event: Event) => {
+const handleRowClick = (row: T, column: unknown, event: Event) => {
   emit('row-click', row, column, event)
 }
 
@@ -136,7 +136,7 @@ const handleSelectionChange = (selection: T[]) => {
 }
 
 /** 处理排序变化 */
-const handleSortChange = (sort: { column: any; prop: string; order: string | null }) => {
+const handleSortChange = (sort: { column: unknown; prop: string; order: string | null }) => {
   emit('sort-change', sort)
 }
 
@@ -214,7 +214,7 @@ const displayColumns = computed(() => {
               :sortable="child.sortable"
             >
               <template v-if="child.slot" #default="scope">
-                <slot :name="child.slot" :row="scope.row" :column="scope.column" :$index="scope.$index" />
+                <slot :name="child.slot" :row="scope.row" :column="scope.column" :index="scope.$index" />
               </template>
               <template v-else-if="child.formatter" #default="scope">
                 {{ child.formatter(scope.row, scope.column, scope.row[child.prop], scope.$index) }}
@@ -235,7 +235,7 @@ const displayColumns = computed(() => {
           :sortable="column.sortable"
         >
           <template #default="scope">
-            <slot :name="column.slot" :row="scope.row" :column="scope.column" :$index="scope.$index" />
+            <slot :name="column.slot" :row="scope.row" :column="scope.column" :index="scope.$index" />
           </template>
         </el-table-column>
 

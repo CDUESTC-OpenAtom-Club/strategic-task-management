@@ -10,6 +10,7 @@
 // ============================================================================
 // 统一实体类型导出 (与后端完全对齐)
 // ============================================================================
+/* eslint-disable no-restricted-syntax -- Backend-aligned types must use backend terminology */
 export type {
   StrategicTask,
   Indicator,
@@ -29,8 +30,9 @@ export type {
   CreateMilestoneRequest,
   UpdateMilestoneRequest
 } from './entities'
+/* eslint-enable no-restricted-syntax */
 
-export enum {
+export {
   TaskType,
   MilestoneStatus,
   ProgressApprovalStatus,
@@ -42,6 +44,7 @@ export enum {
 // ============================================================================
 // Zod 运行时验证 Schema 重新导出
 // ============================================================================
+/* eslint-disable no-restricted-syntax -- Backend-aligned schemas must use backend terminology */
 export {
   UserRoleSchema,
   ApprovalStatusSchema,
@@ -63,8 +66,10 @@ export {
   validateMilestone,
   validateLoginCredentials
 } from './schemas'
+/* eslint-enable no-restricted-syntax */
 
 // 重新导出从 Schema 推断的类型
+/* eslint-disable no-restricted-syntax -- Backend-aligned types inferred from schemas */
 export type {
   UserRole,
   ApprovalStatus,
@@ -82,6 +87,7 @@ export type {
   DashboardData,
   DistributionStatus
 } from './schemas'
+/* eslint-enable no-restricted-syntax */
 
 // ============================================================================
 // 原有类型定义保持兼容性
@@ -290,9 +296,10 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
 
 // Form Types
 // 注意: 以下表单类型需要与后端 VO 对齐
+// eslint-disable-next-line no-restricted-syntax -- Comment references backend-aligned type names
 // 使用 CreateStrategicTaskRequest / UpdateStrategicTaskRequest 代替
 
-export interface StrategicTaskForm {
+export interface PlanForm {
   taskName: string        // 与后端对齐: taskName
   taskDesc: string | null // 与后端对齐: taskDesc
   cycleId: number         // 与后端对齐: cycleId
@@ -374,14 +381,14 @@ export interface SystemConfig {
 export interface ApiError {
   code: string
   message: string
-  details?: Record<string, any>
+  details?: Record<string, unknown>
   timestamp: Date
 }
 
 export interface ValidationError {
   field: string
   message: string
-  value?: any
+  value?: unknown
 }
 
 // 面包屑导航
@@ -412,16 +419,16 @@ export interface AuditLogItem {
   operatorName: string
   operateTime: Date
   ipAddress?: string
-  dataBefore?: Record<string, any>
-  dataAfter?: Record<string, any>
+  dataBefore?: Record<string, unknown>
+  dataAfter?: Record<string, unknown>
   changes?: FieldChange[]
 }
 
 export interface FieldChange {
   field: string
   fieldLabel: string
-  oldValue: any
-  newValue: any
+  oldValue: unknown
+  newValue: unknown
 }
 
 export interface AuditLogFilters {
@@ -450,8 +457,8 @@ export interface ApprovalHistoryItem {
   operatorName: string
   operateTime: Date
   comment?: string
-  dataBefore?: Record<string, any>
-  dataAfter?: Record<string, any>
+  dataBefore?: Record<string, unknown>
+  dataAfter?: Record<string, unknown>
 }
 
 // 热力图数据

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { Folder, Document, Warning, Connection } from '@element-plus/icons-vue'
+// eslint-disable-next-line no-restricted-syntax -- Backend-aligned types use strategic_task terminology
 import type { StrategicTask, StrategicIndicator } from '@/types'
 import { useStrategicStore } from '@/stores/strategic'
 
@@ -84,11 +85,13 @@ const calculateIndicatorStats = (indicators: StrategicIndicator[]): NodeStats =>
   return stats
 }
 
+/* eslint-disable no-restricted-syntax -- Backend-aligned types in props */
 const props = defineProps<{
   tasks?: StrategicTask[]
   indicators?: StrategicIndicator[]
   highlightIndicatorId?: string
 }>()
+/* eslint-enable no-restricted-syntax */
 
 const emit = defineEmits<{
   'select-indicator': [id: string]
@@ -190,6 +193,7 @@ const treeData = computed(() => {
 })
 
 // 获取任务聚合状态
+// eslint-disable-next-line no-restricted-syntax -- Backend-aligned types in function parameters
 const getTaskAggregatedStatus = (task: StrategicTask, indicators: StrategicIndicator[]) => {
   if (indicators.length === 0) {return 'info'}
   const avgProgress = indicators.reduce((sum, i) => sum + i.progress, 0) / indicators.length
@@ -199,6 +203,7 @@ const getTaskAggregatedStatus = (task: StrategicTask, indicators: StrategicIndic
 }
 
 // 获取任务聚合进度
+// eslint-disable-next-line no-restricted-syntax -- Backend-aligned types in function parameters
 const getTaskAggregatedProgress = (task: StrategicTask, indicators: StrategicIndicator[]) => {
   if (indicators.length === 0) {return 0}
   return Math.round(indicators.reduce((sum, i) => sum + i.progress, 0) / indicators.length)
@@ -252,7 +257,7 @@ const getStatusColor = (status: string) => {
 }
 
 // 处理节点点击
-const handleNodeClick = (data: any) => {
+const handleNodeClick = (data: Record<string, unknown>) => {
   selectedKey.value = data.id
   
   if (data.type === 'indicator') {

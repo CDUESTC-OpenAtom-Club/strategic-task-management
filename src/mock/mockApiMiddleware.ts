@@ -89,7 +89,10 @@ export function mockApiMiddleware(req: Request, res: Response, next: Function) {
     return next()
   }
   
-  console.log('[Mock API]', method, url)
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log('[Mock API]', method, url)
+  }
   
   // 模拟网络延迟
   setTimeout(() => {

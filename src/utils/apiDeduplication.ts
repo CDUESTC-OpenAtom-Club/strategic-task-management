@@ -7,10 +7,10 @@
  * - 自动清理过期的pending请求
  */
 
-import type { AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 interface PendingRequest {
-  promise: Promise<any>
+  promise: Promise<AxiosResponse>
   timestamp: number
 }
 
@@ -65,7 +65,6 @@ export function createDeduplicationInterceptor() {
 
         // 如果请求在有效期内，返回相同Promise
         if (Date.now() - pending.timestamp < CACHE_TTL) {
-          console.debug(`[API去重] 复用请求: ${config.url}`)
           // 使用特殊的reject标记，让响应拦截器处理
           return Promise.reject({
             __deduplicated: true,
@@ -90,10 +89,9 @@ export function createDeduplicationInterceptor() {
     /**
      * 响应错误拦截器 - 失败时也清理pending请求
      */
-    responseRejected: (error: any) => {
+    responseRejected: (error: unknown) => {
       // 处理去重请求的特殊标记
       if (error.__deduplicated) {
-        console.debug(`[API去重] 返回缓存的Promise: ${error.config?.url}`)
         return error.promise
       }
 
@@ -111,7 +109,7 @@ export function createDeduplicationInterceptor() {
 /**
  * 存储正在进行的请求（供外部调用）
  */
-export function storePendingRequest(key: string, promise: Promise<any>) {
+export function storePendingRequest(key: string, promise: Promise<unknown>) {
   pendingRequests.set(key, {
     promise,
     timestamp: Date.now()

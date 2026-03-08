@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import type {
   DashboardData,
   DepartmentProgress,
-  ApiResponse,
+  ApiResponse as _ApiResponse,
   DrillDownLevel,
   BreadcrumbItem,
   FilterState,
@@ -12,10 +12,10 @@ import type {
   ComparisonItem,
   SankeyData,
   SankeyLink,
-  SankeyNode,
+  SankeyNode as _SankeyNode,
   SourcePieData,
   OrgLevel,
-  UserRole
+  UserRole as _UserRole
 } from '@/types'
 import { useStrategicStore } from './strategic'
 import { useAuthStore } from './auth'
@@ -29,7 +29,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // State
   const dashboardData = ref<DashboardData | null>(null)
   const departmentProgress = ref<DepartmentProgress[]>([])
-  const recentActivities = ref<any[]>([])
+  const recentActivities = ref<Array<Record<string, unknown>>>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -227,7 +227,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const authStore = useAuthStore()
     const strategicStore = useStrategicStore()
     const timeContext = useTimeContextStore()
-    const orgStore = useOrgStore()
+    const _orgStore = useOrgStore()
     // 使用有效角色（考虑视角切换）
     const role = authStore.effectiveRole
     const dept = authStore.effectiveDepartment
@@ -567,7 +567,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const fetchRecentActivities = async () => {
     try {
       logger.info('[Dashboard Store] Fetching recent activities from API...')
-      const response = await api.get<any[]>('/dashboard/recent-activities')
+      const response = await api.get<Record<string, unknown>[]>('/dashboard/recent-activities')
 
       if (response.success && response.data) {
         recentActivities.value = response.data
@@ -701,7 +701,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   // 图表点击联动
-  const handleChartDrillDown = (chartType: string, data: any) => {
+  const handleChartDrillDown = (chartType: string, data: Record<string, unknown>) => {
     switch (chartType) {
       case 'comparison':
         // 对比图点击

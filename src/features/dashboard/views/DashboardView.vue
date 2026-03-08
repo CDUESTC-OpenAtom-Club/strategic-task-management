@@ -290,7 +290,7 @@ const selectedDeptStats = computed(() => {
 })
 
 // 获取任意部门的指标状态统计（用于tooltip显示）
-const getDeptStats = (deptName: string) => {
+const _getDeptStats = (deptName: string) => {
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
   const currentYear = timeContext.currentYear
@@ -796,7 +796,7 @@ const availableFunctionalDepts = computed(() => {
 })
 
 // 处理排名图表点击事件
-const handleBenchmarkClick = (deptName: string) => {
+const _handleBenchmarkClick = (deptName: string) => {
   if (selectedBenchmarkDept.value === deptName) {
     // 再次点击同一部门，取消选中
     handleCloseIndicatorCard()
@@ -841,9 +841,9 @@ const orgStore = useOrgStore()
  * - 显示骨架屏：数据加载中时显示骨架屏
  * - 空状态处理：数据为空时显示空状态提示
  */
-const { 
-  isLoading: pageLoading, 
-  hasError: pageHasError, 
+const {
+  isLoading: _pageLoading,
+  hasError: pageHasError,
   errorMessage: pageErrorMessage,
   showSkeleton,
   startLoading,
@@ -920,13 +920,13 @@ const currentRole = computed<UserRole>(() =>
 const currentDepartment = computed(() => props.viewingDept || authStore.effectiveDepartment || '')
 
 // 是否显示筛选功能（二级学院不显示）
-const showFilterFeature = computed(() => currentRole.value !== 'secondary_college')
+const _showFilterFeature = computed(() => currentRole.value !== 'secondary_college')
 
 // 是否可以查看所有部门（只有战略发展部可以）
 const canViewAllDepartments = computed(() => currentRole.value === 'strategic_dept')
 
 // 部门完成情况卡片标题（根据下钻状态动态显示）
-const getDepartmentCardTitle = computed(() => {
+const _getDepartmentCardTitle = computed(() => {
   if (dashboardStore.currentOrgLevel === 'functional' && dashboardStore.selectedFunctionalDept) {
     return `${dashboardStore.selectedFunctionalDept} 任务下发情况`
   }
@@ -934,7 +934,7 @@ const getDepartmentCardTitle = computed(() => {
 })
 
 // 排名看板标题（根据角色动态显示）
-const getBenchmarkTitle = computed(() => {
+const _getBenchmarkTitle = computed(() => {
   if (currentRole.value === 'strategic_dept') {
     return '职能部门执行排名'
   } else if (currentRole.value === 'functional_dept') {
@@ -953,7 +953,7 @@ const filterForm = ref({
 })
 
 // 部门选项（使用完整配置，根据角色权限过滤）
-const departmentOptions = computed(() => {
+const _departmentOptions = computed(() => {
   // 战略发展部可以看所有部门
   if (currentRole.value === 'strategic_dept') {
     return orgStore.getAllDepartmentNames()
@@ -1014,7 +1014,7 @@ const applyFilters = () => {
 }
 
 // 重置筛选
-const resetFilters = () => {
+const _resetFilters = () => {
   filterForm.value = { department: '', indicatorType: '', alertLevel: '' }
   dashboardStore.resetFilters()
   showFilterPanel.value = false
@@ -1032,7 +1032,7 @@ const handleBreadcrumbNavigate = (index: number) => {
 }
 
 // 判断是否有活跃筛选
-const hasActiveFilters = computed(() => {
+const _hasActiveFilters = computed(() => {
   return dashboardStore.filters.department || 
          dashboardStore.filters.indicatorType || 
          dashboardStore.filters.alertLevel
@@ -1191,14 +1191,14 @@ const handleSourceClick = (source: string) => {
 }
 
 // 应用筛选（集成新筛选组件）
-const handleFilterApply = () => {
+const _handleFilterApply = () => {
   ElMessage.success('筛选已应用')
 }
 
 // KPI 卡片数据（带趋势）
-const kpiCards = computed(() => {
+const _kpiCards = computed(() => {
   const data = dashboardData.value
-  const indicators = dashboardStore.visibleIndicators
+  const _indicators = dashboardStore.visibleIndicators
   
   // 计算上期数据（模拟趋势）
   const lastMonthScore = Math.max(0, data.totalScore - Math.floor(Math.random() * 10) + 5)
@@ -1329,7 +1329,7 @@ const benchmarkData = computed(() => {
 })
 
 // 雷达图统计数据
-const radarStats = computed(() => {
+const _radarStats = computed(() => {
   const data = radarData.value
   if (!data || data.length === 0) {return { avgMatch: 0, volatility: 0 }}
   const avg = data.reduce((a, b) => a + b.value, 0) / data.length
@@ -1393,10 +1393,10 @@ const initRadarChart = () => {
 }
 
 // Benchmark 图表视图模式
-const benchmarkViewMode = ref<'completion' | 'benchmark'>('completion')
+const _benchmarkViewMode = ref<'completion' | 'benchmark'>('completion')
 
 // 动态计算图表高度（每个部门30px，最小400px）
-const benchmarkChartHeight = computed(() => {
+const _benchmarkChartHeight = computed(() => {
   const dataLength = benchmarkData.value.length
   return Math.max(400, dataLength * 30)
 })
@@ -1407,7 +1407,7 @@ const initBenchmarkChart = () => {
 
   // 根据下钻状态选择数据源
   const data = isDrillDown.value ? monthlyStackedData.value : stackedBarData.value
-  const xAxisLabel = isDrillDown.value ? `${drilledDept.value} - 月度趋势` : '职能部门'
+  const _xAxisLabel = isDrillDown.value ? `${drilledDept.value} - 月度趋势` : '职能部门'
 
   if (!data || data.length === 0) {
     // 数据为空时，清空图表
@@ -1637,7 +1637,7 @@ watch(() => timeContext.currentYear, () => {
 // 解决异步加载数据后图表不更新的问题
 watch(
   () => strategicStore.indicators.length,
-  (newLength, oldLength) => {
+  (newLength, _oldLength) => {
     if (newLength > 0) {
       nextTick(() => {
         initCollegeChart()
@@ -1991,7 +1991,7 @@ const initCollegeRankingChart = () => {
     },
     xAxis: {
       type: 'value',
-      max: (value: any) => {
+      max: (_value: any) => {
         const max = Math.max(...data.map(d => d.value))
         return Math.ceil(max * 1.2)
       },

@@ -38,8 +38,8 @@ export function hasBackendUpdates(updates: Partial<StrategicIndicator>): boolean
 /**
  * 将前端更新对象转换为后端API请求格式
  */
-export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): any {
-  const request: any = {}
+export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Record<string, unknown> {
+  const request: Record<string, unknown> = {}
 
   // 直接映射的字段
   const directFields = [
@@ -75,9 +75,10 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): an
 
   // 里程碑需要特殊处理 - 转换字段名以匹配后端API
   // 前端使用: id, name, targetProgress, deadline, status
-  // 后端期望: milestoneId, milestoneName, targetProgress, dueDate, status, weightPercent, sortOrder
+  // 后端期望: milestoneId, milestoneName, targetProgress, dueDate, status, sortOrder
+  // 注意：weightPercent 已废弃，后端返回 null
   if ('milestones' in updates && updates.milestones) {
-    request.milestones = updates.milestones.map((ms: any, index: number) => {
+    request.milestones = updates.milestones.map((ms: Record<string, unknown>, index: number) => {
       // 处理 milestoneId：如果是字符串ID（临时ID），传 null 让后端创建新记录
       let milestoneId: number | null = null
       if (ms.milestoneId) {
@@ -87,14 +88,6 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): an
         const parsed = typeof ms.id === 'number' ? ms.id : parseInt(ms.id, 10)
         milestoneId = isNaN(parsed) ? null : parsed
       }
-      
-      console.log('[dataMappers] 转换里程碑:', {
-        原始id: ms.id,
-        原始milestoneId: ms.milestoneId,
-        转换后milestoneId: milestoneId,
-        name: ms.name,
-        milestoneName: ms.milestoneName
-      })
       
       // 转换前端状态到后端枚举值
       // 前端: pending, completed, overdue
@@ -115,7 +108,6 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): an
         targetProgress: ms.targetProgress || 0,
         dueDate: ms.dueDate || ms.deadline || '',
         status: backendStatus,
-        weightPercent: ms.weightPercent || 0,
         sortOrder: ms.sortOrder !== undefined ? ms.sortOrder : index
       }
     })

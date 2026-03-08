@@ -31,11 +31,9 @@ import {
   MoreFilled,
   Clock,
   Check,
-  Warning,
-  CircleCheck,
   Document
 } from '@element-plus/icons-vue'
-import type { Plan, PlanStatus, Task } from '@/types'
+import type { Plan, PlanStatus } from '@/types'
 import { usePlanStore } from '@/stores/plan'
 import { useAuthStore } from '@/stores/auth'
 
@@ -96,9 +94,11 @@ const statusOptions: Array<{ value: PlanStatus | 'all'; label: string; type?: st
   { value: 'archived', label: '已归档', type: 'info' }
 ]
 
+import type { Component } from 'vue'
+
 // 获取状态配置
 const getStatusConfig = (status: PlanStatus) => {
-  const configs: Record<PlanStatus, { label: string; type: string; icon: any }> = {
+  const configs: Record<PlanStatus, { label: string; type: string; icon: Component }> = {
     draft: { label: '草稿', type: 'info', icon: Document },
     pending: { label: '待审核', type: 'warning', icon: Clock },
     published: { label: '已发布', type: 'success', icon: Check },

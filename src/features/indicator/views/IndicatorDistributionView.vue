@@ -6,7 +6,9 @@
 import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Plus, Promotion, Check, Close, View, Search, RefreshLeft, Timer, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+/* eslint-disable no-restricted-syntax -- Backend-aligned types */
 import type { StrategicIndicator } from '@/types'
+/* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
@@ -185,8 +187,8 @@ const _newIndicatorList = ref<NewIndicatorItem[]>([])
 // 当前正在选择关联指标的新增指标索引
 const _selectingParentForIndex = ref<number>(-1)
 
-// 战略任务和指标数据（用于选择关联指标弹框）
-const strategicTasksWithIndicators = computed(() => {
+// 计划和指标数据（用于选择关联指标弹框）
+const plansWithIndicators = computed(() => {
   // 获取当前部门接收到的战略指标（responsible_dept = 当前部门）
   // 这些是从战略发展部下发给当前部门的指标
   const indicators = strategicStore.indicators.filter(i => 
@@ -221,7 +223,7 @@ interface SelectParentTableRow {
 const selectParentTableData = computed((): SelectParentTableRow[] => {
   const data: SelectParentTableRow[] = []
   
-  strategicTasksWithIndicators.value.forEach(task => {
+  plansWithIndicators.value.forEach(task => {
     const taskIndicators = task.indicators
     taskIndicators.forEach((indicator, index) => {
       data.push({
@@ -567,7 +569,7 @@ const _getPendingChildCount = (parentId: string) => {
 }
 
 // 下发所有新增的子指标
-const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
+const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
   const parentId = parentIndicator.id.toString()
   const children = newChildIndicators[parentId] || []
   
@@ -645,7 +647,7 @@ const distributeNewChildren = (parentIndicator: StrategicIndicator) => {
 // 当前编辑的子指标
 const editingChildId = ref<string | null>(null)
 const editingChildField = ref<string | null>(null)
-const editingChildValue = ref<any>(null)
+const editingChildValue = ref<Record<string, unknown> | null>(null)
 
 // 学院下拉菜单是否打开
 const collegeDropdownVisible = ref(false)
@@ -756,12 +758,12 @@ const saveChildEdit = (child: StrategicIndicator, field: string) => {
 }
 
 // 学院选择器下拉框可见性变化
-const handleCollegeSelectClose = (visible: boolean) => {
+const _handleCollegeSelectClose = (visible: boolean) => {
   collegeDropdownVisible.value = visible
 }
 
 // 学院选择器失焦处理
-const handleCollegeSelectBlur = (child: StrategicIndicator) => {
+const _handleCollegeSelectBlur = (child: StrategicIndicator) => {
   // 延迟检查，确保 mousedown 事件先处理完成
   setTimeout(() => {
     // 如果正在与 select 或 dropdown 交互，不保存
@@ -805,7 +807,7 @@ const getMyCollegeIndicators = (college: string) => {
 }
 
 // 批量审批：针对学院下所有待审批的子指标
-const handleBatchApprove = (college: string) => {
+const _handleBatchApprove = (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const pendingIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'pending')
   
@@ -873,7 +875,7 @@ const handleBatchApprove = (college: string) => {
 }
 
 // 批量打回：针对学院下所有待审批的子指标
-const handleBatchReject = (college: string) => {
+const _handleBatchReject = (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const pendingIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'pending')
   
@@ -986,14 +988,10 @@ const handleBatchWithdraw = (college: string) => {
 
 // 批量下发：针对学院下所有草稿状态的子指标
 const handleBatchDistribute = (college: string) => {
-  console.log('[DEBUG] handleBatchDistribute 被调用, college:', college)
   const childIndicators = getMyCollegeIndicators(college)
-  console.log('[DEBUG] childIndicators 数量:', childIndicators.length)
   const draftIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'draft')
-  console.log('[DEBUG] draftIndicators 数量:', draftIndicators.length)
   
   if (draftIndicators.length === 0) {
-    console.log('[DEBUG] 没有可下发的子指标，显示警告')
     ElMessage.warning('没有可下发的子指标')
     return
   }
@@ -1046,20 +1044,6 @@ const getCollegeStatus = (college: string) => {
     return i.responsibleDept === college
   })
   
-  console.log('[DEBUG] getCollegeStatus:', {
-    college,
-    currentDept: currentDept.value,
-    totalIndicators: strategicStore.indicators.length,
-    filteredCount: childIndicators.length,
-    sampleIndicators: childIndicators.slice(0, 3).map(i => ({
-      id: i.id,
-      name: i.name,
-      ownerDept: i.ownerDept,
-      responsibleDept: i.responsibleDept,
-      statusAudit: i.statusAudit
-    }))
-  })
-  
   if (childIndicators.length === 0) {return { draft: 0, distributed: 0, pending: 0, approved: 0 }}
   
   // 统计各状态数量
@@ -1072,13 +1056,10 @@ const getCollegeStatus = (college: string) => {
   
   childIndicators.forEach(i => {
     const status = getChildStatus(i as StrategicIndicator) as keyof typeof statusCounts
-    console.log('[DEBUG] 指标状态:', { id: i.id, name: i.name.substring(0, 20), status })
     if (status in statusCounts) {
       statusCounts[status]++
     }
   })
-  
-  console.log('[DEBUG] statusCounts:', statusCounts)
   
   return statusCounts
 }
@@ -1105,7 +1086,7 @@ const collegeOverallStatus = computed(() => {
 })
 
 // 下发/撤销统一处理函数
-const handleDistributeOrWithdraw = (command: string) => {
+const _handleDistributeOrWithdraw = (command: string) => {
   if (!selectedCollege.value) {return}
   
   if (command === 'distribute') {
@@ -1116,7 +1097,7 @@ const handleDistributeOrWithdraw = (command: string) => {
 }
 
 // 审批通过（保留给单个指标，但现在已移至批量操作）
-const handleApprove = (indicator: StrategicIndicator) => {
+const _handleApprove = (indicator: StrategicIndicator) => {
   ElMessageBox.confirm('确认通过该学院的进度提交？', '审批确认', {
     confirmButtonText: '通过',
     cancelButtonText: '取消',
@@ -1162,7 +1143,7 @@ const handleApprove = (indicator: StrategicIndicator) => {
 }
 
 // 打回（保留给单个指标，但现在已移至批量操作）
-const handleReject = (indicator: StrategicIndicator) => {
+const _handleReject = (indicator: StrategicIndicator) => {
   ElMessageBox.prompt('请输入打回原因', '打回确认', {
     confirmButtonText: '确认打回',
     cancelButtonText: '取消',
@@ -1237,7 +1218,7 @@ const getChildStatus = (child: StrategicIndicator) => {
 }
 
   // 获取状态标签类型
-  const getStatusTagType = (status: string) => {
+  const _getStatusTagType = (status: string) => {
     switch (status) {
       case 'draft': return 'info'            // 草稿 - 灰色 (Element Plus info 是灰色)
       case 'distributed': return 'primary'   // 已下发 - 蓝色 (Element Plus primary 是蓝色)
@@ -1248,7 +1229,7 @@ const getChildStatus = (child: StrategicIndicator) => {
   }
 
 // 获取状态文本
-const getStatusText = (status: string) => {
+const _getStatusText = (status: string) => {
   switch (status) {
     case 'draft': return '草稿'
     case 'distributed': return '已下发'
@@ -1259,14 +1240,14 @@ const getStatusText = (status: string) => {
 }
 
 // 格式化学院显示（完整列表）
-const formatColleges = (depts: string | string[] | undefined): string => {
+const _formatColleges = (depts: string | string[] | undefined): string => {
   if (!depts) {return '-'}
   if (Array.isArray(depts)) {return depts.join('、')}
   return depts.split(',').join('、')
 }
 
 // 格式化学院显示（简短版，超过2个显示+N）
-const formatCollegesShort = (depts: string | string[] | undefined): string => {
+const _formatCollegesShort = (depts: string | string[] | undefined): string => {
   if (!depts) {return '-'}
   const arr = Array.isArray(depts) ? depts : depts.split(',')
   if (arr.length <= 2) {return arr.join('、')}
@@ -1281,12 +1262,12 @@ const parseColleges = (depts: string | string[] | undefined): string[] => {
 }
 
 // 获取任务类型对应的颜色（基于指标的type2：发展性/基础性）
-const getTaskTypeColor = (type2: string) => {
+const _getTaskTypeColor = (type2: string) => {
   return type2 === '发展性' ? '#409EFF' : '#67C23A'
 }
 
 // 获取指标类型颜色（定性/定量）
-const getIndicatorTypeColor = (type1: string) => {
+const _getIndicatorTypeColor = (type1: string) => {
   return type1 === '定性' ? 'var(--color-qualitative, #9333ea)' : 'var(--color-quantitative, #0891b2)'
 }
 
@@ -1334,7 +1315,7 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
 }
 
 // 计算定量指标当月的目标进度
-const getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
+const _getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
   const milestones = child.milestones || []
   if (milestones.length === 0) {return 100}
   
@@ -1378,7 +1359,7 @@ const getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndic
 }
 
 // 处理子指标类型变更
-const handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, newType: '定量' | '定性') => {
+const _handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, newType: '定量' | '定性') => {
   // 检查状态：只有草稿状态才能编辑
   if (!('isNew' in child && child.isNew)) {
     const status = getChildStatus(child as StrategicIndicator)
@@ -1553,15 +1534,6 @@ const saveMilestones = () => {
         status: 'pending' as const
       }))
     }
-    console.log('[saveMilestones] 更新已有指标，调用 updateIndicator')
-    console.log('[saveMilestones] indicatorId:', (child as StrategicIndicator).id)
-    console.log('[saveMilestones] updates:', updates)
-    console.log('[saveMilestones] 里程碑详情:', editingMilestones.value.map(m => ({
-      id: m.id,
-      name: m.name,
-      idType: typeof m.id,
-      isNumeric: !isNaN(parseInt(m.id))
-    })))
     strategicStore.updateIndicator((child as StrategicIndicator).id.toString(), updates)
   }
   
@@ -1571,7 +1543,7 @@ const saveMilestones = () => {
 }
 
 // 格式化里程碑显示
-const formatMilestones = (child: StrategicIndicator | NewChildIndicator): string => {
+const _formatMilestones = (child: StrategicIndicator | NewChildIndicator): string => {
   if ('isNew' in child && child.isNew) {
     return `${child.milestones?.length || 0} 个里程碑`
   }
@@ -1623,31 +1595,8 @@ const collegeTableData = computed(() => {
   const data: TableRowData[] = []
   const indicators = collegeIndicators.value
   
-  console.log('[collegeTableData] 开始计算表格数据')
-  console.log('[collegeTableData] collegeIndicators 数量:', indicators.length)
-  
-  // 检查是否有重复的指标ID
-  const idSet = new Set()
-  const duplicates: any[] = []
-  indicators.forEach(ind => {
-    if (idSet.has(ind.id)) {
-      duplicates.push({ id: ind.id, name: ind.name })
-    }
-    idSet.add(ind.id)
-  })
-  if (duplicates.length > 0) {
-    console.warn('[collegeTableData] 发现重复的指标ID:', duplicates)
-  }
-  
   // 直接将这些指标作为数据行显示，不再查找子指标
-  indicators.forEach((indicator, idx) => {
-    console.log(`[collegeTableData] 添加指标 ${idx + 1}:`, {
-      id: indicator.id,
-      name: indicator.name,
-      parentIndicatorId: indicator.parentIndicatorId,
-      level: indicator.level
-    })
-    
+  indicators.forEach((indicator) => {
     // 直接添加为 child 类型（可编辑的指标行）
     data.push({
       type: 'child',
@@ -1657,9 +1606,6 @@ const collegeTableData = computed(() => {
       parentIndicatorId: indicator.parentIndicatorId?.toString() || indicator.id.toString()
     })
   })
-  
-  console.log('[collegeTableData] 最终表格数据行数:', data.length)
-  console.log('[collegeTableData] 前3行数据:', data.slice(0, 3))
   
   return data
 })
@@ -2153,15 +2099,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         placeholder="选择关联的核心指标"
                         style="width: 100%"
                         @change="(val: string) => {
-                          if (!strategicTasksWithIndicators.value) return
-                          const indicator = strategicTasksWithIndicators.value
+                          if (!plansWithIndicators.value) return
+                          const indicator = plansWithIndicators.value
                             .flatMap(t => t.indicators)
                             .find(i => i.id.toString() === val)
                           if (indicator) selectParentIndicator(indicator)
                         }"
                       >
                         <el-option-group
-                          v-for="task in strategicTasksWithIndicators"
+                          v-for="task in plansWithIndicators"
                           :key="task.taskContent"
                           :label="task.taskContent"
                         >

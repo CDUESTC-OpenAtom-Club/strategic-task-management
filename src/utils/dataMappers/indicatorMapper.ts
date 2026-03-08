@@ -110,33 +110,22 @@ const BACKEND_FIELDS = [
 /**
  * 将前端更新数据转换为后端格式
  */
-export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Record<string, any> {
-  const request: Record<string, any> = {}
-
-  console.log('[indicatorMapper] Converting updates:', updates)
-  console.log('[indicatorMapper] FRONTEND_TO_BACKEND mapping:', FRONTEND_TO_BACKEND)
+export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Record<string, unknown> {
+  const request: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(updates)) {
-    console.log(`[indicatorMapper] Processing key: ${key}, value:`, value, `(type: ${typeof value})`)
-    
     // 跳过 undefined，但允许 null（用于清空字段）
     if (value === undefined) {
-      console.log(`[indicatorMapper] Skipping ${key} because value is undefined`)
       continue
     }
 
     const backendKey = FRONTEND_TO_BACKEND[key]
-    console.log(`[indicatorMapper] Backend key for ${key}:`, backendKey)
     
     if (backendKey) {
       request[backendKey] = value
-      console.log(`[indicatorMapper] Added to request: ${backendKey} =`, value)
-    } else {
-      console.log(`[indicatorMapper] No backend mapping found for ${key}`)
     }
   }
 
-  console.log('[indicatorMapper] Final request:', request)
   return request
 }
 
@@ -150,8 +139,8 @@ export function hasBackendUpdates(updates: Partial<StrategicIndicator>): boolean
 /**
  * 将后端数据转换为前端格式
  */
-export function convertFromBackend(data: any): Partial<StrategicIndicator> {
-  const result: Record<string, any> = {}
+export function convertFromBackend(data: Record<string, unknown>): Partial<StrategicIndicator> {
+  const result: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(data)) {
     const frontendKey = BACKEND_TO_FRONTEND[key] || key

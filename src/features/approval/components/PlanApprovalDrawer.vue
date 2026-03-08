@@ -29,7 +29,7 @@ const drawerVisible = computed({
 })
 
 // 待审批列表
-const pendingApprovals = ref<any[]>([])
+const pendingApprovals = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 
 // 加载待审批列表
@@ -45,7 +45,7 @@ const loadPendingApprovals = async () => {
     } else {
       ElMessage.error(response.message || '加载待审批列表失败')
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('[PlanApprovalDrawer] 加载待审批列表失败:', error)
     ElMessage.error(error.message || '加载失败')
   } finally {
@@ -54,7 +54,7 @@ const loadPendingApprovals = async () => {
 }
 
 // 审批通过
-const handleApprove = async (instance: any) => {
+const handleApprove = async (instance: { close: () => void }) => {
   try {
     await ElMessageBox.prompt(
       `确认审批通过计划"${instance.planName || '年度计划'}"？`,
@@ -75,7 +75,7 @@ const handleApprove = async (instance: any) => {
     
     try {
       const userId = authStore.user?.id || 1
-      const comment = (arguments[0] as any).value || '审批通过'
+      const comment = (arguments[0] as { value: string }).value || '审批通过'
       
       const response = await approvalApi.approvePlan(instance.instanceId, userId, comment)
       
@@ -95,7 +95,7 @@ const handleApprove = async (instance: any) => {
 }
 
 // 审批拒绝
-const handleReject = async (instance: any) => {
+const handleReject = async (instance: { close: () => void }) => {
   try {
     const { value } = await ElMessageBox.prompt(
       `确认拒绝计划"${instance.planName || '年度计划'}"？`,
@@ -152,7 +152,7 @@ const formatTime = (timestamp: Date | string) => {
 }
 
 // 获取当前步骤描述
-const getCurrentStepDesc = async (instanceId: number) => {
+const _getCurrentStepDesc = async (instanceId: number) => {
   try {
     const response = await approvalApi.getCurrentStep(instanceId)
     return response.data || '未知步骤'

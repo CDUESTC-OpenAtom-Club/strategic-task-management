@@ -21,7 +21,7 @@ export interface HealthCheckResult {
   service: string
   status: 'success' | 'error' | 'warning'
   message: string
-  details?: any
+  details?: Record<string, unknown>
   timestamp: Date
 }
 
@@ -43,7 +43,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       details: response.data,
       timestamp: new Date()
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('❌ [Health Check] 后端服务异常:', error)
 
     if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
@@ -115,14 +115,17 @@ export async function quickBackendCheck(): Promise<boolean> {
     // 尝试访问 Spring Boot Actuator 健康检查端点
     await healthApi.get('/actuator/health', { timeout: 3000 })
     return true
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 404 表示端点不存在但服务可访问
-    if (error.response?.status === 404) {
-      return true
-    }
-    // 401/403 表示需要认证但服务可访问
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      return true
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as { response?: { status?: number } }
+      if (axiosError.response?.status === 404) {
+        return true
+      }
+      // 401/403 表示需要认证但服务可访问
+      if (axiosError.response?.status === 401 || axiosError.response?.status === 403) {
+        return true
+      }
     }
     return false
   }
@@ -211,7 +214,7 @@ export async function checkAuthFlow(credentials?: {
         timestamp: new Date()
       }
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('❌ [Health Check] 认证流程异常:', error)
 
     // Check both error.response.status and error.originalError.response.status

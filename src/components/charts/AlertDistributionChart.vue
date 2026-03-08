@@ -6,7 +6,7 @@ import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 
-import { getColorByIndex, getGradientColor } from '@/utils/colors'
+import { getColorByIndex as _getColorByIndex, getGradientColor } from '@/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
@@ -25,7 +25,7 @@ const total = computed(() => props.severe + props.moderate + props.normal)
 const chartOption = computed(() => ({
   tooltip: {
     trigger: 'item',
-    formatter: (params: any) => {
+    formatter: (params: { name: string; value: number; percent: number }) => {
       const levelMap: Record<string, string> = {
         '严重预警': '进度 < 30%',
         '中度预警': '30% ≤ 进度 < 60%',
@@ -123,7 +123,7 @@ const chartOption = computed(() => ({
   }
 }))
 
-const handleChartClick = (params: any) => {
+const handleChartClick = (params: { name: string }) => {
   const levelMap: Record<string, 'severe' | 'moderate' | 'normal'> = {
     '严重预警': 'severe',
     '中度预警': 'moderate',

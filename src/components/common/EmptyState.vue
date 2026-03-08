@@ -55,7 +55,7 @@ import {
   Loading,
   FolderOpened,
   DataAnalysis,
-  Calendar
+  Calendar as _Calendar
 } from '@element-plus/icons-vue'
 
 interface Props {
@@ -140,10 +140,10 @@ const iconComponent = computed(() => props.icon)
 const defaultIcon = computed(() => iconMap[props.type] || Document)
 
 /** 显示标题 */
-const displayTitle = computed(() => props.title || textMap[props.type]?.title || '')
+const _displayTitle = computed(() => props.title || textMap[props.type]?.title || '')
 
 /** 显示描述 */
-const displayDescription = computed(() => props.description || textMap[props.type]?.description || '')
+const _displayDescription = computed(() => props.description || textMap[props.type]?.description || '')
 
 /** 图标大小 */
 const iconSize = computed(() => {

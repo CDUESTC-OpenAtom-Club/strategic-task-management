@@ -4,8 +4,8 @@
  * 用于战略任务管理页面左侧导航
  * 支持职能部门和二级学院的树形展示
  */
-import { ref, computed, watch } from 'vue'
-import { OfficeBuilding, School, FolderOpened, Folder, Promotion } from '@element-plus/icons-vue'
+import { ref, computed, watch as _watch } from 'vue'
+import { OfficeBuilding, School, FolderOpened, Folder, Promotion as _Promotion } from '@element-plus/icons-vue'
 import { useOrgStore } from '@/stores/org'
 
 const orgStore = useOrgStore()
@@ -39,12 +39,14 @@ const selectedDept = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
+import type { Component } from 'vue'
+
 // 树形数据结构
 interface TreeNode {
   id: string
   label: string
   type: 'category' | 'functional' | 'college' | 'all'
-  icon: any
+  icon: Component
   children?: TreeNode[]
   count?: number
   pendingCount?: number

@@ -155,7 +155,7 @@ export class PageDataChecker {
   /**
    * 检查战略任务页面数据
    */
-  checkStrategicTaskData(
+  checkPlanData(
     indicators: StrategicIndicator[],
     dataSource: 'api' | 'fallback' | 'local'
   ): PageCheckResult {
@@ -197,7 +197,7 @@ export class PageDataChecker {
     })
 
     return {
-      pageName: 'StrategicTaskView',
+      pageName: 'PlanView',
       timestamp: new Date(),
       dataSource,
       issues,
@@ -240,23 +240,27 @@ export class PageDataChecker {
    * 输出检查报告到控制台
    */
   printReport(report: CheckReport): void {
-    console.group('📊 页面数据检查报告')
-    console.log(`生成时间: ${report.generatedAt.toLocaleString()}`)
-    console.log(`检查页面: ${report.pagesChecked}`)
-    console.log(`整体健康: ${report.overallHealth}`)
-    console.log(`问题统计: 错误=${report.summary.errors}, 警告=${report.summary.warnings}, 信息=${report.summary.infos}`)
-    
-    report.pageResults.forEach(result => {
-      console.group(`📄 ${result.pageName}`)
-      console.log(`数据来源: ${result.dataSource}`)
-      console.log(`健康状态: ${result.isHealthy ? '✅' : '❌'}`)
-      if (result.issues.length > 0) {
-        console.table(result.issues)
-      }
+    if (import.meta.env.DEV) {
+      /* eslint-disable no-console */
+      console.group('📊 页面数据检查报告')
+      console.log(`生成时间: ${report.generatedAt.toLocaleString()}`)
+      console.log(`检查页面: ${report.pagesChecked}`)
+      console.log(`整体健康: ${report.overallHealth}`)
+      console.log(`问题统计: 错误=${report.summary.errors}, 警告=${report.summary.warnings}, 信息=${report.summary.infos}`)
+      
+      report.pageResults.forEach(result => {
+        console.group(`📄 ${result.pageName}`)
+        console.log(`数据来源: ${result.dataSource}`)
+        console.log(`健康状态: ${result.isHealthy ? '✅' : '❌'}`)
+        if (result.issues.length > 0) {
+          console.table(result.issues)
+        }
+        console.groupEnd()
+      })
+      
       console.groupEnd()
-    })
-    
-    console.groupEnd()
+      /* eslint-enable no-console */
+    }
   }
 }
 

@@ -48,9 +48,10 @@ const chartOption = computed(() => ({
     axisPointer: {
       type: 'shadow'
     },
-    formatter: (params: any) => {
-      if (!params || !params[0]) {return ''}
-      const item = sortedData.value[params[0].dataIndex]
+    formatter: (params: { dataIndex: number }[] | { dataIndex: number }) => {
+      const paramsArray = Array.isArray(params) ? params : [params]
+      if (!paramsArray || !paramsArray[0]) {return ''}
+      const item = sortedData.value[paramsArray[0].dataIndex]
       if (!item) {return ''}
       return `
         <div style="padding: 8px;">
@@ -140,7 +141,7 @@ const chartOption = computed(() => ({
 }))
 
 // 处理图表点击事件
-const handleChartClick = (params: any) => {
+const handleChartClick = (params: { componentType: string; dataIndex: number }) => {
   if (props.clickable && params.componentType === 'series') {
     const item = sortedData.value[params.dataIndex]
     emit('click', item)

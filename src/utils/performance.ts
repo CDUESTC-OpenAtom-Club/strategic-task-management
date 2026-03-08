@@ -482,6 +482,7 @@ export async function reportMetrics(
 export function printPerformanceReport(metrics?: PerformanceMetrics): void {
   const data = metrics || collectMetrics()
 
+  /* eslint-disable no-console */
   console.group('📊 Performance Report')
   
   // Web Vitals
@@ -537,6 +538,7 @@ export function printPerformanceReport(metrics?: PerformanceMetrics): void {
 
   console.log(`Collected at: ${data.collectedAt}`)
   console.groupEnd()
+  /* eslint-enable no-console */
 }
 
 /**

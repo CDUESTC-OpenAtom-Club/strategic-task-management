@@ -11,8 +11,6 @@ import type {
   Plan,
   PlanStatus,
   PlanFill,
-  PlanFillStatus,
-  Indicator,
   IndicatorFill,
   IndicatorFillForm,
   PlanSubmitForm,

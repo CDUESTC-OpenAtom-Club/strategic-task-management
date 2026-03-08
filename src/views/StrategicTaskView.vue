@@ -3,18 +3,19 @@
   import { Plus, View, Download, Delete, ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right, Timer } from '@element-plus/icons-vue'
   import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
   import type { ElTable } from 'element-plus'
-  import type { StrategicTask, StrategicIndicator } from '@/types'
+  // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types
+  import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/types'
   import { useStrategicStore } from '@/stores/strategic'
   import { useAuthStore } from '@/stores/auth'
   import { useTimeContextStore } from '@/stores/timeContext'
   import { useOrgStore } from '@/stores/org'
   import { logger } from '@/utils/logger'
   import { approvalApi } from '@/features/task/api/strategicApi'
-  import { getStatusText, getStatusType, getStatusIcon } from '@/utils/indicatorStatus'
+  import { getStatusText as _getStatusText, getStatusType as _getStatusType, getStatusIcon as _getStatusIcon } from '@/utils/indicatorStatus'
   import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
   import PlanApprovalDrawer from '@/features/approval/components/PlanApprovalDrawer.vue'
-  import MilestoneList from '@/components/milestone/MilestoneList.vue'
+  import _MilestoneList from '@/components/milestone/MilestoneList.vue'
 
   // 使用共享 Store
   const strategicStore = useStrategicStore()
@@ -24,7 +25,7 @@
 
   // 获取操作类型配置（与 AuditLogDrawer 保持一致）
   const getActionConfig = (action: string) => {
-    const configs: Record<string, { icon: any; label: string; type: string }> = {
+    const configs: Record<string, { icon: unknown; label: string; type: string }> = {
       submit: { icon: Upload, label: '提交进度', type: 'primary' },
       approve: { icon: Check, label: '审批通过', type: 'success' },
       reject: { icon: Close, label: '审批驳回', type: 'danger' },
@@ -175,7 +176,7 @@
   })
   
   // 切换视图模式
-  const toggleViewMode = () => {
+  const _toggleViewMode = () => {
     viewMode.value = viewMode.value === 'table' ? 'card' : 'table'
     // 切换到卡片视图时，如果没有指标则重置索引
     if (viewMode.value === 'card' && indicators.value.length === 0) {
@@ -197,7 +198,7 @@
   }
   
   // 跳转到指定指标
-  const goToIndicator = (index: number) => {
+  const _goToIndicator = (index: number) => {
     if (index >= 0 && index < indicators.value.length) {
       currentIndicatorIndex.value = index
     }
@@ -213,7 +214,7 @@
   })))
   
   // 当前选中的任务
-  const currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
+  const _currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
     id: 0,
     title: '暂无任务',
     desc: '',
@@ -265,19 +266,19 @@
   })
   
   // 计算单元格合并信息
-  const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
+  const getSpanMethod = ({ row, column: _column, rowIndex, columnIndex }: { row: Record<string, unknown>; column: unknown; rowIndex: number; columnIndex: number }) => {
     const dataList = indicators.value
-  
+
     // 战略任务列（第0列）需要合并
     // 列顺序: 0战略任务, 1核心指标, 2说明, 3权重, 4里程碑, 5进度, 6状态, 7操作
     if (columnIndex === 0) {
       const currentTask = row.taskContent || '未关联任务'
-  
+
       let startIndex = rowIndex
       while (startIndex > 0 && (dataList[startIndex - 1].taskContent || '未关联任务') === currentTask) {
         startIndex--
       }
-  
+
       if (startIndex === rowIndex) {
         let count = 1
         while (rowIndex + count < dataList.length && (dataList[rowIndex + count].taskContent || '未关联任务') === currentTask) {
@@ -314,7 +315,7 @@
   }
 
   // 撤回整个任务（撤回同一战略任务下的所有指标）
-  const handleWithdrawTask = async (row: StrategicIndicator) => {
+  const _handleWithdrawTask = async (row: StrategicIndicator) => {
     const group = getTaskGroup(row)
     const distributedRows = group.rows.filter(r => !r.canWithdraw)
     
@@ -364,7 +365,7 @@
   const taskAuditLogVisible = ref(false)
   const currentTaskAuditGroup = ref<{ taskContent: string; rows: StrategicIndicator[] } | null>(null)
   
-  const handleViewTaskAuditLog = (row: StrategicIndicator) => {
+  const _handleViewTaskAuditLog = (row: StrategicIndicator) => {
     currentTaskAuditGroup.value = getTaskGroup(row)
     taskAuditLogVisible.value = true
   }
@@ -373,7 +374,7 @@
   const milestoneDrawerVisible = ref(false)
   const currentMilestoneIndicator = ref<StrategicIndicator | null>(null)
   
-  const handleViewMilestones = (row: StrategicIndicator) => {
+  const _handleViewMilestones = (row: StrategicIndicator) => {
     currentMilestoneIndicator.value = row
     milestoneDrawerVisible.value = true
   }
@@ -431,7 +432,7 @@
 
   // 生成12个月里程碑（编辑弹窗内）
   const generateMonthlyMilestonesInDialog = () => {
-    const currentYear = timeContext.currentYear
+    const _currentYear = timeContext.currentYear
     const indicatorName = editingMilestoneIndicator.value?.name || '指标完成'
     editingMilestones.value = []
     
@@ -538,14 +539,14 @@
   }
 
   // 格式化更新时间
-  const formatUpdateTime = (time: string | Date | undefined) => {
+  const _formatUpdateTime = (time: string | Date | undefined) => {
     if (!time) {return '-'}
     const date = new Date(time)
     return `${date.getMonth() + 1}/${date.getDate()}`
   }
 
   // 获取进度数字的样式类
-  const getProgressClass = (progress: number) => {
+  const _getProgressClass = (progress: number) => {
     if (progress >= 80) {return 'progress-success'}
     if (progress >= 50) {return 'progress-warning'}
     return 'progress-danger'
@@ -572,8 +573,8 @@
     return groups
   }
   
-  const groupedDevelopmentIndicators = computed(() => groupIndicatorsByTask(developmentIndicators.value))
-  const groupedBasicIndicators = computed(() => groupIndicatorsByTask(basicIndicators.value))
+  const _groupedDevelopmentIndicators = computed(() => groupIndicatorsByTask(developmentIndicators.value))
+  const _groupedBasicIndicators = computed(() => groupIndicatorsByTask(basicIndicators.value))
   
   // 获取已有的任务名称列表（从当前部门的指标中提取）
   const existingTaskNames = computed(() => {
@@ -605,7 +606,7 @@
   }
 
   // 战略任务选择器ref
-  const taskSelectRef = ref<any>(null)
+  const taskSelectRef = ref<{ $el?: { querySelector: (selector: string) => HTMLInputElement } } | null>(null)
 
   // 处理战略任务下拉框关闭 - 保存输入的值
   const handleTaskVisibleChange = (visible: boolean) => {
@@ -623,8 +624,8 @@
   const newRow = ref({
     taskContent: '',
     name: '',
-    type1: '定性' as '定性' | '定量',
-    type2: '发展性' as '发展性' | '基础性',
+    type1: '定量' as '定性' | '定量',
+    type2: '基础性' as '发展性' | '基础性',
     weight: '',
     remark: '',
     milestones: [] as Milestone[]
@@ -650,13 +651,13 @@
 
   // 生成12个月里程碑（定量指标默认）
   const generateMonthlyMilestones = () => {
-    const currentYear = timeContext.currentYear
+    const _currentYear = timeContext.currentYear
     const indicatorName = newRow.value.name || '指标完成'
     newRow.value.milestones = []
     
     for (let month = 1; month <= 12; month++) {
-      const lastDay = new Date(currentYear, month, 0).getDate()
-      const deadline = `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
+      const lastDay = new Date(_currentYear, month, 0).getDate()
+      const deadline = `${_currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
       const progress = Math.round((month / 12) * 100)
       
       newRow.value.milestones.push({
@@ -675,7 +676,7 @@
   }
   
   // 当前日期
-  const currentDate = '2025年12月5日'
+  const _currentDate = '2025年12月5日'
   
   // 编辑状态管理（任务详情）
   const editingField = ref<string | null>(null)
@@ -684,17 +685,17 @@
   // 指标列表编辑状态
   const editingIndicatorId = ref<number | null>(null)
   const editingIndicatorField = ref<string | null>(null)
-  const editingIndicatorValue = ref<any>(null)
+  const editingIndicatorValue = ref<Record<string, unknown> | null>(null)
   
   // 任务详情双击编辑处理
-  const handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
+  const _handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
     if (!canEdit.value) {return}
     editingField.value = field
     editingValue.value = value
   }
   
   // 任务详情保存编辑
-  const saveEdit = (field: 'title' | 'desc' | 'cycle' | 'createTime') => {
+  const _saveEdit = (field: 'title' | 'desc' | 'cycle' | 'createTime') => {
     // 如果值没有变化或者被清空（根据需求，这里假设如果不填则取消编辑或保留原值，这里逻辑是如果不填则取消）
     if (editingValue.value === undefined || editingValue.value === null) {
         cancelEdit()
@@ -747,7 +748,7 @@
               updates.isQualitative = editingIndicatorValue.value === '定性'
           }
       } else {
-          (updates as any)[field] = editingIndicatorValue.value
+          (updates as Record<string, unknown>)[field] = editingIndicatorValue.value
       }
 
       // 如果编辑的是核心指标名称，且当前没有指标类型，则设置默认类型为"定性"
@@ -802,10 +803,14 @@
   // 方法
   const addNewRow = () => {
     isAddingOrEditing.value = true
+    // 由于默认是定量指标，自动生成12个里程碑
+    if (newRow.value.type1 === '定量') {
+      generateMonthlyMilestones()
+    }
   }
   
   // 在指定类别中添加新指标
-  const addIndicatorToCategory = (category: '发展性' | '基础性') => {
+  const _addIndicatorToCategory = (category: '发展性' | '基础性') => {
     logger.info(`[StrategicTaskView] addIndicatorToCategory called with category: ${category}`)
     newRow.value.type2 = category
     isAddingOrEditing.value = true
@@ -820,7 +825,7 @@
   
   const cancelAdd = () => {
     isAddingOrEditing.value = false
-    newRow.value = { taskContent: '', name: '', type1: '定性', type2: '发展性', weight: '', remark: '', milestones: [] }
+    newRow.value = { taskContent: '', name: '', type1: '定量', type2: '基础性', weight: '', remark: '', milestones: [] }
     updateEditTime()
   }
   
@@ -867,6 +872,11 @@
         statusAudit: []
       })
       
+      // 🔧 修复：强制从后端重新加载指标数据，确保前端显示的是包含正式ID的数据
+      logger.info(`[StrategicTaskView] Reloading indicators after successful save to sync backend IDs...`)
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+      logger.info(`[StrategicTaskView] Indicators reloaded successfully`)
+      
       // 成功：关闭表单并更新 UI
       cancelAdd()
       updateEditTime()
@@ -879,7 +889,7 @@
   }
 
   // 删除指标
-  const deleteIndicator = (indicator: StrategicIndicator) => {
+  const _deleteIndicator = (indicator: StrategicIndicator) => {
     ElMessageBox.confirm(
       `确定要删除指标 "${indicator.name}" 吗？删除后无法恢复。`,
       '删除确认',
@@ -906,13 +916,13 @@
   }
   
   // 里程碑状态计算
-  const calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'warning' | 'exception' => {
+  const _calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'warning' | 'exception' => {
     if (!indicator.milestones || indicator.milestones.length === 0) {
       return getProgressStatus(indicator.progress)
     }
   
-    const currentDate = new Date()
-    const currentYear = currentDate.getFullYear()
+    const _currentDate = new Date()
+    const _currentYear = currentDate.getFullYear()
   
     // 检查是否有逾期未完成的里程碑
     const hasOverdueMilestone = indicator.milestones.some(milestone => {
@@ -939,17 +949,17 @@
   }
   
   // 获取里程碑进度文本
-  const getMilestoneProgressText = (indicator: StrategicIndicator): string => {
+  const _getMilestoneProgressText = (indicator: StrategicIndicator): string => {
     if (!indicator.milestones || indicator.milestones.length === 0) {
       return `当前进度: ${indicator.progress}%`
     }
   
-    const totalMilestones = indicator.milestones.length
-    const completedMilestones = indicator.milestones.filter(m => m.status === 'completed').length
-    const overdueMilestones = indicator.milestones.filter(m => m.status === 'overdue').length
+    const _totalMilestones = indicator.milestones.length
+    const _completedMilestones = indicator.milestones.filter(m => m.status === 'completed').length
+    const _overdueMilestones = indicator.milestones.filter(m => m.status === 'overdue').length
     const pendingMilestones = indicator.milestones.filter(m => m.status === 'pending').length
   
-    const currentDate = new Date()
+    const _currentDate = new Date()
     const overdueMilestonesCount = indicator.milestones.filter(m => {
       if (m.status !== 'pending') {return false}
       const deadlineDate = new Date(m.deadline)
@@ -986,7 +996,7 @@
     selectedDepartment.value = dept
   }
   
-  const selectTask = (index: number) => {
+  const _selectTask = (index: number) => {
     currentTaskIndex.value = index
   }
   
@@ -1060,7 +1070,7 @@
   })
 
   // 查看审计日志
-  const handleViewAuditLog = (row: StrategicIndicator) => {
+  const _handleViewAuditLog = (row: StrategicIndicator) => {
     currentAuditIndicator.value = row
     auditLogVisible.value = true
   }
@@ -1101,7 +1111,7 @@
   })
 
   // 打开审批弹窗
-  const handleOpenApprovalDialog = (row: StrategicIndicator) => {
+  const _handleOpenApprovalDialog = (row: StrategicIndicator) => {
     currentApprovalIndicator.value = row
     approvalForm.value = {
       action: 'approve',
@@ -1215,7 +1225,7 @@
   }
   
   // 打开下发弹窗
-  const openDistributeDialog = (row: StrategicIndicator) => {
+  const _openDistributeDialog = (row: StrategicIndicator) => {
     currentDistributeItem.value = row
     // 默认选中左侧当前选择的部门
     distributeTarget.value = selectedDepartment.value ? [selectedDepartment.value] : []
@@ -1380,7 +1390,7 @@
   }
   
   // 单个撤回
-  const handleWithdraw = async (row: StrategicIndicator) => {
+  const _handleWithdraw = async (row: StrategicIndicator) => {
     ElMessageBox.confirm(
       `撤回后，该指标将重新变为可下发状态。确认撤回 "${row.name}"？`,
       '撤回操作',
@@ -1414,6 +1424,12 @@
 
   // 全部下发（下发当前界面所有未下发的指标）
   const handleDistributeAll = async () => {
+    // 验证权重总和是否为100%
+    if (departmentTotalWeight.value !== 100) {
+      ElMessage.warning(`权重总和必须为100%，当前为${departmentTotalWeight.value}`)
+      return
+    }
+    
     // 基于 statusAudit 判断草稿状态
     const pendingRows = indicators.value.filter(r => {
       if (!r.name) {return false} // 只下发有核心指标的记录
@@ -1582,7 +1598,7 @@
   }
   
   // 按任务整体下发（复用下发弹窗）
-  const handleBatchDistributeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+  const _handleBatchDistributeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
     const pendingRows = group.rows.filter(r => r.canWithdraw)
     if (pendingRows.length === 0) {
       ElMessage.warning('该任务下所有指标已下发')
@@ -1596,7 +1612,7 @@
   }
 
   // 按任务整体撤回
-  const handleBatchWithdrawByTask = async (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+  const _handleBatchWithdrawByTask = async (group: { taskContent: string; rows: StrategicIndicator[] }) => {
     const distributedRows = group.rows.filter(r => !r.canWithdraw)
     if (distributedRows.length === 0) {
       ElMessage.warning('该任务下没有已下发的指标')
@@ -1651,7 +1667,7 @@
   }
 
   // 按任务整体删除
-  const handleBatchDeleteByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+  const _handleBatchDeleteByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
     if (group.rows.length === 0) {
       ElMessage.warning('该任务下没有指标')
       return
@@ -1722,7 +1738,7 @@
    */
   const planApprovalVisible = ref(false)
   
-  const handleOpenPlanApproval = () => {
+  const _handleOpenPlanApproval = () => {
     planApprovalVisible.value = true
   }
   
@@ -1737,11 +1753,11 @@
   }
   
   // 表格滚动状态
-  const tableScrollRef = ref<HTMLElement | null>(null)
+  const _tableScrollRef = ref<HTMLElement | null>(null)
   const isTableScrolling = ref(false)
   
   // 监听表格滚动，判断是否需要显示操作列的固定效果
-  const handleTableScroll = (e: Event) => {
+  const _handleTableScroll = (e: Event) => {
     const target = e.target as HTMLElement
     const scrollLeft = target.scrollLeft
     const scrollWidth = target.scrollWidth
@@ -1764,7 +1780,7 @@
     const isAchieved = progress >= targetValue
     
     // 检查是否有里程碑及其截止日期
-    const currentDate = new Date()
+    const _currentDate = new Date()
     let isOverdue = false
     
     if (row.milestones && row.milestones.length > 0) {
@@ -1918,7 +1934,7 @@
             >
 
               <el-table-column prop="taskContent" label="战略任务" width="180">
-                <template #default="{ row, $index }">
+                <template #default="{ row }">
                   <div class="task-cell-wrapper">
                     <div class="indicator-name-cell" @dblclick="handleIndicatorDblClick(row, 'taskContent')">
                       <el-input
@@ -2056,14 +2072,6 @@
                     </el-popover>
                   </template>
                 </el-table-column>
-                <!-- 状态列 -->
-                <el-table-column label="状态" width="110" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusType(row.displayStatus)" size="small">
-                      {{ getStatusIcon(row.displayStatus) }} {{ getStatusText(row.displayStatus) }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
                 <el-table-column prop="progress" label="进度" width="120" align="center">
                   <template #default="{ row }">
                     <div class="progress-cell" @dblclick="handleIndicatorDblClick(row, 'progress')">
@@ -2152,12 +2160,6 @@
                       :style="{ backgroundColor: getCategoryColor(currentIndicator.type2), color: '#fff', border: 'none' }"
                     >
                       {{ currentIndicator.type2 }}任务
-                    </el-tag>
-                    <el-tag 
-                      size="small" 
-                      :type="currentIndicator.canWithdraw ? 'info' : 'success'"
-                    >
-                      {{ currentIndicator.canWithdraw ? '待下发' : '已下发' }}
                     </el-tag>
                     <!-- 进度审批状态标签 -->
                     <el-tag v-if="currentIndicator.progressApprovalStatus === 'PENDING'" type="warning" size="small">
@@ -2457,9 +2459,6 @@
               <el-tag size="small" :class="currentDetail.type1 === '定性' ? 'tag-qualitative' : 'tag-quantitative'">{{ currentDetail.type1 }}</el-tag>
               <el-tag size="small" :style="{ backgroundColor: getCategoryColor(currentDetail.type2), color: '#fff', border: 'none' }">
                 {{ currentDetail.type2 }}任务
-              </el-tag>
-              <el-tag size="small" :type="currentDetail.canWithdraw ? 'info' : 'success'">
-                {{ currentDetail.canWithdraw ? '待下发' : '已下发' }}
               </el-tag>
             </div>
           </div>

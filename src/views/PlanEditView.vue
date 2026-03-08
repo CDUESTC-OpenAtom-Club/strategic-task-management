@@ -7,12 +7,11 @@ import {
   ElFormItem,
   ElInput,
   ElButton,
-  ElIcon,
   ElMessage,
   ElSelect,
   ElOption
 } from 'element-plus'
-import { ArrowLeft, Plus, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Plus } from '@element-plus/icons-vue'
 import type { Plan, Task } from '@/types'
 import { usePlanStore } from '@/stores/plan'
 import { useAuthStore } from '@/stores/auth'

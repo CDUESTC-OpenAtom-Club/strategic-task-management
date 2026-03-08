@@ -8,9 +8,11 @@
 
 // API
 export { strategicApi } from './api/strategicApi'
+/* eslint-disable no-restricted-syntax -- Backend VO types use strategic_task terminology */
 export type {
   StrategicTaskVO,
   IndicatorVO,
   MilestoneVO,
   AssessmentCycleVO
 } from './api/strategicApi'
+/* eslint-enable no-restricted-syntax */

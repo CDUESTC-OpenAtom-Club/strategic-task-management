@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Plus, View, Download, Delete, ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right } from '@element-plus/icons-vue'
+import { Plus, View, Download, Delete as _Delete, ArrowDown as _ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
-import type { StrategicTask, StrategicIndicator, Milestone } from '@/types'
+/* eslint-disable no-restricted-syntax -- Backend-aligned types */
+import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/types'
+/* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
-import { getProgressStatus, getProgressColor, getStatusTagType } from '@/utils'
+import { getProgressStatus, getProgressColor as _getProgressColor, getStatusTagType as _getStatusTagType } from '@/utils'
 import type { StatusAuditEntry } from '@/types'
 import { useOrgStore } from '@/stores/org'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
 import { useDataValidator } from '@/composables/useDataValidator'
-import { milestoneDefaultValues, MILESTONE_STATUS_VALUES, PROGRESS_APPROVAL_STATUS_VALUES, type ProgressApprovalStatusValue } from '@/config/validationRules'
+import { milestoneDefaultValues as _milestoneDefaultValues, MILESTONE_STATUS_VALUES, PROGRESS_APPROVAL_STATUS_VALUES, type ProgressApprovalStatusValue } from '@/config/validationRules'
 
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
@@ -74,7 +76,7 @@ const timeContext = useTimeContextStore()
 
 // 使用数据验证器 - 用于验证里程碑数据完整性
 // @requirement 2.4 - Milestone data validation with complete fields
-const { validateMilestone, safeGet, fillDefaults, validateEnum } = useDataValidator({ logErrors: true })
+const { validateMilestone, safeGet, validateEnum } = useDataValidator({ logErrors: true })
 
 // ============================================================================
 // 审批状态枚举值验证与容错处理
@@ -269,7 +271,7 @@ const approvalIndicators = computed(() => {
 })
 
 // 仅计算待审批的数量，用于按钮上的数字显示
-const pendingApprovalCount = computed(() => {
+const _pendingApprovalCount = computed(() => {
   let list = strategicStore.indicators
 
   // 按当前年份过滤
@@ -304,7 +306,7 @@ const taskList = computed(() => strategicStore.tasks.map(t => ({
 })))
 
 // 当前选中的任务
-const currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
+const _currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
   id: 0,
   title: '暂无任务',
   desc: '',
@@ -418,14 +420,14 @@ const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; colum
 }
 
 // 获取当前行所属的任务组
-const getTaskGroup = (row: StrategicIndicator) => {
+const _getTaskGroup = (row: StrategicIndicator) => {
   const taskContent = row.taskContent || '未命名任务'
   const rows = indicators.value.filter(i => (i.taskContent || '未命名任务') === taskContent)
   return { taskContent, rows }
 }
 
 // 按任务组批量分解（战略发展部专用）
-const handleBatchDistributeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+const _handleBatchDistributeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
   const departments = ['教务处', '科研处', '人事处']
   const indicatorNames = group.rows.map(ind => ind.name).join('、')
 
@@ -443,7 +445,7 @@ const handleBatchDistributeByTask = (group: { taskContent: string; rows: Strateg
 }
 
 // 按任务组批量提交（职能部门/二级学院专用）
-const handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
   // 找出所有待提交（draft）或已驳回（rejected）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   const pendingRows = group.rows.filter(r => isApprovalStatus(r, ['draft', 'rejected']))
@@ -501,7 +503,7 @@ const handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndi
 }
 
 // 按任务组批量撤回（职能部门/二级学院专用）
-const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
+const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
   // 找出所有待审批（pending）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   const pendingRows = group.rows.filter(r => isApprovalStatus(r, 'pending'))
@@ -548,7 +550,7 @@ const handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIn
 }
 
 // 全局批量提交（职能部门/二级学院专用）
-const handleBatchSubmitAll = () => {
+const _handleBatchSubmitAll = () => {
   // 找出所有待提交（draft）或已驳回（rejected）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   const pendingRows = indicators.value.filter(r => isApprovalStatus(r, ['draft', 'rejected']))
@@ -604,7 +606,7 @@ const handleBatchSubmitAll = () => {
 }
 
 // 全局批量撤回（职能部门/二级学院专用）
-const handleBatchRevokeAll = () => {
+const _handleBatchRevokeAll = () => {
   // 找出所有待审批（pending）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'pending'))
@@ -653,8 +655,8 @@ const getTaskTypeColor = (type2: string) => {
 }
 
 // 按类别筛选指标
-const developmentIndicators = computed(() => indicators.value.filter(i => i.type2 === '发展性'))
-const basicIndicators = computed(() => indicators.value.filter(i => i.type2 === '基础性'))
+const _developmentIndicators = computed(() => indicators.value.filter(i => i.type2 === '发展性'))
+const _basicIndicators = computed(() => indicators.value.filter(i => i.type2 === '基础性'))
 
 // 新增行数据
 const newRow = ref({
@@ -674,7 +676,7 @@ const taskOptions = computed(() => strategicStore.tasks.map(t => ({
 })))
 
 // 里程碑输入状态
-const showMilestoneInput = ref(false)
+const _showMilestoneInput = ref(false)
 
 // 任务下发相关状态
 const showAssignmentDialog = ref(false)
@@ -682,7 +684,7 @@ const assignmentTarget = ref('')
 const assignmentMethod = ref<'self' | 'college'>('self')
 
 // 添加新里程碑
-const addMilestone = () => {
+const _addMilestone = () => {
   newRow.value.milestones.push({
     id: Date.now(),
     name: '',
@@ -693,7 +695,7 @@ const addMilestone = () => {
 }
 
 // 删除里程碑
-const removeMilestone = (index: number) => {
+const _removeMilestone = (index: number) => {
   newRow.value.milestones.splice(index, 1)
 }
 
@@ -710,14 +712,14 @@ const editingIndicatorField = ref<string | null>(null)
 const editingIndicatorValue = ref<any>(null)
 
 // 任务详情双击编辑处理
-const handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
+const _handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
   if (!canEdit.value) {return}
   editingField.value = field
   editingValue.value = value
 }
 
 // 任务详情保存编辑
-const saveEdit = (field: 'title' | 'desc' | 'cycle' | 'createTime') => {
+const _saveEdit = (field: 'title' | 'desc' | 'cycle' | 'createTime') => {
   if (editingValue.value === undefined || editingValue.value === null) {
     cancelEdit()
     return
@@ -783,7 +785,7 @@ const addNewRow = () => {
 }
 
 // 在指定类别中添加新指标
-const addIndicatorToCategory = (category: '发展性' | '基础性') => {
+const _addIndicatorToCategory = (category: '发展性' | '基础性') => {
   newRow.value.type2 = category
   isAddingOrEditing.value = true
 }
@@ -829,7 +831,7 @@ const saveNewRow = () => {
 
 // 里程碑状态计算
 // @requirement 2.4 - Milestone data validation with complete fields
-const calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'warning' | 'exception' => {
+const _calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'warning' | 'exception' => {
   if (!indicator.milestones || indicator.milestones.length === 0) {
     return getProgressStatus(indicator.progress)
   }
@@ -874,7 +876,7 @@ const calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | 'w
 
 // 获取里程碑进度文本
 // @requirement 2.4 - Milestone data validation with complete fields
-const getMilestoneProgressText = (indicator: StrategicIndicator): string => {
+const _getMilestoneProgressText = (indicator: StrategicIndicator): string => {
   if (!indicator.milestones || indicator.milestones.length === 0) {
     return `当前进度: ${indicator.progress}%`
   }
@@ -1090,11 +1092,11 @@ const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipIt
   })
 }
 
-const selectDepartment = (dept: string) => {
+const _selectDepartment = (dept: string) => {
   selectedDepartment.value = dept
 }
 
-const selectTask = (index: number) => {
+const _selectTask = (index: number) => {
   currentTaskIndex.value = index
 }
 
@@ -1104,7 +1106,7 @@ const handleSelectionChange = (selection: StrategicIndicator[]) => {
 }
 
 // 任务下发相关方法
-const confirmAssignment = () => {
+const _confirmAssignment = () => {
   if (!assignmentTarget.value) {
     ElMessage.warning('请选择下发目标')
     return
@@ -1130,7 +1132,7 @@ const confirmAssignment = () => {
 }
 
 // 批量分解到职能部门（战略发展部专用）
-const batchDistributeToDepartments = () => {
+const _batchDistributeToDepartments = () => {
   const departments = ['教务处', '科研处', '人事处']
   const indicatorNames = selectedIndicators.value.map(ind => ind.name).join('、')
 
@@ -1175,10 +1177,10 @@ const handleDeleteIndicator = (row: StrategicIndicator) => {
 }
 
 // 表格滚动状态
-const tableScrollRef = ref<HTMLElement | null>(null)
+const _tableScrollRef = ref<HTMLElement | null>(null)
 const isTableScrolling = ref(false)
 
-const handleTableScroll = (e: Event) => {
+const _handleTableScroll = (e: Event) => {
   const target = e.target as HTMLElement
   const scrollLeft = target.scrollLeft
   const scrollWidth = target.scrollWidth
@@ -1204,7 +1206,7 @@ const reportForm = ref({
 const nearestMilestone = computed(() => {
   if (!currentReportIndicator.value?.milestones?.length) {return null}
   
-  const now = new Date()
+  const _now = new Date()
   const pendingMilestones = currentReportIndicator.value.milestones
     .filter(m => {
       const status = safeGet(m, 'status', 'pending')

@@ -6,8 +6,8 @@ import {
   ElInput,
   ElTag,
   ElIcon,
-  ElTimeline,
-  ElTimelineItem,
+  ElTimeline as _ElTimeline,
+  ElTimelineItem as _ElTimelineItem,
   ElMessage,
   ElMessageBox,
   ElProgress
@@ -19,10 +19,10 @@ import {
   Document,
   User,
   Calendar,
-  Warning,
-  CircleCheck
+  Warning as _Warning,
+  CircleCheck as _CircleCheck
 } from '@element-plus/icons-vue'
-import type { PlanFill, PlanFillStatus, IndicatorFill } from '@/types'
+import type { PlanFill, PlanFillStatus, IndicatorFill as _IndicatorFill } from '@/types'
 import { usePlanStore } from '@/stores/plan'
 import { useAuthStore } from '@/stores/auth'
 import { logger } from '@/utils/logger'
@@ -49,7 +49,7 @@ const emit = defineEmits<{
 }>()
 
 const planStore = usePlanStore()
-const authStore = useAuthStore()
+const _authStore = useAuthStore()
 
 // 状态
 const loading = ref(false)
@@ -62,9 +62,11 @@ const rejecting = ref(false)
 
 // ============ 计算属性 ============
 
+import type { Component } from 'vue'
+
 // 获取状态配置
 const getStatusConfig = (status: PlanFillStatus) => {
-  const configs: Record<PlanFillStatus, { label: string; type: string; icon: any }> = {
+  const configs: Record<PlanFillStatus, { label: string; type: string; icon: Component }> = {
     submitted: { label: '待审核', type: 'warning', icon: Clock },
     approved: { label: '已通过', type: 'success', icon: Check },
     rejected: { label: '已驳回', type: 'danger', icon: Close }

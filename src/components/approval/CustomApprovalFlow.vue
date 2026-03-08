@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
-  ElSteps,
-  ElStep,
   ElCard,
   ElButton,
   ElSelect,
   ElOption,
   ElTag,
   ElAvatar,
-  ElTooltip,
   ElIcon,
   ElEmpty,
   ElSkeleton,
@@ -19,9 +16,7 @@ import {
   ElInput,
   ElSwitch,
   ElMessage,
-  ElTreeSelect,
-  type FormInstance,
-  type FormRules
+  type FormInstance
 } from 'element-plus'
 import {
   Check,
@@ -29,12 +24,11 @@ import {
   Loading,
   Clock,
   Edit,
-  User,
+  User as _User,
   Setting,
-  CirclePlus,
-  Delete
+  CirclePlus
 } from '@element-plus/icons-vue'
-import type { WorkflowNode, ApprovalTemplate, ApprovalTemplateStep, UserRole } from '@/types'
+import type { WorkflowNode, ApprovalTemplate, ApprovalTemplateStep } from '@/types'
 
 /**
  * 自定义审批流程组件
@@ -61,6 +55,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  // 添加节点
+  (e: 'addNode'): void
   // 更新审批人
   (e: 'updateApprover', nodeId: string, approverId: string): void
   // 保存为模板
@@ -75,6 +71,7 @@ const editingNode = ref<string | null>(null)
 const customApprovers = ref<Record<string, string>>({})
 const showTemplateDialog = ref(false)
 const showManageTemplateDialog = ref(false)
+const setAsDefaultTemplate = ref(false)
 
 // 审批模板
 const templates = ref<ApprovalTemplate[]>([])
@@ -83,7 +80,7 @@ const selectedTemplateId = ref<string | null>(null)
 // 新建模板表单
 const newTemplateName = ref('')
 const newTemplateDesc = ref('')
-const templateFormRef = ref<FormInstance>()
+const _templateFormRef = ref<FormInstance>()
 
 // 模拟组织人员数据
 const organizationUsers = ref([
@@ -95,7 +92,7 @@ const organizationUsers = ref([
 ])
 
 // 当前激活的步骤索引
-const activeStepIndex = computed(() => {
+const _activeStepIndex = computed(() => {
   return props.nodes.findIndex(n => n.status === 'current')
 })
 
@@ -127,7 +124,7 @@ const formatTime = (date?: Date) => {
 }
 
 // 获取用户信息
-const getUserInfo = (userId?: string) => {
+const _getUserInfo = (userId?: string) => {
   if (!userId) {return null}
   return organizationUsers.value.find(u => u.id === userId)
 }
@@ -204,7 +201,7 @@ const saveAsTemplate = async () => {
 }
 
 // 删除模板
-const deleteTemplate = (templateId: string) => {
+const _deleteTemplate = (templateId: string) => {
   templates.value = templates.value.filter(t => t.id !== templateId)
   ElMessage.success('模板已删除')
 }
@@ -492,7 +489,7 @@ onMounted(() => {
           />
         </ElFormItem>
         <ElFormItem label="设为默认">
-          <ElSwitch v-model="true" active-text="是" inactive-text="否" />
+          <ElSwitch v-model="setAsDefaultTemplate" active-text="是" inactive-text="否" />
         </ElFormItem>
       </ElForm>
 

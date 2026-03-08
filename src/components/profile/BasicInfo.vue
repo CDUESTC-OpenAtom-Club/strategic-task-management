@@ -91,7 +91,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { validateEmail, validatePhone, getRoleLabel } from '@/utils'
-import type { User, UserRole } from '@/types'
+import type { User as _User, UserRole } from '@/types'
 
 const formRef = ref<FormInstance>()
 const authStore = useAuthStore()
@@ -113,7 +113,7 @@ const rules = {
   ],
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { validator: (rule: any, value: string, callback: Function) => {
+    { validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
       if (value && !validateEmail(value)) {
         callback(new Error('请输入正确的邮箱地址'))
       } else {
@@ -122,7 +122,7 @@ const rules = {
     }, trigger: 'blur' }
   ],
   phone: [
-    { validator: (rule: any, value: string, callback: Function) => {
+    { validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
       if (value && !validatePhone(value)) {
         callback(new Error('请输入正确的手机号'))
       } else {
