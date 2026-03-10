@@ -8,6 +8,31 @@
  */
 
 // ============================================================================
+// Backend-Aligned VO Types (统一后端对齐类型)
+// ============================================================================
+export type {
+  IndicatorVO,
+  TaskVO,
+  MilestoneVO,
+  PlanVO,
+  UserVO,
+  OrgVO,
+  DistributionStatus,
+  IndicatorStatus,
+  MilestoneStatus as BackendMilestoneStatus,
+  ProgressApprovalStatus,
+  TaskType as BackendTaskType,
+  PlanStatus as BackendPlanStatus,
+  IndicatorCreateRequest,
+  IndicatorUpdateRequest,
+  IndicatorDistributionRequest,
+  BatchDistributionRequest,
+  IndicatorDistributionEligibility,
+  Attachment,
+  StatusAuditEntry
+} from '@/api/types/backend-aligned'
+
+// ============================================================================
 // 统一实体类型导出 (与后端完全对齐)
 // ============================================================================
 /* eslint-disable no-restricted-syntax -- Backend-aligned types must use backend terminology */
@@ -262,14 +287,8 @@ export interface RoleOption {
 }
 
 // Utility Types
-export interface Attachment {
-  id: string
-  name: string
-  url: string
-  size: number
-  type: string
-  uploadedAt: Date
-}
+// Attachment 已移至 backend-aligned.ts
+export type { Attachment } from '@/api/types/backend-aligned'
 
 export interface PaginationParams {
   page: number
@@ -519,25 +538,9 @@ export interface SourcePieData {
 // 扩展下钻层级类型
 export type OrgLevel = 'strategy' | 'functional' | 'college'
 
-// 指标下发相关类型
-export interface IndicatorDistributionRequest {
-  parentIndicatorId: string
-  targetOrgId: string
-  customDesc?: string // 可选的自定义描述（定性指标可微调）
-  actorUserId?: string
-}
-
-export interface IndicatorDistributionEligibility {
-  canDistribute: boolean
-  reason: string
-  existingDistributionCount: number
-}
-
-export interface BatchDistributionRequest {
-  parentIndicatorId: string
-  targetOrgIds: string[]
-  actorUserId?: string
-}
+// 指标下发相关类型 (已移至 backend-aligned.ts)
+// 保留此处的 re-export 以保持向后兼容
+export type { IndicatorDistributionRequest, BatchDistributionRequest, IndicatorDistributionEligibility } from '@/api/types/backend-aligned'
 
 // ============================================================
 // 新数据结构类型定义 (Plan -> Task -> Indicator -> IndicatorFill)

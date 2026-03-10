@@ -123,7 +123,7 @@ export const StrategicIndicatorSchema = z.object({
   unit: z.string().default(''),
   responsibleDept: z.string(),
   responsiblePerson: z.string(),
-  status: z.enum(['draft', 'active', 'archived', 'distributed', 'pending', 'approved']),
+  status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED', 'DISTRIBUTED', 'PENDING', 'APPROVED']),
   /**
    * 后端持久化的下发状态字段（distribution_status）。
    * 前端草稿时为 'DRAFT'，调用 publish 接口后变为 'DISTRIBUTED'。

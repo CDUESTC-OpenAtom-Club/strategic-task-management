@@ -21,69 +21,74 @@
  * 任务类型枚举
  * @requirement 后端 TaskType 枚举
  */
-export enum TaskType {
-  QUALITATIVE = '定性',
-  QUANTITATIVE = '定量'
-}
+export const TaskType = {
+  QUALITATIVE: '定性',
+  QUANTITATIVE: '定量'
+} as const;
+export type TaskType = typeof TaskType[keyof typeof TaskType];
 
 /**
  * 里程碑状态枚举
  * @requirement 后端 MilestoneStatus 枚举
  */
-export enum MilestoneStatus {
-  PENDING = 'pending',
-  COMPLETED = 'completed',
-  OVERDUE = 'overdue'
-}
+export const MilestoneStatus = {
+  PENDING: 'pending',
+  COMPLETED: 'completed',
+  OVERDUE: 'overdue'
+} as const;
+export type MilestoneStatus = typeof MilestoneStatus[keyof typeof MilestoneStatus];
 
 /**
  * 进度审批状态枚举
  * @requirement 后端 ProgressApprovalStatus 枚举
  */
-export enum ProgressApprovalStatus {
-  NONE = 'none',
-  DRAFT = 'draft',
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected'
-}
+export const ProgressApprovalStatus = {
+  NONE: 'NONE',
+  DRAFT: 'DRAFT',
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED'
+} as const;
+export type ProgressApprovalStatus = typeof ProgressApprovalStatus[keyof typeof ProgressApprovalStatus];
 
 /**
  * 审计操作类型枚举
  * @requirement 后端 AuditAction 枚举
  */
-export enum AuditAction {
-  SUBMIT = 'submit',
-  APPROVE = 'approve',
-  REJECT = 'reject',
-  REVOKE = 'revoke',
-  UPDATE = 'update',
-  DISTRIBUTE = 'distribute',
-  WITHDRAW = 'withdraw'
-}
+export const AuditAction = {
+  SUBMIT: 'submit',
+  APPROVE: 'approve',
+  REJECT: 'reject',
+  REVOKE: 'revoke',
+  UPDATE: 'update',
+  DISTRIBUTE: 'distribute',
+  WITHDRAW: 'withdraw'
+} as const;
+export type AuditAction = typeof AuditAction[keyof typeof AuditAction];
 
 /**
- * 指标状态枚举
+ * 指标状态枚举（生命周期状态）
  * @requirement 后端 IndicatorStatus 枚举
  */
-export enum IndicatorStatus {
-  DRAFT = 'draft',
-  ACTIVE = 'active',
-  ARCHIVED = 'archived',
-  DISTRIBUTED = 'distributed',
-  PENDING = 'pending',
-  APPROVED = 'approved'
-}
+export const IndicatorStatus = {
+  DRAFT: 'DRAFT',                   // 草稿
+  PENDING_REVIEW: 'PENDING_REVIEW', // 待审核（指标定义审核）
+  DISTRIBUTED: 'DISTRIBUTED',       // 已下发
+  ACTIVE: 'ACTIVE',                 // 已下发（遗留状态，等同于 DISTRIBUTED）
+  ARCHIVED: 'ARCHIVED'              // 已归档
+} as const;
+export type IndicatorStatus = typeof IndicatorStatus[keyof typeof IndicatorStatus];
 
 /**
  * 用户角色枚举
  * @requirement 后端 UserRole 枚举
  */
-export enum UserRole {
-  STRATEGIC_DEPT = 'strategic_dept',
-  FUNCTIONAL_DEPT = 'functional_dept',
-  SECONDARY_COLLEGE = 'secondary_college'
-}
+export const UserRole = {
+  STRATEGIC_DEPT: 'strategic_dept',
+  FUNCTIONAL_DEPT: 'functional_dept',
+  SECONDARY_COLLEGE: 'secondary_college'
+} as const;
+export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 // ============================================================================
 // 核心实体类型定义

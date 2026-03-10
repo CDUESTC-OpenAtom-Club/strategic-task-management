@@ -5,6 +5,10 @@ import type {
   IndicatorDistributionEligibility,
   BatchDistributionRequest 
 } from '@/types'
+import type { 
+  IndicatorVO, 
+  DistributionStatus 
+} from './types/backend-aligned'
 import { logger } from '@/utils/logger'
 
 /**
@@ -46,74 +50,13 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
 /**
  * 指标 API 服务
  * 包含指标下发相关的接口
+ * 
+ * Note: IndicatorVO, MilestoneVO, and related types are now imported from backend-aligned.ts
+ * to ensure consistency across the application.
  */
 
-// 指标下发状态枚举（与后端 distribution_status 字段对齐）
-export type DistributionStatus = 'DRAFT' | 'DISTRIBUTED' | 'PENDING' | 'APPROVED' | 'REJECTED'
-
-// 指标 VO 类型（与后端 IndicatorVO 对应）
-export interface IndicatorVO {
-  indicatorId: number
-  taskId: number
-  taskName: string
-  parentIndicatorId?: number
-  parentIndicatorDesc?: string
-  level: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'
-  // 组织信息字段 - 兼容前后端
-  ownerOrgId?: number        // 来源部门ID（可选）
-  ownerOrgName?: string      // 来源部门名称（可选）
-  ownerDept?: string         // 来源部门（与后端一致）
-  targetOrgId?: number       // 责任部门ID（可选）
-  targetOrgName?: string     // 责任部门名称（可选）
-  responsibleDept?: string   // 责任部门（与后端一致）
-  indicatorDesc: string
-  weightPercent: number
-  sortOrder: number
-  year: number
-  status: 'ACTIVE' | 'ARCHIVED'
-  /** 下发状态（后端 distribution_status 字段）*/
-  distributionStatus?: DistributionStatus
-  remark?: string
-  createdAt: string
-  updatedAt: string
-  childIndicators?: IndicatorVO[]
-  milestones?: MilestoneVO[]
-}
-
-// 指标创建请求类型
-export interface IndicatorCreateRequest {
-  taskId: number                    // Required
-  parentIndicatorId?: number        // Optional
-  indicatorDesc: string             // Required (核心指标内容)
-  weightPercent?: number            // Optional (权重)
-  sortOrder?: number                // Optional (排序)
-  remark?: string                   // Optional (备注)
-  type?: string                     // Optional (基础性/发展性)
-  progress?: number                 // Optional (进度, default: 0)
-  ownerOrgId?: number               // Optional (来源部门ID)
-  targetOrgId?: number              // Optional (责任部门ID)
-  level?: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'  // Optional
-  year?: number                     // Optional (年份)
-  canWithdraw?: boolean             // Optional (是否可撤回)
-  /** 初始下发状态，默认 DRAFT（草稿，尚未正式下发）*/
-  distributionStatus?: DistributionStatus
-}
-
-export interface MilestoneVO {
-  milestoneId: number
-  indicatorId: number
-  indicatorDesc: string
-  milestoneName: string
-  milestoneDesc?: string
-  dueDate: string
-  targetProgress: number  // 主字段：目标进度 (0-100)
-  weightPercent?: number  // 已废弃：保留用于向后兼容
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
-  sortOrder: number
-  inheritedFromId?: number
-  createdAt: string
-  updatedAt: string
-}
+// Re-export types for backward compatibility
+export type { IndicatorVO, MilestoneVO, DistributionStatus, IndicatorCreateRequest } from './types/backend-aligned'
 
 export const indicatorApi = {
   /**
@@ -232,6 +175,23 @@ export const indicatorApi = {
   },
 
   /**
+   * 撤回已下发的指标
+   * 将指标状态从 DISTRIBUTED 改回 DRAFT，允许重新编辑
+   * 
+   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
+   * 撤回操作需要确保成功，避免数据不一致
+   * 
+   * 权限要求: 仅战略发展部可以调用
+   * 
+   * @param indicatorId 指标ID
+   */
+  async withdrawIndicator(indicatorId: string): Promise<ApiResponse<IndicatorVO>> {
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/withdraw`)
+    })
+  },
+
+  /**
    * 更新指标
    * 
    * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
@@ -302,6 +262,67 @@ export const indicatorApi = {
   async deleteIndicator(indicatorId: string): Promise<ApiResponse<void>> {
     return withRetry(async () => {
       return apiClient.delete<ApiResponse<void>>(`/indicators/${indicatorId}`)
+    })
+  },
+
+  // ==================== 指标审核工作流接口 ====================
+
+  /**
+   * 提交指标进行定义审核
+   * 状态转换: DRAFT → PENDING_REVIEW
+   * 
+   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
+   * 提交审核是指标生命周期的重要节点，需要确保成功
+   * 
+   * **Validates: Requirements 2.3, 2.5, 2.6**
+   * 
+   * @param indicatorId 指标ID
+   */
+  async submitIndicatorForReview(indicatorId: string): Promise<ApiResponse<IndicatorVO>> {
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/submit-review`)
+    })
+  },
+
+  /**
+   * 批准指标定义审核
+   * 状态转换: PENDING_REVIEW → DISTRIBUTED
+   * 
+   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
+   * 审核批准是指标生命周期的关键节点，需要确保成功
+   * 
+   * 权限要求: 仅战略发展部可以调用
+   * 
+   * **Validates: Requirements 2.7, 2.8**
+   * 
+   * @param indicatorId 指标ID
+   */
+  async approveIndicatorReview(indicatorId: string): Promise<ApiResponse<IndicatorVO>> {
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/approve-review`)
+    })
+  },
+
+  /**
+   * 驳回指标定义审核
+   * 状态转换: PENDING_REVIEW → DRAFT
+   * 
+   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
+   * 审核驳回需要记录原因并确保状态正确回退
+   * 
+   * 权限要求: 仅战略发展部可以调用
+   * 
+   * **Validates: Requirements 2.7, 2.8**
+   * 
+   * @param indicatorId 指标ID
+   * @param reason 驳回原因（必填）
+   */
+  async rejectIndicatorReview(indicatorId: string, reason: string): Promise<ApiResponse<IndicatorVO>> {
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<IndicatorVO>>(
+        `/indicators/${indicatorId}/reject-review`,
+        { reason }
+      )
     })
   },
 }

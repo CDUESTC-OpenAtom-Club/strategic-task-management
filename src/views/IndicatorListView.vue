@@ -5,12 +5,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
 import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/types'
+import { IndicatorStatus } from '@/types/entities'
 /* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
 import { getProgressStatus, getProgressColor as _getProgressColor, getStatusTagType as _getStatusTagType } from '@/utils'
-import type { StatusAuditEntry } from '@/types'
+import type { StatusAuditEntry as _StatusAuditEntry } from '@/types'
 import { useOrgStore } from '@/stores/org'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
 import { useDataValidator } from '@/composables/useDataValidator'
@@ -86,12 +87,12 @@ const { validateMilestone, safeGet, validateEnum } = useDataValidator({ logError
 /**
  * 默认审批状态值 - 当状态无效时使用
  */
-const DEFAULT_APPROVAL_STATUS: ProgressApprovalStatusValue = 'none'
+const DEFAULT_APPROVAL_STATUS: ProgressApprovalStatusValue = 'NONE'
 
 /**
  * 安全获取审批状态值
  * 
- * 检查 progressApprovalStatus 是否为有效枚举值，无效时返回默认值 'none'
+ * 检查 progressApprovalStatus 是否为有效枚举值，无效时返回默认值 'NONE'
  * 确保 UI 不会因为无效状态值而崩溃
  * 
  * @param status - 原始状态值
@@ -293,7 +294,7 @@ const _pendingApprovalCount = computed(() => {
 
   // 只统计待审批状态的指标数量
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  return list.filter(i => isApprovalStatus(i, 'pending')).length
+  return list.filter(i => isApprovalStatus(i, 'PENDING')).length
 })
 
 // 从 Store 获取任务列表
@@ -448,7 +449,7 @@ const _handleBatchDistributeByTask = (group: { taskContent: string; rows: Strate
 const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
   // 找出所有待提交（draft）或已驳回（rejected）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = group.rows.filter(r => isApprovalStatus(r, ['draft', 'rejected']))
+  const pendingRows = group.rows.filter(r => isApprovalStatus(r, ['DRAFT', 'REJECTED']))
   
   if (pendingRows.length === 0) {
     ElMessage.warning('当前没有待提交的进度')
@@ -477,7 +478,7 @@ const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicInd
       for (const row of pendingRows) {
         // 更新指标状态为待审批
         await strategicStore.updateIndicator(row.id.toString(), {
-          progressApprovalStatus: 'pending'
+          progressApprovalStatus: 'PENDING'
         })
 
         // 添加审计日志
@@ -490,7 +491,7 @@ const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicInd
           previousProgress: row.progress,
           newProgress: row.pendingProgress,
           previousStatus: row.progressApprovalStatus,
-          newStatus: 'pending'
+          newStatus: 'PENDING'
         })
       }
 
@@ -506,7 +507,7 @@ const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicInd
 const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
   // 找出所有待审批（pending）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = group.rows.filter(r => isApprovalStatus(r, 'pending'))
+  const pendingRows = group.rows.filter(r => isApprovalStatus(r, 'PENDING'))
   
   if (pendingRows.length === 0) {
     ElMessage.warning('该任务下没有待审批的指标')
@@ -516,8 +517,8 @@ const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicI
   const indicatorNames = pendingRows.map(ind => ind.name).join('、')
 
   ElMessageBox.confirm(
-    `确认撤回任务 "${group.taskContent}" 下的 ${pendingRows.length} 个待审批指标？\n\n${indicatorNames}`,
-    '批量撤回确认',
+    `确认撤回任务 "${group.taskContent}" 下的 ${pendingRows.length} 个待审批指标的进度审批？\n\n${indicatorNames}`,
+    '批量撤回进度审批',
     {
       confirmButtonText: '确认撤回',
       cancelButtonText: '取消',
@@ -530,7 +531,7 @@ const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicI
       // 在这里我们改回 none，但保留 pendingProgress 等字段，这样“填报”按钮会显示这些值。
       // 实际上 updateIndicator 会合并对象。
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'none'
+        progressApprovalStatus: 'DRAFT'
       })
 
       // 添加审计日志
@@ -539,9 +540,9 @@ const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicI
         operatorName: authStore.userName || '未知用户',
         operatorDept: authStore.userDepartment || '未知部门',
         action: 'revoke',
-        comment: '批量撤回进度填报',
+        comment: '批量撤回进度审批',
         previousStatus: 'pending',
-        newStatus: 'none'
+        newStatus: 'draft'
       })
     })
 
@@ -553,7 +554,7 @@ const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicI
 const _handleBatchSubmitAll = () => {
   // 找出所有待提交（draft）或已驳回（rejected）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, ['draft', 'rejected']))
+  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, ['DRAFT', 'REJECTED']))
   
   if (pendingRows.length === 0) {
     ElMessage.warning('没有可提交的指标')
@@ -581,7 +582,7 @@ const _handleBatchSubmitAll = () => {
     pendingRows.forEach(row => {
       // 提交：将状态改为 pending，并将 pendingProgress 等数据提交审批
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'pending',
+        progressApprovalStatus: 'PENDING',
         progress: row.pendingProgress || row.progress || 0,
         progressComment: row.pendingProgressComment || row.progressComment || ''
       })
@@ -594,7 +595,7 @@ const _handleBatchSubmitAll = () => {
         action: 'submit',
         comment: submitComment || '批量提交进度填报',
         previousStatus: row.progressApprovalStatus,
-        newStatus: 'pending',
+        newStatus: 'PENDING',
         previousProgress: row.progress,
         newProgress: row.pendingProgress,
         progressComment: row.pendingProgressComment
@@ -606,49 +607,6 @@ const _handleBatchSubmitAll = () => {
 }
 
 // 全局批量撤回（职能部门/二级学院专用）
-const _handleBatchRevokeAll = () => {
-  // 找出所有待审批（pending）的指标
-  // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'pending'))
-  
-  if (pendingRows.length === 0) {
-    ElMessage.warning('没有待审批的指标')
-    return
-  }
-
-  const indicatorNames = pendingRows.map(ind => ind.name).join('、')
-
-  ElMessageBox.confirm(
-    `确认批量撤回 ${pendingRows.length} 个待审批指标？\n\n${indicatorNames}`,
-    '批量撤回确认',
-    {
-      confirmButtonText: '确认撤回',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    pendingRows.forEach(row => {
-      // 撤回：将状态改回 none
-      strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'none'
-      })
-
-      // 添加审计日志
-      strategicStore.addStatusAuditEntry(row.id.toString(), {
-        operator: authStore.userName || 'unknown',
-        operatorName: authStore.userName || '未知用户',
-        operatorDept: authStore.userDepartment || '未知部门',
-        action: 'revoke',
-        comment: '批量撤回进度填报',
-        previousStatus: 'pending',
-        newStatus: 'none'
-      })
-    })
-
-    ElMessage.info(`已撤回${pendingRows.length}项指标提交`)
-  })
-}
-
 // 获取任务类型对应的颜色
 const getTaskTypeColor = (type2: string) => {
   return type2 === '发展性' ? '#409EFF' : '#67C23A'
@@ -1176,6 +1134,38 @@ const handleDeleteIndicator = (row: StrategicIndicator) => {
   })
 }
 
+// ============================================================================
+// 指标生命周期撤回操作 (Indicator Lifecycle Withdrawal)
+// 操作字段: status (DISTRIBUTED -> DRAFT via approval workflow)
+// 用途: 撤回已下发的指标，使其回到草稿状态可重新编辑
+// @requirement 2.1, 2.2, 3.3, 3.4 - 分离审批操作和生命周期操作
+// ============================================================================
+
+/**
+ * 撤回已下发的指标 (生命周期操作)
+ * 操作指标的生命周期状态字段 (status)，不影响进度审批状态
+ * 这是一个需要审批的操作：DISTRIBUTED -> PENDING_WITHDRAW_REVIEW -> DRAFT
+ */
+const handleWithdrawIndicator = (row: StrategicIndicator) => {
+  ElMessageBox.confirm(
+    `确定要撤回指标 "${row.name}" 的下发吗？撤回后可以重新编辑。`,
+    '撤回指标下发',
+    {
+      confirmButtonText: '确定撤回',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      // 调用后端服务撤回指标生命周期状态
+      await strategicStore.withdrawIndicator(row.id.toString())
+      ElMessage.success('指标下发撤回成功')
+    } catch (err) {
+      ElMessage.error('指标下发撤回失败，请稍后重试')
+    }
+  })
+}
+
 // 表格滚动状态
 const _tableScrollRef = ref<HTMLElement | null>(null)
 const isTableScrolling = ref(false)
@@ -1295,7 +1285,7 @@ const submitProgressReport = () => {
 
   // 直接保存，设为待提交状态
   strategicStore.updateIndicator(indicator.id.toString(), {
-    progressApprovalStatus: 'draft',  // 待提交状态
+    progressApprovalStatus: 'DRAFT',  // 待提交状态
     pendingProgress: reportForm.value.newProgress,
     pendingRemark: reportForm.value.remark,
     pendingAttachments: reportForm.value.attachments
@@ -1310,7 +1300,7 @@ const submitProgressReport = () => {
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const isIndicatorFilled = (row: StrategicIndicator): boolean => {
   // 状态为 draft 或 pending 表示已填报
-  if (isApprovalStatus(row, ['draft', 'pending'])) {
+  if (isApprovalStatus(row, ['DRAFT', 'PENDING'])) {
     return true
   }
   // 有待提交的进度数据（包括0）也表示已填报
@@ -1334,7 +1324,31 @@ const allIndicatorsFilled = computed(() => {
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const allIndicatorsSubmitted = computed(() => {
   if (indicators.value.length === 0) {return false}
-  return indicators.value.every(row => isApprovalStatus(row, 'pending'))
+  return indicators.value.every(row => isApprovalStatus(row, 'PENDING'))
+})
+
+/**
+ * 计算属性：判断是否存在任何可供撤回的指标。
+ * 只有当至少有一个指标的状态是 'PENDING' (待审批) 时，才允许撤回。
+ * 
+ * @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
+ */
+const canWithdrawAny = computed(() => {
+  if (indicators.value.length === 0) {return false}
+  return indicators.value.some(row => isApprovalStatus(row, 'PENDING'))
+})
+
+/**
+ * 计算属性：为撤回按钮提供动态的提示信息。
+ */
+const withdrawTooltip = computed(() => {
+  if (timeContext.isReadOnly) {
+    return '当前时间窗口为只读，无法操作。'
+  }
+  if (canWithdrawAny.value) {
+    return '' // 如果可以撤回，则没有提示
+  }
+  return '没有待审批的指标可供撤回' // 如果不可撤回，提供原因
 })
 
 // 获取未填报的指标数量
@@ -1377,7 +1391,7 @@ const handleSubmitAll = () => {
     indicators.value.forEach(row => {
       // 提交：将状态改为 pending，使用当前进度数据
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'pending',
+        progressApprovalStatus: 'PENDING',
         // 如果有待提交的进度数据就用待提交的，否则用当前进度
         progress: row.pendingProgress || row.progress || 0,
         progressComment: row.pendingProgressComment || row.progressComment || ''
@@ -1391,7 +1405,7 @@ const handleSubmitAll = () => {
         action: 'submit',
         comment: submitComment || '一键提交所有指标进度',
         previousStatus: row.progressApprovalStatus,
-        newStatus: 'pending',
+        newStatus: 'PENDING',
         previousProgress: row.progress,
         newProgress: row.pendingProgress || row.progress,
         progressComment: row.pendingProgressComment || row.progressComment
@@ -1402,10 +1416,66 @@ const handleSubmitAll = () => {
   })
 }
 
-// 一键撤回所有已提交的指标
-// @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-const handleWithdrawAll = () => {
-  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'pending'))
+// ============================================================================
+// 进度审批撤回操作 (Progress Approval Withdrawal)
+// 操作字段: progressApprovalStatus (PENDING -> DRAFT)
+// 用途: 撤回已提交的进度审批，允许重新编辑填报内容
+// @requirement 2.1, 2.2, 3.3, 3.4 - 分离审批操作和生命周期操作
+// ============================================================================
+
+/**
+ * 撤回单个指标的进度审批
+ * 仅操作 progressApprovalStatus 字段，不影响指标生命周期状态
+ */
+const handleWithdrawProgressApproval = (row: StrategicIndicator) => {
+  // 检查是否为待审批状态
+  if (!isApprovalStatus(row, 'PENDING')) {
+    ElMessage.warning('只能撤回待审批状态的进度')
+    return
+  }
+
+  ElMessageBox.confirm(
+    `确定要撤回指标 "${row.name}" 的进度审批吗？撤回后可以重新编辑填报内容。`,
+    '撤回进度审批',
+    {
+      confirmButtonText: '确定撤回',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // 撤回进度审批：将 progressApprovalStatus 改回 DRAFT
+    strategicStore.updateIndicator(row.id.toString(), {
+      progressApprovalStatus: 'DRAFT'
+    })
+
+    // 添加审计日志
+    strategicStore.addStatusAuditEntry(row.id.toString(), {
+      operator: authStore.userName || 'unknown',
+      operatorName: authStore.userName || '未知用户',
+      operatorDept: authStore.userDepartment || '未知部门',
+      action: 'revoke',
+      comment: '撤回进度审批',
+      previousStatus: 'pending',
+      newStatus: 'draft'
+    })
+
+    ElMessage.success('进度审批撤回成功')
+  })
+}
+
+/**
+ * 一键撤回所有已提交的指标进度审批
+ * 仅操作 progressApprovalStatus 字段，不影响指标生命周期状态
+ * @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
+ */
+const handleWithdrawAllProgressApprovals = () => {
+  // 二次校验：确保有可撤回的指标
+  if (!canWithdrawAny.value) {
+    ElMessage.warning(withdrawTooltip.value)
+    return
+  }
+
+  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))
   
   if (pendingRows.length === 0) {
     ElMessage.warning('没有待审批的指标可撤回')
@@ -1415,8 +1485,8 @@ const handleWithdrawAll = () => {
   const indicatorNames = pendingRows.map(ind => ind.name).join('、')
 
   ElMessageBox.confirm(
-    `确认一键撤回所有 ${pendingRows.length} 个已提交的指标？\n\n${indicatorNames}\n\n撤回后可重新编辑填报内容。`,
-    '一键撤回确认',
+    `确认一键撤回所有 ${pendingRows.length} 个已提交的指标进度审批？\n\n${indicatorNames}\n\n撤回后可重新编辑填报内容。`,
+    '一键撤回进度审批',
     {
       confirmButtonText: '确定撤回',
       cancelButtonText: '取消',
@@ -1424,9 +1494,9 @@ const handleWithdrawAll = () => {
     }
   ).then(() => {
     pendingRows.forEach(row => {
-      // 撤回：将状态改回 draft，保留填报数据供修改
+      // 撤回进度审批：将 progressApprovalStatus 改回 DRAFT，保留填报数据供修改
       strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'draft'
+        progressApprovalStatus: 'DRAFT'
       })
 
       // 添加审计日志
@@ -1435,14 +1505,102 @@ const handleWithdrawAll = () => {
         operatorName: authStore.userName || '未知用户',
         operatorDept: authStore.userDepartment || '未知部门',
         action: 'revoke',
-        comment: '一键撤回所有指标进度',
+        comment: '一键撤回所有指标进度审批',
         previousStatus: 'pending',
         newStatus: 'draft'
       })
     })
 
-    ElMessage.success(`成功撤回${pendingRows.length}项指标提交`)
+    ElMessage.success(`成功撤回${pendingRows.length}项指标进度审批`)
   })
+}
+
+// ============================================================================
+// 状态显示辅助函数
+// @requirement 2.9, 3.1, 3.2 - 清晰分离生命周期状态和审批状态
+// ============================================================================
+
+/**
+ * 获取生命周期状态的显示文本
+ * @param status - 指标生命周期状态
+ * @returns 中文显示文本
+ */
+const getLifecycleStatusText = (status: IndicatorStatus): string => {
+  const statusMap: Record<IndicatorStatus, string> = {
+    DRAFT: '草稿',
+    PENDING_REVIEW: '待审核',
+    DISTRIBUTED: '已下发',
+    ACTIVE: '已下发',  // Legacy ACTIVE status treated as DISTRIBUTED
+    ARCHIVED: '已归档'
+  }
+  return statusMap[status] || '未知状态'
+}
+
+/**
+ * 获取生命周期状态的标签类型
+ * @param status - 指标生命周期状态
+ * @returns Element Plus tag type
+ */
+const getLifecycleStatusType = (status: IndicatorStatus): 'success' | 'info' | 'warning' | 'danger' => {
+  const typeMap: Record<IndicatorStatus, 'success' | 'info' | 'warning' | 'danger'> = {
+    DRAFT: 'info',
+    PENDING_REVIEW: 'warning',
+    DISTRIBUTED: 'success',
+    ACTIVE: 'success',  // Legacy ACTIVE status treated as DISTRIBUTED
+    ARCHIVED: 'info'
+  }
+  return typeMap[status] || 'info'
+}
+
+/**
+ * 获取审批状态的显示文本
+ * @param status - 进度审批状态
+ * @returns 中文显示文本
+ */
+const getApprovalStatusText = (status: ProgressApprovalStatusValue): string => {
+  const statusMap: Record<ProgressApprovalStatusValue, string> = {
+    NONE: '无',
+    DRAFT: '草稿',
+    PENDING: '待审批',
+    APPROVED: '已通过',
+    REJECTED: '已驳回'
+  }
+  return statusMap[status] || '未知'
+}
+
+/**
+ * 获取审批状态的标签类型
+ * @param status - 进度审批状态
+ * @returns Element Plus badge type
+ */
+const getApprovalStatusType = (status: ProgressApprovalStatusValue): 'success' | 'info' | 'warning' | 'danger' => {
+  const typeMap: Record<ProgressApprovalStatusValue, 'success' | 'info' | 'warning' | 'danger'> = {
+    NONE: 'info',
+    DRAFT: 'info',
+    PENDING: 'warning',
+    APPROVED: 'success',
+    REJECTED: 'danger'
+  }
+  return typeMap[status] || 'info'
+}
+
+/**
+ * 判断是否显示审批状态徽章
+ * 只有当指标已下发且有活跃的审批状态时才显示
+ * @param indicator - 指标对象
+ * @returns 是否显示徽章
+ */
+const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
+  // 只有已下发的指标才可能有审批状态 (including legacy ACTIVE status)
+  if (indicator.status !== IndicatorStatus.DISTRIBUTED && indicator.status !== 'ACTIVE') {
+    return false
+  }
+  
+  // 获取安全的审批状态
+  const approvalStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
+  
+  // 只有非NONE状态才显示徽章
+  return approvalStatus !== 'NONE'
 }
 </script>
 
@@ -1527,17 +1685,26 @@ const handleWithdrawAll = () => {
                 <el-icon><Upload /></el-icon>
                 一键提交
               </el-button>
-              <!-- 一键撤回按钮（所有指标都已提交时显示） -->
-              <el-button 
-                v-if="allIndicatorsSubmitted"
-                type="warning" 
-                size="small" 
-                :disabled="timeContext.isReadOnly"
-                @click="handleWithdrawAll"
+              <!-- 一键撤回按钮（有任何待审批指标时显示） -->
+              <el-tooltip
+                :content="withdrawTooltip"
+                :disabled="!timeContext.isReadOnly && canWithdrawAny"
+                effect="dark"
+                placement="top"
               >
-                <el-icon><RefreshLeft /></el-icon>
-                一键撤回
-              </el-button>
+                <span style="display: inline-block;"> <!-- Tooltip 需要一个包裹元素来处理 disabled 状态 -->
+                  <el-button 
+                    v-if="canWithdrawAny || timeContext.isReadOnly"
+                    type="warning" 
+                    size="small" 
+                    :disabled="timeContext.isReadOnly || !canWithdrawAny"
+                    @click="handleWithdrawAllProgressApprovals"
+                  >
+                    <el-icon><RefreshLeft /></el-icon>
+                    一键撤回
+                  </el-button>
+                </span>
+              </el-tooltip>
                         <!-- 审批进度按钮 -->
                         <el-button 
                           link
@@ -1674,6 +1841,32 @@ const handleWithdrawAll = () => {
                   <span class="progress-number" :class="getProgressStatusClass(row)">{{ row.progress || 0 }}</span>
                 </template>
               </el-table-column>
+              <!-- 状态列 - 显示生命周期状态和审批状态 -->
+              <!-- @requirement 2.9, 3.1, 3.2 - 清晰分离生命周期状态和审批状态 -->
+              <el-table-column label="状态" width="140" align="center">
+                <template #default="{ row }">
+                  <div class="status-cell">
+                    <!-- 主要状态：生命周期状态 -->
+                    <el-tag 
+                      :type="getLifecycleStatusType(row.status)" 
+                      size="small"
+                      class="lifecycle-status-tag"
+                    >
+                      {{ getLifecycleStatusText(row.status) }}
+                    </el-tag>
+                    
+                    <!-- 次要状态：审批状态徽章（仅在已下发且有审批状态时显示） -->
+                    <el-tag
+                      v-if="showApprovalBadge(row)"
+                      :type="getApprovalStatusType(getSafeApprovalStatus(row.progressApprovalStatus))"
+                      size="small"
+                      class="approval-status-badge"
+                    >
+                      {{ getApprovalStatusText(getSafeApprovalStatus(row.progressApprovalStatus)) }}
+                    </el-tag>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column v-if="showResponsibleDeptColumn" prop="responsibleDept" label="责任部门" min-width="140">
                 <template #default="{ row }">
                   <span class="dept-text">{{ row.responsibleDept || '未分配' }}</span>
@@ -1695,6 +1888,34 @@ const handleWithdrawAll = () => {
                       :disabled="isApprovalStatus(row, 'pending') || timeContext.isReadOnly"
                       @click="handleOpenReportDialog(row)"
                     >{{ isApprovalStatus(row, 'rejected') ? '重新填报' : (isIndicatorFilled(row) ? '编辑' : '填报') }}</el-button>
+
+                    <!-- 职能部门/二级学院显示进度审批撤回按钮 -->
+                    <!-- 只有待审批状态的指标才显示撤回按钮 -->
+                    <!-- @requirement 2.1, 2.2, 3.3, 3.4 - 分离审批操作和生命周期操作 -->
+                    <el-button 
+                      v-if="!isStrategicDept && isApprovalStatus(row, 'PENDING')" 
+                      link 
+                      type="warning" 
+                      size="small" 
+                      :disabled="timeContext.isReadOnly"
+                      @click="handleWithdrawProgressApproval(row)"
+                    >
+                      <el-icon><RefreshLeft /></el-icon>
+                      撤回
+                    </el-button>
+
+                    <!-- 战略发展部显示撤回下发按钮 -->
+                    <el-button 
+                      v-if="isStrategicDept && !row.canWithdraw"
+                      link 
+                      type="warning" 
+                      size="small" 
+                      :disabled="timeContext.isReadOnly"
+                      @click="handleWithdrawIndicator(row)"
+                    >
+                      <el-icon><RefreshLeft /></el-icon>
+                      撤回下发
+                    </el-button>
 
                     <el-button v-if="canEdit" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
                   </div>
@@ -2882,5 +3103,29 @@ const handleWithdrawAll = () => {
   color: var(--text-placeholder, #94a3b8);
   text-align: center;
   padding: 12px 0;
+}
+
+/* ========================================
+   状态列样式
+   Requirements: 2.9, 3.1, 3.2 - 清晰分离生命周期状态和审批状态
+   ======================================== */
+.status-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.lifecycle-status-tag {
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.approval-status-badge {
+  font-size: 11px;
+  font-weight: 500;
+  min-width: 60px;
+  opacity: 0.9;
 }
 </style>

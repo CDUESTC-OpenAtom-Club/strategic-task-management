@@ -21,6 +21,7 @@ import type {
   AuditForm,
   Attachment
 } from '@/types'
+import type { PlanVO, TaskVO, IndicatorVO } from './types/backend-aligned'
 import { logger } from '@/utils/logger'
 
 /**
@@ -61,31 +62,11 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
+// Note: PlanVO, TaskVO, IndicatorVO are now imported from backend-aligned.ts
 // ============================================================
 
-export interface PlanVO {
-  planId: number
-  planName: string
-  cycle: string
-  orgId: number
-  orgName: string
-  status: 'DRAFT' | 'PENDING' | 'PUBLISHED' | 'ARCHIVED'
-  createdAt: string
-  updatedAt: string
-  createdBy: string
-  description?: string
-}
-
-export interface TaskVO {
-  taskId: number
-  planId: number
-  taskName: string
-  taskType: 'QUALITATIVE' | 'QUANTITATIVE'
-  description?: string
-  sortOrder: number
-}
-
-export interface IndicatorVO {
+// 计划模块专用的指标 VO（简化版本，仅用于计划填报）
+export interface PlanIndicatorVO {
   indicatorId: number
   taskId: number
   name: string
@@ -186,7 +167,7 @@ const mockTasks: TaskVO[] = [
   }
 ]
 
-const mockIndicators: IndicatorVO[] = [
+const mockIndicators: PlanIndicatorVO[] = [
   {
     indicatorId: 1,
     taskId: 1,
@@ -387,7 +368,7 @@ function convertTaskVOToTask(vo: TaskVO, indicators: Indicator[]): Task {
   }
 }
 
-function convertIndicatorVOToIndicator(vo: IndicatorVO): Indicator {
+function convertIndicatorVOToIndicator(vo: PlanIndicatorVO): Indicator {
   // 查找该指标的最新填报记录
   const fills = mockIndicatorFills.filter(f => f.indicatorId === vo.indicatorId)
   const latestFill = fills.sort((a, b) => new Date(b.fillDate).getTime() - new Date(a.fillDate).getTime())[0]

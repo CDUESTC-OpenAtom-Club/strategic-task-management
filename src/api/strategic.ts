@@ -9,103 +9,24 @@ import { apiClient } from '@/shared/api/client'
 /* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type { ApiResponse, StrategicTask, StrategicIndicator } from '@/types'
 /* eslint-enable no-restricted-syntax */
+// 导入统一的 IndicatorVO 接口，避免重复定义
+import type { IndicatorVO, TaskVO } from './types/backend-aligned'
 
-// 后端返回的战略任务 VO
+// Re-export TaskVO from backend-aligned types
 // eslint-disable-next-line no-restricted-syntax -- Backend VO uses strategic_task terminology
-export interface StrategicTaskVO {
-  taskId: number
-  cycleId: number
-  cycleName: string
-  year: number
-  taskName: string
-  taskDesc: string
-  taskType: 'BASIC' | 'DEVELOPMENT' | 'KEY' | 'SPECIAL' | 'QUANTITATIVE' | 'REGULAR'
-  orgId: number
-  orgName: string
-  createdByOrgId: number
-  createdByOrgName: string
-  sortOrder: number
-  remark?: string
-  createdAt: string
-  updatedAt: string
-}
+export type { TaskVO as StrategicTaskVO } from './types/backend-aligned'
 
-// 后端返回的指标 VO
-export interface IndicatorVO {
-  indicatorId: number
-  taskId: number
-  taskName: string
-  parentIndicatorId?: number
-  parentIndicatorDesc?: string
-  level: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'
-  ownerOrgId: number
-  ownerOrgName: string
-  targetOrgId: number
-  targetOrgName: string
-  indicatorDesc: string
-  weightPercent: number
-  sortOrder: number
-  year: number
-  status: 'ACTIVE' | 'ARCHIVED'
-  remark?: string
-  createdAt: string
-  updatedAt: string
-  childIndicators?: IndicatorVO[]
-  milestones?: MilestoneVO[]
-  // 新增字段 (前端数据对齐 2026-01-19)
-  isQualitative?: boolean
-  type1?: string
-  type2?: string
-  canWithdraw?: boolean
-  targetValue?: number
-  actualValue?: number
-  unit?: string
-  responsiblePerson?: string
-  progress?: number
-  statusAudit?: string
-  progressApprovalStatus?: 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
-  pendingProgress?: number
-  pendingRemark?: string
-  pendingAttachments?: string
-  isStrategic?: boolean
-  responsibleDept?: string
-  ownerDept?: string
-  distributionStatus?: 'DRAFT' | 'DISTRIBUTED' | 'PENDING' | 'APPROVED' | 'REJECTED'
-}
+// Re-export IndicatorVO for consistency
+export type { IndicatorVO } from './types/backend-aligned'
 
-// 后端返回的里程碑 VO
-export interface MilestoneVO {
-  milestoneId: number
-  indicatorId: number
-  indicatorDesc: string
-  milestoneName: string
-  milestoneDesc?: string
-  dueDate: string
-  targetProgress: number  // 主字段：目标进度 (0-100)
-  weightPercent?: number  // 已废弃：保留用于向后兼容
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
-  sortOrder: number
-  inheritedFromId?: number
-  createdAt: string
-  updatedAt: string
-  isPaired?: boolean
-}
-
-// 考核周期 VO
-export interface AssessmentCycleVO {
-  cycleId: number
-  cycleName: string
-  year: number
-  startDate: string
-  endDate: string
-  description?: string
-}
+// 考核周期 VO (已移至 backend-aligned.ts)
+export type { AssessmentCycleVO } from './types/backend-aligned'
 
 /**
  * 将后端 VO 转换为前端 StrategicTask 类型
  */
 // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
-function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
+function convertTaskVOToStrategicTask(vo: TaskVO): StrategicTask {
   return {
     id: String(vo.taskId),
     title: vo.taskName,
@@ -196,8 +117,8 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     unit: vo.unit ?? '%',
     responsibleDept: vo.responsibleDept ?? vo.targetOrgName,
     responsiblePerson: vo.responsiblePerson ?? '',
-    // 修复：正确处理所有状态值，后端返回的是小写字符串
-    status: (vo.status?.toLowerCase() as 'draft' | 'active' | 'archived' | 'distributed' | 'pending' | 'approved') ?? 'active',
+    // 修复：将后端返回的状态转换为大写，匹配 IndicatorStatus 枚举
+    status: (vo.status?.toUpperCase() as 'DRAFT' | 'ACTIVE' | 'ARCHIVED' | 'DISTRIBUTED' | 'PENDING' | 'APPROVED') ?? 'ACTIVE',
     isStrategic: vo.isStrategic ?? (vo.level === 'STRAT_TO_FUNC'),
     ownerDept: vo.ownerDept ?? vo.ownerOrgName,
     year: vo.year,
@@ -208,7 +129,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     pendingAttachments,
     statusAudit,
     distributionStatus: vo.distributionStatus
-  }
+  } as StrategicIndicator  // 添加类型断言确保类型正确
 }
 
 /**
@@ -243,11 +164,11 @@ export const strategicApi = {
   /**
    * 获取指定年份的战略任务（通过 cycle）
    */
-  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-  async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns TaskVO
+  async getTasksByYear(year: number): Promise<ApiResponse<TaskVO[]>> {
     // 获取所有任务，然后按年份过滤
-    // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-    const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
+    // eslint-disable-next-line no-restricted-syntax -- Backend API returns TaskVO
+    const response = await apiClient.get<ApiResponse<TaskVO[]>>('/tasks')
     if (response.success && response.data) {
       // 如果 task.year 为 null，则认为它适用于所有年份
       const filteredTasks = response.data.filter(t => !t.year || t.year === year)
@@ -259,10 +180,10 @@ export const strategicApi = {
   /**
    * 获取所有战略任务
    */
-  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-  async getAllTasks(): Promise<ApiResponse<StrategicTaskVO[]>> {
-    // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-    return apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns TaskVO
+  async getAllTasks(): Promise<ApiResponse<TaskVO[]>> {
+    // eslint-disable-next-line no-restricted-syntax -- Backend API returns TaskVO
+    return apiClient.get<ApiResponse<TaskVO[]>>('/tasks')
   },
 
   /**

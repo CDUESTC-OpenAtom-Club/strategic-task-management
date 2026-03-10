@@ -8,7 +8,7 @@ import strategicApi from '@/api/strategic'
 import { useDataValidator, type ValidationResult } from '@/composables/useDataValidator'
 import { logger } from '@/utils/logger'
 import { ElMessage } from 'element-plus'
-import { convertToUpdateRequest, hasBackendUpdates as hasBackendUpdatesUtil } from '@/utils/dataMappers'
+import { convertToUpdateRequest, hasBackendUpdates as hasBackendUpdatesUtil } from '@/utils/dataMappers/indicatorMapper'
 
 /**
  * 数据健康状态接口
@@ -657,6 +657,51 @@ export const useStrategicStore = defineStore('strategic', () => {
       throw err
     }
   }
+  /**
+   * 撤回已下发的指标
+   * 将指标状态从 DISTRIBUTED 改回 DRAFT，允许重新编辑
+   * 
+   * @param id 指标ID
+   */
+  const withdrawIndicator = async (id: string) => {
+    const index = indicators.value.findIndex(i => i.id === id)
+    if (index === -1) {
+      ElMessage.error('指标不存在')
+      return
+    }
+
+    const indicator = indicators.value[index]
+    
+    // 保存原始状态用于回滚
+    const originalState = { ...indicator }
+
+    try {
+      const { default: indicatorApi } = await import('@/api/indicator')
+      const response = await indicatorApi.withdrawIndicator(id)
+      
+      if (response.success && response.data) {
+        // 从后端 VO 转换为前端 StrategicIndicator
+        const { default: strategicApi } = await import('@/api/strategic')
+        const convertedIndicator = strategicApi.convertIndicatorVOToStrategicIndicator(response.data)
+        
+        // 更新本地状态
+        indicators.value[index] = convertedIndicator
+        indicators.value = [...indicators.value]
+        
+        logger.info(`[Strategic Store] Successfully withdrew indicator ${id}`)
+        ElMessage.success('指标撤回成功')
+      } else {
+        throw new Error(response.message || 'Failed to withdraw indicator')
+      }
+    } catch (err) {
+      logger.error(`[Strategic Store] Failed to withdraw indicator ${id}:`, err)
+      // 回滚：恢复原始状态
+      indicators.value[index] = originalState
+      indicators.value = [...indicators.value]
+      ElMessage.error('指标撤回失败，请稍后重试')
+      throw err
+    }
+  }
 
   const updateMilestoneStatus = (indicatorId: string, milestoneId: string, status: 'pending' | 'completed' | 'overdue') => {
     const indicator = getIndicatorById(indicatorId)
@@ -844,6 +889,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       replaceIndicatorId,
       updateIndicator,
       deleteIndicator,
+      withdrawIndicator,
     updateMilestoneStatus,
     addStatusAuditEntry,
     loadIndicatorsByYear,

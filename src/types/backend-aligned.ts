@@ -38,8 +38,29 @@ export enum IndicatorLevel {
   FUNC_TO_COLLEGE = 'FUNC_TO_COLLEGE'
 }
 
+/**
+ * Indicator lifecycle status enumeration
+ * Defines the four-state lifecycle of indicators
+ *
+ * Four-state lifecycle flow:
+ * DRAFT -> PENDING_REVIEW -> DISTRIBUTED -> ARCHIVED
+ *
+ * State descriptions:
+ * - DRAFT: Indicator is being created/edited, not yet submitted for review
+ * - PENDING_REVIEW: Indicator submitted and awaiting strategic dept approval of definition
+ * - DISTRIBUTED: Indicator approved and distributed to departments for progress tracking
+ * - ACTIVE: Legacy status (equivalent to DISTRIBUTED). Kept for backward compatibility.
+ * - ARCHIVED: Indicator soft-deleted or end-of-lifecycle
+ *
+ * Note: This lifecycle status (status field) is separate from progress approval status
+ * (progressApprovalStatus field). PENDING_REVIEW represents indicator definition review,
+ * while ProgressApprovalStatus.PENDING represents progress submission approval.
+ */
 export enum IndicatorStatus {
-  ACTIVE = 'ACTIVE',
+  DRAFT = 'DRAFT',
+  PENDING_REVIEW = 'PENDING_REVIEW',
+  DISTRIBUTED = 'DISTRIBUTED',
+  ACTIVE = 'ACTIVE', // Legacy: equivalent to DISTRIBUTED, kept for backward compatibility
   ARCHIVED = 'ARCHIVED'
 }
 

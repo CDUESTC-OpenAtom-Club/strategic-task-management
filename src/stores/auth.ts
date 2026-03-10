@@ -137,6 +137,11 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('auth_token')
 
     logger.debug('[Auth] 用户已登出，所有凭证已清除')
+
+    // 跳转到登录页
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login'
+    }
   }
 
   const fetchUser = async () => {

@@ -75,44 +75,50 @@ export interface ApprovalActionRequest {
 export const approvalApi = {
   /**
    * Start a new approval flow
+   * FIXED: Backend path is /plans/approval/instances
    */
   async startApprovalFlow(request: ApprovalStartRequest): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.post<ApiResponse<ApprovalDetail>>('/approval/instances', request)
+    return apiClient.post<ApiResponse<ApprovalDetail>>('/plans/approval/instances', request)
   },
 
   /**
    * Get pending approvals for a user
+   * FIXED: Backend path is /plans/approval/instances/pending
    */
   async getPendingApprovals(userId: number): Promise<ApiResponse<ApprovalDetail[]>> {
-    return apiClient.get<ApiResponse<ApprovalDetail[]>>('/approval/instances/pending', { userId })
+    return apiClient.get<ApiResponse<ApprovalDetail[]>>('/plans/approval/instances/pending', { userId })
   },
 
   /**
    * Get approval instance details
+   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
    */
-  async getApprovalInstance(id: number): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.get<ApiResponse<ApprovalDetail>>(`/approval/instances/${id}`)
+  async getApprovalInstance(instanceId: number): Promise<ApiResponse<ApprovalDetail>> {
+    return apiClient.get<ApiResponse<ApprovalDetail>>(`/plans/approval/instances/${instanceId}`)
   },
 
   /**
    * Approve an approval instance
+   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
    */
-  async approve(id: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.post<ApiResponse<ApprovalDetail>>(`/approval/instances/${id}/approve`, request)
+  async approve(instanceId: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
+    return apiClient.post<ApiResponse<ApprovalDetail>>(`/plans/approval/instances/${instanceId}/approve`, request)
   },
 
   /**
    * Reject an approval instance
+   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
    */
-  async reject(id: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.post<ApiResponse<ApprovalDetail>>(`/approval/instances/${id}/reject`, request)
+  async reject(instanceId: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
+    return apiClient.post<ApiResponse<ApprovalDetail>>(`/plans/approval/instances/${instanceId}/reject`, request)
   },
 
   /**
    * Get approval history for an instance
+   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
    */
-  async getApprovalHistory(id: number): Promise<ApiResponse<ApprovalHistory>> {
-    return apiClient.get<ApiResponse<ApprovalHistory>>(`/approval/instances/${id}/history`)
+  async getApprovalHistory(instanceId: number): Promise<ApiResponse<ApprovalHistory>> {
+    return apiClient.get<ApiResponse<ApprovalHistory>>(`/plans/approval/instances/${instanceId}/history`)
   }
 }
 

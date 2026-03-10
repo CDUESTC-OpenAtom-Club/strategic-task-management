@@ -22,7 +22,6 @@ const FRONTEND_TO_BACKEND: Record<string, string> = {
   indicatorDesc: 'indicatorDesc',
   // 权重
   weight: 'weightPercent',
-  weightPercent: 'weightPercent',
   // 排序
   sortOrder: 'sortOrder',
   // 备注
@@ -103,7 +102,7 @@ const BACKEND_FIELDS = [
   'parentIndicatorId', 'level', 'ownerOrgId', 'targetOrgId', 'year',
   'status', 'progress', 'progressApprovalStatus', 'pendingProgress',
   'pendingRemark', 'pendingAttachments', 'targetValue', 'actualValue',
-  'unit', 'responsiblePerson', 'name', 'taskContent', 'weight',
+  'unit', 'responsiblePerson', 'name', 'taskContent',
   'distributionStatus', 'statusAudit'
 ]
 

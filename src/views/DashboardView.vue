@@ -1085,9 +1085,9 @@ const handleExport = () => {
         '权重': item.weight,
         '完成进度': `${item.progress}%`,
         '里程碑进度': item.milestoneProgress,
-        '审批状态': item.approvalStatus === 'approved' ? '已通过' :
-                     item.approvalStatus === 'pending' ? '待审批' :
-                     item.approvalStatus === 'rejected' ? '已驳回' : '草稿',
+        '审批状态': item.progressApprovalStatus === 'APPROVED' ? '已通过' :
+                     item.progressApprovalStatus === 'PENDING' ? '待审批' :
+                     item.progressApprovalStatus === 'REJECTED' ? '已驳回' : '草稿',
         '备注': item.description || ''
       }))
 
@@ -1115,9 +1115,9 @@ const handleExport = () => {
         '权重': item.weight,
         '完成进度': `${item.progress}%`,
         '里程碑进度': item.milestoneProgress,
-        '审批状态': item.approvalStatus === 'approved' ? '已通过' :
-                     item.approvalStatus === 'pending' ? '待审批' :
-                     item.approvalStatus === 'rejected' ? '已驳回' : '草稿',
+        '审批状态': item.progressApprovalStatus === 'APPROVED' ? '已通过' :
+                     item.progressApprovalStatus === 'PENDING' ? '待审批' :
+                     item.progressApprovalStatus === 'REJECTED' ? '已驳回' : '草稿',
         '备注': item.description || ''
       }))
 

@@ -17,86 +17,14 @@ import type {
 } from '@/types'
 /* eslint-enable no-restricted-syntax */
 import { logger } from '@/utils/logger'
+// 导入统一的 IndicatorVO 和 MilestoneVO 接口，避免重复定义
+import type { IndicatorVO, MilestoneVO } from '@/api/types/backend-aligned'
 
-// 后端返回的战略任务 VO
-// eslint-disable-next-line no-restricted-syntax -- Backend VO uses strategic_task terminology
-export interface StrategicTaskVO {
-  taskId: number
-  cycleId: number
-  cycleName: string
-  year: number
-  taskName: string
-  taskDesc: string
-  taskType: 'BASIC' | 'DEVELOPMENT' | 'KEY' | 'SPECIAL' | 'QUANTITATIVE' | 'REGULAR'
-  orgId: number
-  orgName: string
-  createdByOrgId: number
-  createdByOrgName: string
-  sortOrder: number
-  remark?: string
-  createdAt: string
-  updatedAt: string
-}
+// 后端返回的战略任务 VO (已移至 backend-aligned.ts)
+export type { TaskVO as StrategicTaskVO } from '@/api/types/backend-aligned'
 
-// 后端返回的指标 VO
-export interface IndicatorVO {
-  indicatorId: number
-  taskId: number
-  taskName: string
-  indicatorName: string
-  indicatorDesc: string
-  isQualitative: boolean
-  type1: '定性' | '定量'
-  type2: '发展性' | '基础性'
-  progress: number
-  createdAt: string
-  weightPercent: number
-  remark: string
-  canWithdraw: boolean
-  targetValue: number
-  actualValue: number
-  unit: string
-  responsibleDept: string
-  responsiblePerson: string
-  status: 'ACTIVE' | 'ARCHIVED'
-  isStrategic: boolean
-  ownerDept: string
-  year: number
-  parentIndicatorId?: number
-  level: 'STRAT_TO_FUNC' | 'FUNC_TO_SEC'
-  progressApprovalStatus: 'NONE' | 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED'
-  pendingProgress?: number
-  pendingRemark?: string
-  pendingAttachments?: string
-  statusAudit?: string
-  milestones?: MilestoneVO[]
-}
-
-// 后端返回的里程碑 VO
-export interface MilestoneVO {
-  milestoneId: number
-  indicatorId: number
-  milestoneName: string
-  milestoneDesc: string
-  targetProgress: number
-  dueDate: string
-  weightPercent: number
-  sortOrder: number
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
-  isPaired: boolean
-}
-
-// 后端返回的考核周期 VO
-export interface AssessmentCycleVO {
-  cycleId: number
-  cycleName: string
-  year: number
-  startDate: string
-  endDate: string
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
-}
+// 后端返回的考核周期 VO (已移至 backend-aligned.ts)
+export type { AssessmentCycleVO } from '@/api/types/backend-aligned'
 
 /**
  * 指数退避重试辅助函数

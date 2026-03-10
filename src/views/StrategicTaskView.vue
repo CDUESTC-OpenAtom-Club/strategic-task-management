@@ -1,10 +1,11 @@
 <script setup lang="ts">
-  import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+  import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
   import { Plus, View, Download, Delete, ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right, Timer } from '@element-plus/icons-vue'
   import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
   import type { ElTable } from 'element-plus'
   // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types
   import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/types'
+  import { IndicatorStatus, ProgressApprovalStatus } from '@/types/entities'
   import { useStrategicStore } from '@/stores/strategic'
   import { useAuthStore } from '@/stores/auth'
   import { useTimeContextStore } from '@/stores/timeContext'
@@ -16,6 +17,7 @@
   import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
   import PlanApprovalDrawer from '@/features/approval/components/PlanApprovalDrawer.vue'
   import _MilestoneList from '@/components/milestone/MilestoneList.vue'
+  import { indicatorApi } from '@/api/indicator'
 
   // 使用共享 Store
   const strategicStore = useStrategicStore()
@@ -116,32 +118,48 @@
     return deptIndicators.reduce((sum, i) => sum + (i.weight || 0), 0)
   })
 
-  // 计算当前页面整体状态（基于所有指标）
+  // 计算当前页面整体状态（基于所有指标的生命周期状态，不考虑审批状态）
   const overallStatus = computed(() => {
     const list = indicators.value
     if (list.length === 0) {return { label: '暂无指标', type: 'info' }}
     
-    const hasPending = list.some(i => i.progressApprovalStatus === 'PENDING')
-    const hasRejected = list.some(i => i.progressApprovalStatus === 'REJECTED')
-    const allDistributed = list.every(i => !i.canWithdraw)
+    // 只基于指标生命周期状态计算整体状态（使用大写枚举值）
+    // 注意：ACTIVE 是旧状态，等同于 DISTRIBUTED
+    const allDraft = list.every(i => !i.status || i.status === IndicatorStatus.DRAFT)
+    const allPendingReview = list.every(i => i.status === IndicatorStatus.PENDING_REVIEW)
+    const allDistributed = list.every(i => 
+      i.status === IndicatorStatus.DISTRIBUTED || 
+      i.status === IndicatorStatus.ACTIVE ||
+      i.status === 'ACTIVE' // 兼容数据库中的旧状态
+    )
+    const hasDistributed = list.some(i => 
+      i.status === IndicatorStatus.DISTRIBUTED || 
+      i.status === IndicatorStatus.ACTIVE ||
+      i.status === 'ACTIVE' // 兼容数据库中的旧状态
+    )
+    const hasPendingReview = list.some(i => i.status === IndicatorStatus.PENDING_REVIEW)
     
-    if (hasPending) {return { label: '待审批', type: 'warning' }}
-    if (hasRejected) {return { label: '有驳回', type: 'danger' }}
     if (allDistributed) {return { label: '已下发', type: 'success' }}
-    return { label: '待下发', type: 'info' }
+    if (allPendingReview) {return { label: '待审核', type: 'warning' }}
+    if (allDraft) {return { label: '草稿', type: 'info' }}
+    if (hasDistributed) {return { label: '部分下发', type: 'warning' }}
+    if (hasPendingReview) {return { label: '部分待审核', type: 'warning' }}
+    
+    // 如果所有指标都是 ACTIVE 状态（旧数据），视为已下发
+    const allActive = list.every(i => i.status === 'ACTIVE')
+    if (allActive) {return { label: '已下发', type: 'success' }}
+    
+    // Defensive fallback: 默认为草稿状态
+    return { label: '草稿', type: 'info' }
   })
 
   // 判断当前部门是否有指标已下发（用于控制下发/撤回按钮和编辑权限）
-  // 基于 statusAudit 判断状态，而不是 canWithdraw 字段
   const hasDistributedIndicators = computed(() => {
-    return indicators.value.some(i => {
-      const audit = i.statusAudit || []
-      if (audit.length === 0) {return false} // 无审计记录 = 草稿状态 = 未下发
-      const lastAudit = audit[audit.length - 1]
-      const lastAction = lastAudit?.action
-      // 已下发状态：最后一次操作是 distribute（下发）或 reject（打回）或 approve（审批通过）
-      return lastAction === 'distribute' || lastAction === 'reject' || lastAction === 'approve' || lastAction === 'submit'
-    })
+    return indicators.value.some(i => 
+      i.status === IndicatorStatus.DISTRIBUTED || 
+      i.status === IndicatorStatus.ACTIVE ||
+      i.status === 'ACTIVE' // 兼容数据库中的旧状态
+    )
   })
 
   // 判断是否可以编辑（未下发状态才能编辑）
@@ -156,14 +174,37 @@
     if (isReadOnly.value) {return false}
     if (!canEdit.value) {return false}
     
-    const audit = indicator.statusAudit || []
-    if (audit.length === 0) {return true} // 无审计记录 = 草稿状态 = 可删除
-    
-    const lastAudit = audit[audit.length - 1]
-    const lastAction = lastAudit?.action
-    // 未下发状态才能删除
-    return lastAction !== 'distribute' && lastAction !== 'submit' && lastAction !== 'approve'
+    // 只有草稿状态才能删除（使用大写枚举值）
+    return !indicator.status || indicator.status === IndicatorStatus.DRAFT
   }
+  
+  // 待审批进度数量计算（独立于生命周期状态）
+  const pendingApprovalCount = computed(() => {
+    return indicators.value.filter(i => 
+      i.progressApprovalStatus === ProgressApprovalStatus.PENDING
+    ).length
+  })
+  
+  // 判断是否可以下发（没有待审批的进度时才能下发）
+  const canDistribute = computed(() => {
+    if (isReadOnly.value) {return false}
+    if (!canEdit.value) {return false}
+    
+    // 检查是否有指标可以下发（草稿或待审核状态，使用大写枚举值）
+    const hasUndistributed = indicators.value.some(i =>
+      !i.status || i.status === IndicatorStatus.DRAFT || i.status === IndicatorStatus.PENDING
+    )
+    
+    // 检查是否有待审批的进度
+    const hasPendingApproval = pendingApprovalCount.value > 0
+    
+    // 如果有待审批的进度，不允许下发
+    if (hasPendingApproval) {
+      return false
+    }
+    
+    return hasUndistributed
+  })
   
   // 表格引用和选中的指标
   const tableRef = ref<InstanceType<typeof ElTable>>()
@@ -730,7 +771,7 @@
   // 保存指标编辑
   const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
     // 如果已经在取消过程中或值无效，直接退出
-    if (editingIndicatorId.value === null) {return;} 
+    if (editingIndicatorId.value === null) {return} 
   
     if (editingIndicatorValue.value === null || editingIndicatorValue.value === undefined) {
         cancelIndicatorEdit()
@@ -741,7 +782,10 @@
       // 使用 Store 更新指标
       const updates: Partial<StrategicIndicator> = {}
       
-      if (field === 'type1' || field === 'type2') {
+      if (field === 'weight') {
+        // 权重字段强制转换为数字
+        (updates as Record<string, unknown>)[field] = Number(editingIndicatorValue.value)
+      } else if (field === 'type1' || field === 'type2') {
           updates[field] = editingIndicatorValue.value
           // 更新 isQualitative 状态如果修改的是 type1
           if (field === 'type1') {
@@ -761,7 +805,7 @@
       cancelIndicatorEdit()
       updateEditTime()
     } catch (error) {
-      console.error('Failed to save indicator:', error)
+      console.error('[StrategicTaskView] Failed to save indicator:', error)
       // 错误已经在Store中显示，这里不需要再显示
     }
   }
@@ -1062,13 +1106,6 @@
     return approvalIndicators.value.some(i => i.progressApprovalStatus === 'PENDING')
   })
 
-  // 待审批数量：如果部门有任何一个指标待审批，则显示该部门的总指标数（因为要一起审批）
-  const pendingApprovalCount = computed(() => {
-    if (!selectedDepartment.value) {return 0}
-    if (!hasPendingApproval.value) {return 0}
-    return approvalIndicators.value.length  // 显示该部门的总指标数
-  })
-
   // 查看审计日志
   const _handleViewAuditLog = (row: StrategicIndicator) => {
     currentAuditIndicator.value = row
@@ -1176,8 +1213,8 @@
             comment: approvalForm.value.comment || '审批通过',
             previousProgress: currentProgress,
             newProgress: pendingProgress,
-            previousStatus: 'pending_approval',
-            newStatus: 'active'
+            previousStatus: 'pending',
+            newStatus: 'distributed'
           })
 
           ElMessage.success('审批通过，进度已更新')
@@ -1200,8 +1237,8 @@
             comment: approvalForm.value.rejectReason,
             previousProgress: currentProgress,
             newProgress: pendingProgress,
-            previousStatus: 'pending_approval',
-            newStatus: 'rejected'
+            previousStatus: 'pending',
+            newStatus: 'distributed'
           })
 
           ElMessage.info('已驳回该进度填报')
@@ -1222,6 +1259,173 @@
   const handleViewDetail = (row: StrategicIndicator) => {
     currentDetail.value = row
     detailDrawerVisible.value = true
+  }
+
+  // ================== 指标审核工作流方法 ==================
+
+  // 判断是否为战略发展部
+  const isStrategicDept = computed(() => {
+    return authStore.userRole === 'strategic_dept' || props.selectedRole === 'strategic_dept'
+  })
+
+  // 计算指标权重总和（用于提交审核验证）
+  const getIndicatorWeightSum = (indicator: StrategicIndicator): number => {
+    // 如果指标有子指标，计算子指标权重总和
+    // 否则返回指标自身权重
+    return indicator.weight || 0
+  }
+
+  // 提交指标进行定义审核
+  const submitIndicatorForReview = async (indicatorId: string) => {
+    try {
+      const indicator = indicators.value.find(i => i.id.toString() === indicatorId)
+      if (!indicator) {
+        ElMessage.error('找不到指标')
+        return
+      }
+
+      // 验证权重总和是否为100
+      const weightSum = getIndicatorWeightSum(indicator)
+      if (weightSum !== 100) {
+        ElMessage.warning(`权重总和必须为100，当前为${weightSum}`)
+        return
+      }
+
+      ElMessageBox.confirm(
+        `确认提交指标 "${indicator.name}" 进行审核？`,
+        '提交审核',
+        {
+          confirmButtonText: '确认提交',
+          cancelButtonText: '取消',
+          type: 'info'
+        }
+      ).then(async () => {
+        const loading = ElLoading.service({
+          lock: true,
+          text: '正在提交审核...',
+          background: 'rgba(0, 0, 0, 0.7)'
+        })
+
+        try {
+          await indicatorApi.submitIndicatorForReview(indicatorId)
+          ElMessage.success('已提交审核')
+          
+          // 重新加载指标数据
+          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          updateEditTime()
+        } catch (error) {
+          console.error('提交审核失败:', error)
+          ElMessage.error('提交审核失败，请重试')
+        } finally {
+          loading.close()
+        }
+      }).catch(() => {
+        // 用户取消操作
+      })
+    } catch (error) {
+      console.error('提交审核失败:', error)
+      ElMessage.error('提交审核失败')
+    }
+  }
+
+  // 审核通过指标定义
+  const approveIndicatorReview = async (indicatorId: string) => {
+    try {
+      const indicator = indicators.value.find(i => i.id.toString() === indicatorId)
+      if (!indicator) {
+        ElMessage.error('找不到指标')
+        return
+      }
+
+      ElMessageBox.confirm(
+        `确认审核通过指标 "${indicator.name}"？\n\n审核通过后，指标将变为已下发状态。`,
+        '审核通过',
+        {
+          confirmButtonText: '确认通过',
+          cancelButtonText: '取消',
+          type: 'success'
+        }
+      ).then(async () => {
+        const loading = ElLoading.service({
+          lock: true,
+          text: '正在审核...',
+          background: 'rgba(0, 0, 0, 0.7)'
+        })
+
+        try {
+          await indicatorApi.approveIndicatorReview(indicatorId)
+          ElMessage.success('审核通过')
+          
+          // 重新加载指标数据
+          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          updateEditTime()
+        } catch (error) {
+          console.error('审核通过失败:', error)
+          ElMessage.error('审核通过失败，请重试')
+        } finally {
+          loading.close()
+        }
+      }).catch(() => {
+        // 用户取消操作
+      })
+    } catch (error) {
+      console.error('审核通过失败:', error)
+      ElMessage.error('审核通过失败')
+    }
+  }
+
+  // 驳回指标定义审核
+  const rejectIndicatorReview = async (indicatorId: string) => {
+    try {
+      const indicator = indicators.value.find(i => i.id.toString() === indicatorId)
+      if (!indicator) {
+        ElMessage.error('找不到指标')
+        return
+      }
+
+      // 使用 ElMessageBox.prompt 收集驳回原因
+      ElMessageBox.prompt(
+        `请输入驳回指标 "${indicator.name}" 的原因：`,
+        '审核驳回',
+        {
+          confirmButtonText: '确认驳回',
+          cancelButtonText: '取消',
+          inputType: 'textarea',
+          inputPlaceholder: '请输入驳回原因（必填）',
+          inputValidator: (value) => {
+            if (!value || !value.trim()) {
+              return '驳回原因不能为空'
+            }
+            return true
+          }
+        }
+      ).then(async ({ value: reason }) => {
+        const loading = ElLoading.service({
+          lock: true,
+          text: '正在驳回...',
+          background: 'rgba(0, 0, 0, 0.7)'
+        })
+
+        try {
+          await indicatorApi.rejectIndicatorReview(indicatorId, reason)
+          ElMessage.info('已驳回审核')
+          
+          // 重新加载指标数据
+          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          updateEditTime()
+        } catch (error) {
+          console.error('驳回审核失败:', error)
+          ElMessage.error('驳回审核失败，请重试')
+        } finally {
+          loading.close()
+        }
+      }).catch(() => {
+        // 用户取消操作
+      })
+    } catch (error) {
+      console.error('驳回审核失败:', error)
+      ElMessage.error('驳回审核失败')
+    }
   }
   
   // 打开下发弹窗
@@ -1424,21 +1628,23 @@
 
   // 全部下发（下发当前界面所有未下发的指标）
   const handleDistributeAll = async () => {
+    // 检查是否有待审批的进度
+    if (pendingApprovalCount.value > 0) {
+      ElMessage.warning(`有 ${pendingApprovalCount.value} 个指标有待审批的进度，请先完成审批后再下发`)
+      return
+    }
+    
     // 验证权重总和是否为100%
     if (departmentTotalWeight.value !== 100) {
       ElMessage.warning(`权重总和必须为100%，当前为${departmentTotalWeight.value}`)
       return
     }
     
-    // 基于 statusAudit 判断草稿状态
+    // 基于生命周期状态判断可下发的指标
     const pendingRows = indicators.value.filter(r => {
       if (!r.name) {return false} // 只下发有核心指标的记录
-      const audit = r.statusAudit || []
-      if (audit.length === 0) {return true} // 无审计记录 = 草稿状态
-      const lastAudit = audit[audit.length - 1]
-      const lastAction = lastAudit?.action
-      // 草稿状态：最后一次操作是 withdraw（撤回）或无操作
-      return lastAction === 'withdraw' || audit.length === 0
+      // 草稿或待审核状态的指标可以下发（使用大写枚举值）
+      return !r.status || r.status === IndicatorStatus.DRAFT || r.status === IndicatorStatus.PENDING
     })
     
     if (pendingRows.length === 0) {
@@ -1463,7 +1669,7 @@
       })
       
       try {
-        // 1. 先调用后端 API 更新所有指标（添加审计记录）
+        // 更新所有指标状态为已下发
         await Promise.all(
           pendingRows.map(row => {
             // 构建审计记录
@@ -1481,19 +1687,18 @@
             const updatedStatusAudit = [...(row.statusAudit || []), newAuditEntry]
             
             return strategicStore.updateIndicator(row.id.toString(), { 
-              canWithdraw: false,
               status: 'distributed',
               statusAudit: updatedStatusAudit
             })
           })
         )
         
-        // 2. 重新从后端加载数据，确保前端状态与后端一致
+        // 重新从后端加载数据，确保前端状态与后端一致
         await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
         
         loading.close()
         ElMessage.success({
-          message: `已成功下发 ${pendingRows.length} 个指标，已自动提交审批，当前状态：待审核`,
+          message: `已成功下发 ${pendingRows.length} 个指标`,
           duration: 5000,
           showClose: true
         })
@@ -1858,20 +2063,34 @@
             <el-button 
               :type="hasDistributedIndicators ? 'warning' : 'success'" 
               size="small" 
-              :disabled="isReadOnly" 
+              :disabled="isReadOnly"
               @click.stop="hasDistributedIndicators ? handleWithdrawAll() : handleDistributeAll()"
             >
               <el-icon><component :is="hasDistributedIndicators ? RefreshLeft : Promotion" /></el-icon>
               {{ hasDistributedIndicators ? '撤回' : '下发' }}
             </el-button>
-            <!-- 审批按钮 -->
+            <!-- 审批进度按钮（带徽章） -->
+            <el-badge 
+              v-if="pendingApprovalCount > 0" 
+              :value="pendingApprovalCount" 
+              class="approval-badge"
+            >
+              <el-button 
+                size="small" 
+                type="warning"
+                @click="handleOpenApproval"
+              >
+                <el-icon><Check /></el-icon>
+                审批进度
+              </el-button>
+            </el-badge>
             <el-button 
+              v-else
               size="small" 
-              :type="pendingApprovalCount > 0 ? 'primary' : 'default'"
               @click="handleOpenApproval"
             >
               <el-icon><Check /></el-icon>
-              审批{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
+              审批进度
             </el-button>
             <el-button size="small">
               <el-icon><Download /></el-icon>
@@ -1898,16 +2117,16 @@
             </el-button-group>
           </div>
           <div class="toolbar-right">
-            <el-tag 
-              :type="overallStatus.type" 
-              size="small" 
+            <el-tag
+              :type="overallStatus.type"
+              size="small"
               style="margin-right: 12px;"
             >
               状态: {{ overallStatus.label }}
             </el-tag>
-            <el-tag 
-              :type="departmentTotalWeight === 100 ? 'success' : 'danger'" 
-              size="small" 
+            <el-tag
+              :type="departmentTotalWeight === 100 ? 'success' : 'danger'"
+              size="small"
               style="margin-right: 12px;"
             >
               权重合计: {{ departmentTotalWeight }} / 100
@@ -1918,7 +2137,19 @@
             <span class="update-time">更新时间: {{ new Date().toLocaleString() }}</span>
           </div>
         </div>
-  
+
+        <!-- 待审批进度警告提示 -->
+        <el-alert
+          v-if="pendingApprovalCount > 0 && !hasDistributedIndicators"
+          type="warning"
+          :closable="false"
+          style="margin: 12px 16px;"
+        >
+          <template #title>
+            有 {{ pendingApprovalCount }} 个指标有待审批的进度，请先完成审批后再下发
+          </template>
+        </el-alert>
+
         <!-- Excel表格 -->
         <div class="excel-table-wrapper">
           <!-- 表格视图 -->
@@ -2089,10 +2320,46 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="120" align="center">
+                <el-table-column label="操作" width="180" align="center">
                   <template #default="{ row }">
                     <div class="action-buttons-inline">
+                      <!-- 提交审核按钮 - 草稿状态且权重为100 -->
+                      <el-button 
+                        v-if="row.status === IndicatorStatus.DRAFT && getIndicatorWeightSum(row) === 100"
+                        link 
+                        type="primary" 
+                        size="small" 
+                        @click="submitIndicatorForReview(row.id.toString())"
+                      >
+                        提交审核
+                      </el-button>
+                      
+                      <!-- 审核通过按钮 - 待审核状态且是战略发展部 -->
+                      <el-button 
+                        v-if="row.status === IndicatorStatus.PENDING_REVIEW && isStrategicDept"
+                        link 
+                        type="success" 
+                        size="small" 
+                        @click="approveIndicatorReview(row.id.toString())"
+                      >
+                        审核通过
+                      </el-button>
+                      
+                      <!-- 审核驳回按钮 - 待审核状态且是战略发展部 -->
+                      <el-button 
+                        v-if="row.status === IndicatorStatus.PENDING_REVIEW && isStrategicDept"
+                        link 
+                        type="warning" 
+                        size="small" 
+                        @click="rejectIndicatorReview(row.id.toString())"
+                      >
+                        审核驳回
+                      </el-button>
+                      
+                      <!-- 查看按钮 - 始终显示 -->
                       <el-button link type="primary" size="small" @click="handleViewDetail(row)">查看</el-button>
+                      
+                      <!-- 删除按钮 - 仅草稿状态可删除 -->
                       <el-button v-if="canDeleteIndicator(row)" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
                     </div>
                   </template>
@@ -3445,7 +3712,7 @@
     display: flex;
     flex-direction: column;
   }
-  
+
   .table-container {
     flex: 1;
     overflow: auto;

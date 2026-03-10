@@ -186,8 +186,8 @@ const handleBatchApprove = () => {
           comment: '一键审批通过',
           previousProgress: indicator.progress,
           newProgress: indicator.pendingProgress || indicator.progress,
-          previousStatus: 'pending_approval',
-          newStatus: 'active',
+          previousStatus: 'pending',
+          newStatus: 'distributed',
         })
 
         successCount++
@@ -247,8 +247,8 @@ const handleBatchReject = () => {
         comment: batchRejectReason.value,
         previousProgress: indicator.progress,
         newProgress: indicator.pendingProgress || indicator.progress,
-        previousStatus: 'pending_approval',
-        newStatus: 'rejected',
+        previousStatus: 'pending',
+        newStatus: 'distributed',
       })
 
       successCount++

@@ -76,13 +76,14 @@ export default defineConfig(({ mode }) => {
               target: env.VITE_API_TARGET || 'http://localhost:8080',
               changeOrigin: true,
               secure: false,
-              rewrite: path => path,
+              // 保持 /api 前缀，不进行路径重写
+              // 前端: /api/indicators → 后端: /api/indicators
               configure: (proxy, options) => {
                 proxy.on('error', (err, _req, _res) => {
                   console.error('⚠️ [Proxy Error]', err.message)
                 })
                 proxy.on('proxyReq', (proxyReq, req, _res) => {
-                  console.log('📤 [Proxy Request]', req.method, req.url, '→', options.target)
+                  console.log('📤 [Proxy Request]', req.method, req.url, '→', options.target + req.url)
                 })
                 proxy.on('proxyRes', (proxyRes, req, _res) => {
                   console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url)

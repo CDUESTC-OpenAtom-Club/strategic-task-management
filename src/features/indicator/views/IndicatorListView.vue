@@ -10,6 +10,7 @@ import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
 import { getProgressStatus, getProgressColor as _getProgressColor, getStatusTagType as _getStatusTagType } from '@/utils'
+import { logger } from '@/utils/logger'
 import type { StatusAuditEntry } from '@/types'
 import { useOrgStore } from '@/stores/org'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
@@ -29,15 +30,15 @@ const vFocus = {
 }
 
 // 获取操作类型配置（与 AuditLogDrawer 保持一致）
-const getActionConfig = (action: StatusAuditEntry['action']) => {
-  const configs = {
-    submit: { icon: Upload, label: '提交进度', type: 'primary' },
-    approve: { icon: Check, label: '审批通过', type: 'success' },
-    reject: { icon: Close, label: '审批驳回', type: 'danger' },
-    revoke: { icon: Refresh, label: '撤回提交', type: 'warning' },
-    update: { icon: Edit, label: '更新进度', type: 'info' },
-    distribute: { icon: Promotion, label: '下发指标', type: 'primary' }
-  }
+const configs = {
+  submit: { icon: Upload, label: '提交进度', type: 'primary' },
+  approve: { icon: Check, label: '审批通过', type: 'success' },
+  reject: { icon: Close, label: '审批驳回', type: 'danger' },
+  revoke: { icon: Refresh, label: '撤回提交', type: 'warning' },
+  update: { icon: Edit, label: '更新进度', type: 'info' },
+  distribute: { icon: Promotion, label: '下发指标', type: 'primary' }
+}
+const getActionConfig = (action: keyof typeof configs) => {
   return configs[action] || configs.update
 }
 
@@ -140,10 +141,13 @@ function isApprovalStatus(
 }
 
 // 接收父组件传递的选中角色和部门
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   viewingRole?: string  // 角色类型: 'strategic_dept' | 'functional_dept' | 'secondary_college'
   viewingDept?: string  // 部门名称: 如 '党委宣传部 | 宣传策划部'
-}>()
+}>(), {
+  viewingRole: 'strategic_dept',
+  viewingDept: ''
+})
 
 // 判断当前是否为战略发展部角色
 const isStrategicDept = computed(() => {
@@ -158,7 +162,15 @@ const isSecondaryCollege = computed(() => {
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，职能部门不能新增指标，历史年份只读）
-const canEdit = computed(() => authStore.userRole === 'strategic_dept' && isStrategicDept.value && !timeContext.isReadOnly)
+const canEdit = computed(() => {
+  // 只有战略发展部可以编辑，且非只读年份，且总体状态不为“已下发”
+  return (
+    authStore.userRole === 'strategic_dept' &&
+    isStrategicDept.value &&
+    !timeContext.isReadOnly &&
+    overallStatus.value !== 'active'
+  )
+})
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
@@ -264,7 +276,7 @@ const approvalIndicators = computed(() => {
     // 使用安全的状态获取，过滤掉 draft 和 none 状态
     return list.filter(i => {
       const safeStatus = getSafeApprovalStatus(i.progressApprovalStatus)
-      return safeStatus !== 'none' && safeStatus !== 'draft'
+      return safeStatus !== 'NONE' && safeStatus !== 'DRAFT'
     })
   }
 })
@@ -292,22 +304,22 @@ const _pendingApprovalCount = computed(() => {
 
   // 只统计待审批状态的指标数量
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  return list.filter(i => isApprovalStatus(i, 'pending')).length
+  return list.filter(i => isApprovalStatus(i, 'PENDING')).length
 })
 
 // 从 Store 获取任务列表
 const taskList = computed(() => strategicStore.tasks.map(t => ({
-  id: Number(t.id),
-  title: t.title,
-  desc: t.desc,
-  createTime: t.createTime,
-  cycle: t.cycle
+  id: Number(t.taskId),
+  title: t.taskName,
+  desc: t.taskDesc,
+  createTime: t.createdAt,
+  cycle: t.cycleId
 })))
 
 // 当前选中的任务
 const _currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
   id: 0,
-  title: '暂无任务',
+  taskName: '暂无任务',
   desc: '',
   createTime: '',
   cycle: ''
@@ -400,13 +412,13 @@ const overallStatus = computed(() => {
   const list = indicators.value
   if (list.length === 0) {return 'draft'}
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const hasPending = list.some(i => isApprovalStatus(i, 'pending'))
+  const hasPending = list.some(i => isApprovalStatus(i, 'PENDING'))
   if (hasPending) {return 'pending'}
-  const hasRejected = list.some(i => isApprovalStatus(i, 'rejected'))
+  const hasRejected = list.some(i => isApprovalStatus(i, 'REJECTED'))
   if (hasRejected) {return 'rejected'}
-  const allApproved = list.every(i => isApprovalStatus(i, 'approved'))
+  const allApproved = list.every(i => isApprovalStatus(i, 'APPROVED'))
   if (allApproved) {return 'approved'}
-  const hasActive = list.some(i => i.status === 'active')
+  const hasActive = list.some(i => i.status === 'ACTIVE')
   if (hasActive) {return 'active'}
   return 'draft'
 })
@@ -441,7 +453,7 @@ const _handleBatchDistributeByTask = (group: { taskContent: string; rows: Strate
 const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicIndicator[] }) => {
   // 找出所有待提交（draft）或已驳回（rejected）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = group.rows.filter(r => isApprovalStatus(r, ['draft', 'rejected']))
+  const pendingRows = group.rows.filter(r => isApprovalStatus(r, ['DRAFT', 'REJECTED']))
   
   if (pendingRows.length === 0) {
     ElMessage.warning('当前没有待提交的进度')
@@ -483,7 +495,8 @@ const _handleBatchFillByTask = (group: { taskContent: string; rows: StrategicInd
           previousProgress: row.progress,
           newProgress: row.pendingProgress,
           previousStatus: row.progressApprovalStatus,
-          newStatus: 'pending'
+          newStatus: 'PENDING',
+          auditId: undefined // Placeholder
         })
       }
 
@@ -534,7 +547,10 @@ const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicI
         action: 'revoke',
         comment: '批量撤回进度填报',
         previousStatus: 'PENDING',
-        newStatus: 'DRAFT'
+        newStatus: 'DRAFT',
+        previousProgress: '', // Placeholder
+        newProgress: '', // Placeholder
+        auditId: undefined // Placeholder
       })
     })
 
@@ -543,10 +559,10 @@ const _handleBatchRevokeByTask = (group: { taskContent: string; rows: StrategicI
 }
 
 // 全局批量提交（职能部门/二级学院专用）
-const _handleBatchSubmitAll = () => {
-  // 找出所有待提交（draft）或已驳回（rejected）的指标
+const handleBatchRevokeAll = () => {
+  // 找出所有待审批（PENDING）的指标
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, ['draft', 'rejected']))
+  const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))  // 使用大写
   
   if (pendingRows.length === 0) {
     ElMessage.warning('没有可提交的指标')
@@ -634,7 +650,10 @@ const _handleBatchRevokeAll = () => {
         action: 'revoke',
         comment: '批量撤回进度填报',
         previousStatus: 'PENDING',
-        newStatus: 'DRAFT'
+        newStatus: 'DRAFT',
+        previousProgress: '', // Placeholder
+        newProgress: '', // Placeholder
+        auditId: undefined // Placeholder
       })
     })
 
@@ -679,7 +698,7 @@ const assignmentMethod = ref<'self' | 'college'>('self')
 // 添加新里程碑
 const _addMilestone = () => {
   newRow.value.milestones.push({
-    id: Date.now(),
+    milestoneId: Date.now(),
     name: '',
     targetProgress: 0,
     deadline: '',
@@ -719,10 +738,12 @@ const _saveEdit = (field: 'title' | 'desc' | 'cycle' | 'createTime') => {
   }
 
   const task = taskList.value[currentTaskIndex.value]
-  if (field === 'title') {task.title = editingValue.value}
-  else if (field === 'desc') {task.desc = editingValue.value}
-  else if (field === 'cycle') {task.cycle = editingValue.value}
-  else if (field === 'createTime') {task.createTime = editingValue.value}
+  if (task) {
+    if (field === 'title') {task.title = editingValue.value}
+    else if (field === 'desc') {task.desc = editingValue.value}
+    else if (field === 'cycle') {task.cycle = editingValue.value}
+    else if (field === 'createTime') {task.createTime = editingValue.value}
+  }
 
   cancelEdit()
 }
@@ -1048,7 +1069,7 @@ const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipIt
     const validationResult = validateMilestone(m)
     
     // 使用 safeGet 安全获取字段值，缺失时使用默认值
-    const id = safeGet(m, 'id', `milestone-${index}`)
+    const id = safeGet(m, 'milestoneId', `milestone-${index}`)
     const name = safeGet(m, 'name', '未命名里程碑')
     const deadline = safeGet(m, 'deadline', '')
     const targetProgress = safeGet(m, 'targetProgress', 0)
@@ -1209,7 +1230,7 @@ const nearestMilestone = computed(() => {
       const deadline = safeGet(m, 'deadline', '')
       const name = safeGet(m, 'name', '未命名里程碑')
       const targetProgress = safeGet(m, 'targetProgress', 0)
-      const id = safeGet(m, 'id', '')
+      const id = safeGet(m, 'milestoneId', '')
       const status = safeGet(m, 'status', 'pending')
       
       return {
@@ -1329,6 +1350,30 @@ const allIndicatorsSubmitted = computed(() => {
   return indicators.value.every(row => isApprovalStatus(row, 'PENDING'))  // 使用大写
 })
 
+/**
+ * 计算属性：判断是否存在任何可供撤回的指标。
+ * 只有当至少有一个指标的状态是 'PENDING' (待审批) 时，才允许撤回。
+ * 
+ * @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
+ */
+const canWithdrawAny = computed(() => {
+  if (indicators.value.length === 0) {return false}
+  return indicators.value.some(row => isApprovalStatus(row, 'PENDING'))
+})
+
+/**
+ * 计算属性：为撤回按钮提供动态的提示信息。
+ */
+const withdrawTooltip = computed(() => {
+  if (timeContext.isReadOnly) {
+    return '当前时间窗口为只读，无法操作。'
+  }
+  if (canWithdrawAny.value) {
+    return '' // 如果可以撤回，则没有提示
+  }
+  return '没有待审批的指标可供撤回' // 如果不可撤回，提供原因
+})
+
 // 获取未填报的指标数量
 const unfilledIndicatorsCount = computed(() => {
   return indicators.value.filter(row => !isIndicatorFilled(row)).length
@@ -1428,6 +1473,12 @@ const handleSubmitAll = async () => {
 // 一键撤回所有已提交的指标
 // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
 const handleWithdrawAll = () => {
+  // 二次校验：确保有可撤回的指标
+  if (!canWithdrawAny.value) {
+    ElMessage.warning(withdrawTooltip.value)
+    return
+  }
+
   const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))  // 使用大写
   
   if (pendingRows.length === 0) {
@@ -1568,17 +1619,26 @@ const handleWithdrawAll = () => {
                 <el-icon><Upload /></el-icon>
                 一键提交
               </el-button>
-              <!-- 一键撤回按钮（所有指标都已提交时显示） -->
-              <el-button 
-                v-if="allIndicatorsSubmitted"
-                type="warning" 
-                size="small" 
-                :disabled="timeContext.isReadOnly"
-                @click="handleWithdrawAll"
+              <!-- 一键撤回按钮（有任何待审批指标时显示） -->
+              <el-tooltip
+                :content="withdrawTooltip"
+                :disabled="!timeContext.isReadOnly && canWithdrawAny"
+                effect="dark"
+                placement="top"
               >
-                <el-icon><RefreshLeft /></el-icon>
-                一键撤回
-              </el-button>
+                <span style="display: inline-block;"> <!-- Tooltip 需要一个包裹元素来处理 disabled 状态 -->
+                  <el-button 
+                    v-if="canWithdrawAny || timeContext.isReadOnly"
+                    type="warning" 
+                    size="small" 
+                    :disabled="timeContext.isReadOnly || !canWithdrawAny"
+                    @click="handleWithdrawAll"
+                  >
+                    <el-icon><RefreshLeft /></el-icon>
+                    一键撤回
+                  </el-button>
+                </span>
+              </el-tooltip>
                         <!-- 审批进度按钮 -->
                         <el-button 
                           link
@@ -1850,14 +1910,14 @@ const handleWithdrawAll = () => {
               v-for="(milestone, index) in currentDetail.milestones"
               :key="index"
               :timestamp="milestone.deadline"
-              :type="milestone.status === 'completed' ? 'success' : milestone.status === 'overdue' ? 'danger' : 'primary'"
+              :type="milestone.status === 'COMPLETED' ? 'success' : milestone.status === 'OVERDUE' ? 'danger' : 'primary'"
               placement="top"
             >
               <div class="timeline-card">
                 <div class="timeline-header">
                   <span class="action-text">{{ milestone.name }}</span>
-                  <el-tag size="small" :type="milestone.status === 'completed' ? 'success' : milestone.status === 'overdue' ? 'danger' : 'warning'">
-                    {{ milestone.status === 'completed' ? '已完成' : milestone.status === 'overdue' ? '已逾期' : '进行中' }}
+                  <el-tag size="small" :type="milestone.status === 'COMPLETED' ? 'success' : milestone.status === 'OVERDUE' ? 'danger' : 'warning'">
+                    {{ milestone.status === 'COMPLETED' ? '已完成' : milestone.status === 'OVERDUE' ? '已逾期' : '进行中' }}
                   </el-tag>
                 </div>
                 <div class="timeline-comment">

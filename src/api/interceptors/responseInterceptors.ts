@@ -254,20 +254,9 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
         
         const { useAuthStore } = await import('@/stores/auth')
         const authStore = useAuthStore()
+        
+        // logout() 会自动跳转到登录页，无需额外处理
         authStore.logout()
-        
-        const { ElMessage } = await import('element-plus')
-        ElMessage.warning({
-          message: '登录已过期，请重新登录',
-          duration: 3000,
-          showClose: true
-        })
-        
-        setTimeout(() => {
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login'
-          }
-        }, 100)
         
         return Promise.reject(error)
       }
@@ -302,23 +291,10 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       } catch (refreshError) {
         logger.error('❌ [API Auth] Token 刷新失败:', refreshError)
         
-        // 刷新失败，清除登录状态
+        // 刷新失败，清除登录状态并跳转（logout() 会自动跳转）
         const { useAuthStore } = await import('@/stores/auth')
         const authStore = useAuthStore()
         authStore.logout()
-        
-        const { ElMessage } = await import('element-plus')
-        ElMessage.warning({
-          message: '登录已过期，请重新登录',
-          duration: 3000,
-          showClose: true
-        })
-        
-        setTimeout(() => {
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login'
-          }
-        }, 100)
         
         return Promise.reject(refreshError)
       }

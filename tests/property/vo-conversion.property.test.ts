@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
+import type { IndicatorVO } from '@/api/types/backend-aligned'
 
 // ============================================================================
 // Mock localStorage
@@ -37,28 +38,8 @@ beforeAll(() => {
 
 
 // ============================================================================
-// 类型定义（模拟后端 VO）
+// 类型定义（使用统一的 backend-aligned 类型）
 // ============================================================================
-
-interface IndicatorVO {
-  indicatorId: number
-  indicatorDesc: string
-  progress?: number
-  weightPercent: number
-  targetOrgName?: string
-  ownerOrgName?: string
-  year: number
-  taskName: string
-  level?: string
-  status?: string
-  isQualitative?: boolean
-  type1?: string
-  type2?: string
-  responsibleDept?: string
-  ownerDept?: string
-  isStrategic?: boolean
-  milestones?: MilestoneVO[]
-}
 
 interface MilestoneVO {
   milestoneId: number

@@ -11,7 +11,7 @@ import { ElNotification } from 'element-plus'
 // 创建一个不使用认证的axios实例，专门用于健康检查
 const healthApi = axios.create({
   baseURL: '/api',
-  timeout: 5000,
+  timeout: 10000, // 增加超时时间到10秒，避免开发环境下的初始化延迟
   headers: {
     'Content-Type': 'application/json'
   }
@@ -33,7 +33,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
 
   try {
     // 尝试访问 Spring Boot Actuator 健康检查端点
-    const response = await healthApi.get('/actuator/health', { timeout: 5000 })
+    const response = await healthApi.get('/actuator/health', { timeout: 10000 })
 
     logger.debug('✅ [Health Check] 后端服务正常')
     return {
@@ -45,6 +45,17 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     }
   } catch (error: unknown) {
     logger.error('❌ [Health Check] 后端服务异常:', error)
+
+    // 处理超时错误
+    if (error.code === 'ECONNABORTED' && error.message?.includes('timeout')) {
+      return {
+        service: 'Backend API',
+        status: 'error',
+        message: '后端服务响应超时，可能正在启动或负载过高',
+        details: { error: error.message, code: error.code },
+        timestamp: new Date()
+      }
+    }
 
     if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
       return {
@@ -278,7 +289,7 @@ export function autoHealthCheck() {
   if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'true') {
     logger.debug('🏥 [Health Check] 开发环境，自动运行健康检查...')
     
-    // 延迟1秒执行，确保应用已初始化
+    // 延迟2秒执行，确保Vite代理服务器已完全初始化
     setTimeout(async () => {
       const results = await runFullHealthCheck()
       
@@ -314,6 +325,6 @@ export function autoHealthCheck() {
           position: 'bottom-right'
         })
       }
-    }, 1000)
+    }, 2000) // 增加延迟到2秒，给Vite代理更多初始化时间
   }
 }

@@ -6,6 +6,8 @@ import type {
   BatchDistributionRequest 
 } from '@/types'
 import { logger } from '@/utils/logger'
+// 导入统一的 IndicatorVO 和 MilestoneVO 接口，避免重复定义
+import type { IndicatorVO, MilestoneVO, IndicatorCreateRequest } from '@/api/types/backend-aligned'
 
 /**
  * 重试辅助函数 - 使用指数退避策略
@@ -47,42 +49,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
  * 指标 API 服务
  * 包含指标下发相关的接口
  */
-
-// 指标 VO 类型（与后端 IndicatorVO 对应）
-export interface IndicatorVO {
-  indicatorId: number
-  taskId: number
-  taskName: string
-  parentIndicatorId?: number
-  parentIndicatorDesc?: string
-  level: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'
-  // 组织信息字段 - 兼容前后端
-  ownerOrgId?: number        // 来源部门ID（可选）
-  ownerOrgName?: string      // 来源部门名称（可选）
-  ownerDept?: string         // 来源部门（与后端一致）
-  targetOrgId?: number       // 责任部门ID（可选）
-  targetOrgName?: string     // 责任部门名称（可选）
-  responsibleDept?: string   // 责任部门（与后端一致）
-  indicatorDesc: string
-  weightPercent: number
-  sortOrder: number
-  year: number
-  status: 'ACTIVE' | 'ARCHIVED'
-  remark?: string
-  createdAt: string
-  updatedAt: string
-  childIndicators?: IndicatorVO[]
-  milestones?: MilestoneVO[]
-}
-
-// 指标创建请求类型
-export interface IndicatorCreateRequest {
-  taskId: number                    // Required
-  parentIndicatorId?: number        // Optional
-  indicatorDesc: string             // Required (核心指标内容)
-  weightPercent?: number            // Optional (权重)
-  sortOrder?: number                // Optional (排序)
-  remark?: string                   // Optional (备注)
   type?: string                     // Optional (基础性/发展性)
   progress?: number                 // Optional (进度, default: 0)
   ownerOrgId?: number               // Optional (来源部门ID)

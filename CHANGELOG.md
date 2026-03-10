@@ -1,3 +1,23 @@
+## 1.0.2 (2026-03-08)
+
+### Bug Fixes
+
+- **状态管理**: 修复指标生命周期状态与进度审批状态混淆问题 ([#指标状态Bug修复](docs/INDICATOR-STATUS-FIX-SUMMARY.md))
+  - 分离生命周期状态（DRAFT/PENDING/DISTRIBUTED）和进度审批状态（NONE/PENDING/APPROVED/REJECTED）
+  - 状态标签只显示生命周期状态，审批状态通过独立徽章显示
+  - 有待审批进度时自动禁用下发按钮并显示警告提示
+  - 更新后端 `IndicatorStatus` 枚举：移除 ACTIVE/ARCHIVED，新增 PENDING
+  - 重构前端状态工具函数，新增 `getApprovalBadgeInfo()` 函数
+  - 优化 `StrategicTaskView.vue` 状态计算和下发逻辑
+
+### Technical Improvements
+
+- **类型安全**: 前后端状态枚举完全对齐，消除类型歧义
+- **代码质量**: 状态判断逻辑单一职责，提升可维护性
+- **用户体验**: 状态显示清晰，操作逻辑合理，防止误操作
+
+---
+
 ## 1.0.1 (2026-03-05)
 
 ### Bug Fixes

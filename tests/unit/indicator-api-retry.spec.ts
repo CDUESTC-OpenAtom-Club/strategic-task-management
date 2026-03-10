@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { indicatorApi } from '@/api/indicator'
 import { apiClient } from '@/shared/api/client'
-import type { IndicatorCreateRequest } from '@/api/indicator'
+import type { IndicatorCreateRequest } from '@/api/types/backend-aligned'
 
 // Mock the apiClient
 vi.mock('@/shared/api/client', () => ({

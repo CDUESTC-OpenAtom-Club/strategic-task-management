@@ -15,6 +15,15 @@ import { performanceMonitor } from './utils/performance'
 const app = createApp(App)
 const pinia = createPinia()
 
+// Register global directives
+app.directive('focus', {
+  mounted(el) {
+    // 对于 el-input 组件，需要找到内部的 input 元素
+    const input = el.querySelector('input') || el.querySelector('textarea') || el
+    input?.focus()
+  }
+})
+
 // Use plugins
 app.use(pinia)
 app.use(router)

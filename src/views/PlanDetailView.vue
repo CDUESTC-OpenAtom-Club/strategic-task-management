@@ -79,8 +79,21 @@ const handleEdit = () => {
   }
 }
 
-const handleSubmit = () => {
-  // TODO: 实现提交逻辑
+const handleSubmit = async () => {
+  if (!plan.value?.id) {
+    ElMessage.warning('计划ID不存在')
+    return
+  }
+  
+  try {
+    await planStore.submitPlan(plan.value.id)
+    ElMessage.success('计划已提交审核')
+    // 重新加载计划详情以更新状态
+    await loadPlan()
+  } catch (error) {
+    console.error('Failed to submit plan:', error)
+    ElMessage.error('提交失败，请稍后重试')
+  }
 }
 
 // 加载 Plan 详情

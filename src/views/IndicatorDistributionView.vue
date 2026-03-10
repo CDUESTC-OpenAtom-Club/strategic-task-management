@@ -79,6 +79,7 @@ const approvalIndicators = computed(() => {
 })
 
 // 待审批数量（用于按钮显示）- 基于 progressApprovalStatus === 'PENDING'
+// 注意：这是进度审批状态（progress approval），不是指标定义审核状态（lifecycle status）
 const pendingApprovalCount = computed(() => {
   if (!selectedCollege.value) {return 0}
   // 统计当前部门下发给该学院的、进度待审批的指标数量
@@ -890,8 +891,8 @@ const handleBatchWithdraw = async (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
   const withdrawableIndicators = childIndicators.filter(i => {
     const status = getChildStatus(i as StrategicIndicator)
-    // 进行中状态包含 distributed 和 approved，都可以撤回
-    return status === 'distributed' || status === 'pending' || status === 'approved'
+    // 进行中状态包含 distributed、active (legacy) 和 approved，都可以撤回
+    return status === 'distributed' || status === 'active' || status === 'pending' || status === 'approved'
   })
   
   if (withdrawableIndicators.length === 0) {
@@ -1082,7 +1083,7 @@ const collegeOverallStatus = computed(() => {
   if (status.pending > 0) {return { label: '待审批', type: 'warning' }}
   // 待下发：有草稿状态的指标
   if (status.draft > 0) {return { label: '待下发', type: 'info' }}
-  // 进行中：已下发或已通过的指标（正在执行中）
+  // 进行中：已下发、active (legacy) 或已通过的指标（正在执行中）
   if (status.distributed > 0 || status.approved > 0) {return { label: '进行中', type: 'success' }}
   
   return { label: '暂无指标', type: 'info' }
@@ -1146,13 +1147,15 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
 // 获取子指标状态
 // 状态流转：draft(草稿) → distributed(已下发) → pending(待审批，下级提交后) → approved(已通过)
 // 打回后回到 distributed 状态，撤销后回到 draft 状态
+// 注意：这里的 pending 状态是指进度审批待审批（progressApprovalStatus），不是指标定义审核（lifecycle status 的 PENDING_REVIEW）
+// Legacy ACTIVE status is treated as equivalent to DISTRIBUTED
 const getChildStatus = (child: StrategicIndicator) => {
   // 优先使用后端持久化的 distributionStatus（页面刷新后仍准确）
   if (child.distributionStatus) {
     const distributionStatusMap: Record<string, string> = {
       'DRAFT': 'draft',
       'DISTRIBUTED': 'distributed',
-      'PENDING': 'pending',
+      'PENDING_REVIEW': 'pending_review',  // 指标定义审核状态（不在此页面使用）
       'APPROVED': 'approved',
       'REJECTED': 'distributed',
     }
@@ -1178,6 +1181,7 @@ const getChildStatus = (child: StrategicIndicator) => {
     switch (status) {
       case 'draft': return 'info'            // 草稿 - 灰色 (Element Plus info 是灰色)
       case 'distributed': return 'primary'   // 已下发 - 蓝色 (Element Plus primary 是蓝色)
+    case 'active': return 'primary'        // 已下发 (legacy) - 蓝色
       case 'pending': return 'warning'       // 待审批 - 橙色
       case 'approved': return 'success'      // 已通过 - 绿色
       default: return 'info'
@@ -1189,6 +1193,7 @@ const _getStatusText = (status: string) => {
   switch (status) {
     case 'draft': return '草稿'
     case 'distributed': return '已下发'
+    case 'active': return '已下发'        // Legacy ACTIVE status
     case 'pending': return '待审批'
     case 'approved': return '已通过'
     default: return '已下发'
