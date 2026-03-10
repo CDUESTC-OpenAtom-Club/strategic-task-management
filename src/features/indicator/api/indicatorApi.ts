@@ -49,14 +49,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
  * 指标 API 服务
  * 包含指标下发相关的接口
  */
-  type?: string                     // Optional (基础性/发展性)
-  progress?: number                 // Optional (进度, default: 0)
-  ownerOrgId?: number               // Optional (来源部门ID)
-  targetOrgId?: number              // Optional (责任部门ID)
-  level?: 'STRAT_TO_FUNC' | 'FUNC_TO_COLLEGE'  // Optional
-  year?: number                     // Optional (年份)
-  canWithdraw?: boolean             // Optional (是否可撤回)
-}
 
 export interface MilestoneVO {
   milestoneId: number

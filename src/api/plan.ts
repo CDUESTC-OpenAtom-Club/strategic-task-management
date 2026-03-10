@@ -21,7 +21,7 @@ import type {
   AuditForm,
   Attachment
 } from '@/types'
-import type { PlanVO, TaskVO, IndicatorVO } from './types/backend-aligned'
+import type { PlanVO, TaskVO } from './types/backend-aligned'
 import { logger } from '@/utils/logger'
 
 /**

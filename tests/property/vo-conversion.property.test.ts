@@ -40,9 +40,6 @@ beforeAll(() => {
 // ============================================================================
 // 类型定义（使用统一的 backend-aligned 类型）
 // ============================================================================
-
-interface MilestoneVO {
-  milestoneId: number
   milestoneName: string
   targetProgress?: number
   weightPercent?: number

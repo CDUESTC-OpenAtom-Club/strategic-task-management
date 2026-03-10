@@ -17,8 +17,8 @@ import type {
 } from '@/types'
 /* eslint-enable no-restricted-syntax */
 import { logger } from '@/utils/logger'
-// 导入统一的 IndicatorVO 和 MilestoneVO 接口，避免重复定义
-import type { IndicatorVO, MilestoneVO } from '@/api/types/backend-aligned'
+// 导入统一的 IndicatorVO 接口，避免重复定义
+import type { IndicatorVO } from '@/api/types/backend-aligned'
 
 // 后端返回的战略任务 VO (已移至 backend-aligned.ts)
 export type { TaskVO as StrategicTaskVO } from '@/api/types/backend-aligned'
