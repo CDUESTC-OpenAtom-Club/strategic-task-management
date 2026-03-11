@@ -155,7 +155,10 @@ const getRoleConfig = (role: UserRole) => {
 
 // 获取状态配置
 const getStatusConfig = (status: 'active' | 'disabled' | 'locked') => {
-  const configs: Record<string, { label: string; type: string; icon: typeof Unlock | typeof Lock | typeof User }> = {
+  const configs: Record<
+    string,
+    { label: string; type: string; icon: typeof Unlock | typeof Lock | typeof User }
+  > = {
     active: { label: '启用', type: 'success', icon: Unlock },
     disabled: { label: '禁用', type: 'danger', icon: Lock },
     locked: { label: '锁定', type: 'warning', icon: Lock }
@@ -393,13 +396,54 @@ const handleSave = async () => {
       roleIds: userForm.value.roles
     }
 
+    let result
     if (dialogMode.value === 'create') {
       userData.password = userForm.value.password
-      await api.post('/admin/users', userData)
+      result = await api.post('/admin/users', userData)
       ElMessage.success('用户创建成功')
+
+      // 记录审计日志
+      try {
+        auditLogStore.logAction({
+          entityType: 'user',
+          entityId: String(result.data?.id || ''),
+          entityName: userData.realName as string,
+          action: 'create_user',
+          operator: authStore.user?.id || '',
+          operatorName: authStore.user?.name || '',
+          dataAfter: {
+            username: userData.username,
+            realName: userData.realName,
+            email: userData.email,
+            orgId: userData.orgId,
+            roles: userData.roleIds
+          }
+        })
+      } catch (logError) {
+        console.warn('记录审计日志失败:', logError)
+      }
     } else {
-      await api.put(`/admin/users/${editingUserId.value}`, userData)
+      // 获取原始数据用于审计日志
+      const originalUser = users.value.find(u => u.id === editingUserId.value)
+
+      result = await api.put(`/admin/users/${editingUserId.value}`, userData)
       ElMessage.success('用户信息更新成功')
+
+      // 记录审计日志
+      try {
+        auditLogStore.logAction({
+          entityType: 'user',
+          entityId: String(editingUserId.value),
+          entityName: userData.realName as string,
+          action: 'update_user',
+          operator: authStore.user?.id || '',
+          operatorName: authStore.user?.name || '',
+          dataBefore: originalUser,
+          dataAfter: userData
+        })
+      } catch (logError) {
+        console.warn('记录审计日志失败:', logError)
+      }
     }
 
     showUserDialog.value = false
@@ -439,6 +483,23 @@ const toggleUserStatus = async (user: UserManagementItem) => {
     })
 
     ElMessage.success(`${actionText}成功`)
+
+    // 记录审计日志
+    try {
+      auditLogStore.logAction({
+        entityType: 'user',
+        entityId: String(user.id),
+        entityName: user.realName,
+        action: 'toggle_user_status',
+        operator: authStore.user?.id || '',
+        operatorName: authStore.user?.name || '',
+        dataBefore: { status: user.status },
+        dataAfter: { status: newStatus }
+      })
+    } catch (logError) {
+      console.warn('记录审计日志失败:', logError)
+    }
+
     await loadUsers()
   } catch (error: unknown) {
     if (error !== 'cancel') {
@@ -463,6 +524,23 @@ const handleDelete = async (user: UserManagementItem) => {
 
     await api.delete(`/admin/users/${user.id}`)
     ElMessage.success('删除成功')
+
+    // 记录审计日志
+    try {
+      auditLogStore.logAction({
+        entityType: 'user',
+        entityId: String(user.id),
+        entityName: user.realName,
+        action: 'delete_user',
+        operator: authStore.user?.id || '',
+        operatorName: authStore.user?.name || '',
+        dataBefore: user,
+        dataAfter: { deleted: true, deletedAt: new Date().toISOString() }
+      })
+    } catch (logError) {
+      console.warn('记录审计日志失败:', logError)
+    }
+
     await loadUsers()
   } catch (error: unknown) {
     if (error !== 'cancel') {
@@ -499,7 +577,8 @@ const handleResetPassword = async () => {
 
   try {
     // 调用管理员重置密码API
-    const response = await api.put(`/api/admin/users/${passwordForm.value.userId}/password`, {
+    // 注意：api.put() 已经包含 /api 前缀，所以这里不需要再加
+    const response = await api.put(`/admin/users/${passwordForm.value.userId}/password`, {
       newPassword: passwordForm.value.newPassword
     })
 
