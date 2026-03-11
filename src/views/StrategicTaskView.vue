@@ -340,10 +340,7 @@ const indicators = computed(() => {
   let list = strategicStore.indicators.filter(i => !i.year || i.year === timeContext.currentYear)
 
   // 根据选中的部门筛选指标
-  // 战略发展部视角：显示所有 ownerDept = '战略发展部' 的战略指标
-  // 如果选择了具体部门，则只显示下发给该部门的指标
-  if (selectedDepartment.value && selectedDepartment.value !== '战略发展部') {
-    // 选择了其他部门：只显示下发给该部门的指标
+  if (selectedDepartment.value) {
     list = list.filter(
       i =>
         i.ownerDept === '战略发展部' && // 由战略发展部创建的指标
@@ -351,7 +348,7 @@ const indicators = computed(() => {
         i.isStrategic === true // 只显示战略指标，不显示子指标
     )
   } else {
-    // 没有选择部门，或选择的是战略发展部自己：显示所有战略发展部创建的战略指标
+    // 没有选择部门：显示所有战略发展部创建的战略指标
     list = list.filter(i => i.ownerDept === '战略发展部' && i.isStrategic === true)
   }
 
@@ -2557,11 +2554,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             <el-table-column label="操作" width="180" align="center">
               <template #default="{ row }">
                 <div class="action-buttons-inline">
-                  <!-- 提交审核按钮 - 草稿状态且权重为100 -->
+                  <!-- 提交审核按钮 - 草稿状态 -->
                   <el-button
-                    v-if="
-                      row.status === IndicatorStatus.DRAFT && getIndicatorWeightSum(row) === 100
-                    "
+                    v-if="row.status === IndicatorStatus.DRAFT"
                     link
                     type="primary"
                     size="small"
