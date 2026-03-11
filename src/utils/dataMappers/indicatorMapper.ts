@@ -62,6 +62,8 @@ const FRONTEND_TO_BACKEND: Record<string, string> = {
   distributionStatus: 'distributionStatus',
   // 审计日志（同步到后端持久化）
   statusAudit: 'statusAudit',
+  // 里程碑
+  milestones: 'milestones'
 }
 
 /**
@@ -91,25 +93,47 @@ const BACKEND_TO_FRONTEND: Record<string, string> = {
   unit: 'unit',
   responsiblePerson: 'responsiblePerson',
   distributionStatus: 'distributionStatus',
-  statusAudit: 'statusAudit',
+  statusAudit: 'statusAudit'
 }
 
 /**
- * 需要同步到后端的字段列表
+ * 需要同步到后端的字段列表（前端字段名）
  */
 const BACKEND_FIELDS = [
-  'canWithdraw', 'indicatorDesc', 'weightPercent', 'sortOrder', 'remark',
-  'parentIndicatorId', 'level', 'ownerOrgId', 'targetOrgId', 'year',
-  'status', 'progress', 'progressApprovalStatus', 'pendingProgress',
-  'pendingRemark', 'pendingAttachments', 'targetValue', 'actualValue',
-  'unit', 'responsiblePerson', 'name', 'taskContent',
-  'distributionStatus', 'statusAudit'
+  'canWithdraw',
+  'name',
+  'indicatorDesc',
+  'weight',
+  'weightPercent',
+  'sortOrder',
+  'remark',
+  'parentIndicatorId',
+  'level',
+  'ownerOrgId',
+  'targetOrgId',
+  'year',
+  'status',
+  'progress',
+  'progressApprovalStatus',
+  'pendingProgress',
+  'pendingRemark',
+  'pendingAttachments',
+  'targetValue',
+  'actualValue',
+  'unit',
+  'responsiblePerson',
+  'taskContent',
+  'distributionStatus',
+  'statusAudit',
+  'milestones'
 ]
 
 /**
  * 将前端更新数据转换为后端格式
  */
-export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Record<string, unknown> {
+export function convertToUpdateRequest(
+  updates: Partial<StrategicIndicator>
+): Record<string, unknown> {
   const request: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(updates)) {
@@ -119,9 +143,39 @@ export function convertToUpdateRequest(updates: Partial<StrategicIndicator>): Re
     }
 
     const backendKey = FRONTEND_TO_BACKEND[key]
-    
+
     if (backendKey) {
-      request[backendKey] = value
+      // statusAudit 需要序列化为 JSON 字符串
+      if (key === 'statusAudit' && Array.isArray(value)) {
+        request[backendKey] = JSON.stringify(value)
+      }
+      // milestones 需要转换为后端格式
+      else if (key === 'milestones' && Array.isArray(value)) {
+        request[backendKey] = value.map((ms: Record<string, unknown>) => {
+          // 转换状态值：前端可能使用小写的 pending/completed/overdue
+          // 后端使用大写的 NOT_STARTED/IN_PROGRESS/COMPLETED/DELAYED/CANCELED
+          let status = (ms.status as string) || 'NOT_STARTED'
+          if (status === 'pending') {
+            status = 'NOT_STARTED'
+          }
+          if (status === 'completed') {
+            status = 'COMPLETED'
+          }
+          if (status === 'overdue') {
+            status = 'DELAYED'
+          }
+
+          return {
+            milestoneId: (ms.id as number) > 0 ? ms.id : null, // 负数ID表示新建，转换为null
+            milestoneName: ms.name,
+            targetProgress: ms.targetProgress,
+            dueDate: ms.deadline,
+            status: status
+          }
+        })
+      } else {
+        request[backendKey] = value
+      }
     }
   }
 
