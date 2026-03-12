@@ -11,7 +11,7 @@
 
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMessageStore } from '@/stores/message'
+import { useMessageStore } from '@/features/messages/model/message'
 import { Bell } from '@element-plus/icons-vue'
 
 export function useNotificationCenter() {

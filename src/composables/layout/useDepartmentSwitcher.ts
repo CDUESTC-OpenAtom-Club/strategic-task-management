@@ -12,8 +12,8 @@
 
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useOrgStore } from '@/stores/org'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useOrgStore } from '@/features/organization/model/store'
 import type { UserRole } from '@/types'
 
 /** 部门选项接口 */

@@ -68,8 +68,8 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
             // Application should initialize without throwing errors
             try {
               // Test that core modules can be imported
-              expect(() => import('@/stores/auth')).not.toThrow()
-              expect(() => import('@/stores/plan')).not.toThrow()
+              expect(() => import('@/features/auth/model/store')).not.toThrow()
+              expect(() => import('@/features/plan/model/store')).not.toThrow()
               expect(() => import('@/router/index')).not.toThrow()
               return true
             } catch (error) {
@@ -83,8 +83,8 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
 
     it('should preserve Pinia store initialization behavior', async () => {
       // Import stores and verify they initialize correctly
-      const { useAuthStore } = await import('@/stores/auth')
-      const { usePlanStore } = await import('@/stores/plan')
+      const { useAuthStore } = await import('@/features/auth/model/store')
+      const { usePlanStore } = await import('@/features/plan/model/store')
       
       const authStore = useAuthStore()
       const planStore = usePlanStore()
@@ -105,7 +105,7 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
    */
   describe('Authentication Flows', () => {
     it('should preserve authentication state management behavior', async () => {
-      const { useAuthStore } = await import('@/stores/auth')
+      const { useAuthStore } = await import('@/features/auth/model/store')
       const authStore = useAuthStore()
 
       fc.assert(
@@ -164,7 +164,7 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
    */
   describe('State Management', () => {
     it('should preserve plan store state transitions', async () => {
-      const { usePlanStore } = await import('@/stores/plan')
+      const { usePlanStore } = await import('@/features/plan/model/store')
       const planStore = usePlanStore()
 
       fc.assert(
@@ -187,7 +187,7 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
     })
 
     it('should preserve store method signatures', async () => {
-      const { usePlanStore } = await import('@/stores/plan')
+      const { usePlanStore } = await import('@/features/plan/model/store')
       const planStore = usePlanStore()
 
       // Verify all expected methods exist

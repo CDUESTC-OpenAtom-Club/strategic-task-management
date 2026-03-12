@@ -17,7 +17,7 @@
  * - isCollege(name) → useOrgStore().isCollege(name)
  */
 
-import { useOrgStore } from '@/stores/org'
+import { useOrgStore } from '@/features/organization/model/store'
 
 // 战略发展部（系统管理员，不属于职能部门）
 export const STRATEGIC_DEPT = '战略发展部' as const

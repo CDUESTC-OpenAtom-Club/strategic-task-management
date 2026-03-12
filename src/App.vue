@@ -3,15 +3,15 @@ import { watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Aim, Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
-import YearSelector from '@/components/common/YearSelector.vue'
+import YearSelector from '@/shared/ui/form/YearSelector.vue'
 import {
   useAppLayout,
   useNavigation,
   useDepartmentSwitcher,
   useNotificationCenter
 } from '@/composables/layout'
-import { initApprovalNotifications } from '@/features/approval/services/approvalNotifications'
-import { disconnectWebSocket } from '@/shared/services/websocket'
+import { initApprovalNotifications } from '@/features/approval/lib/approvalNotifications'
+import { disconnectWebSocket } from '@/shared/api/websocket'
 
 const router = useRouter()
 

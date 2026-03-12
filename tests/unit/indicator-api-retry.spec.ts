@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { indicatorApi } from '@/api/indicator'
+import { indicatorApi } from '@/api'
 import { apiClient } from '@/shared/api/client'
 import type { IndicatorCreateRequest } from '@/api/types/backend-aligned'
 

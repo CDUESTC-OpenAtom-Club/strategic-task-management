@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/features/auth/model/store'
 import { startProgress, doneProgress } from './nprogress'
 import './nprogress.css'
 
@@ -29,49 +29,49 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@/views/LoginView.vue'),
+    component: () => import('@/pages/auth/ui/LoginPage.vue'),
     meta: { requiresAuth: false }
   },
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: () => import('@/features/dashboard/views/DashboardView.vue'),
+    component: () => import('@/pages/dashboard/ui/DashboardPage.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/strategic-tasks',
     name: 'StrategicTasks',
-    component: () => import('@/views/StrategicTaskView.vue'),
+    component: () => import('@/pages/strategy/tasks/ui/StrategicTaskPage.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept'] }
   },
   {
     path: '/indicators',
     name: 'Indicators',
-    component: () => import('@/features/indicator/views/IndicatorListView.vue'),
+    component: () => import('@/pages/strategy/indicators/ui/IndicatorListPage.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/distribution',
     name: 'Distribution',
-    component: () => import('@/features/indicator/views/IndicatorDistributionView.vue'),
+    component: () => import('@/pages/strategy/indicators/ui/IndicatorEditPage.vue'),
     meta: { requiresAuth: true, roles: ['functional_dept'] }
   },
   {
     path: '/messages',
     name: 'Messages',
-    component: () => import('@/views/MessageCenterView.vue'),
+    component: () => import('@/pages/messages/ui/MessageCenterPage.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/profile',
     name: 'Profile',
-    component: () => import('@/views/ProfileView.vue'),
+    component: () => import('@/pages/profile/ui/ProfilePage.vue'),
     meta: { requiresAuth: true }
   },
   {
     path: '/admin/console',
     name: 'AdminConsole',
-    component: () => import('@/views/AdminConsoleView.vue'),
+    component: () => import('@/pages/admin/ui/AdminConsolePage.vue'),
     meta: {
       requiresAuth: true,
       roles: ['strategic_dept']
@@ -80,7 +80,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/403',
     name: 'Forbidden',
-    component: () => import('@/views/403View.vue'),
+    component: () => import('@/pages/error/ui/ForbiddenPage.vue'),
     meta: { requiresAuth: false }
   },
 
@@ -95,7 +95,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans',
     name: 'PlanList',
-    component: () => import('@/features/plan/views/PlanListView.vue'),
+    component: () => import('@/pages/strategy/plans/ui/PlanListPage.vue'),
     meta: { requiresAuth: true }
   },
 
@@ -106,7 +106,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans/:id',
     name: 'plan-detail',
-    component: () => import('@/features/plan/views/PlanDetailView.vue'),
+    component: () => import('@/pages/strategy/plans/ui/PlanDetailPage.vue'),
     meta: { requiresAuth: true }
   },
 
@@ -117,7 +117,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans/:id/edit',
     name: 'plan-edit',
-    component: () => import('@/features/plan/views/PlanEditView.vue'),
+    component: () => import('@/pages/strategy/plans/ui/PlanEditPage.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept'] }
   },
 
@@ -127,7 +127,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/plans/create',
     name: 'plan-create',
-    component: () => import('@/features/plan/views/PlanEditView.vue'),
+    component: () => import('@/pages/strategy/plans/ui/PlanEditPage.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept'] }
   },
 
@@ -138,7 +138,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/fills/indicator/:indicatorId',
     name: 'indicator-fill',
-    component: () => import('@/features/indicator/views/IndicatorFillView.vue'),
+    component: () => import('@/pages/strategy/indicators/ui/IndicatorFillPage.vue'),
     meta: { requiresAuth: true }
   },
 
@@ -149,7 +149,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/audit/plan/:fillId',
     name: 'plan-audit',
-    component: () => import('@/features/plan/views/PlanAuditView.vue'),
+    component: () => import('@/pages/strategy/plans/ui/PlanAuditPage.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept', 'functional_dept'] }
   },
 
@@ -159,14 +159,14 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/audit/pending',
     name: 'pending-audit',
-    component: () => import('@/views/PendingAuditView.vue'),
+    component: () => import('@/pages/approval/ui/PendingAuditPage.vue'),
     meta: { requiresAuth: true, roles: ['strategic_dept', 'functional_dept'] }
   },
 
   {
     path: '/:pathMatch(.*)*',
     name: '404',
-    component: () => import('@/views/404.vue')
+    component: () => import('@/pages/error/ui/NotFoundPage.vue')
   }
 ]
 

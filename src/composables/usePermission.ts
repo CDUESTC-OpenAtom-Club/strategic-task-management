@@ -11,7 +11,7 @@
  */
 
 import { computed, type ComputedRef } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/features/auth/model/store'
 import type { PermissionCode, UserRoleWithPermission as _UserRoleWithPermission, Plan, PlanFill, Indicator, IndicatorFill } from '@/types'
 
 /**

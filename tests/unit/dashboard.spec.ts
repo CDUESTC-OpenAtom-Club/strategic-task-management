@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useAuthStore } from '@/stores/auth'
-import { useStrategicStore } from '@/stores/strategic'
+import { useDashboardStore } from '@/features/dashboard/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useStrategicStore } from '@/features/task/model/strategic'
 import { isSecondaryCollege } from '@/utils/colors'
 
 // Mock localStorage for node environment

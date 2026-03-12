@@ -5,7 +5,7 @@ import {
   createRequestErrorInterceptor,
   createResponseInterceptor,
   createResponseErrorInterceptor
-} from './interceptors'
+} from '@/shared/api/interceptors'
 
 // Create axios instance
 const api = axios.create({
@@ -98,9 +98,19 @@ export const apiService = {
 export default api
 
 // 重新导出工具函数
-export { formatErrorMessage, isRetryableError, getErrorSeverity } from './errorHandler'
+export { formatErrorMessage, isRetryableError, getErrorSeverity } from '@/shared/api/errorHandler'
 export type { ExtendedErrorInfo } from '@/types/error'
 export { refreshCache, refreshCachePattern, cacheManager, getFromCache } from '@/utils/cache'
 
-// 导出用户API
-export { userApi } from './user'
+// ============================================================================
+// 兼容层 - 从新位置重新导出 API
+// ============================================================================
+
+// 从 features 重新导出 API（保持向后兼容）
+export { approvalApi } from '@/features/approval/api/approval'
+export { indicatorApi } from '@/features/strategic-indicator/api/indicator'
+export { milestoneApi } from '@/features/strategic-indicator/api/milestone'
+export { orgApi } from '@/features/organization/api/org'
+export { userApi } from '@/features/auth/api/user'
+export { planApi, indicatorFillApi, planFillApi } from '@/features/plan/api/planApi'
+export { strategicApi } from '@/features/task/api/strategicApi'

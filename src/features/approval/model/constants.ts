@@ -1,0 +1,42 @@
+/**
+ * Approval Feature Constants
+ */
+
+export const APPROVAL_STATUS = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  CANCELLED: 'CANCELLED'
+} as const
+
+export const APPROVAL_STATUS_LABELS = {
+  [APPROVAL_STATUS.PENDING]: '待审批',
+  [APPROVAL_STATUS.APPROVED]: '已通过',
+  [APPROVAL_STATUS.REJECTED]: '已驳回',
+  [APPROVAL_STATUS.CANCELLED]: '已取消'
+} as const
+
+export const APPROVAL_STATUS_COLORS = {
+  [APPROVAL_STATUS.PENDING]: 'warning',
+  [APPROVAL_STATUS.APPROVED]: 'success',
+  [APPROVAL_STATUS.REJECTED]: 'danger',
+  [APPROVAL_STATUS.CANCELLED]: 'info'
+} as const
+
+export const ENTITY_TYPES = {
+  INDICATOR: 'INDICATOR',
+  PLAN: 'PLAN',
+  REPORT: 'REPORT'
+} as const
+
+export const ENTITY_TYPE_LABELS = {
+  [ENTITY_TYPES.INDICATOR]: '指标',
+  [ENTITY_TYPES.PLAN]: '计划',
+  [ENTITY_TYPES.REPORT]: '报告'
+} as const
+
+export const FLOW_CODES = {
+  INDICATOR_APPROVAL: 'INDICATOR_APPROVAL',
+  PLAN_APPROVAL: 'PLAN_APPROVAL',
+  REPORT_APPROVAL: 'REPORT_APPROVAL'
+} as const

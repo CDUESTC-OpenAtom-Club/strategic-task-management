@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
-import { useStrategicStore } from '@/stores/strategic'
+import { useStrategicStore } from '@/features/task/model/strategic'
 import type { StrategicIndicator } from '@/types'
 import {
   PROGRESS_APPROVAL_STATUS_VALUES,
