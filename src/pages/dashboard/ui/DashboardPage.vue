@@ -19,6 +19,8 @@ import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/features/organization/model/store'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/composables/useLoadingState'
+// 导入定时器管理
+import { useTimeoutManager } from '@/composables/useTimeoutManager'
 
 // 帮助提示内容
 const helpTexts = {
@@ -87,6 +89,9 @@ const statusColors = {
   warning: '#E6A23C', // 黄色 - 预警
   delayed: '#F56C6C'  // 红色 - 延期
 }
+
+// 获取定时器管理器
+const { addDelayedSequence, addTimeout } = useTimeoutManager()
 
 // 计算指标状态的函数
 const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
@@ -486,7 +491,7 @@ const monthIndicatorStats = computed(() => {
 // 处理月份指标卡片关闭
 const handleCloseMonthIndicatorCard = () => {
   showMonthIndicatorCard.value = false
-  setTimeout(() => {
+  addTimeout(() => {
     selectedMonthInDrillDown.value = null
     selectedStatusFilter.value = null
   }, 400)
@@ -693,7 +698,7 @@ const collegeMonthIndicatorStats = computed(() => {
 // 处理学院月份指标卡片关闭
 const handleCloseCollegeMonthIndicatorCard = () => {
   showCollegeMonthIndicatorCard.value = false
-  setTimeout(() => {
+  addTimeout(() => {
     selectedMonthInCollegeDrillDown.value = null
     selectedStatusFilter.value = null
   }, 400)
@@ -807,7 +812,7 @@ const handleCloseIndicatorCard = () => {
   // 先触发退出动画
   showIndicatorCard.value = false
   // 延迟清空数据，等动画完成
-  setTimeout(() => {
+  addTimeout(() => {
     selectedBenchmarkDept.value = null
     selectedStatusFilter.value = null
   }, 400)
@@ -2067,10 +2072,8 @@ watch(showIndicatorCard, () => {
   resizeChart()
 
   // 动画过程中多次调整，确保平滑
-  setTimeout(resizeChart, 100)
-  setTimeout(resizeChart, 200)
-  setTimeout(resizeChart, 300)
-  setTimeout(() => {
+  addDelayedSequence(resizeChart, [100, 200, 300])
+  addTimeout(() => {
     resizeChart()
     // 动画结束后重新初始化图表
     initBenchmarkChart()
@@ -2084,10 +2087,8 @@ watch(showMonthIndicatorCard, () => {
   }
 
   resizeChart()
-  setTimeout(resizeChart, 100)
-  setTimeout(resizeChart, 200)
-  setTimeout(resizeChart, 300)
-  setTimeout(() => {
+  addDelayedSequence(resizeChart, [100, 200, 300])
+  addTimeout(() => {
     resizeChart()
     initBenchmarkChart()
   }, 400)
@@ -2100,10 +2101,8 @@ watch(showCollegeMonthIndicatorCard, () => {
   }
 
   resizeChart()
-  setTimeout(resizeChart, 100)
-  setTimeout(resizeChart, 200)
-  setTimeout(resizeChart, 300)
-  setTimeout(() => {
+  addDelayedSequence(resizeChart, [100, 200, 300])
+  addTimeout(() => {
     resizeChart()
     initCollegeChart()
   }, 400)

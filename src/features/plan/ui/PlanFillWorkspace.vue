@@ -33,8 +33,8 @@ import {
   Paperclip as _Paperclip
 } from '@element-plus/icons-vue'
 import type { Plan, Task as _Task, Indicator as _Indicator, IndicatorFill, Milestone } from '@/types'
-import IndicatorFillForm from '@/features/indicator/ui/IndicatorFillForm.vue'
-import IndicatorFillHistory from '@/features/indicator/ui/IndicatorFillHistory.vue'
+import IndicatorFillForm from '@/shared/ui/form/indicator/IndicatorFillForm.vue'
+import IndicatorFillHistory from '@/shared/ui/form/indicator/IndicatorFillHistory.vue'
 
 /**
  * Plan 填报工作区 - 分栏式布局
