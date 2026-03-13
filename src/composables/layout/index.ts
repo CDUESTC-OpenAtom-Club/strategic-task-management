@@ -1,13 +1,17 @@
 /**
- * Layout Composables 统一导出
+ * Layout Composables - Backward Compatibility Layer
  *
- * @module composables/layout
+ * This file provides backward compatibility for imports from the old composables/layout/ directory.
+ * All layout composables have been migrated to @/shared/lib/layout/.
+ *
+ * Migration Map:
+ * - useAppLayout → @/shared/lib/layout/useAppLayout
+ * - useNavigation → @/shared/lib/layout/useNavigation
+ * - useDepartmentSwitcher → @/shared/lib/layout/useDepartmentSwitcher
+ * - useNotificationCenter → @/shared/lib/layout/useNotificationCenter
+ *
+ * @deprecated Import from @/shared/lib/layout instead
  */
 
-export { useAppLayout } from './useAppLayout'
-export { useNavigation } from './useNavigation'
-export { useDepartmentSwitcher } from './useDepartmentSwitcher'
-export { useNotificationCenter } from './useNotificationCenter'
-
-export type { TabConfig } from './useNavigation'
-export type { DepartmentOption } from './useDepartmentSwitcher'
+// Re-export from new location
+export * from '@/shared/lib/layout'

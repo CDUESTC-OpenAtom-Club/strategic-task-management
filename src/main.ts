@@ -67,33 +67,34 @@ if (import.meta.env.DEV) {
 autoHealthCheck()
 
 // 开发环境下暴露调试工具到全局
-if (import.meta.env.DEV) {
-  // 暴露 stores 到全局，方便在控制台调试
-  import('./stores/auth').then(({ useAuthStore }) => {
-    const authStore = useAuthStore()
-    interface DebugTools {
-      authStore: ReturnType<typeof useAuthStore>
-      tokenManager: unknown
-      pinia: typeof pinia
-    }
-    ;(window as Window & { __DEBUG__: DebugTools }).__DEBUG__ = {
-      authStore,
-      tokenManager: null,
-      pinia,
-    }
-    
-    // 延迟加载 tokenManager
-    import('./utils/tokenManager').then(({ tokenManager }) => {
-      ;(window as Window & { __DEBUG__: DebugTools }).__DEBUG__.tokenManager = tokenManager
-    })
-    
-    // eslint-disable-next-line no-console
-    console.log('%c🔧 调试工具已加载', 'color: #E6A23C; font-size: 14px; font-weight: bold')
-    // eslint-disable-next-line no-console
-    console.log('%c使用 window.__DEBUG__ 访问调试工具', 'color: #909399; font-size: 12px')
-    // eslint-disable-next-line no-console
-    console.log('%c示例: window.__DEBUG__.authStore.user', 'color: #909399; font-size: 12px')
-    // eslint-disable-next-line no-console
-    console.log('%c示例: window.__DEBUG__.tokenManager.getAccessToken()', 'color: #909399; font-size: 12px')
-  })
-}
+// TODO: 创建 stores/auth 和 utils/tokenManager 后取消注释
+// if (import.meta.env.DEV) {
+//   // 暴露 stores 到全局，方便在控制台调试
+//   import('./stores/auth').then(({ useAuthStore }) => {
+//     const authStore = useAuthStore()
+//     interface DebugTools {
+//       authStore: ReturnType<typeof useAuthStore>
+//       tokenManager: unknown
+//       pinia: typeof pinia
+//     }
+//     ;(window as Window & { __DEBUG__: DebugTools }).__DEBUG__ = {
+//       authStore,
+//       tokenManager: null,
+//       pinia,
+//     }
+//
+//     // 延迟加载 tokenManager
+//     import('./utils/tokenManager').then(({ tokenManager }) => {
+//       ;(window as Window & { __DEBUG__: DebugTools }).__DEBUG__.tokenManager = tokenManager
+//     })
+//
+//     // eslint-disable-next-line no-console
+//     console.log('%c🔧 调试工具已加载', 'color: #E6A23C; font-size: 14px; font-weight: bold')
+//     // eslint-disable-next-line no-console
+//     console.log('%c使用 window.__DEBUG__ 访问调试工具', 'color: #909399; font-size: 12px')
+//     // eslint-disable-next-line no-console
+//     console.log('%c示例: window.__DEBUG__.authStore.user', 'color: #909399; font-size: 12px')
+//     // eslint-disable-next-line no-console
+//     console.log('%c示例: window.__DEBUG__.tokenManager.getAccessToken()', 'color: #909399; font-size: 12px')
+//   })
+// }

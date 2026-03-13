@@ -1,31 +1,47 @@
 /**
  * 统一错误响应类型定义
- * 
+ *
  * 定义前后端统一的错误响应格式，用于错误追踪和处理
- * 
+ *
  * **Validates: Requirements 3.1.1, 3.1.5**
  */
 
 /**
  * 统一的 API 错误响应格式
- * 
- * @property code - 错误码，如 "AUTH_001"
+ * 根据 API 文档，错误响应格式为：
+ * {
+ *   "code": 2002,
+ *   "message": "Token无效",
+ *   "timestamp": "2024-01-21T10:00:00"
+ * }
+ *
+ * 支持的错误字段可能包含：
+ * errors, requiredPermission, resourceType, resourceId,
+ * indicatorId, currentStatus, suggestion, errorId
+ *
+ * @property code - 错误码，数字类型，如 2002
  * @property message - 用户友好的错误消息
  * @property details - 详细错误信息（开发环境可用）
- * @property requestId - 请求 ID，用于日志关联和问题追踪
  * @property timestamp - ISO 8601 格式时间戳
  */
 export interface ApiErrorResponse {
-  /** 错误码，格式为 "模块_编号"，如 "AUTH_001" */
-  code: string
+  /** 错误码，数字类型，如 2002 */
+  code: number
   /** 用户友好的错误消息 */
   message: string
   /** 详细错误信息，仅在开发环境返回 */
   details?: Record<string, unknown>
-  /** 请求 ID，用于日志关联和问题追踪 */
-  requestId: string
   /** ISO 8601 格式时间戳 */
-  timestamp: string
+  timestamp?: string
+  // Additional error fields from API documentation
+  errors?: Array<{ field: string; message: string }>
+  requiredPermission?: string
+  resourceType?: string
+  resourceId?: string
+  indicatorId?: number
+  currentStatus?: string
+  suggestion?: string
+  errorId?: string
 }
 
 /**
@@ -106,13 +122,10 @@ export function isApiErrorResponse(error: unknown): error is ApiErrorResponse {
   if (typeof error !== 'object' || error === null) {
     return false
   }
-  
+
   const obj = error as Record<string, unknown>
   return (
-    typeof obj.code === 'string' &&
-    typeof obj.message === 'string' &&
-    typeof obj.requestId === 'string' &&
-    typeof obj.timestamp === 'string'
+    typeof obj.code === 'number' && typeof obj.message === 'string'
   )
 }
 

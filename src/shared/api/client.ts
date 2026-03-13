@@ -129,10 +129,13 @@ export class ApiClient {
     const statusCode = error.response?.status || 500
     const responseData = error.response?.data as ApiErrorResponse | undefined
 
+    // 使用后端返回的业务错误码（如果有），否则使用 HTTP 状态码
+    const errorCode = responseData?.code !== undefined ? responseData.code : statusCode
+
     return {
-      code: statusCode,
+      code: errorCode,
       message: responseData?.message || error.message || '请求失败',
-      details: responseData?.details || error.response?.data
+      details: responseData || error.response?.data
     }
   }
 
@@ -169,6 +172,49 @@ export class ApiClient {
    */
   async patch<T>(url: string, data?: unknown): Promise<T> {
     return this.client.patch(url, data)
+  }
+
+  /**
+   * 文件上传请求
+   */
+  async upload<T>(
+    url: string,
+    file: File,
+    additionalData?: Record<string, unknown>
+  ): Promise<T> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    if (additionalData) {
+      Object.entries(additionalData).forEach(([key, value]) => {
+        formData.append(key, String(value))
+      })
+    }
+
+    return this.client.post(url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  }
+
+  /**
+   * 文件下载请求
+   */
+  async download(url: string, filename?: string): Promise<void> {
+    const response = await this.client.get(url, {
+      responseType: 'blob'
+    })
+
+    const blob = new Blob([response.data])
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename || 'download'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(downloadUrl)
   }
 }
 

@@ -12,25 +12,13 @@
 // ============================================================================
 export type {
   IndicatorVO,
-  TaskVO,
   MilestoneVO,
-  PlanVO,
-  UserVO,
-  OrgVO,
-  DistributionStatus,
-  IndicatorStatus,
-  MilestoneStatus as BackendMilestoneStatus,
-  ProgressApprovalStatus,
-  TaskType as BackendTaskType,
-  PlanStatus as BackendPlanStatus,
   IndicatorCreateRequest,
-  IndicatorUpdateRequest,
+  DistributionStatus,
   IndicatorDistributionRequest,
   BatchDistributionRequest,
-  IndicatorDistributionEligibility,
-  Attachment,
-  StatusAuditEntry
-} from '@/api/types/backend-aligned'
+  IndicatorDistributionEligibility
+} from './backend-aligned'
 
 // ============================================================================
 // 统一实体类型导出 (与后端完全对齐)
@@ -297,21 +285,8 @@ export interface PaginationParams {
   sortOrder?: 'asc' | 'desc'
 }
 
-export interface ApiResponse<T> {
-  data: T
-  message: string
-  success: boolean
-  timestamp: Date
-}
-
-export interface PaginatedResponse<T> extends ApiResponse<T[]> {
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-    totalPages: number
-  }
-}
+// Re-export the updated API response types from backend-aligned
+export type { ApiResponse, PaginatedResponse, ApiError } from './backend-aligned'
 
 // Form Types
 // 注意: 以下表单类型需要与后端 VO 对齐

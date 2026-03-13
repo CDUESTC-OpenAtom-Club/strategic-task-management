@@ -24,6 +24,7 @@ import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from './org'
 import api from '@/api'
 import { logger } from '@/utils/logger'
+import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitoringApi'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -32,6 +33,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const recentActivities = ref<Array<Record<string, unknown>>>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // 预警告警状态
+  const alertStatsData = ref<AlertStats | null>(null)
+  const unclosedAlerts = ref<AlertEvent[]>([])
+  const alertsLoading = ref(false)
 
   // 下钻和筛选状态
   const currentLevel = ref<DrillDownLevel>('organization')
@@ -52,6 +58,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const totalScore = computed(() => dashboardData.value?.totalScore || 0)
   const warningCount = computed(() => dashboardData.value?.warningCount || 0)
   const alertStats = computed(() => dashboardData.value?.alertIndicators || { severe: 0, moderate: 0, normal: 0 })
+
+  // 预警统计计算属性
+  const totalAlerts = computed(() => alertStatsData.value?.totalOpen || 0)
+  const criticalAlerts = computed(() => alertStatsData.value?.countBySeverity.CRITICAL || 0)
+  const majorAlerts = computed(() => alertStatsData.value?.countBySeverity.MAJOR || 0)
+  const minorAlerts = computed(() => alertStatsData.value?.countBySeverity.MINOR || 0)
   
   // 筛选后的指标列表
   const filteredIndicators = computed<StrategicIndicator[]>(() => {
@@ -583,6 +595,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       fetchDashboardData(),
       fetchDepartmentProgress(),
       fetchRecentActivities(),
+      fetchAlertStats(),
+      fetchUnclosedAlerts()
     ])
   }
 
@@ -609,6 +623,43 @@ export const useDashboardStore = defineStore('dashboard', () => {
     } catch (err) {
       console.error('Export error:', err)
       throw new Error('Failed to export report')
+    }
+  }
+
+  // 获取告警统计
+  const fetchAlertStats = async () => {
+    alertsLoading.value = true
+    try {
+      logger.info('[Dashboard Store] Fetching alert stats...')
+      const stats = await alertApi.getStats()
+      alertStatsData.value = stats
+      logger.info('[Dashboard Store] Alert stats loaded:', stats)
+    } catch (err) {
+      logger.error('[Dashboard Store] Failed to fetch alert stats:', err)
+      // 失败时不影响主流程，使用默认值
+      alertStatsData.value = {
+        totalOpen: 0,
+        countBySeverity: {
+          CRITICAL: 0,
+          MAJOR: 0,
+          MINOR: 0
+        }
+      }
+    } finally {
+      alertsLoading.value = false
+    }
+  }
+
+  // 获取未关闭的告警事件
+  const fetchUnclosedAlerts = async () => {
+    try {
+      logger.info('[Dashboard Store] Fetching unclosed alerts...')
+      const alerts = await alertApi.getUnclosedAlerts()
+      unclosedAlerts.value = alerts
+      logger.info('[Dashboard Store] Unclosed alerts loaded:', alerts.length)
+    } catch (err) {
+      logger.error('[Dashboard Store] Failed to fetch unclosed alerts:', err)
+      unclosedAlerts.value = []
     }
   }
   
@@ -762,6 +813,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
     recentActivities,
     loading,
     error,
+    alertStatsData,
+    unclosedAlerts,
+    alertsLoading,
     currentLevel,
     breadcrumbs,
     filters,
@@ -777,6 +831,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     totalScore,
     warningCount,
     alertStats,
+    totalAlerts,
+    criticalAlerts,
+    majorAlerts,
+    minorAlerts,
     filteredIndicators,
     departmentSummary,
     alertDistribution,
@@ -791,6 +849,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     fetchDashboardData,
     fetchDepartmentProgress,
     fetchRecentActivities,
+    fetchAlertStats,
+    fetchUnclosedAlerts,
     refreshDashboard,
     exportReport,
     drillDown,

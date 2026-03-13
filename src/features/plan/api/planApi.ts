@@ -21,7 +21,7 @@ import type {
   AuditForm,
   Attachment
 } from '@/types'
-import type { PlanVO, TaskVO } from '@/api/types/backend-aligned'
+import type { PlanVO, TaskVO } from '@/types'
 import { logger } from '@/utils/logger'
 
 /**
@@ -454,10 +454,10 @@ export const planApi = {
       })
 
       return {
-        success: true,
+        code: 200,
         data: plans,
         message: '获取成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString().toISOString()
       }
     }
 
@@ -504,7 +504,7 @@ export const planApi = {
     if (this.useMockData) {
       const planVO = mockPlans.find(p => p.planId === Number(planId))
       if (!planVO) {
-        return { success: false, data: null, message: 'Plan not found', timestamp: new Date() }
+        return { code: 1002, data: null, message: 'Plan not found', timestamp: new Date().toISOString().toISOString() }
       }
 
       const tasks = mockTasks
@@ -517,10 +517,10 @@ export const planApi = {
         })
 
       return {
-        success: true,
+        code: 200,
         data: convertPlanVOToPlan(planVO, tasks),
         message: '获取成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -552,10 +552,10 @@ export const planApi = {
       })
 
       return {
-        success: true,
+        code: 200,
         data: newPlan,
         message: '创建成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -573,13 +573,13 @@ export const planApi = {
       if (index !== -1) {
         mockPlans[index] = { ...mockPlans[index], ...data }
         return {
-          success: true,
+          code: 200,
           data: convertPlanVOToPlan(mockPlans[index], []),
           message: '更新成功',
-          timestamp: new Date()
+          timestamp: new Date().toISOString()
         }
       }
-      return { success: false, data: null as never, message: 'Plan not found', timestamp: new Date() }
+      return { code: 1002, data: null as never, message: 'Plan not found', timestamp: new Date().toISOString() }
     }
 
     return withRetry(async () => {
@@ -595,9 +595,9 @@ export const planApi = {
       const index = mockPlans.findIndex(p => p.planId === Number(planId))
       if (index !== -1) {
         mockPlans.splice(index, 1)
-        return { success: true, data: undefined, message: '删除成功', timestamp: new Date() }
+        return { success: true, data: undefined, message: '删除成功', timestamp: new Date().toISOString() }
       }
-      return { success: false, data: undefined, message: 'Plan not found', timestamp: new Date() }
+      return { code: 1002, data: undefined, message: 'Plan not found', timestamp: new Date().toISOString() }
     }
 
     return withRetry(async () => {
@@ -639,10 +639,10 @@ export const planApi = {
       })
 
       return {
-        success: true,
+        code: 200,
         data: newPlanFill,
         message: '提交成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -671,10 +671,10 @@ export const indicatorFillApi = {
         .sort((a, b) => new Date(b.fill_date).getTime() - new Date(a.fill_date).getTime())
 
       return {
-        success: true,
+        code: 200,
         data: fills,
         message: '获取成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -688,14 +688,14 @@ export const indicatorFillApi = {
     if (this.useMockData) {
       const fillVO = mockIndicatorFills.find(f => f.fillId === Number(fillId))
       if (!fillVO) {
-        return { success: false, data: null, message: 'Fill not found', timestamp: new Date() }
+        return { code: 1002, data: null, message: 'Fill not found', timestamp: new Date().toISOString() }
       }
 
       return {
-        success: true,
+        code: 200,
         data: convertIndicatorFillVOToIndicatorFill(fillVO),
         message: '获取成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -738,10 +738,10 @@ export const indicatorFillApi = {
       })
 
       return {
-        success: true,
+        code: 200,
         data: newFill,
         message: '保存成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -764,13 +764,13 @@ export const indicatorFillApi = {
         }
 
         return {
-          success: true,
+          code: 200,
           data: convertIndicatorFillVOToIndicatorFill(mockIndicatorFills[index]),
           message: '更新成功',
-          timestamp: new Date()
+          timestamp: new Date().toISOString()
         }
       }
-      return { success: false, data: null as never, message: 'Fill not found', timestamp: new Date() }
+      return { code: 1002, data: null as never, message: 'Fill not found', timestamp: new Date().toISOString() }
     }
 
     return withRetry(async () => {
@@ -786,9 +786,9 @@ export const indicatorFillApi = {
       const index = mockIndicatorFills.findIndex(f => f.fillId === Number(fillId))
       if (index !== -1) {
         mockIndicatorFills.splice(index, 1)
-        return { success: true, data: undefined, message: '删除成功', timestamp: new Date() }
+        return { success: true, data: undefined, message: '删除成功', timestamp: new Date().toISOString() }
       }
-      return { success: false, data: undefined, message: 'Fill not found', timestamp: new Date() }
+      return { code: 1002, data: undefined, message: 'Fill not found', timestamp: new Date().toISOString() }
     }
 
     return withRetry(async () => {
@@ -805,13 +805,13 @@ export const indicatorFillApi = {
       if (fillVO) {
         fillVO.status = 'SUBMITTED'
         return {
-          success: true,
+          code: 200,
           data: convertIndicatorFillVOToIndicatorFill(fillVO),
           message: '提交成功',
-          timestamp: new Date()
+          timestamp: new Date().toISOString()
         }
       }
-      return { success: false, data: null as never, message: 'Fill not found', timestamp: new Date() }
+      return { code: 1002, data: null as never, message: 'Fill not found', timestamp: new Date().toISOString() }
     }
 
     return withRetry(async () => {
@@ -844,10 +844,10 @@ export const planFillApi = {
         .sort((a, b) => new Date(b.submit_date).getTime() - new Date(a.submit_date).getTime())
 
       return {
-        success: true,
+        code: 200,
         data: fills,
         message: '获取成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -869,10 +869,10 @@ export const planFillApi = {
         })
 
       return {
-        success: true,
+        code: 200,
         data: fills,
         message: '获取成功',
-        timestamp: new Date()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -903,13 +903,13 @@ export const planFillApi = {
           .map(convertIndicatorFillVOToIndicatorFill)
 
         return {
-          success: true,
+          code: 200,
           data: convertPlanFillVOToPlanFill(planFillVO, indicatorFills),
           message: form.action === 'approve' ? '审核通过' : '已驳回',
-          timestamp: new Date()
+          timestamp: new Date().toISOString()
         }
       }
-      return { success: false, data: null as never, message: 'Fill not found', timestamp: new Date() }
+      return { code: 1002, data: null as never, message: 'Fill not found', timestamp: new Date().toISOString() }
     }
 
     return withRetry(async () => {

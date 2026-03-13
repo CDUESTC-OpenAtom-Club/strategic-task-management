@@ -16,8 +16,8 @@ import type { AxiosError } from 'axios'
 export interface ApiError {
   /** Error message */
   message: string
-  /** Error code */
-  code?: string
+  /** Error code (numeric, from backend) */
+  code?: number
   /** HTTP status code */
   status?: number
   /** Additional error details */

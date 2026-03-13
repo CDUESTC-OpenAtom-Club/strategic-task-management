@@ -23,7 +23,8 @@ export const API_ENDPOINTS = {
     login: '/auth/login',
     logout: '/auth/logout',
     refresh: '/auth/refresh',
-    userInfo: '/auth/userinfo'
+    userInfo: '/auth/userinfo',
+    register: '/auth/register'
   },
 
   // Users
@@ -49,7 +50,15 @@ export const API_ENDPOINTS = {
     create: '/indicators',
     update: (id: string) => `/indicators/${id}`,
     delete: (id: string) => `/indicators/${id}`,
-    distribute: (id: string) => `/indicators/${id}/distribute`
+    distribute: (id: string) => `/indicators/${id}/distribute`,
+    distributeBatch: (id: string) => `/indicators/${id}/distribute/batch`,
+    distributionEligibility: (id: string) => `/indicators/${id}/distribution-eligibility`,
+    distributed: (id: string) => `/indicators/${id}/distributed`,
+    search: '/indicators/search',
+    byTask: (taskId: string) => `/indicators/task/${taskId}`,
+    rootByTask: (taskId: string) => `/indicators/task/${taskId}/root`,
+    byOwnerOrg: (orgId: string) => `/indicators/owner/${orgId}`,
+    byTargetOrg: (orgId: string) => `/indicators/target/${orgId}`
   },
 
   // Plans
@@ -57,7 +66,9 @@ export const API_ENDPOINTS = {
     list: '/plans',
     detail: (id: string) => `/plans/${id}`,
     create: '/plans',
-    update: (id: string) => `/plans/${id}`
+    update: (id: string) => `/plans/${id}`,
+    delete: (id: string) => `/plans/${id}`,
+    submitApproval: (id: string) => `/plans/${id}/submit-approval`
   },
 
   // Tasks
@@ -65,7 +76,8 @@ export const API_ENDPOINTS = {
     list: '/tasks',
     detail: (id: string) => `/tasks/${id}`,
     create: '/tasks',
-    update: (id: string) => `/tasks/${id}`
+    update: (id: string) => `/tasks/${id}`,
+    delete: (id: string) => `/tasks/${id}`
   },
 
   // Reports
@@ -76,10 +88,18 @@ export const API_ENDPOINTS = {
     submit: (id: string) => `/reports/${id}/submit`
   },
 
-  // Approval
+  // Approval - Workflow Engine
   approval: {
+    // Flow definitions
     flows: '/approval/flows',
+    flowDetail: (id: string) => `/approval/flows/${id}`,
+    flowByCode: (code: string) => `/approval/flows/code/${code}`,
+    flowByEntityType: (entityType: string) => `/approval/flows/entity-type/${entityType}`,
+    flowStatus: (id: string) => `/approval/flows/${id}/status`,
+
+    // Instances
     instances: '/approval/instances',
+    instanceDetail: (id: string) => `/approval/instances/${id}`,
     myPending: '/approval/instances/my-pending',
     approve: (id: string) => `/approval/instances/${id}/approve`,
     reject: (id: string) => `/approval/instances/${id}/reject`

@@ -1,112 +1,68 @@
-import axios from 'axios'
-import type { ApiResponse } from '@/types'
-import {
-  createRequestInterceptor,
-  createRequestErrorInterceptor,
-  createResponseInterceptor,
-  createResponseErrorInterceptor
-} from '@/shared/api/interceptors'
+/**
+ * API Module - Backward Compatibility Layer
+ *
+ * This file provides backward compatibility for imports from the old api/index.ts.
+ * The API client has been consolidated in @/shared/api/client.ts.
+ *
+ * Migration Map:
+ * - apiService → Use @/shared/api/client's apiClient instance
+ * - Individual methods → Available on apiClient (get, post, put, delete, patch, upload, download)
+ *
+ * @deprecated Import from @/shared/api/client instead
+ */
 
-// Create axios instance
-const api = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  withCredentials: true // 允许发送 HttpOnly Cookie (用于 refresh token)
-})
+// Re-export the unified API client
+export { ApiClient, apiClient } from '@/shared/api/client'
+export type { ApiClientConfig, AppError } from '@/shared/api/client'
 
-// ============================================================================
-// 拦截器配置 - 包含Mock模式支持
-// ============================================================================
-
-// 请求拦截器: Token注入和Mock模式处理
-api.interceptors.request.use(createRequestInterceptor(), createRequestErrorInterceptor())
-
-// 响应拦截器: Mock模式处理和错误处理
-api.interceptors.response.use(createResponseInterceptor(), createResponseErrorInterceptor())
-
-// ============================================================================
-// API 服务方法
-// ============================================================================
+// Re-export legacy apiService wrapper for backward compatibility
 export const apiService = {
-  async get<T>(url: string, params?: Record<string, unknown>): Promise<ApiResponse<T>> {
-    const response = await api.get(url, { params })
-    return response.data
+  async get<T>(url: string, params?: Record<string, unknown>) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.get<T>(url, params)
   },
 
-  async post<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-    const response = await api.post(url, data)
-    return response.data
+  async post<T>(url: string, data?: unknown) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.post<T>(url, data)
   },
 
-  async put<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-    const response = await api.put(url, data)
-    return response.data
+  async put<T>(url: string, data?: unknown) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.put<T>(url, data)
   },
 
-  async delete<T>(url: string): Promise<ApiResponse<T>> {
-    const response = await api.delete(url)
-    return response.data
+  async delete<T>(url: string) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.delete<T>(url)
   },
 
-  async patch<T>(url: string, data?: unknown): Promise<ApiResponse<T>> {
-    const response = await api.patch(url, data)
-    return response.data
+  async patch<T>(url: string, data?: unknown) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.patch<T>(url, data)
   },
 
   async upload<T>(
     url: string,
     file: File,
     additionalData?: Record<string, unknown>
-  ): Promise<ApiResponse<T>> {
-    const formData = new FormData()
-    formData.append('file', file)
-
-    if (additionalData) {
-      Object.entries(additionalData).forEach(([key, value]) => {
-        formData.append(key, String(value))
-      })
-    }
-
-    const response = await api.post(url, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-    return response.data
+  ) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.upload<T>(url, file, additionalData)
   },
 
-  async download(url: string, filename?: string): Promise<void> {
-    const response = await api.get(url, {
-      responseType: 'blob'
-    })
-
-    const blob = new Blob([response.data])
-    const downloadUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = downloadUrl
-    link.download = filename || 'download'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(downloadUrl)
+  async download(url: string, filename?: string) {
+    const { apiClient } = await import('@/shared/api/client')
+    return apiClient.download(url, filename)
   }
 }
 
-export default api
-
-// 重新导出工具函数
+// Re-export utility functions
 export { formatErrorMessage, isRetryableError, getErrorSeverity } from '@/shared/api/errorHandler'
 export type { ExtendedErrorInfo } from '@/types/error'
 export { refreshCache, refreshCachePattern, cacheManager, getFromCache } from '@/utils/cache'
 
-// ============================================================================
-// 兼容层 - 从新位置重新导出 API
-// ============================================================================
-
-// 从 features 重新导出 API（保持向后兼容）
+// Re-export feature APIs for backward compatibility
 export { approvalApi } from '@/features/approval/api/approval'
 export { indicatorApi } from '@/features/strategic-indicator/api/indicator'
 export { milestoneApi } from '@/features/strategic-indicator/api/milestone'
@@ -114,3 +70,6 @@ export { orgApi } from '@/features/organization/api/org'
 export { userApi } from '@/features/auth/api/user'
 export { planApi, indicatorFillApi, planFillApi } from '@/features/plan/api/planApi'
 export { strategicApi } from '@/features/task/api/strategicApi'
+
+// Default export for backward compatibility (import api from '@/api')
+export { apiClient as default } from '@/shared/api/client'

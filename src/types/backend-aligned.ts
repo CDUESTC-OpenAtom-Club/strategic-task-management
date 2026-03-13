@@ -380,41 +380,52 @@ export interface IdempotencyRecord {
 
 /**
  * Standard API response wrapper
+ * Matches backend API documentation format
  */
 export interface ApiResponse<T> {
-  success: boolean
+  code: number
   message: string
-  data: T
-  timestamp: string
+  data?: T
+  timestamp?: string
 }
 
 /**
  * Paginated API response
  */
 export interface PaginatedResponse<T> {
-  success: boolean
+  code: number
   message: string
   data: T[]
-  pagination: {
+  pagination?: {
     page: number
     pageSize: number
     total: number
     totalPages: number
   }
-  timestamp: string
+  timestamp?: string
 }
 
 /**
  * Error response
+ * Matches backend API documentation format with business error codes
  */
 export interface ApiError {
-  success: false
+  code: number
   message: string
-  error: {
-    code: string
-    details?: Record<string, unknown>
-  }
-  timestamp: string
+  timestamp?: string
+  // Additional fields that may be present for specific errors
+  errors?: Array<{
+    field: string
+    message: string
+  }>
+  requiredPermission?: string
+  resourceType?: string
+  resourceId?: string
+  indicatorId?: number
+  currentStatus?: string
+  suggestion?: string
+  errorId?: string
+  [key: string]: unknown
 }
 
 // ============================================
@@ -475,23 +486,156 @@ export interface FilterState {
 // ============================================
 
 export function isApiError(response: unknown): response is ApiError {
-  return response !== null && typeof response === 'object' && 'success' in response && response.success === false && 'error' in response
+  return (
+    response !== null &&
+    typeof response === 'object' &&
+    'code' in response &&
+    'message' in response &&
+    (response as { code: number }).code !== 200
+  )
 }
 
 export function isApiResponse<T>(response: unknown): response is ApiResponse<T> {
-  return response !== null && typeof response === 'object' && 'success' in response && response.success === true && 'data' in response
+  return (
+    response !== null &&
+    typeof response === 'object' &&
+    'code' in response &&
+    (response as { code: number }).code === 200
+  )
 }
 
 export function isPaginatedResponse<T>(response: unknown): response is PaginatedResponse<T> {
   return (
     response !== null &&
     typeof response === 'object' &&
-    'success' in response &&
-    response.success === true &&
+    'code' in response &&
+    (response as { code: number }).code === 200 &&
     'data' in response &&
-    Array.isArray((response as PaginatedResponse<T>).data) &&
-    'pagination' in response
+    Array.isArray((response as PaginatedResponse<T>).data)
   )
+}
+
+// ============================================
+// Additional API-specific types
+// ============================================
+
+/**
+ * Indicator VO (View Object) matching backend API
+ */
+export interface IndicatorVO {
+  indicatorId: number
+  parentIndicatorId?: number
+  indicatorDesc: string
+  type?: 'QUANTITATIVE' | 'QUALITATIVE'
+  progress?: number
+  ownerOrgId: number
+  targetOrgId: number
+  weightPercent: number
+  sortOrder: number
+  status: 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
+  createdAt: string
+  updatedAt: string
+  // Extended fields
+  milestones?: MilestoneVO[]
+  canDistribute?: boolean
+  canWithdraw?: boolean
+}
+
+/**
+ * Milestone VO matching backend API
+ */
+export interface MilestoneVO {
+  milestoneId: number
+  indicatorId: number
+  indicatorDesc: string
+  milestoneName: string
+  milestoneDesc?: string
+  dueDate: string
+  weightPercent: number
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
+  sortOrder: number
+  inheritedFromId?: number
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Indicator create request matching backend API
+ */
+export interface IndicatorCreateRequest {
+  indicatorDesc: string
+  type?: 'QUANTITATIVE' | 'QUALITATIVE'
+  ownerOrgId: number
+  targetOrgId: number
+  weightPercent: number
+  sortOrder?: number
+  milestones?: Array<{
+    milestoneName: string
+    milestoneDesc?: string
+    dueDate: string
+    weightPercent: number
+    sortOrder?: number
+  }>
+}
+
+/**
+ * Distribution status for indicators
+ */
+export type DistributionStatus = 'DRAFT' | 'DISTRIBUTED'
+
+/**
+ * Indicator distribution request
+ */
+export interface IndicatorDistributionRequest {
+  parentIndicatorId: string
+  targetOrgId: string
+  customDesc?: string
+  actorUserId?: string
+}
+
+/**
+ * Batch indicator distribution request
+ */
+export interface BatchDistributionRequest {
+  parentIndicatorId: string
+  targetOrgIds: string[]
+  actorUserId?: string
+}
+
+/**
+ * Indicator distribution eligibility check
+ */
+export interface IndicatorDistributionEligibility {
+  eligible: boolean
+  reason?: string
+  availableTargetOrgs?: Array<{
+    orgId: number
+    orgName: string
+  }>
+}
+
+/**
+ * Login credentials for authentication
+ */
+export interface LoginCredentials {
+  username: string
+  password: string
+}
+
+/**
+ * Login response from backend
+ */
+export interface LoginResponse {
+  accessToken: string
+  refreshToken: string
+  expiresIn: number
+  user: {
+    id: number
+    username: string
+    realName: string
+    orgId: number
+    roles: string[]
+  }
 }
 
 // ============================================

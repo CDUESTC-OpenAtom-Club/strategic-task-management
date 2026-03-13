@@ -953,7 +953,7 @@ const _getBenchmarkTitle = computed(() => {
 const showFilterPanel = ref(false)
 const filterForm = ref({
   department: '',
-  indicatorType: '' as '' | '定�? | '定量',
+  indicatorType: '' as '' | '定性' | '定量',
   alertLevel: '' as '' | 'severe' | 'moderate' | 'normal'
 })
 

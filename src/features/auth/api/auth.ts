@@ -16,18 +16,18 @@ export const authApi = {
   /**
    * User login
    * POST /api/auth/login
-   * 
+   *
    * @param credentials - Username and password
    * @returns Login response with token and user info
    */
-  async login(credentials: LoginCredentials): Promise<ApiResponse<LoginResponse>> {
+  async login(credentials: LoginCredentials & { captcha: string; captchaKey: string }): Promise<ApiResponse<LoginResponse>> {
     return api.post('/auth/login', credentials)
   },
 
   /**
    * User logout
    * POST /api/auth/logout
-   * 
+   *
    * Invalidates the current access token
    */
   async logout(): Promise<ApiResponse<void>> {
@@ -37,7 +37,7 @@ export const authApi = {
   /**
    * Refresh access token
    * POST /api/auth/refresh
-   * 
+   *
    * @param refreshToken - Refresh token
    * @returns New access token
    */
@@ -47,22 +47,23 @@ export const authApi = {
 
   /**
    * Get current user info
-   * GET /api/auth/me
-   * 
+   * GET /api/auth/userinfo
+   *
    * @returns Current user information
    */
   async getCurrentUser(): Promise<ApiResponse<any>> {
-    return api.get('/auth/me')
+    return api.get('/auth/userinfo')
   },
 
   /**
-   * Verify token validity
-   * GET /api/auth/verify
-   * 
-   * @returns Token validity status
+   * User registration
+   * POST /api/auth/register
+   *
+   * @param userData - User registration data
+   * @returns Registration response
    */
-  async verifyToken(): Promise<ApiResponse<{ valid: boolean }>> {
-    return api.get('/auth/verify')
+  async register(userData: { username: string; password: string; realName: string; email: string; phone?: string; orgId: number }): Promise<ApiResponse<{ userId: number; status: string }>> {
+    return api.post('/auth/register', userData)
   }
 }
 
