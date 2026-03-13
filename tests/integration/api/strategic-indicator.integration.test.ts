@@ -8,8 +8,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useIndicatorStore } from '@/features/strategic-indicator/model/store'
-import { queryIndicators, getIndicatorById } from '@/features/strategic-indicator/api/query'
-import { createIndicator, updateIndicator, deleteIndicator } from '@/features/strategic-indicator/api/mutations'
+import { getIndicatorById } from '@/features/strategic-indicator/api/query'
 import type { Indicator } from '@/entities/indicator/model/types'
 
 // Mock the API client

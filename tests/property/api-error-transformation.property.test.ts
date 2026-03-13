@@ -108,14 +108,14 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
           )
 
           // 模拟 HTTP 错误
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError(message)
             axiosError.response = {
               status: statusCode,
               statusText: 'Error',
               data: { message, details },
               headers: {},
-              config: config as any
+              config: _config as any
             }
             return Promise.reject(axiosError)
           })
@@ -162,14 +162,14 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
             }
           )
 
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError('Error')
             axiosError.response = {
               status: statusCode,
               statusText: 'Error',
               data: {},
               headers: {},
-              config: config as any
+              config: _config as any
             }
             return Promise.reject(axiosError)
           })
@@ -209,14 +209,14 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
             }
           )
 
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError('Default error')
             axiosError.response = {
               status: statusCode,
               statusText: 'Error',
               data: { message },
               headers: {},
-              config: config as any
+              config: _config as any
             }
             return Promise.reject(axiosError)
           })
@@ -256,14 +256,14 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
             }
           )
 
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError('Error')
             axiosError.response = {
               status: statusCode,
               statusText: 'Error',
               data: { message: 'Error', details },
               headers: {},
-              config: config as any
+              config: _config as any
             }
             return Promise.reject(axiosError)
           })
@@ -306,7 +306,7 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
             }
           )
 
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError(message)
             // 没有 response（网络错误）
             axiosError.response = undefined
@@ -352,14 +352,14 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
             }
           )
 
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError('Error')
             axiosError.response = {
               status: statusCode,
               statusText: 'Error',
               data: { message: `Error ${statusCode}` },
               headers: {},
-              config: config as any
+              config: _config as any
             }
             return Promise.reject(axiosError)
           })
@@ -404,14 +404,14 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
             }
           )
 
-          testClient.interceptors.request.use((config) => {
+          testClient.interceptors.request.use((_config) => {
             const axiosError = new AxiosError('Error')
             axiosError.response = {
               status: statusCode,
               statusText: 'Error',
               data: { message: 'Error' },
               headers: {},
-              config: config as any
+              config: _config as any
             }
             return Promise.reject(axiosError)
           })
@@ -483,14 +483,14 @@ describe('Error Transformation Edge Cases', () => {
       }
     )
 
-    testClient.interceptors.request.use((config) => {
+    testClient.interceptors.request.use((_config) => {
       const axiosError = new AxiosError('')
       axiosError.response = {
         status: 500,
         statusText: 'Error',
         data: { message: '' },
         headers: {},
-        config: config as any
+        config: _config as any
       }
       return Promise.reject(axiosError)
     })
@@ -522,14 +522,14 @@ describe('Error Transformation Edge Cases', () => {
       }
     )
 
-    testClient.interceptors.request.use((config) => {
+    testClient.interceptors.request.use((_config) => {
       const axiosError = new AxiosError('Error')
       axiosError.response = {
         status: 400,
         statusText: 'Error',
         data: null,
         headers: {},
-        config: config as any
+        config: _config as any
       }
       return Promise.reject(axiosError)
     })
@@ -570,14 +570,14 @@ describe('Error Transformation Edge Cases', () => {
       }
     )
 
-    testClient.interceptors.request.use((config) => {
+    testClient.interceptors.request.use((_config) => {
       const axiosError = new AxiosError('Validation error')
       axiosError.response = {
         status: 422,
         statusText: 'Error',
         data: complexDetails,
         headers: {},
-        config: config as any
+        config: _config as any
       }
       return Promise.reject(axiosError)
     })

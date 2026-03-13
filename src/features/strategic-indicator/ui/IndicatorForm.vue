@@ -6,21 +6,20 @@
  */
 
 import { ref, computed, watch } from 'vue'
-import { 
-  ElForm, 
-  ElFormItem, 
-  ElInput, 
-  ElSelect, 
+import {
+  ElForm,
+  ElFormItem,
+  ElInput,
+  ElSelect,
   ElOption,
   ElInputNumber,
   ElDatePicker,
-  ElSwitch,
   ElButton,
   ElSpace,
   type FormInstance,
   type FormRules
 } from 'element-plus'
-import type { Indicator, IndicatorCreateRequest } from '@/entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import { INDICATOR_TYPE_OPTIONS, VALIDATION_RULES } from '../model/constants'
 import { indicatorCreateSchema, indicatorUpdateSchema } from '../model/schema'
 

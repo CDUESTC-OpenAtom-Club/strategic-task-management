@@ -75,7 +75,7 @@ function safeGet<T>(obj: unknown, path: string, defaultValue: T): T {
 // 数据生成器
 // ============================================================================
 
-const nullishArbitrary = fc.constantFrom(null, undefined)
+const _nullishArbitrary = fc.constantFrom(null, undefined)
 const pathArbitrary = fc.array(
   fc.string({ minLength: 1, maxLength: 10 }).filter(s => !s.includes('.')),
   { minLength: 1, maxLength: 3 }

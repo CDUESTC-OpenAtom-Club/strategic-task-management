@@ -78,7 +78,7 @@ describe('Strategic Indicator Validations', () => {
       expect(canSubmitForApproval({ ...mockIndicator, status: 'DISTRIBUTED' })).toBe(false)
     })
   })
-})
+
   describe('validateIndicatorCreate', () => {
     it('should validate correct indicator data', () => {
       const validData = {

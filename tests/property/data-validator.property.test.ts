@@ -16,10 +16,7 @@ import { useDataValidator } from '@/composables/useDataValidator'
 import {
   PROGRESS_APPROVAL_STATUS_VALUES,
   MILESTONE_STATUS_VALUES,
-  USER_ROLE_VALUES,
-  indicatorValidationRules,
-  milestoneValidationRules,
-  userValidationRules
+  USER_ROLE_VALUES
 } from '@/config/validationRules'
 
 // ============================================================================

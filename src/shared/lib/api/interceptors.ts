@@ -11,7 +11,7 @@
 
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
-import { handleApiError, type ApiError } from './errorHandler'
+import { handleApiError } from './errorHandler'
 
 /**
  * Interceptor configuration

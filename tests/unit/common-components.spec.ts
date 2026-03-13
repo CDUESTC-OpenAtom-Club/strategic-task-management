@@ -10,7 +10,7 @@ import {
   SkeletonLoader,
   EmptyState,
   TransitionWrapper
-} from '@/components/common'
+} from '@/shared/ui'
 
 describe('SkeletonLoader Component', () => {
   it('should render table type skeleton', () => {

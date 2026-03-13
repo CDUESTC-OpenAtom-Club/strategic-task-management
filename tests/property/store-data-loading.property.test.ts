@@ -9,13 +9,11 @@
  * 
  * **Validates: Requirements 1.1, 1.4, 7.4, 8.1**
  */
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
 import { useStrategicStore } from '@/features/task/model/strategic'
-import type { StrategicIndicator } from '@/types'
 import {
-  PROGRESS_APPROVAL_STATUS_VALUES,
   MILESTONE_STATUS_VALUES
 } from '@/config/validationRules'
 
@@ -64,7 +62,7 @@ const nonEmptyStringArbitrary = (maxLength: number = 50) =>
 /**
  * 生成有效的里程碑对象
  */
-const validMilestoneArbitrary = fc.record({
+const _validMilestoneArbitrary = fc.record({
   id: nonEmptyStringArbitrary(50),
   name: nonEmptyStringArbitrary(100),
   targetProgress: fc.integer({ min: 0, max: 100 }),
@@ -73,48 +71,6 @@ const validMilestoneArbitrary = fc.record({
   status: fc.constantFrom(...MILESTONE_STATUS_VALUES)
 })
 
-/**
- * 生成有效的指标对象（符合 StrategicIndicator 结构）
- */
-const validIndicatorArbitrary = fc.record({
-  id: nonEmptyStringArbitrary(50),
-  name: nonEmptyStringArbitrary(200),
-  isQualitative: fc.boolean(),
-  type1: fc.constantFrom('定量', '定性'),
-  type2: fc.constantFrom('发展性', '基础性'),
-  progress: fc.integer({ min: 0, max: 100 }),
-  createTime: fc.constant('2025年12月14日'),
-  weight: fc.float({ min: 0, max: 100, noNaN: true }),
-  remark: fc.string({ maxLength: 200 }),
-  canWithdraw: fc.boolean(),
-  taskContent: nonEmptyStringArbitrary(200),
-  milestones: fc.array(validMilestoneArbitrary, { minLength: 0, maxLength: 4 }),
-  targetValue: fc.integer({ min: 0, max: 100 }),
-  unit: fc.constantFrom('%', '个', '项', '家/专业'),
-  responsibleDept: nonEmptyStringArbitrary(100),
-  responsiblePerson: nonEmptyStringArbitrary(50),
-  status: fc.constantFrom('active', 'completed', 'pending'),
-  isStrategic: fc.boolean(),
-  ownerDept: nonEmptyStringArbitrary(100),
-  year: fc.integer({ min: 2020, max: 2030 }),
-  progressApprovalStatus: fc.constantFrom(...PROGRESS_APPROVAL_STATUS_VALUES)
-})
-
-/**
- * 生成有效年份
- */
-const validYearArbitrary = fc.integer({ min: 2023, max: 2026 })
-
-/**
- * 生成 API 错误类型
- */
-const apiErrorTypeArbitrary = fc.constantFrom(
-  'network_error',
-  'timeout_error',
-  'server_error_500',
-  'server_error_502',
-  'server_error_503'
-)
 
 
 // ============================================================================

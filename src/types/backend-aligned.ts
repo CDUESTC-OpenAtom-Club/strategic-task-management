@@ -535,10 +535,16 @@ export interface IndicatorVO {
   status: 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
   createdAt: string
   updatedAt: string
-  // Extended fields
+  // Extended fields for frontend alignment
   milestones?: MilestoneVO[]
   canDistribute?: boolean
   canWithdraw?: boolean
+  targetValue?: number | null
+  actualValue?: number | null
+  unit?: string | null
+  type1?: '定性' | '定量'
+  type2?: '基础性' | '发展性'
+  responsiblePerson?: string | null
 }
 
 /**

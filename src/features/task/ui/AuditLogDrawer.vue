@@ -42,7 +42,7 @@
           </el-form-item>
 
           <el-form-item>
-            <el-button type="primary" @click="handleQuery" :loading="loading">
+            <el-button type="primary" :loading="loading" @click="handleQuery">
               查询
             </el-button>
           </el-form-item>
@@ -89,7 +89,7 @@
                 <span class="label">操作人：</span>
                 <span class="value">{{ log.userName }}</span>
               </div>
-              <div class="detail-item" v-if="log.resource">
+              <div v-if="log.resource" class="detail-item">
                 <span class="label">资源：</span>
                 <span class="value">{{ log.resource }}</span>
                 <span v-if="log.resourceId" class="value">(#{{ log.resourceId }})</span>
@@ -107,7 +107,7 @@
       <el-empty v-if="!loading && logs.length === 0" description="暂无审计日志" />
 
       <!-- 分页 -->
-      <div class="pagination-wrapper" v-if="total > 0">
+      <div v-if="total > 0" class="pagination-wrapper">
         <el-pagination
           v-model:current-page="queryParams.page"
           v-model:page-size="queryParams.size"
@@ -122,7 +122,7 @@
 
     <template #footer>
       <div class="drawer-footer">
-        <el-button @click="handleExport" :loading="exporting">
+        <el-button :loading="exporting" @click="handleExport">
           <el-icon><Download /></el-icon>
           导出日志
         </el-button>
@@ -177,7 +177,7 @@ const visible = computed({
 
 // 格式化日期时间
 const formatDateTime = (dateStr: string) => {
-  if (!dateStr) return ''
+  if (!dateStr) {return ''}
   const date = new Date(dateStr)
   const now = new Date()
   const diff = now.getTime() - date.getTime()

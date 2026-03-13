@@ -12,17 +12,15 @@
  */
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { 
-  orgTypeSchema, 
-  orgVOSchema, 
+import {
+  orgVOSchema,
   orgListResponseSchema,
-  type OrgVO, 
-  type OrgType 
+  type OrgVO,
+  type OrgType
 } from '../../src/api/schemas/org.schema'
-import { 
-  convertOrgVOToDepartment, 
+import {
+  convertOrgVOToDepartment,
   mapOrgTypeToFrontend,
-  type Department 
 } from '../../src/api/org'
 
 // ============================================================================

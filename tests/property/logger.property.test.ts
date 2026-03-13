@@ -18,11 +18,10 @@ import {
   shouldLog,
   REDACTED_VALUE,
   type LogLevel,
-  type ExtendedLogger,
 } from '@/utils/logger'
 
 // 所有日志级别
-const ALL_LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
+const _ALL_LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
 
 // 日志级别优先级 (数值越大优先级越高)
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {

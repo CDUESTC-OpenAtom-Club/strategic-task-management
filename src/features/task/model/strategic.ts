@@ -36,9 +36,9 @@ export const useStrategicStore = defineStore('strategic', () => {
     
     try {
       logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
-      const response = await indicatorApi.query({ year })
-      
-      if (response.code === 0 && response.data) {
+      const response = await indicatorApi.getAllIndicators(year)
+
+      if (response.success && response.data) {
         indicators.value = response.data
         logger.debug(`[Strategic Store] Loaded ${response.data.length} indicators`)
       } else {
@@ -56,9 +56,9 @@ export const useStrategicStore = defineStore('strategic', () => {
   async function updateIndicator(id: string, data: Partial<StrategicIndicator>) {
     try {
       logger.debug(`[Strategic Store] Updating indicator ${id}`)
-      const response = await indicatorApi.update(id, data)
-      
-      if (response.code === 0) {
+      const response = await indicatorApi.updateIndicator(id, data)
+
+      if (response.success) {
         // Update local state
         const index = indicators.value.findIndex(i => i.id === id)
         if (index !== -1 && response.data) {
@@ -79,9 +79,9 @@ export const useStrategicStore = defineStore('strategic', () => {
   async function deleteIndicator(id: string) {
     try {
       logger.debug(`[Strategic Store] Deleting indicator ${id}`)
-      const response = await indicatorApi.delete(id)
-      
-      if (response.code === 0) {
+      const response = await indicatorApi.deleteIndicator(id)
+
+      if (response.success) {
         // Remove from local state
         const index = indicators.value.findIndex(i => i.id === id)
         if (index !== -1) {

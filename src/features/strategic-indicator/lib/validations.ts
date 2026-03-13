@@ -4,7 +4,7 @@
  * Business rule validations for indicators.
  */
 
-import type { Indicator, IndicatorStatus, WorkflowStatus } from '@/entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import { validateWeightSum } from './calculations'
 
 /**
@@ -210,7 +210,7 @@ export function validateIndicatorWeights(
   }
   
   // Check individual weights
-  indicators.forEach((indicator, index) => {
+  indicators.forEach((indicator, _index) => {
     if (indicator.weight !== undefined) {
       if (indicator.weight < 0 || indicator.weight > 1) {
         errors.push(`指标"${indicator.name}"的权重必须在0-1之间`)

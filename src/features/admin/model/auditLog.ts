@@ -26,7 +26,7 @@ export const useAuditLogStore = defineStore('auditLog', () => {
   
   // ============ Actions ============
   
-  async function fetchLogs(entityType?: string, entityId?: string) {
+  async function fetchLogs(_entityType?: string, _entityId?: string) {
     loading.value = true
     try {
       // TODO: Implement API call when backend is ready

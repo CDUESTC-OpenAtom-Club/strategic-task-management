@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Download, Warning, Aim, Refresh, QuestionFilled, Top, Close } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole } from '@/types'
+import type { Indicator, Milestone } from '@/types/entities'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useDashboardStore } from '@/features/dashboard/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
@@ -96,7 +97,7 @@ const statusColors = {
 const { addDelayedSequence, addTimeout } = useTimeoutManager()
 
 // 计算指标状态的函数
-const getIndicatorStatus = (indicator: any): IndicatorStatus => {
+const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -114,7 +115,7 @@ const getIndicatorStatus = (indicator: any): IndicatorStatus => {
   
   // 检查是否有已过期但未达标的里程碑（延期�?
   for (const milestone of sortedMilestones) {
-    const deadlineDate = new Date(milestone.deadline)
+    const deadlineDate = new Date(milestone.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     
     if (deadlineDate < today && currentProgress < milestone.targetProgress) {
@@ -178,7 +179,7 @@ const getStatusClass = (status: IndicatorStatus): string => {
 }
 
 // 获取当月目标进度（离今天最近的里程碑的目标进度�?
-const getCurrentTargetProgress = (indicator: any): number | null => {
+const getCurrentTargetProgress = (indicator: Indicator): number | null => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -209,7 +210,7 @@ const getCurrentTargetProgress = (indicator: any): number | null => {
 }
 
 // 获取当前里程碑序号信息（�?"2/5" 表示�?个里程碑，共5个）
-const getCurrentMilestoneIndex = (indicator: any): string | null => {
+const getCurrentMilestoneIndex = (indicator: Indicator): string | null => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   
@@ -321,7 +322,7 @@ const _getDeptStats = (deptName: string) => {
 }
 
 // 计算指标在指定月份的状态（用于堆叠柱状图）
-const getIndicatorStatusAtMonth = (indicator: any, month: number, year: number): IndicatorStatus => {
+const getIndicatorStatusAtMonth = (indicator: Indicator, month: number, year: number): IndicatorStatus => {
   const milestones = indicator.milestones || []
   if (milestones.length === 0) {
     return 'normal'
@@ -350,7 +351,7 @@ const getIndicatorStatusAtMonth = (indicator: any, month: number, year: number):
 
   // 检查是否有已过期但未达标的里程碑（延期�?
   for (const milestone of milestonesUpToMonth) {
-    const deadlineDate = new Date(milestone.deadline)
+    const deadlineDate = new Date(milestone.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     if (deadlineDate < monthEnd && (indicator.progress || 0) < milestone.targetProgress) {
       return 'delayed'

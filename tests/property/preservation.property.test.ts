@@ -12,9 +12,8 @@
  * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10**
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import fc from 'fast-check'
-import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import type { Router } from 'vue-router'
@@ -61,9 +60,9 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
       fc.assert(
         fc.property(
           fc.constantFrom('development', 'production', 'test'),
-          (mode) => {
+          (_mode) => {
             // Simulate environment mode
-            const originalEnv = import.meta.env.MODE
+            const _originalEnv = import.meta.env.MODE
             
             // Application should initialize without throwing errors
             try {
@@ -114,7 +113,7 @@ describe('Property 2: Preservation - Runtime Behavior Unchanged', () => {
             username: fc.string({ minLength: 1, maxLength: 50 }),
             password: fc.string({ minLength: 1, maxLength: 50 })
           }),
-          (credentials) => {
+          (_credentials) => {
             // Verify auth store has expected methods
             expect(typeof authStore.login).toBe('function')
             expect(typeof authStore.logout).toBe('function')

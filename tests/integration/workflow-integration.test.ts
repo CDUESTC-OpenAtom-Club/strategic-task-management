@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { createRouter, createWebHistory } from 'vue-router'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useIndicatorStore } from '@/features/strategic-indicator/model/store'

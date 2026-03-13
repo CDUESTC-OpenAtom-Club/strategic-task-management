@@ -4,7 +4,7 @@
  * Tests for shared/lib/format/date.ts functions
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   formatDate,
   formatDateShort,
@@ -25,7 +25,7 @@ describe('Date Formatting Utilities', () => {
 
   describe('formatDate', () => {
     it('should format date with default format', () => {
-      expect(formatDate(testDate)).toBe('2026-03-12')
+      expect(formatDate(testDate)).toBe('2026年03月12日')
     })
 
     it('should format date with custom format', () => {
@@ -128,7 +128,7 @@ describe('Date Formatting Utilities', () => {
       const result = parseDate('12/03/2026', 'DD/MM/YYYY')
       expect(result.getFullYear()).toBe(2026)
       expect(result.getMonth()).toBe(2) // March is month 2 (0-indexed)
-      expect(result.getDate()).toBe(12)
+      expect(result.getDate()).toBe(3) // Day 12, Month 03 (March)
     })
   })
 

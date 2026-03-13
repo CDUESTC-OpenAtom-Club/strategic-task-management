@@ -40,13 +40,6 @@ beforeAll(() => {
 // ============================================================================
 // 类型定义（使用统一的 backend-aligned 类型）
 // ============================================================================
-  milestoneName: string
-  targetProgress?: number
-  weightPercent?: number
-  dueDate: string
-  status: string
-}
-
 interface StrategicIndicator {
   id: string
   name: string

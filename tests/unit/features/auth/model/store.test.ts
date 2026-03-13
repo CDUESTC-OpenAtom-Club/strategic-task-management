@@ -164,8 +164,7 @@ describe('Auth Store', () => {
 
     it('should handle login failure', async () => {
       const mockApi = await import('@/api')
-      const mockAuthHelpers = await import('@/utils/authHelpers')
-      
+
       mockApi.default.post.mockRejectedValue(new Error('Network error'))
 
       const result = await authStore.login(mockCredentials)

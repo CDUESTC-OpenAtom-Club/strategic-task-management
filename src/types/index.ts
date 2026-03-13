@@ -8,19 +8,6 @@
  */
 
 // ============================================================================
-// Backend-Aligned VO Types (统一后端对齐类型)
-// ============================================================================
-export type {
-  IndicatorVO,
-  MilestoneVO,
-  IndicatorCreateRequest,
-  DistributionStatus,
-  IndicatorDistributionRequest,
-  BatchDistributionRequest,
-  IndicatorDistributionEligibility
-} from './backend-aligned'
-
-// ============================================================================
 // 统一实体类型导出 (与后端完全对齐)
 // ============================================================================
 /* eslint-disable no-restricted-syntax -- Backend-aligned types must use backend terminology */
@@ -46,13 +33,24 @@ export type {
 /* eslint-enable no-restricted-syntax */
 
 export {
-  TaskType,
   MilestoneStatus,
   ProgressApprovalStatus,
   AuditAction,
   IndicatorStatus,
   UserRole
 } from './entities'
+
+// ============================================================================
+// Backend-Aligned VO Types (统一后端对齐类型)
+// ============================================================================
+export type {
+  IndicatorVO,
+  MilestoneVO,
+  IndicatorCreateRequest,
+  DistributionStatus
+} from './backend-aligned'
+
+export { TaskType } from './backend-aligned'
 
 // ============================================================================
 // Zod 运行时验证 Schema 重新导出
@@ -84,21 +82,8 @@ export {
 // 重新导出从 Schema 推断的类型
 /* eslint-disable no-restricted-syntax -- Backend-aligned types inferred from schemas */
 export type {
-  UserRole,
-  ApprovalStatus,
-  ProgressApprovalStatus,
-  IndicatorType,
-  AlertLevel,
-  MessageType,
-  AuditAction,
-  User,
   LoginCredentials,
-  Milestone,
-  StatusAuditEntry,
-  StrategicIndicator,
-  StrategicTask,
-  DashboardData,
-  DistributionStatus
+  StrategicIndicator
 } from './schemas'
 /* eslint-enable no-restricted-syntax */
 
@@ -112,16 +97,7 @@ export type DrillDownLevel = 'organization' | 'department' | 'indicator'
 export type EntityType = 'task' | 'indicator' | 'approval'
 
 // User and Permission Types
-export interface User {
-  id: string
-  username: string
-  name: string
-  role: UserRole
-  department: string
-  avatar?: string
-  createdAt: Date
-  updatedAt: Date
-}
+
 
 export interface Permission {
   resource: string
@@ -139,7 +115,7 @@ export interface MilestonePairingStatus {
   totalMilestones: number
   pairedCount: number
   unpairedCount: number
-  nextMilestoneToReport: Milestone | null
+  nextMilestoneToReport: any | null
   isAllPaired: boolean
   pairingProgress: number // 配对进度百分比
 }
@@ -149,7 +125,7 @@ export interface MilestoneReportValidation {
   milestoneId: string
   canReport: boolean
   message: string
-  nextMilestoneToReport: Milestone | null
+  nextMilestoneToReport: any | null
 }
 
 // 仪表盘数据类型 (Enhanced)
@@ -180,19 +156,7 @@ export interface DepartmentProgress {
 }
 
 // 指标类型 (Enhanced)
-export interface Indicator {
-  id: string
-  name: string
-  type: '定量' | '定性'
-  progress: number
-  status: 'normal' | 'warning' | 'danger'
-  deadline: string
-  department: string
-  targetValue: number
-  actualValue?: number
-  unit: string
-  responsiblePerson: string
-}
+
 
 // 待审批项类型 (Enhanced)
 export interface PendingApproval {
@@ -203,7 +167,7 @@ export interface PendingApproval {
   type: string
   priority: 'high' | 'medium' | 'low'
   alertDescription?: string
-  approvalStatus: ApprovalStatus
+  approvalStatus: string
 }
 
 // Approval Types
@@ -214,13 +178,13 @@ export interface ApprovalRequest {
   submittedBy: string
   submittedDept: string
   submittedAt: Date
-  approvalStatus: ApprovalStatus
+  approvalStatus: string
   approverId?: string
   approvedAt?: Date
   rejectionReason?: string
   priority: 'high' | 'medium' | 'low'
   alertDescription?: string
-  attachments?: Attachment[]
+  attachments?: any[]
 }
 
 export interface ApprovalHistory {
@@ -240,11 +204,11 @@ export interface ApprovalHistory {
 // Message Types
 export interface Message {
   id: string
-  type: MessageType
+  type: string
   title: string
   content: string
-  severity?: AlertLevel
-  recipientRole?: UserRole | UserRole[] // 接收者角色
+  severity?: string
+  recipientRoles?: string[] // 接收者角色
   recipientDept?: string | string[] // 接收者部门
   recipientId?: string // 特定接收者ID
   isRead: boolean
@@ -275,8 +239,15 @@ export interface RoleOption {
 }
 
 // Utility Types
-// Attachment 已移至 backend-aligned.ts
-export type { Attachment } from '@/api/types/backend-aligned'
+export interface Attachment {
+  id: string
+  fileName: string
+  fileSize: number
+  fileType: string
+  url: string
+  uploadedBy: number
+  uploadedAt: string
+}
 
 export interface PaginationParams {
   page: number
@@ -285,8 +256,6 @@ export interface PaginationParams {
   sortOrder?: 'asc' | 'desc'
 }
 
-// Re-export the updated API response types from backend-aligned
-export type { ApiResponse, PaginatedResponse, ApiError } from './backend-aligned'
 
 // Form Types
 // 注意: 以下表单类型需要与后端 VO 对齐
@@ -306,7 +275,7 @@ export interface PlanForm {
 export interface IndicatorForm {
   taskId: string
   name: string
-  type: IndicatorType
+  type: string
   targetValue: number
   unit: string
   description?: string
@@ -379,6 +348,19 @@ export interface ApiError {
   timestamp: Date
 }
 
+export interface PaginatedResponse<T> {
+  code: number
+  message: string
+  data: T[]
+  pagination?: {
+    page: number
+    pageSize: number
+    total: number
+    totalPages: number
+  }
+  timestamp?: string
+}
+
 export interface ValidationError {
   field: string
   message: string
@@ -395,8 +377,8 @@ export interface BreadcrumbItem {
 // 筛选状态
 export interface FilterState {
   department?: string
-  indicatorType?: '定性' | '定量'
-  alertLevel?: AlertLevel
+  indicatorType?: string
+  alertLevel?: string
   dateRange?: [Date, Date]
   sourceOwner?: string // 任务来源过滤 (发布方部门)
   collegeFilter?: string // 学院过滤
@@ -408,7 +390,7 @@ export interface AuditLogItem {
   entityType: EntityType
   entityId: string
   entityName: string
-  action: AuditAction
+  action: string
   operator: string
   operatorName: string
   operateTime: Date
@@ -428,7 +410,7 @@ export interface FieldChange {
 export interface AuditLogFilters {
   operator?: string
   entityType?: EntityType
-  action?: AuditAction
+  action?: string | string[]
   dateRange?: [Date, Date]
 }
 
@@ -513,10 +495,6 @@ export interface SourcePieData {
 // 扩展下钻层级类型
 export type OrgLevel = 'strategy' | 'functional' | 'college'
 
-// 指标下发相关类型 (已移至 backend-aligned.ts)
-// 保留此处的 re-export 以保持向后兼容
-export type { IndicatorDistributionRequest, BatchDistributionRequest, IndicatorDistributionEligibility } from '@/api/types/backend-aligned'
-
 // ============================================================
 // 新数据结构类型定义 (Plan -> Task -> Indicator -> IndicatorFill)
 // ============================================================
@@ -562,28 +540,10 @@ export interface Task {
   type: TaskType // qualitative | quantitative
   description?: string
   sortOrder?: number // 排序
-  indicators: Indicator[]
+  indicators: any[]
 }
 
-/**
- * Indicator (指标 - 基础数据元)
- * 文件夹里的"单张表格"，是填报的最小单位
- */
-export interface Indicator {
-  id: string | number
-  task_id: string | number
-  name: string
-  definition: string // 定义
-  milestones: Milestone[] // 里程碑（包含目标值等）
-  createdAt?: string
-  updatedAt?: string
 
-  // 前端辅助字段（用于展示最新进度，从历史表中获取）
-  latest_progress?: number
-  latest_fill_date?: string
-  latest_fill_id?: string // 最近一次填报记录ID
-  fill_count?: number // 填报次数
-}
 
 /**
  * IndicatorFill (指标填报历史 - 新增核心表)
@@ -648,29 +608,30 @@ export interface UserRoleWithPermission {
 /**
  * 权限标识枚举
  */
-export enum PermissionCode {
+export const PermissionCode = {
   // Plan 相关
-  PLAN_CREATE = 'plan.create',
-  PLAN_VIEW = 'plan.view',
-  PLAN_EDIT = 'plan.edit',
-  PLAN_DELETE = 'plan.delete',
-  PLAN_SUBMIT = 'plan.submit',
+  PLAN_CREATE: 'plan.create',
+  PLAN_VIEW: 'plan.view',
+  PLAN_EDIT: 'plan.edit',
+  PLAN_DELETE: 'plan.delete',
+  PLAN_SUBMIT: 'plan.submit',
 
   // Indicator 相关
-  INDICATOR_VIEW = 'indicator.view',
-  INDICATOR_FILL = 'indicator.fill',
-  INDICATOR_EDIT = 'indicator.edit',
+  INDICATOR_VIEW: 'indicator.view',
+  INDICATOR_FILL: 'indicator.fill',
+  INDICATOR_EDIT: 'indicator.edit',
 
   // 审核相关
-  AUDIT_VIEW = 'audit.view',
-  AUDIT_APPROVE = 'audit.approve',
-  AUDIT_REJECT = 'audit.reject',
+  AUDIT_VIEW: 'audit.view',
+  AUDIT_APPROVE: 'audit.approve',
+  AUDIT_REJECT: 'audit.reject',
 
   // Task 相关
-  TASK_CREATE = 'task.create',
-  TASK_EDIT = 'task.edit',
-  TASK_DELETE = 'task.delete',
-}
+  TASK_CREATE: 'task.create',
+  TASK_EDIT: 'task.edit',
+  TASK_DELETE: 'task.delete',
+} as const;
+export type PermissionCode = typeof PermissionCode[keyof typeof PermissionCode];
 
 /**
  * 填报记录表单
@@ -716,7 +677,7 @@ export interface UserManagementItem {
   phone?: string
   orgId: string | number // 所属组织ID (核心权限控制字段)
   orgName: string // 所属组织名称
-  roles: UserRole[] // 用户角色列表 (支持多角色)
+  roles: string[] // 用户角色列表 (支持多角色)
   status: 'active' | 'disabled' | 'locked'
   lastLoginAt?: string
   createdAt: string
@@ -734,7 +695,7 @@ export interface UserForm {
   email?: string
   phone?: string
   orgId: string | number // 必填 - 决定数据权限
-  roles: UserRole[] // 必填 - 至少一个角色
+  roles: string[] // 必填 - 至少一个角色
   status: 'active' | 'disabled'
 }
 
@@ -744,7 +705,7 @@ export interface UserForm {
 export interface Organization {
   id: string | number
   name: string
-  type: UserRole // strategic_dept | functional_dept | secondary_college
+  type: string // strategic_dept | functional_dept | secondary_college
   parentId?: string | number
   children?: Organization[]
 }
@@ -758,7 +719,7 @@ export interface ApprovalTemplate {
   description?: string
   isDefault: boolean // 是否为默认模板
   steps: ApprovalTemplateStep[] // 审批步骤
-  applicableRoles: UserRole[] // 适用角色
+  applicableRoles?: string[] // 适用角色
   createdAt: string
   updatedAt: string
 }
@@ -770,7 +731,7 @@ export interface ApprovalTemplateStep {
   id: string | number
   stepOrder: number // 步骤顺序
   stepName: string // 步骤名称，如 "主任审核"
-  requiredRole: UserRole // 需要的角色
+  requiredRole: string // 需要的角色
   allowCustomApprover: boolean // 是否允许自定义审批人
   customApproverId?: string | number // 自定义审批人ID (可选)
   autoApprove: boolean // 是否自动通过

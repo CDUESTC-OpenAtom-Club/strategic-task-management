@@ -6,7 +6,6 @@
  */
 
 import type { Indicator } from '@/types'
-import { logger } from '@/utils/logger'
 
 export class DashboardCalculationService {
   /**

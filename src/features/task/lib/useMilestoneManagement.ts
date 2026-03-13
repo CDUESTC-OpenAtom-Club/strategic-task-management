@@ -4,7 +4,7 @@
  */
 
 import { ref } from 'vue'
-import type { StrategicIndicator, Milestone } from '@/types'
+import type { Milestone } from '@/types'
 
 export function useMilestoneManagement() {
   const dialogVisible = ref(false)

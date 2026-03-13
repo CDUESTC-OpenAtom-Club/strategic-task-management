@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/features/auth/model/store'
-import { useIndicatorStore } from '@/features/strategic-indicator/model/store'
 import type { User } from '@/entities/user/model/types'
 
 // Mock API dependencies
@@ -17,7 +16,6 @@ vi.mock('@/features/strategic-indicator/api/query', () => ({
 
 describe('State Management Integration', () => {
   let authStore: ReturnType<typeof useAuthStore>
-  let indicatorStore: ReturnType<typeof useIndicatorStore>
 
   const mockUser: User = {
     id: 1,
@@ -31,7 +29,6 @@ describe('State Management Integration', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     authStore = useAuthStore()
-    indicatorStore = useIndicatorStore()
     vi.clearAllMocks()
   })
 

@@ -8,7 +8,7 @@
  * final state without creating duplicate data.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 
 /**

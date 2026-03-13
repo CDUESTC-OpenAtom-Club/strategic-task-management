@@ -7,7 +7,7 @@
  * for the data synchronization engine.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
 
 /**
@@ -266,11 +266,11 @@ describe('Property 2: Error Propagation and Interruption', () => {
       fc.property(
         fc.constantFrom(...EXPECTED_ORDER),
         (failingPhase) => {
-          const { results, executionOrder } = simulateSyncExecution(EXPECTED_ORDER, failingPhase)
-          
+          const { executionOrder } = simulateSyncExecution(EXPECTED_ORDER, failingPhase)
+
           // Find the index of the failing phase
           const failIndex = EXPECTED_ORDER.indexOf(failingPhase)
-          
+
           // Execution should stop at or before the failing phase
           return executionOrder.length <= failIndex + 1
         }

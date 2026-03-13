@@ -5,7 +5,7 @@
  * Displays indicators in a table with filtering and pagination.
  */
 
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { 
   ElTable, 
   ElTableColumn, 
@@ -37,7 +37,7 @@ interface Emits {
   (e: 'size-change', size: number): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   loading: false,
   total: 0,
   currentPage: 1,

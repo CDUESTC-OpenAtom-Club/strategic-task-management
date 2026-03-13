@@ -129,8 +129,8 @@ describe('API Client', () => {
     })
 
     it('should cancel request', () => {
-      const cancelToken = client.createCancelToken('slow-request')
-      
+      client.createCancelToken('slow-request')
+
       expect(() => client.cancelRequest('slow-request')).not.toThrow()
     })
 

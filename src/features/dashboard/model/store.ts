@@ -15,16 +15,10 @@ import type {
   FilterState,
   AlertSummary,
   StrategicIndicator,
-  ComparisonItem,
-  SankeyData,
-  SourcePieData,
   OrgLevel
 } from '@/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
-import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
-import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
-import { useOrgStore } from '@/features/organization/model/store'
 import api from '@/api'
 import { logger } from '@/utils/logger'
 

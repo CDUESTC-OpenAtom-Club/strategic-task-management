@@ -1,5 +1,5 @@
 /**
- * Mock API 处理器
+ * Mock API 处理器 - 与后端完全对齐
  * 拦截 API 请求并返回模拟数据
  */
 
@@ -9,10 +9,12 @@ import {
   mockUsers,
   mockAnnouncements,
   mockIndicators,
-  mockTasks,
+  mockStrategicTasks,
   mockMilestones,
+  mockAssessmentCycles,
   mockDashboardData,
   createMockResponse,
+  createMockPageResponse,
   createMockError
 } from './data'
 
@@ -78,61 +80,87 @@ export class MockApiHandler {
         response = await this.handleLogout()
       }
       // ============================================
+      // 评估周期 API
+      // ============================================
+      else if (path === '/api/assessment-cycles' && method === 'GET') {
+        response = await this.handleGetAssessmentCycles(query)
+      } else if (path.startsWith('/api/assessment-cycles/') && method === 'GET') {
+        const id = path.split('/').pop()
+        response = await this.handleGetAssessmentCycle(id!)
+      }
+      // ============================================
+      // 战略任务 API
+      // ============================================
+      else if (path === '/api/strategic-tasks' && method === 'GET') {
+        response = await this.handleGetStrategicTasks(query)
+      } else if (path.startsWith('/api/strategic-tasks/') && method === 'GET') {
+        const id = path.split('/').pop()
+        response = await this.handleGetStrategicTask(id!)
+      } else if (path === '/api/strategic-tasks' && method === 'POST') {
+        response = await this.handleCreateStrategicTask(data)
+      } else if (path.startsWith('/api/strategic-tasks/') && method === 'PUT') {
+        const id = path.split('/').pop()
+        response = await this.handleUpdateStrategicTask(id!, data)
+      } else if (path.startsWith('/api/strategic-tasks/') && method === 'DELETE') {
+        const id = path.split('/').pop()
+        response = await this.handleDeleteStrategicTask(id!)
+      }
+      // ============================================
+      // 指标 API（与后端对齐）
+      // ============================================
+      else if (path === '/api/indicators' && method === 'GET') {
+        response = await this.handleGetIndicators(query)
+      } else if (path.startsWith('/api/indicators/') && method === 'GET') {
+        const id = path.split('/').pop()
+        response = await this.handleGetIndicator(id!)
+      } else if (path === '/api/indicators' && method === 'POST') {
+        response = await this.handleCreateIndicator(data)
+      } else if (path.startsWith('/api/indicators/') && method === 'PUT') {
+        const id = path.split('/').pop()
+        response = await this.handleUpdateIndicator(id!, data)
+      } else if (path.startsWith('/api/indicators/') && method === 'DELETE') {
+        const id = path.split('/').pop()
+        response = await this.handleDeleteIndicator(id!)
+      }
+      // ============================================
+      // 里程碑 API
+      // ============================================
+      else if (path === '/api/milestones' && method === 'GET') {
+        response = await this.handleGetMilestones(query)
+      } else if (path.startsWith('/api/milestones/') && method === 'GET') {
+        const id = path.split('/').pop()
+        response = await this.handleGetMilestone(id!)
+      } else if (path === '/api/milestones' && method === 'POST') {
+        response = await this.handleCreateMilestone(data)
+      } else if (path.startsWith('/api/milestones/') && method === 'PUT') {
+        const id = path.split('/').pop()
+        response = await this.handleUpdateMilestone(id!, data)
+      } else if (path.startsWith('/api/milestones/') && method === 'DELETE') {
+        const id = path.split('/').pop()
+        response = await this.handleDeleteMilestone(id!)
+      }
+      // ============================================
       // 组织架构 API
       // ============================================
-      else if (path === '/orgs' && method === 'get') {
+      else if (path === '/api/orgs' && method === 'GET') {
         response = await this.handleGetOrgs()
       }
       // ============================================
       // 系统公告 API
       // ============================================
-      else if (path === '/system/announcement' && method === 'get') {
+      else if (path === '/api/system/announcement' && method === 'GET') {
         response = await this.handleGetAnnouncements()
-      }
-      // ============================================
-      // 战略指标 API
-      // ============================================
-      else if (path === '/indicators' && method === 'get') {
-        response = await this.handleGetIndicators(query)
-      } else if (path.startsWith('/indicators/') && method === 'get') {
-        const id = path.split('/').pop()
-        response = await this.handleGetIndicator(id!)
-      } else if (path === '/indicators' && method === 'post') {
-        response = await this.handleCreateIndicator(data)
-      } else if (path.startsWith('/indicators/') && method === 'put') {
-        const id = path.split('/').pop()
-        response = await this.handleUpdateIndicator(id!, data)
-      } else if (path.startsWith('/indicators/') && method === 'delete') {
-        const id = path.split('/').pop()
-        response = await this.handleDeleteIndicator(id!)
-      }
-      // ============================================
-      // 任务 API
-      // ============================================
-      else if (path === '/tasks' && method === 'get') {
-        response = await this.handleGetTasks(query)
-      } else if (path.startsWith('/tasks/') && method === 'get') {
-        const id = path.split('/').pop()
-        response = await this.handleGetTask(id!)
-      } else if (path === '/tasks' && method === 'post') {
-        response = await this.handleCreateTask(data)
-      }
-      // ============================================
-      // 里程碑 API
-      // ============================================
-      else if (path === '/milestones' && method === 'get') {
-        response = await this.handleGetMilestones(query)
       }
       // ============================================
       // 仪表板 API
       // ============================================
-      else if (path === '/dashboard' && method === 'get') {
+      else if (path === '/api/dashboard' && method === 'GET') {
         response = await this.handleGetDashboard()
-      } else if (path === '/dashboard/overview' && method === 'get') {
+      } else if (path === '/api/dashboard/overview' && method === 'GET') {
         response = await this.handleGetDashboard()
-      } else if (path === '/dashboard/department-progress' && method === 'get') {
+      } else if (path === '/api/dashboard/department-progress' && method === 'GET') {
         response = await this.handleGetDepartmentProgress()
-      } else if (path === '/dashboard/recent-activities' && method === 'get') {
+      } else if (path === '/api/dashboard/recent-activities' && method === 'GET') {
         response = await this.handleGetRecentActivities()
       }
       // ============================================
@@ -159,11 +187,14 @@ export class MockApiHandler {
     const { username, password: _password } = data as { username: string; password: string }
 
     // Mock 登录：任意用户名密码都可以登录
-    let user = mockUsers.admin
-    if (username === 'functional') {user = mockUsers.functional}
-    else if (username === 'college') {user = mockUsers.college}
+    let user = mockUsers[0] // 默认返回第一个用户
+    if (username === 'admin') user = mockUsers[0]
+    else if (username === 'kychu') user = mockUsers[1]
+    else if (username === 'jsxy') user = mockUsers[2]
+    else if (username === 'jiaowuchu') user = mockUsers[3]
+    else if (username === 'xueshengchu') user = mockUsers[4]
 
-    logger.info('🎭 [Mock Login] 用户登录:', user.realName)
+    logger.info('🎭 [Mock Login] 用户登录:', user.name)
 
     return createMockResponse({
       token: 'mock_token_' + Date.now(),
@@ -174,11 +205,261 @@ export class MockApiHandler {
   }
 
   private static async handleAuthInfo() {
-    return createMockResponse(mockUsers.admin, '获取用户信息成功')
+    return createMockResponse(mockUsers[0], '获取用户信息成功')
   }
 
   private static async handleLogout() {
     return createMockResponse(null, '退出登录成功')
+  }
+
+  // ============================================
+  // 评估周期处理器
+  // ============================================
+
+  private static async handleGetAssessmentCycles(query: Record<string, string>) {
+    let cycles = [...mockAssessmentCycles]
+
+    // 支持按状态过滤
+    if (query.status) {
+      cycles = cycles.filter(cycle => cycle.status === query.status)
+    }
+
+    logger.debug('🎭 [Mock API] 获取评估周期列表:', {
+      query,
+      count: cycles.length
+    })
+
+    return createMockPageResponse(cycles, Number(query.page) || 1, Number(query.pageSize) || 10)
+  }
+
+  private static async handleGetAssessmentCycle(id: string) {
+    const cycleId = Number(id)
+    const cycle = mockAssessmentCycles.find(item => item.cycleId === cycleId)
+
+    if (!cycle) {
+      return createMockError('NOT_FOUND', `评估周期 ${id} 不存在`)
+    }
+
+    return createMockResponse(cycle, '获取评估周期成功')
+  }
+
+  // ============================================
+  // 战略任务处理器
+  // ============================================
+
+  private static async handleGetStrategicTasks(query: Record<string, string>) {
+    let tasks = [...mockStrategicTasks]
+
+    // 支持按评估周期过滤
+    if (query.cycleId) {
+      const taskId = Number(query.cycleId)
+      tasks = tasks.filter(task => task.cycleId === taskId)
+    }
+
+    // 支持按部门过滤
+    if (query.responsibleDept) {
+      tasks = tasks.filter(task =>
+        task.responsibleDept.includes(query.responsibleDept)
+      )
+    }
+
+    logger.debug('🎭 [Mock API] 获取战略任务列表:', {
+      query,
+      count: tasks.length
+    })
+
+    return createMockPageResponse(tasks, Number(query.page) || 1, Number(query.pageSize) || 10)
+  }
+
+  private static async handleGetStrategicTask(id: string) {
+    const taskId = Number(id)
+    const task = mockStrategicTasks.find(item => item.taskId === taskId)
+
+    if (!task) {
+      return createMockError('NOT_FOUND', `战略任务 ${id} 不存在`)
+    }
+
+    return createMockResponse(task, '获取战略任务成功')
+  }
+
+  private static async handleCreateStrategicTask(data: Record<string, unknown>) {
+    logger.info('🎭 [Mock API] 创建战略任务:', data)
+
+    const newTask = {
+      taskId: Date.now(),
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+
+    return createMockResponse(newTask, '创建战略任务成功')
+  }
+
+  private static async handleUpdateStrategicTask(id: string, data: Record<string, unknown>) {
+    logger.info('🎭 [Mock API] 更新战略任务:', id, data)
+
+    return createMockResponse({
+      taskId: Number(id),
+      ...data,
+      updatedAt: new Date().toISOString()
+    }, '更新战略任务成功')
+  }
+
+  private static async handleDeleteStrategicTask(id: string) {
+    logger.info('🎭 [Mock API] 删除战略任务:', id)
+
+    return createMockResponse({ taskId: Number(id) }, '删除战略任务成功')
+  }
+
+  // ============================================
+  // 指标处理器
+  // ============================================
+
+  private static async handleGetIndicators(query: Record<string, string>) {
+    let indicators = [...mockIndicators]
+
+    // 支持按任务过滤
+    if (query.taskId) {
+      const taskId = Number(query.taskId)
+      indicators = indicators.filter(indicator => indicator.taskId === taskId)
+    }
+
+    // 支持按状态过滤
+    if (query.status) {
+      indicators = indicators.filter(indicator => indicator.status === query.status)
+    }
+
+    // 支持按部门过滤
+    if (query.responsibleDept) {
+      indicators = indicators.filter(indicator =>
+        indicator.responsibleDept.includes(query.responsibleDept)
+      )
+    }
+
+    logger.debug('🎭 [Mock API] 获取指标列表:', {
+      query,
+      count: indicators.length
+    })
+
+    return createMockPageResponse(indicators, Number(query.page) || 1, Number(query.pageSize) || 10)
+  }
+
+  private static async handleGetIndicator(id: string) {
+    const indicatorId = Number(id)
+    const indicator = mockIndicators.find(item => item.indicatorId === indicatorId)
+
+    if (!indicator) {
+      return createMockError('NOT_FOUND', `指标 ${id} 不存在`)
+    }
+
+    // 关联里程碑数据
+    const associatedMilestones = mockMilestones.filter(m => m.indicatorId === indicatorId)
+
+    return createMockResponse({
+      ...indicator,
+      milestones: associatedMilestones
+    }, '获取指标成功')
+  }
+
+  private static async handleCreateIndicator(data: Record<string, unknown>) {
+    logger.info('🎭 [Mock API] 创建指标:', data)
+
+    const newIndicator = {
+      indicatorId: Date.now(),
+      ...data,
+      status: 'DRAFT',
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      statusAudit: [],
+      milestones: []
+    }
+
+    return createMockResponse(newIndicator, '创建指标成功')
+  }
+
+  private static async handleUpdateIndicator(id: string, data: Record<string, unknown>) {
+    logger.info('🎭 [Mock API] 更新指标:', id, data)
+
+    return createMockResponse({
+      indicatorId: Number(id),
+      ...data,
+      updatedAt: new Date().toISOString()
+    }, '更新指标成功')
+  }
+
+  private static async handleDeleteIndicator(id: string) {
+    logger.info('🎭 [Mock API] 删除指标:', id)
+
+    return createMockResponse({ indicatorId: Number(id) }, '删除指标成功')
+  }
+
+  // ============================================
+  // 里程碑处理器
+  // ============================================
+
+  private static async handleGetMilestones(query: Record<string, string>) {
+    let milestones = [...mockMilestones]
+
+    // 支持按指标过滤
+    if (query.indicatorId) {
+      const indicatorId = Number(query.indicatorId)
+      milestones = milestones.filter(milestone => milestone.indicatorId === indicatorId)
+    }
+
+    // 支持按状态过滤
+    if (query.status) {
+      milestones = milestones.filter(milestone => milestone.status === query.status)
+    }
+
+    logger.debug('🎭 [Mock API] 获取里程碑列表:', {
+      query,
+      count: milestones.length
+    })
+
+    return createMockPageResponse(milestones, Number(query.page) || 1, Number(query.pageSize) || 10)
+  }
+
+  private static async handleGetMilestone(id: string) {
+    const milestoneId = Number(id)
+    const milestone = mockMilestones.find(item => item.milestoneId === milestoneId)
+
+    if (!milestone) {
+      return createMockError('NOT_FOUND', `里程碑 ${id} 不存在`)
+    }
+
+    return createMockResponse(milestone, '获取里程碑成功')
+  }
+
+  private static async handleCreateMilestone(data: Record<string, unknown>) {
+    logger.info('🎭 [Mock API] 创建里程碑:', data)
+
+    const newMilestone = {
+      milestoneId: Date.now(),
+      ...data,
+      status: 'PENDING',
+      isPaired: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+
+    return createMockResponse(newMilestone, '创建里程碑成功')
+  }
+
+  private static async handleUpdateMilestone(id: string, data: Record<string, unknown>) {
+    logger.info('🎭 [Mock API] 更新里程碑:', id, data)
+
+    return createMockResponse({
+      milestoneId: Number(id),
+      ...data,
+      updatedAt: new Date().toISOString()
+    }, '更新里程碑成功')
+  }
+
+  private static async handleDeleteMilestone(id: string) {
+    logger.info('🎭 [Mock API] 删除里程碑:', id)
+
+    return createMockResponse({ milestoneId: Number(id) }, '删除里程碑成功')
   }
 
   // ============================================
@@ -191,7 +472,10 @@ export class MockApiHandler {
       { id: 2, name: '科研处', code: 'RESEARCH', parentId: null },
       { id: 3, name: '教务处', code: 'EDUCATION', parentId: null },
       { id: 4, name: '人事处', code: 'HR', parentId: null },
-      { id: 5, name: '财务处', code: 'FINANCE', parentId: null }
+      { id: 5, name: '财务处', code: 'FINANCE', parentId: null },
+      { id: 6, name: '学生处', code: 'STUDENT', parentId: null },
+      { id: 7, name: '计算机学院', code: 'COMPUTER', parentId: null },
+      { id: 8, name: '电子工程学院', code: 'ELECTRONIC', parentId: null }
     ]
     return createMockResponse(mockOrgs, '获取组织架构成功')
   }
@@ -205,176 +489,27 @@ export class MockApiHandler {
   }
 
   // ============================================
-  // 战略指标处理器
-  // ============================================
-
-  private static async handleGetIndicators(query: Record<string, string>) {
-    const { year = '2025' } = query
-    logger.debug(`🎭 [Mock API] 获取 ${year} 年度指标列表`)
-
-    return createMockResponse({
-      list: mockIndicators,
-      total: mockIndicators.length,
-      year
-    }, '获取指标列表成功')
-  }
-
-  private static async handleGetIndicator(id: string) {
-    const indicator = mockIndicators.find(item => item.id === id)
-
-    if (!indicator) {
-      return createMockError('NOT_FOUND', `指标 ${id} 不存在`)
-    }
-
-    return createMockResponse(indicator, '获取指标成功')
-  }
-
-  private static async handleCreateIndicator(data: Record<string, unknown>) {
-    logger.info('🎭 [Mock API] 创建指标:', data)
-
-    const newIndicator = {
-      id: 'IND' + Date.now(),
-      ...data,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-
-    return createMockResponse(newIndicator, '创建指标成功')
-  }
-
-  private static async handleUpdateIndicator(id: string, data: Record<string, unknown>) {
-    logger.info('🎭 [Mock API] 更新指标:', id, data)
-
-    return createMockResponse({
-      id,
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, '更新指标成功')
-  }
-
-  private static async handleDeleteIndicator(id: string) {
-    logger.info('🎭 [Mock API] 删除指标:', id)
-
-    return createMockResponse({ id }, '删除指标成功')
-  }
-
-  // ============================================
-  // 任务处理器
-  // ============================================
-
-  private static async handleGetTasks(query: Record<string, string>) {
-    const { indicatorId } = query
-
-    let tasks = mockTasks
-    if (indicatorId) {
-      tasks = tasks.filter(t => t.indicatorId === indicatorId)
-    }
-
-    return createMockResponse({
-      list: tasks,
-      total: tasks.length
-    }, '获取任务列表成功')
-  }
-
-  private static async handleGetTask(id: string) {
-    const task = mockTasks.find(item => item.id === id)
-
-    if (!task) {
-      return createMockError('NOT_FOUND', `任务 ${id} 不存在`)
-    }
-
-    return createMockResponse(task, '获取任务成功')
-  }
-
-  private static async handleCreateTask(data: Record<string, unknown>) {
-    logger.info('🎭 [Mock API] 创建任务:', data)
-
-    const newTask = {
-      id: 'TASK' + Date.now(),
-      ...data,
-      status: 'pending',
-      progress: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-
-    return createMockResponse(newTask, '创建任务成功')
-  }
-
-  // ============================================
-  // 里程碑处理器
-  // ============================================
-
-  private static async handleGetMilestones(query: Record<string, string>) {
-    const { indicatorId } = query
-
-    let milestones = mockMilestones
-    if (indicatorId) {
-      milestones = milestones.filter(m => m.indicatorId === indicatorId)
-    }
-
-    return createMockResponse({
-      list: milestones,
-      total: milestones.length
-    }, '获取里程碑列表成功')
-  }
-
-  // ============================================
   // 仪表板处理器
   // ============================================
 
   /**
    * 处理获取仪表板数据
    */
-  private async handleGetDashboard() {
-    return createMockResponse(mockDashboardData, '获取仪表板数据成功')
+  private static async handleGetDashboard() {
+    return createMockResponse(mockDashboardData.overview, '获取仪表板数据成功')
   }
 
   /**
    * 处理获取部门进度数据
    */
-  private async handleGetDepartmentProgress() {
-    const departmentProgress = [
-      { name: '战略发展部', progress: 85.2, indicators: 5 },
-      { name: '科研处', progress: 78.6, indicators: 8 },
-      { name: '教务处', progress: 92.3, indicators: 6 },
-      { name: '人事处', progress: 67.8, indicators: 4 },
-      { name: '财务处', progress: 88.9, indicators: 3 }
-    ]
-    return createMockResponse(departmentProgress, '获取部门进度成功')
+  private static async handleGetDepartmentProgress() {
+    return createMockResponse(mockDashboardData.departmentProgress, '获取部门进度成功')
   }
 
   /**
    * 处理获取最近活动数据
    */
-  private async handleGetRecentActivities() {
-    const recentActivities = [
-      {
-        id: 'ACT001',
-        type: 'indicator_update',
-        title: '更新了"年度科研项目立项数"指标',
-        user: '张三',
-        time: '2025-12-05 14:30:00',
-        department: '战略发展部'
-      },
-      {
-        id: 'ACT002',
-        type: 'task_complete',
-        title: '完成了"科研经费统计"任务',
-        user: '赵六',
-        time: '2025-12-04 16:00:00',
-        department: '财务处'
-      },
-      {
-        id: 'ACT003',
-        type: 'milestone_reached',
-        title: '达到了"第一季度项目申报"里程碑',
-        user: '李四',
-        time: '2025-12-03 10:00:00',
-        department: '科研处'
-      }
-    ]
-    return createMockResponse(recentActivities, '获取最近活动成功')
+  private static async handleGetRecentActivities() {
+    return createMockResponse(mockDashboardData.recentActivities, '获取最近活动成功')
   }
 }

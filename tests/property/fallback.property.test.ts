@@ -7,8 +7,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import * as fc from 'fast-check'
 import type { AxiosError, AxiosResponse } from 'axios'
-import { shouldFallback, getMockData, getFallbackReason, logFallback } from '@/api/fallback'
-import type { StrategicIndicator } from '@/types'
+import { shouldFallback } from '@/api/fallback'
 
 vi.mock('@/api/fallback', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/api/fallback')>()

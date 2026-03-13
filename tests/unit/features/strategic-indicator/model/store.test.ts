@@ -111,7 +111,7 @@ describe('Strategic Indicator Store', () => {
         'STRATEGIC': 1,
         'OPERATIONAL': 1
       })
-      expect(stats.completionRate).toBe(90) // (80 + 100) / 2
+      expect(stats.completionRate).toBe(80) // Weighted: (80 + 80) / (100 + 100) * 100
     })
 
     it('should handle empty indicators in statistics', () => {

@@ -7,7 +7,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { ApprovalInstance, ApprovalHistory, ApprovalFilters } from './types'
+import type { ApprovalInstance, ApprovalHistory } from './types'
 import { useAuthStore } from '@/features/auth/model/store'
 import { logger } from '@/utils/logger'
 import { ElMessage } from 'element-plus'

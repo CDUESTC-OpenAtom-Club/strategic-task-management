@@ -159,9 +159,9 @@ export const adminApi = {
     try {
       logger.debug('[adminApi] Exporting audit logs:', params)
       const queryParams = new URLSearchParams()
-      if (params.startDate) queryParams.append('startDate', params.startDate)
-      if (params.endDate) queryParams.append('endDate', params.endDate)
-      if (params.format) queryParams.append('format', params.format)
+      if (params.startDate) {queryParams.append('startDate', params.startDate)}
+      if (params.endDate) {queryParams.append('endDate', params.endDate)}
+      if (params.format) {queryParams.append('format', params.format)}
 
       await apiClient.download(
         `/admin/audit-logs/export?${queryParams.toString()}`,

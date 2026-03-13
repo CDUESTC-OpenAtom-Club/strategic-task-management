@@ -31,7 +31,7 @@ import {
 /**
  * Generator for HTTP methods
  */
-const httpMethodArb = fc.constantFrom('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')
+const _httpMethodArb = fc.constantFrom('GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS')
 
 /**
  * Generator for write methods only

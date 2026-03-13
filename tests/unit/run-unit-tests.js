@@ -31,7 +31,7 @@ console.log('🧪 Running Frontend Architecture Unit Tests...\n')
 
 let totalPassed = 0
 let totalFailed = 0
-let failedSuites = []
+const failedSuites = []
 
 for (const testSuite of testSuites) {
   console.log(`📋 Running: ${testSuite}`)

@@ -4,10 +4,10 @@
  * Tests the integration between auth API and store, including login/logout flows.
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/features/auth/model/store'
-import type { User, LoginCredentials } from '@/entities/user/model/types'
+import type { User } from '@/entities/user/model/types'
 
 // Mock dependencies
 vi.mock('@/api', () => ({
@@ -53,7 +53,6 @@ describe('Auth API Integration', () => {
     it('should complete full login flow with API and store integration', async () => {
       const mockApi = await import('@/api')
       const mockAuthHelpers = await import('@/utils/authHelpers')
-      const mockTokenManager = await import('@/utils/tokenManager')
 
       // Mock successful API response
       mockApi.default.post.mockResolvedValue({

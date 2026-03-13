@@ -4,7 +4,7 @@
  * Unit tests for PageHeader component
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import PageHeader from '../PageHeader.vue'

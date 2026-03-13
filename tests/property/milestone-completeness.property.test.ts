@@ -133,7 +133,7 @@ function validateQuarterlyMilestones(milestones: Milestone[], year: number): { v
 /**
  * Convert DB milestone to frontend format
  */
-function convertDBMilestone(dbMilestone: MilestoneDB): Milestone {
+function _convertDBMilestone(dbMilestone: MilestoneDB): Milestone {
   return {
     id: `milestone-${dbMilestone.milestone_id}`,
     name: dbMilestone.milestone_name,
