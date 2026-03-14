@@ -68,17 +68,17 @@ export default defineConfig(({ mode }) => {
     server: {
       port: Number(env.VITE_DEV_SERVER_PORT) || 3500,
       open: env.VITE_DEV_AUTO_OPEN === 'true',
-      // 只在非Mock模式下配置代理
-      proxy: useMock
-        ? undefined
-        : {
-            '/api': {
-              target: env.VITE_API_TARGET || 'http://localhost:8080',
-              changeOrigin: true,
-              secure: false,
-              // 保持 /api 前缀，不进行路径重写
-              // 前端: /api/indicators → 后端: /api/indicators
-              configure: (proxy, options) => {
+// 只在非Mock模式下配置代理
+        proxy: useMock
+          ? undefined
+          : {
+              '/api/v1': {
+                target: env.VITE_API_TARGET || 'http://localhost:8080',
+                changeOrigin: true,
+                secure: false,
+                // 保持 /api/v1 前缀，不进行路径重写
+                // 前端: /api/v1/indicators → 后端: /api/v1/indicators
+                configure: (proxy, options) => {
                 proxy.on('error', (err, _req, _res) => {
                   console.error('⚠️ [Proxy Error]', err.message)
                 })
@@ -96,11 +96,14 @@ export default defineConfig(({ mode }) => {
       // 生产环境构建优化
       sourcemap: false,
       minify: 'terser',
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
           manualChunks: {
             vue: ['vue', 'vue-router', 'pinia'],
-            'element-plus': ['element-plus']
+            'element-plus': ['element-plus'],
+            echarts: ['echarts'],
+            xlsx: ['xlsx']
           }
         }
       }

@@ -45,7 +45,9 @@ export default defineConfig({
       '@types': fileURLToPath(new URL('./src/types', import.meta.url)),
       '@utils': fileURLToPath(new URL('./src/utils', import.meta.url)),
       '@api': fileURLToPath(new URL('./src/api', import.meta.url)),
-      '@composables': fileURLToPath(new URL('./src/composables', import.meta.url))
+      '@composables': fileURLToPath(new URL('./src/composables', import.meta.url)),
+      '@/features': fileURLToPath(new URL('./src/features', import.meta.url)),
+      '@/shared': fileURLToPath(new URL('./src/shared', import.meta.url))
     }
   }
 })

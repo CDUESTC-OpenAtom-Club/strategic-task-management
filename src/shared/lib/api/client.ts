@@ -50,7 +50,7 @@ export class ApiClient {
 
   constructor(config: ApiClientConfig = {}) {
     const {
-      baseURL = '/api',
+      baseURL = '/api/v1',
       timeout = 30000,
       enableRetry = true,
       maxRetries = 3,
@@ -243,7 +243,7 @@ export function createApiClient(config?: ApiClientConfig): ApiClient {
  * Default API client instance
  */
 export const apiClient = createApiClient({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000,
   enableRetry: true,
   maxRetries: 3,

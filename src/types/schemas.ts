@@ -231,46 +231,58 @@ export type ApiResponse<T> = z.infer<ReturnType<typeof ApiResponseSchema<T>>>
  * 验证用户数据
  */
 export function validateUser(data: unknown): { success: boolean; data?: User; errors?: string[] } {
-  const result = UserSchema.safeParse(data)
-  if (result.success) {
-    return { success: true, data: result.data }
+  try {
+    const result = UserSchema.parse(data)
+    return { success: true, data: result }
+  } catch (error) {
+    return {
+      success: false,
+      errors: error instanceof Error ? [error.message] : ['Invalid data']
+    }
   }
-  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-  return { success: false, errors }
 }
 
 /**
  * 验证指标数据
  */
 export function validateIndicator(data: unknown): { success: boolean; data?: StrategicIndicator; errors?: string[] } {
-  const result = StrategicIndicatorSchema.safeParse(data)
-  if (result.success) {
-    return { success: true, data: result.data }
+  try {
+    const result = StrategicIndicatorSchema.parse(data)
+    return { success: true, data: result }
+  } catch (error) {
+    return {
+      success: false,
+      errors: error instanceof Error ? [error.message] : ['Invalid data']
+    }
   }
-  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-  return { success: false, errors }
 }
 
 /**
  * 验证里程碑数据
  */
 export function validateMilestone(data: unknown): { success: boolean; data?: Milestone; errors?: string[] } {
-  const result = MilestoneSchema.safeParse(data)
-  if (result.success) {
-    return { success: true, data: result.data }
+  try {
+    const result = MilestoneSchema.parse(data)
+    return { success: true, data: result }
+  } catch (error) {
+    return {
+      success: false,
+      errors: error instanceof Error ? [error.message] : ['Invalid data']
+    }
   }
-  const errors = result.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-  return { success: false, errors }
 }
 
 /**
  * 验证登录凭据
  */
 export function validateLoginCredentials(data: unknown): { success: boolean; data?: LoginCredentials; errors?: string[] } {
-  const result = LoginCredentialsSchema.safeParse(data)
-  if (result.success) {
-    return { success: true, data: result.data }
+  try {
+    const result = LoginCredentialsSchema.parse(data)
+    return { success: true, data: result }
+  } catch (error) {
+    return {
+      success: false,
+      errors: error instanceof Error ? [error.message] : ['Invalid data']
+    }
   }
-  const errors = result.error.errors.map(e => e.message)
-  return { success: false, errors }
 }

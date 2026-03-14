@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
 import { Download, Warning, Aim, Refresh, QuestionFilled, Top, Close } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole } from '@/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
@@ -7,20 +7,38 @@ import { useDashboardStore } from '@/features/dashboard/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import BreadcrumbNav from '@/shared/ui/BreadcrumbNav.vue'
-import ScoreCompositionChart from '@/shared/ui/charts/ScoreCompositionChart.vue'
-import AlertDistributionChart from '@/shared/ui/charts/AlertDistributionChart.vue'
-import DepartmentProgressChart from '@/shared/ui/charts/DepartmentProgressChart.vue'
-// 新增图表组件
-import TaskSankeyChart from '@/shared/ui/charts/TaskSankeyChart.vue'
-import SourcePieChart from '@/shared/ui/charts/SourcePieChart.vue'
-import * as XLSX from 'xlsx'
+// 懒加载图表组件以减小初始包大小
+const ScoreCompositionChart = defineAsyncComponent(() => import('@/shared/ui/charts/ScoreCompositionChart.vue'))
+const AlertDistributionChart = defineAsyncComponent(() => import('@/shared/ui/charts/AlertDistributionChart.vue'))
+const DepartmentProgressChart = defineAsyncComponent(() => import('@/shared/ui/charts/DepartmentProgressChart.vue'))
+const TaskSankeyChart = defineAsyncComponent(() => import('@/shared/ui/charts/TaskSankeyChart.vue'))
+const SourcePieChart = defineAsyncComponent(() => import('@/shared/ui/charts/SourcePieChart.vue'))
 import { ElMessage } from 'element-plus'
 import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/features/organization/model/store'
+import { logger } from '@/utils/logger'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/composables/useLoadingState'
 // 导入定时器管理
 import { useTimeoutManager } from '@/composables/useTimeoutManager'
+
+// 动态导入 echarts，避免初始加载时打包
+let echarts: typeof import('echarts') | null = null
+const loadEcharts = async () => {
+  if (!echarts) {
+    echarts = await import('echarts')
+  }
+  return echarts
+}
+
+// 动态导入 XLSX，只在导出时加载
+let XLSX: typeof import('xlsx') | null = null
+const loadXLSX = async () => {
+  if (!XLSX) {
+    XLSX = await import('xlsx')
+  }
+  return XLSX
+}
 
 // 帮助提示内容
 const helpTexts = {
@@ -39,17 +57,17 @@ const helpTexts = {
 }
 
 // 雷达图实例
-let radarChartInstance: echarts.ECharts | null = null
-let benchmarkChartInstance: echarts.ECharts | null = null
+let radarChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
+let benchmarkChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
 const radarChartRef = ref<HTMLElement | null>(null)
 const benchmarkChartRef = ref<HTMLElement | null>(null)
 
 // 学院看板图表实例
-let collegeChartInstance: echarts.ECharts | null = null
+let collegeChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
 const collegeChartRef = ref<HTMLElement | null>(null)
 
 // 分院排名图表实例
-let collegeRankingChartInstance: echarts.ECharts | null = null
+let collegeRankingChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
 const collegeRankingChartRef = ref<HTMLElement | null>(null)
 
 // 选中的部门（用于右侧指标完成情况卡片）
@@ -1037,8 +1055,10 @@ const _hasActiveFilters = computed(() => {
 })
 
 // 导出功能 - 根据角色差异化导出
-const handleExport = () => {
+const handleExport = async () => {
   try {
+    // 动态加载 XLSX
+    const xlsx = await loadXLSX()
     const role = authStore.user?.role
     let exportData: Record<string, unknown>[]
     let fileName: string
@@ -1130,9 +1150,9 @@ const handleExport = () => {
       sheetName = '承接任务'
     }
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    const worksheet = xlsx.utils.json_to_sheet(exportData)
+    const workbook = xlsx.utils.book_new()
+    xlsx.utils.book_append_sheet(workbook, worksheet, sheetName)
 
     // 自动列宽
     const colWidths = Object.keys(exportData[0] || {}).map(key => ({
@@ -1143,7 +1163,7 @@ const handleExport = () => {
     }))
     worksheet['!cols'] = colWidths
 
-    XLSX.writeFile(workbook, fileName)
+    xlsx.writeFile(workbook, fileName)
 
     ElMessage.success('导出成功')
   } catch (error) {
@@ -1341,15 +1361,17 @@ const _radarStats = computed(() => {
 })
 
 // 初始化雷达图
-const initRadarChart = () => {
+const initRadarChart = async () => {
   if (!radarChartRef.value) {return}
-  
+
   const data = radarData.value
   if (!data || data.length === 0) {
     console.warn('No radar data available')
     return
   }
-  
+
+  // 动态加载 echarts
+  const echarts = await loadEcharts()
   radarChartInstance = echarts.init(radarChartRef.value)
   
   radarChartInstance.setOption({
@@ -1400,7 +1422,7 @@ const _benchmarkChartHeight = computed(() => {
 })
 
 // 初始化排名对标图 - 改为堆叠柱状图
-const initBenchmarkChart = () => {
+const initBenchmarkChart = async () => {
   if (!benchmarkChartRef.value) {return}
 
   // 根据下钻状态选择数据源
@@ -1423,6 +1445,8 @@ const initBenchmarkChart = () => {
   if (benchmarkChartInstance) {
     benchmarkChartInstance.dispose()
   }
+  // 动态加载 echarts
+  const echarts = await loadEcharts()
   benchmarkChartInstance = echarts.init(benchmarkChartRef.value)
 
   benchmarkChartInstance.setOption({
@@ -1717,7 +1741,7 @@ const handleResize = () => {
 // ============ 学院看板图表配置（职能部门视角）============
 
 // 初始化学院看板堆叠柱状图
-const initCollegeChart = () => {
+const initCollegeChart = async () => {
   if (!collegeChartRef.value) {return}
   if (currentRole.value === 'secondary_college') {
     // 二级学院不显示此图表，清空已有实例
@@ -1745,6 +1769,8 @@ const initCollegeChart = () => {
   if (collegeChartInstance) {
     collegeChartInstance.dispose()
   }
+  // 动态加载 echarts
+  const echarts = await loadEcharts()
   collegeChartInstance = echarts.init(collegeChartRef.value)
 
   collegeChartInstance.setOption({
@@ -1930,7 +1956,7 @@ const handleBackToColleges = () => {
 // ============ 分院排名看板图表配置 ============
 
 // 初始化分院排名条形图
-const initCollegeRankingChart = () => {
+const initCollegeRankingChart = async () => {
   if (!collegeRankingChartRef.value) {return}
   if (currentRole.value === 'secondary_college') {
     // 二级学院不显示此图表，清空已有实例
@@ -1958,6 +1984,8 @@ const initCollegeRankingChart = () => {
   if (collegeRankingChartInstance) {
     collegeRankingChartInstance.dispose()
   }
+  // 动态加载 echarts
+  const echarts = await loadEcharts()
   collegeRankingChartInstance = echarts.init(collegeRankingChartRef.value)
 
   collegeRankingChartInstance.setOption({
@@ -2109,13 +2137,15 @@ watch(showCollegeMonthIndicatorCard, () => {
 })
 
 // 生命周期
-onMounted(() => {
-  nextTick(() => {
-    initRadarChart()
-    initBenchmarkChart()
-    initCollegeChart()
+onMounted(async () => {
+  await nextTick()
+  // 异步初始化图表
+  await Promise.all([
+    initRadarChart(),
+    initBenchmarkChart(),
+    initCollegeChart(),
     initCollegeRankingChart()
-  })
+  ])
   window.addEventListener('resize', handleResize)
 })
 

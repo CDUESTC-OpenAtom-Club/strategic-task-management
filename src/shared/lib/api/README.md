@@ -114,7 +114,7 @@ try {
 
 ```env
 # API base URL
-VITE_API_BASE_URL=/api
+VITE_API_BASE_URL=/api/v1
 
 # Request timeout (milliseconds)
 VITE_REQUEST_TIMEOUT=30000

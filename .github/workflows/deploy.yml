@@ -32,7 +32,7 @@ jobs:
       - name: Build for production
         run: npm run build
         env:
-          VITE_API_BASE_URL: /api
+          VITE_API_BASE_URL: /api/v1
           VITE_USE_MOCK: false
           VITE_ENABLE_DEVTOOLS: false
           VITE_LOG_LEVEL: warn

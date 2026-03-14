@@ -85,7 +85,7 @@ export function mockApiMiddleware(req: Request, res: Response, next: Function) {
   const { method, url } = req
   
   // 只处理API请求
-  if (!url.startsWith('/api/')) {
+  if (!url.startsWith('/api/v1/')) {
     return next()
   }
   
@@ -97,8 +97,8 @@ export function mockApiMiddleware(req: Request, res: Response, next: Function) {
   // 模拟网络延迟
   setTimeout(() => {
     try {
-      // 组织API
-      if (url === '/api/orgs' && method === 'GET') {
+// 组织API
+  if (url === '/api/v1/orgs' && method === 'GET') {
         res.json({
           success: true,
           data: mockOrgs,
@@ -107,8 +107,8 @@ export function mockApiMiddleware(req: Request, res: Response, next: Function) {
         return
       }
       
-      // 指标API
-      if (url === '/api/indicators' && method === 'GET') {
+// 指标API
+  if (url === '/api/v1/indicators' && method === 'GET') {
         res.json({
           success: true,
           data: mockIndicators,
@@ -117,8 +117,8 @@ export function mockApiMiddleware(req: Request, res: Response, next: Function) {
         return
       }
       
-      // 任务API
-      if (url === '/api/tasks' && method === 'GET') {
+// 任务API
+  if (url === '/api/v1/tasks' && method === 'GET') {
         res.json({
           success: true,
           data: mockTasks,

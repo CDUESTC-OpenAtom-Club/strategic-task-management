@@ -7,7 +7,7 @@ export function mockApiPlugin(): Plugin {
     name: 'mock-api-plugin',
     configureServer(server) {
       // 在Mock模式下，添加中间件处理API请求
-      server.middlewares.use('/api', mockApiMiddleware)
+      server.middlewares.use('/api/v1', mockApiMiddleware)
     }
   }
 }

@@ -188,11 +188,11 @@ export class MockApiHandler {
 
     // Mock 登录：任意用户名密码都可以登录
     let user = mockUsers[0] // 默认返回第一个用户
-    if (username === 'admin') user = mockUsers[0]
-    else if (username === 'kychu') user = mockUsers[1]
-    else if (username === 'jsxy') user = mockUsers[2]
-    else if (username === 'jiaowuchu') user = mockUsers[3]
-    else if (username === 'xueshengchu') user = mockUsers[4]
+    if (username === 'admin') {user = mockUsers[0]}
+    else if (username === 'kychu') {user = mockUsers[1]}
+    else if (username === 'jsxy') {user = mockUsers[2]}
+    else if (username === 'jiaowuchu') {user = mockUsers[3]}
+    else if (username === 'xueshengchu') {user = mockUsers[4]}
 
     logger.info('🎭 [Mock Login] 用户登录:', user.name)
 

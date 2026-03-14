@@ -223,6 +223,6 @@ export class ApiClient {
  * 使用环境变量配置的基础 URL
  */
 export const apiClient = new ApiClient({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000
 })

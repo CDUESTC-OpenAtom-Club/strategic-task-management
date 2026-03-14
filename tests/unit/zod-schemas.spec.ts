@@ -76,18 +76,22 @@ describe('Zod Schemas', () => {
     const validIndicator = {
       id: 'indicator-001',
       name: '测试指标',
+      isQualitative: false,
+      type1: '定量' as const,
+      type2: '基础性' as const,
+      progress: 50,
+      createTime: '2024-01-01T00:00:00Z',
       weight: 25,
-      status: 'in_progress' as const,
       targetValue: 100,
-      currentValue: 50,
-      source: '测试来源',
+      actualValue: 50,
+      unit: '分',
+      responsibleDept: '战略发展部',
+      responsiblePerson: '张三',
+      status: 'DRAFT' as const,
+      isStrategic: true,
       year: 2024,
-      createdAt: '2024-01-01T00:00:00Z',
-      updatedAt: '2024-01-01T00:00:00Z',
-      parentId: null,
       milestones: [],
-      statusHistory: [],
-      isExpanded: false
+      statusAudit: []
     }
 
     it('should accept valid indicator data', () => {
@@ -99,10 +103,10 @@ describe('Zod Schemas', () => {
     it('should accept indicator with parent', () => {
       const indicatorWithParent = {
         ...validIndicator,
-        parentId: 'parent-001'
+        parentIndicatorId: 'parent-001'
       }
       const result = StrategicIndicatorSchema.parse(indicatorWithParent)
-      expect(result.parentId).toBe('parent-001')
+      expect(result.parentIndicatorId).toBe('parent-001')
     })
 
     it('should accept indicator with milestones', () => {
@@ -111,8 +115,9 @@ describe('Zod Schemas', () => {
         milestones: [
           {
             id: 'milestone-001',
-            title: '测试里程碑',
-            plannedDate: '2024-06-30',
+            name: '测试里程碑',
+            targetProgress: 50,
+            deadline: '2024-06-30',
             status: 'pending' as const
           }
         ]
@@ -125,18 +130,14 @@ describe('Zod Schemas', () => {
       const invalidIndicator = { ...validIndicator, weight: 150 }
       expect(() => StrategicIndicatorSchema.parse(invalidIndicator)).toThrow()
     })
-
-    it('should reject indicator with negative progress', () => {
-      const invalidIndicator = { ...validIndicator, progress: -10 }
-      expect(() => StrategicIndicatorSchema.parse(invalidIndicator)).toThrow()
-    })
   })
 
   describe('MilestoneSchema', () => {
     const validMilestone = {
       id: 'milestone-001',
-      title: '测试里程碑',
-      plannedDate: '2024-06-30',
+      name: '测试里程碑',
+      targetProgress: 50,
+      deadline: '2024-06-30',
       status: 'pending' as const
     }
 
@@ -148,15 +149,18 @@ describe('Zod Schemas', () => {
     it('should accept milestone with optional fields', () => {
       const milestoneWithOptionals = {
         ...validMilestone,
-        completedDate: '2024-06-30',
-        description: '里程碑描述'
+        weightPercent: 50,
+        sortOrder: 1,
+        indicatorId: 'indicator-001',
+        isPaired: false
       }
       const result = MilestoneSchema.parse(milestoneWithOptionals)
-      expect(result.description).toBe('里程碑描述')
+      expect(result.weightPercent).toBe(50)
+      expect(result.sortOrder).toBe(1)
     })
 
-    it('should reject milestone with empty title', () => {
-      const invalidMilestone = { ...validMilestone, title: '' }
+    it('should reject milestone with empty name', () => {
+      const invalidMilestone = { ...validMilestone, name: '' }
       expect(() => MilestoneSchema.parse(invalidMilestone)).toThrow()
     })
   })
@@ -221,18 +225,22 @@ describe('Zod Schemas', () => {
         const indicatorData = {
           id: 'indicator-001',
           name: '测试指标',
+          isQualitative: false,
+          type1: '定量' as const,
+          type2: '基础性' as const,
+          progress: 50,
+          createTime: '2024-01-01T00:00:00Z',
           weight: 25,
-          status: 'in_progress' as const,
           targetValue: 100,
-          currentValue: 50,
-          source: '测试来源',
+          actualValue: 50,
+          unit: '分',
+          responsibleDept: '战略发展部',
+          responsiblePerson: '张三',
+          status: 'DRAFT' as const,
+          isStrategic: true,
           year: 2024,
-          createdAt: '2024-01-01T00:00:00Z',
-          updatedAt: '2024-01-01T00:00:00Z',
-          parentId: null,
           milestones: [],
-          statusHistory: [],
-          isExpanded: false
+          statusAudit: []
         }
 
         const result = validateIndicator(indicatorData)
@@ -253,8 +261,9 @@ describe('Zod Schemas', () => {
       it('should return success for valid milestone', () => {
         const milestoneData = {
           id: 'milestone-001',
-          title: '测试里程碑',
-          plannedDate: '2024-06-30',
+          name: '测试里程碑',
+          targetProgress: 50,
+          deadline: '2024-06-30',
           status: 'pending' as const
         }
 

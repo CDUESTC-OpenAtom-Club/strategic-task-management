@@ -133,29 +133,29 @@ const ERROR_HANDLING_STRATEGIES: Record<ErrorType, ErrorStrategy> = {
   // 网络错误 - 触发降级
   NETWORK_ERROR: {
     action: 'fallback',
-    userMessage: '网络连接失败，请检查网络设置或稍后重试',
+    userMessage: '网络连接失败，正在使用离线数据',
     retryable: true
   },
-  
+
   // 超时错误 - 提示重试
   TIMEOUT_ERROR: {
     action: 'retry',
-    userMessage: '请求超时，请检查网络连接或稍后重试',
+    userMessage: '请求超时，请稍后重试',
     retryable: true,
     maxRetries: 3
   },
-  
+
   // 认证错误 - 跳转登录
   AUTH_ERROR: {
     action: 'redirect',
     userMessage: '登录已过期，请重新登录',
     retryable: false
   },
-  
+
   // 服务器错误 - 触发降级
   SERVER_ERROR: {
     action: 'fallback',
-    userMessage: '服务器繁忙，请稍后重试',
+    userMessage: '服务器繁忙，正在使用缓存数据',
     retryable: true
   },
   
@@ -293,6 +293,10 @@ function extractErrorMessage(error: unknown): string {
     if (error.response?.status) {
       switch (error.response.status) {
         case 400:
+          // 如果响应没有返回具体消息，返回原始 Axios 消息
+          if (!error.response?.data?.message && !error.response?.data?.error) {
+            return error.message
+          }
           return '请求参数有误，请检查输入内容'
         case 401:
           return '登录已过期，请重新登录'

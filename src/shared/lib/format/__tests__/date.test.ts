@@ -1,10 +1,11 @@
 /**
  * Date Formatting Tests
- * 
+ *
  * Unit tests for date formatting utilities
  */
 
 import { describe, it, expect } from 'vitest'
+import dayjs from 'dayjs'
 import {
   formatDate,
   formatDateShort,
@@ -21,13 +22,11 @@ import {
 describe('Date Formatting', () => {
   describe('formatDate', () => {
     it('should format date with default format', () => {
-      const date = new Date('2026-03-12T10:30:00')
-      expect(formatDate(date)).toBe('2026-03-12')
+      expect(formatDate('2026-03-12T10:30:00')).toBe('2026-03-12')
     })
 
     it('should format date with custom format', () => {
-      const date = new Date('2026-03-12T10:30:00')
-      expect(formatDate(date, 'YYYY/MM/DD')).toBe('2026/03/12')
+      expect(formatDate('2026-03-12T10:30:00', 'YYYY/MM/DD')).toBe('2026/03/12')
     })
 
     it('should format date from string', () => {
@@ -35,46 +34,41 @@ describe('Date Formatting', () => {
     })
 
     it('should format date from timestamp', () => {
-      const timestamp = new Date('2026-03-12').getTime()
+      // 使用 dayjs 的 UTC 模式进行测试
+      const timestamp = dayjs('2026-03-12').valueOf()
       expect(formatDate(timestamp)).toBe('2026-03-12')
     })
   })
 
   describe('formatDateShort', () => {
     it('should format date in short format', () => {
-      const date = new Date('2026-03-12T10:30:00')
-      expect(formatDateShort(date)).toBe('2026-03-12')
+      expect(formatDateShort('2026-03-12T10:30:00')).toBe('2026-03-12')
     })
   })
 
   describe('formatDateTime', () => {
     it('should format datetime with default format', () => {
-      const date = new Date('2026-03-12T10:30:45')
-      expect(formatDateTime(date)).toBe('2026-03-12 10:30:45')
+      expect(formatDateTime('2026-03-12T10:30:45')).toBe('2026-03-12 10:30:45')
     })
 
     it('should format datetime with custom format', () => {
-      const date = new Date('2026-03-12T10:30:45')
-      expect(formatDateTime(date, 'YYYY-MM-DD HH:mm')).toBe('2026-03-12 10:30')
+      expect(formatDateTime('2026-03-12T10:30:45', 'YYYY-MM-DD HH:mm')).toBe('2026-03-12 10:30')
     })
   })
 
   describe('formatTime', () => {
     it('should format time with default format', () => {
-      const date = new Date('2026-03-12T10:30:45')
-      expect(formatTime(date)).toBe('10:30:45')
+      expect(formatTime('2026-03-12T10:30:45')).toBe('10:30:45')
     })
 
     it('should format time with custom format', () => {
-      const date = new Date('2026-03-12T10:30:45')
-      expect(formatTime(date, 'HH:mm')).toBe('10:30')
+      expect(formatTime('2026-03-12T10:30:45', 'HH:mm')).toBe('10:30')
     })
   })
 
   describe('formatDateChinese', () => {
     it('should format date in Chinese', () => {
-      const date = new Date('2026-03-12')
-      expect(formatDateChinese(date)).toBe('2026年03月12日')
+      expect(formatDateChinese('2026-03-12')).toBe('2026年03月12日')
     })
 
     it('should return default text for null', () => {
@@ -92,8 +86,7 @@ describe('Date Formatting', () => {
 
   describe('safeFormatDate', () => {
     it('should format valid date', () => {
-      const date = new Date('2026-03-12')
-      expect(safeFormatDate(date)).toBe('2026-03-12')
+      expect(safeFormatDate('2026-03-12')).toBe('2026-03-12')
     })
 
     it('should return default value for null', () => {
@@ -113,8 +106,7 @@ describe('Date Formatting', () => {
     })
 
     it('should format with custom format', () => {
-      const date = new Date('2026-03-12')
-      expect(safeFormatDate(date, 'YYYY/MM/DD')).toBe('2026/03/12')
+      expect(safeFormatDate('2026-03-12', 'YYYY/MM/DD')).toBe('2026/03/12')
     })
   })
 

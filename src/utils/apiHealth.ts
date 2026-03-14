@@ -10,7 +10,7 @@ import { ElNotification } from 'element-plus'
 
 // 创建一个不使用认证的axios实例，专门用于健康检查
 const healthApi = axios.create({
-  baseURL: '/api',
+  baseURL: '/api/v1',
   timeout: 10000, // 增加超时时间到10秒，避免开发环境下的初始化延迟
   headers: {
     'Content-Type': 'application/json'
