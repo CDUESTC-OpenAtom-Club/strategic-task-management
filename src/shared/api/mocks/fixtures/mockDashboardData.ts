@@ -47,7 +47,10 @@ export interface DashboardStats {
 }
 
 function calculateDepartmentStats(indicators: Indicator[]): DashboardStats['departmentProgress'] {
-  const deptMap = new Map<string, { total: number; completed: number; inProgress: number; progressSum: number }>()
+  const deptMap = new Map<
+    string,
+    { total: number; completed: number; inProgress: number; progressSum: number }
+  >()
 
   indicators.forEach(indicator => {
     const dept = indicator.responsibleDept
@@ -96,16 +99,18 @@ function generateRecentActivities(
   })
 
   // 从里程碑生成活动
-  milestones.filter(m => m.status === 'COMPLETED').forEach(milestone => {
-    activities.push({
-      id: `ACT-MIL-${milestone.milestoneId}`,
-      type: 'milestone_reached',
-      title: `达到了"${milestone.milestoneName}"里程碑`,
-      user: '系统',
-      department: '',
-      time: milestone.updatedAt
+  milestones
+    .filter(m => m.status === 'COMPLETED')
+    .forEach(milestone => {
+      activities.push({
+        id: `ACT-MIL-${milestone.milestoneId}`,
+        type: 'milestone_reached',
+        title: `达到了"${milestone.milestoneName}"里程碑`,
+        user: '系统',
+        department: '',
+        time: milestone.updatedAt
+      })
     })
-  })
 
   // 待审批的指标
   indicators
@@ -136,7 +141,8 @@ function calculateOverview(
   const inProgressIndicators = indicators.filter(i => i.progress > 0 && i.progress < 100).length
   const pendingIndicators = indicators.filter(i => i.progress === 0).length
   const totalProgress = indicators.reduce((sum, i) => sum + i.progress, 0)
-  const averageProgress = indicators.length > 0 ? Math.round((totalProgress / indicators.length) * 10) / 10 : 0
+  const averageProgress =
+    indicators.length > 0 ? Math.round((totalProgress / indicators.length) * 10) / 10 : 0
 
   const completedMilestones = milestones.filter(m => m.status === 'COMPLETED').length
 
@@ -177,13 +183,33 @@ function generateTrend(): DashboardStats['trend'] {
   }
 }
 
-export function generateMockDashboardData(): DashboardStats {
-  return {
+export function generateMockDashboardData(): DashboardData {
+  const dashboardStats = {
     overview: calculateOverview(mockIndicators, mockStrategicTasks, mockMilestones),
     departmentProgress: calculateDepartmentStats(mockIndicators),
     recentActivities: generateRecentActivities(mockIndicators, mockMilestones),
     trend: generateTrend(),
     distribution: generateDistribution(mockIndicators)
+  }
+
+  return {
+    totalScore: Math.round(dashboardStats.overview.averageProgress * 10) / 10,
+    basicScore: Math.round(dashboardStats.overview.averageProgress * 0.6 * 10) / 10,
+    developmentScore: Math.round(dashboardStats.overview.averageProgress * 0.4 * 10) / 10,
+    completionRate:
+      Math.round(
+        (dashboardStats.overview.completedIndicators / dashboardStats.overview.totalIndicators) *
+          100
+      ) || 0,
+    warningCount:
+      dashboardStats.overview.inProgressIndicators + dashboardStats.overview.pendingIndicators,
+    totalIndicators: dashboardStats.overview.totalIndicators,
+    completedIndicators: dashboardStats.overview.completedIndicators,
+    alertIndicators: {
+      severe: Math.floor(Math.random() * 3), // 随机生成0-2个严重预警
+      moderate: Math.floor(Math.random() * 5) + 1, // 随机生成1-5个中等级预警
+      normal: 0
+    }
   }
 }
 

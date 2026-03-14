@@ -188,20 +188,29 @@ export class MockApiHandler {
 
     // Mock 登录：任意用户名密码都可以登录
     let user = mockUsers[0] // 默认返回第一个用户
-    if (username === 'admin') {user = mockUsers[0]}
-    else if (username === 'kychu') {user = mockUsers[1]}
-    else if (username === 'jsxy') {user = mockUsers[2]}
-    else if (username === 'jiaowuchu') {user = mockUsers[3]}
-    else if (username === 'xueshengchu') {user = mockUsers[4]}
+    if (username === 'admin') {
+      user = mockUsers[0]
+    } else if (username === 'kychu') {
+      user = mockUsers[1]
+    } else if (username === 'jsxy') {
+      user = mockUsers[2]
+    } else if (username === 'jiaowuchu') {
+      user = mockUsers[3]
+    } else if (username === 'xueshengchu') {
+      user = mockUsers[4]
+    }
 
     logger.info('🎭 [Mock Login] 用户登录:', user.name)
 
-    return createMockResponse({
-      token: 'mock_token_' + Date.now(),
-      refreshToken: 'mock_refresh_token_' + Date.now(),
-      user,
-      expiresIn: 7200
-    }, '登录成功')
+    return createMockResponse(
+      {
+        token: 'mock_token_' + Date.now(),
+        refreshToken: 'mock_refresh_token_' + Date.now(),
+        user,
+        expiresIn: 7200
+      },
+      '登录成功'
+    )
   }
 
   private static async handleAuthInfo() {
@@ -258,9 +267,7 @@ export class MockApiHandler {
 
     // 支持按部门过滤
     if (query.responsibleDept) {
-      tasks = tasks.filter(task =>
-        task.responsibleDept.includes(query.responsibleDept)
-      )
+      tasks = tasks.filter(task => task.responsibleDept.includes(query.responsibleDept))
     }
 
     logger.debug('🎭 [Mock API] 获取战略任务列表:', {
@@ -298,11 +305,14 @@ export class MockApiHandler {
   private static async handleUpdateStrategicTask(id: string, data: Record<string, unknown>) {
     logger.info('🎭 [Mock API] 更新战略任务:', id, data)
 
-    return createMockResponse({
-      taskId: Number(id),
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, '更新战略任务成功')
+    return createMockResponse(
+      {
+        taskId: Number(id),
+        ...data,
+        updatedAt: new Date().toISOString()
+      },
+      '更新战略任务成功'
+    )
   }
 
   private static async handleDeleteStrategicTask(id: string) {
@@ -355,10 +365,13 @@ export class MockApiHandler {
     // 关联里程碑数据
     const associatedMilestones = mockMilestones.filter(m => m.indicatorId === indicatorId)
 
-    return createMockResponse({
-      ...indicator,
-      milestones: associatedMilestones
-    }, '获取指标成功')
+    return createMockResponse(
+      {
+        ...indicator,
+        milestones: associatedMilestones
+      },
+      '获取指标成功'
+    )
   }
 
   private static async handleCreateIndicator(data: Record<string, unknown>) {
@@ -381,11 +394,14 @@ export class MockApiHandler {
   private static async handleUpdateIndicator(id: string, data: Record<string, unknown>) {
     logger.info('🎭 [Mock API] 更新指标:', id, data)
 
-    return createMockResponse({
-      indicatorId: Number(id),
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, '更新指标成功')
+    return createMockResponse(
+      {
+        indicatorId: Number(id),
+        ...data,
+        updatedAt: new Date().toISOString()
+      },
+      '更新指标成功'
+    )
   }
 
   private static async handleDeleteIndicator(id: string) {
@@ -449,11 +465,14 @@ export class MockApiHandler {
   private static async handleUpdateMilestone(id: string, data: Record<string, unknown>) {
     logger.info('🎭 [Mock API] 更新里程碑:', id, data)
 
-    return createMockResponse({
-      milestoneId: Number(id),
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, '更新里程碑成功')
+    return createMockResponse(
+      {
+        milestoneId: Number(id),
+        ...data,
+        updatedAt: new Date().toISOString()
+      },
+      '更新里程碑成功'
+    )
   }
 
   private static async handleDeleteMilestone(id: string) {
@@ -496,7 +515,7 @@ export class MockApiHandler {
    * 处理获取仪表板数据
    */
   private static async handleGetDashboard() {
-    return createMockResponse(mockDashboardData.overview, '获取仪表板数据成功')
+    return createMockResponse(mockDashboardData, '获取仪表板数据成功')
   }
 
   /**

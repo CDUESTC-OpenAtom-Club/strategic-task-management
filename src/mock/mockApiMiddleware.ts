@@ -83,61 +83,87 @@ const mockTasks = [
 // Mock API处理器
 export function mockApiMiddleware(req: Request, res: Response, next: Function) {
   const { method, url } = req
-  
+
   // 只处理API请求
   if (!url.startsWith('/api/v1/')) {
     return next()
   }
-  
+
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.log('[Mock API]', method, url)
   }
-  
+
   // 模拟网络延迟
-  setTimeout(() => {
-    try {
-// 组织API
-  if (url === '/api/v1/orgs' && method === 'GET') {
-        res.json({
-          success: true,
-          data: mockOrgs,
-          message: '获取组织列表成功'
+  setTimeout(
+    () => {
+      try {
+        // 组织API
+        if (url === '/api/v1/orgs' && method === 'GET') {
+          res.json({
+            success: true,
+            data: mockOrgs,
+            message: '获取组织列表成功'
+          })
+          return
+        }
+
+        // 指标API
+        if (url === '/api/v1/indicators' && method === 'GET') {
+          res.json({
+            success: true,
+            data: mockIndicators,
+            message: '获取指标列表成功'
+          })
+          return
+        }
+
+        // 任务API
+        if (url === '/api/v1/tasks' && method === 'GET') {
+          res.json({
+            success: true,
+            data: mockTasks,
+            message: '获取任务列表成功'
+          })
+          return
+        }
+
+        // 仪表板API
+        if (url === '/api/v1/dashboard' && method === 'GET') {
+          res.json({
+            success: true,
+            data: {
+              totalScore: 85.5,
+              basicScore: 51.3,
+              developmentScore: 34.2,
+              completionRate: 78,
+              warningCount: 12,
+              totalIndicators: 25,
+              completedIndicators: 19,
+              alertIndicators: {
+                severe: 2,
+                moderate: 5,
+                normal: 0
+              }
+            },
+            message: '获取仪表板数据成功'
+          })
+          return
+        }
+
+        // 如果没有匹配的API，返回404
+        res.status(404).json({
+          success: false,
+          message: `API endpoint not found: ${method} ${url}`
         })
-        return
-      }
-      
-// 指标API
-  if (url === '/api/v1/indicators' && method === 'GET') {
-        res.json({
-          success: true,
-          data: mockIndicators,
-          message: '获取指标列表成功'
+      } catch (error) {
+        console.error('[Mock API] Error:', error)
+        res.status(500).json({
+          success: false,
+          message: 'Internal server error'
         })
-        return
       }
-      
-// 任务API
-  if (url === '/api/v1/tasks' && method === 'GET') {
-        res.json({
-          success: true,
-          data: mockTasks,
-          message: '获取任务列表成功'
-        })
-        return
-      }
-      
-      // 如果没有匹配的API，返回404
-      res.status(404).json({
-        success: false,
-        message: `API endpoint not found: ${method} ${url}`
-      })
-    } catch (error) {
-      console.error('[Mock API] Error:', error)
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      })
-    }
-  }, Math.random() * 500 + 200) // 模拟200-700ms的延迟
+    },
+    Math.random() * 500 + 200
+  ) // 模拟200-700ms的延迟
 }

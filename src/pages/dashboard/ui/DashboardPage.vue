@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
-import { Download, Warning, Aim, Refresh, QuestionFilled, Top, Close } from '@element-plus/icons-vue'
+import {
+  Download,
+  Warning,
+  Aim,
+  Refresh,
+  QuestionFilled,
+  Top,
+  Close
+} from '@element-plus/icons-vue'
 import type { DashboardData, UserRole } from '@/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useDashboardStore } from '@/features/dashboard/model/store'
@@ -8,9 +16,15 @@ import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import BreadcrumbNav from '@/shared/ui/BreadcrumbNav.vue'
 // 懒加载图表组件以减小初始包大小
-const ScoreCompositionChart = defineAsyncComponent(() => import('@/shared/ui/charts/ScoreCompositionChart.vue'))
-const AlertDistributionChart = defineAsyncComponent(() => import('@/shared/ui/charts/AlertDistributionChart.vue'))
-const DepartmentProgressChart = defineAsyncComponent(() => import('@/shared/ui/charts/DepartmentProgressChart.vue'))
+const ScoreCompositionChart = defineAsyncComponent(
+  () => import('@/shared/ui/charts/ScoreCompositionChart.vue')
+)
+const AlertDistributionChart = defineAsyncComponent(
+  () => import('@/shared/ui/charts/AlertDistributionChart.vue')
+)
+const DepartmentProgressChart = defineAsyncComponent(
+  () => import('@/shared/ui/charts/DepartmentProgressChart.vue')
+)
 const TaskSankeyChart = defineAsyncComponent(() => import('@/shared/ui/charts/TaskSankeyChart.vue'))
 const SourcePieChart = defineAsyncComponent(() => import('@/shared/ui/charts/SourcePieChart.vue'))
 import { ElMessage } from 'element-plus'
@@ -42,14 +56,17 @@ const loadXLSX = async () => {
 
 // 帮助提示内容
 const helpTexts = {
-  totalScore: '总得分 = 基础性指标得分 + 发展性指标得分，满分120分。基础性指标满分100分，发展性指标满分20分。',
+  totalScore:
+    '总得分 = 基础性指标得分 + 发展性指标得分，满分120分。基础性指标满分100分，发展性指标满分20分。',
   basicScore: '基础性指标是必须完成的核心指标，根据各指标完成进度加权计算得分，满分100分。',
   developmentScore: '发展性指标是鼓励性指标，完成后可获得额外加分，满分20分。',
   warningCount: '预警任务指进度低于50%的指标数量，需要重点关注和推进。',
   scoreComposition: '展示基础性指标和发展性指标的得分占比，帮助了解整体得分构成。',
-  alertDistribution: '按预警级别统计指标数量：严重（进度<30%）、中度（30%-60%）、正常（≥60%）。点击可筛选对应级别的指标。',
+  alertDistribution:
+    '按预警级别统计指标数量：严重（进度<30%）、中度（30%-60%）、正常（≥60%）。点击可筛选对应级别的指标。',
   completionRate: '完成率 = 已完成指标数 / 总指标数 × 100%，反映整体任务完成情况。',
-  departmentProgress: '展示各部门的指标完成进度，进度条颜色表示状态：绿色（≥80%）、黄色（50%-80%）、红色（<50%）。',
+  departmentProgress:
+    '展示各部门的指标完成进度，进度条颜色表示状态：绿色（≥80%）、黄色（50%-80%）、红色（<50%）。',
   benchmark: '展示各部门执行进度与基准线对比，红色表示低于基准线，蓝色表示达标。',
   radar: '多维度分析各项核心指标的完成情况，帮助识别短板领域。',
   delayedTasks: '展示当前进度滞后、且需优先处理的任务清单，支持一键发送催办提醒。',
@@ -57,17 +74,33 @@ const helpTexts = {
 }
 
 // 雷达图实例
-let radarChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
-let benchmarkChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
+let radarChartInstance: {
+  dispose: () => void
+  setOption: (opt: unknown) => void
+  resize: () => void
+} | null = null
+let benchmarkChartInstance: {
+  dispose: () => void
+  setOption: (opt: unknown) => void
+  resize: () => void
+} | null = null
 const radarChartRef = ref<HTMLElement | null>(null)
 const benchmarkChartRef = ref<HTMLElement | null>(null)
 
 // 学院看板图表实例
-let collegeChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
+let collegeChartInstance: {
+  dispose: () => void
+  setOption: (opt: unknown) => void
+  resize: () => void
+} | null = null
 const collegeChartRef = ref<HTMLElement | null>(null)
 
 // 分院排名图表实例
-let collegeRankingChartInstance: { dispose: () => void; setOption: (opt: unknown) => void; resize: () => void } | null = null
+let collegeRankingChartInstance: {
+  dispose: () => void
+  setOption: (opt: unknown) => void
+  resize: () => void
+} | null = null
 const collegeRankingChartRef = ref<HTMLElement | null>(null)
 
 // 选中的部门（用于右侧指标完成情况卡片）
@@ -100,12 +133,16 @@ const showCollegeMonthIndicatorCard = ref(false) // 学院月份指标卡片显�
 const collegeRankingMonth = ref(new Date().getMonth() + 1) // 分院排名选中月份
 const selectedOwnerDeptFilter = ref<string>('all') // 职能部门筛选（战略发展部用）
 
+// Stores
+const strategicStore = useStrategicStore()
+const timeContext = useTimeContextStore()
+
 // 状态颜色配置
 const statusColors = {
-  ahead: '#67C23A',   // 绿色 - 超前完成
-  normal: '#409EFF',  // 蓝色 - 正常
+  ahead: '#67C23A', // 绿色 - 超前完成
+  normal: '#409EFF', // 蓝色 - 正常
   warning: '#E6A23C', // 黄色 - 预警
-  delayed: '#F56C6C'  // 红色 - 延期
+  delayed: '#F56C6C' // 红色 - 延期
 }
 
 // 获取定时器管理器
@@ -115,36 +152,36 @@ const { addDelayedSequence, addTimeout } = useTimeoutManager()
 const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
+
   const milestones = indicator.milestones || []
   if (milestones.length === 0) {
     return 'normal'
   }
-  
+
   const currentProgress = indicator.progress || 0
-  
+
   // 按deadline排序里程碑
-  const sortedMilestones = [...milestones].sort((a, b) => 
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )
-  
+
   // 检查是否有已过期但未达标的里程碑（延期）
   for (const milestone of sortedMilestones) {
     const deadlineDate = new Date(milestone.deadline)
     deadlineDate.setHours(23, 59, 59, 999)
-    
+
     if (deadlineDate < today && currentProgress < milestone.targetProgress) {
       return 'delayed'
     }
   }
-  
+
   // 找到离今天最近的未来里程碑（deadline > 今天）
   const nextMilestone = sortedMilestones.find(m => {
     const deadlineDate = new Date(m.deadline)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate >= today
   })
-  
+
   if (!nextMilestone) {
     // 没有未来的里程碑，检查最后一个里程碑是否完成
     const lastMilestone = sortedMilestones[sortedMilestones.length - 1]
@@ -153,21 +190,23 @@ const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
     }
     return 'normal'
   }
-  
+
   // 检查是否超前完成
   if (currentProgress >= nextMilestone.targetProgress) {
     return 'ahead'
   }
-  
+
   // 检查是否预警（距离deadline ≤ 3天且未达标）
   const nextDeadline = new Date(nextMilestone.deadline)
   nextDeadline.setHours(23, 59, 59, 999)
-  const daysUntilDeadline = Math.ceil((nextDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  
+  const daysUntilDeadline = Math.ceil(
+    (nextDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  )
+
   if (daysUntilDeadline <= 3 && currentProgress < nextMilestone.targetProgress) {
     return 'warning'
   }
-  
+
   return 'normal'
 }
 
@@ -197,28 +236,28 @@ const getStatusClass = (status: IndicatorStatus): string => {
 const getCurrentTargetProgress = (indicator: Indicator): number | null => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
+
   const milestones = indicator.milestones || []
   if (milestones.length === 0) {
     return null
   }
-  
+
   // 按deadline排序里程碑
-  const sortedMilestones = [...milestones].sort((a, b) => 
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )
-  
+
   // 找到离今天最近的里程碑（deadline >= 今天）
   const nextMilestone = sortedMilestones.find(m => {
     const deadlineDate = new Date(m.deadline)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate >= today
   })
-  
+
   if (nextMilestone) {
     return nextMilestone.targetProgress
   }
-  
+
   // 如果没有未来的里程碑，返回最后一个里程碑的目标
   const lastMilestone = sortedMilestones[sortedMilestones.length - 1]
   return lastMilestone ? lastMilestone.targetProgress : null
@@ -228,30 +267,30 @@ const getCurrentTargetProgress = (indicator: Indicator): number | null => {
 const getCurrentMilestoneIndex = (indicator: Indicator): string | null => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  
+
   const milestones = indicator.milestones || []
   if (milestones.length === 0) {
     return null
   }
-  
+
   const total = milestones.length
-  
+
   // 按deadline排序里程碑
-  const sortedMilestones = [...milestones].sort((a, b) => 
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )
-  
+
   // 找到离今天最近的里程碑（deadline >= 今天）
   const nextMilestoneIndex = sortedMilestones.findIndex(m => {
     const deadlineDate = new Date(m.deadline)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate >= today
   })
-  
+
   if (nextMilestoneIndex !== -1) {
     return `${nextMilestoneIndex + 1}/${total}`
   }
-  
+
   // 如果没有未来的里程碑，返回最后一个
   return `${total}/${total}`
 }
@@ -261,12 +300,12 @@ const selectedDeptIndicators = computed(() => {
   if (!selectedBenchmarkDept.value) {
     return []
   }
-  
+
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
-  
+
   // 筛选该部门接收的指标（responsibleDept === 选中的部门）
   return strategicStore.indicators
     .filter(i => {
@@ -316,7 +355,7 @@ const _getDeptStats = (deptName: string) => {
   const timeContext = useTimeContextStore()
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
-  
+
   const indicators = strategicStore.indicators
     .filter(i => {
       const indicatorYear = i.year || realYear
@@ -326,7 +365,7 @@ const _getDeptStats = (deptName: string) => {
       ...i,
       status: getIndicatorStatus(i)
     }))
-  
+
   return {
     ahead: indicators.filter(i => i.status === 'ahead').length,
     warning: indicators.filter(i => i.status === 'warning').length,
@@ -337,7 +376,11 @@ const _getDeptStats = (deptName: string) => {
 }
 
 // 计算指标在指定月份的状态（用于堆叠柱状图）
-const getIndicatorStatusAtMonth = (indicator: Indicator, month: number, year: number): IndicatorStatus => {
+const getIndicatorStatusAtMonth = (
+  indicator: Indicator,
+  month: number,
+  year: number
+): IndicatorStatus => {
   const milestones = indicator.milestones || []
   if (milestones.length === 0) {
     return 'normal'
@@ -348,8 +391,8 @@ const getIndicatorStatusAtMonth = (indicator: Indicator, month: number, year: nu
   monthEnd.setHours(23, 59, 59, 999)
 
   // 按deadline排序里程碑
-  const sortedMilestones = [...milestones].sort((a, b) =>
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )
 
   // 筛选截止到该月底的里程碑
@@ -383,7 +426,9 @@ const getIndicatorStatusAtMonth = (indicator: Indicator, month: number, year: nu
 
   // 检查是否预警（该月最后一个里程碑后的3天内）
   const nextMonthStart = new Date(year, month, 1)
-  const daysAfterMonth = Math.ceil((nextMonthStart.getTime() - monthEnd.getTime()) / (1000 * 60 * 60 * 24))
+  const daysAfterMonth = Math.ceil(
+    (nextMonthStart.getTime() - monthEnd.getTime()) / (1000 * 60 * 60 * 24)
+  )
   if (daysAfterMonth <= 3 && currentProgress < lastMilestoneInMonth.targetProgress) {
     return 'warning'
   }
@@ -419,7 +464,9 @@ const getDeptStatsAtMonth = (deptName: string, month: number, year: number) => {
 
 // 计算堆叠柱状图数据（部门视图 - 第一层）
 const stackedBarData = computed(() => {
-  if (isDrillDown.value) {return []}
+  if (isDrillDown.value) {
+    return []
+  }
 
   const summary = dashboardStore.departmentSummary
   if (!summary || summary.length === 0) {
@@ -443,7 +490,9 @@ const stackedBarData = computed(() => {
 
 // 计算下钻后的月度堆叠数据（部门月度视图 - 第二层）
 const monthlyStackedData = computed(() => {
-  if (!isDrillDown.value || !drilledDept.value) {return []}
+  if (!isDrillDown.value || !drilledDept.value) {
+    return []
+  }
 
   // 显示1月到选中的月份
   const months = []
@@ -528,9 +577,11 @@ const getCollegeStatsForFunctionalDept = (ownerDept: string, month: number, year
   const indicators = strategicStore.indicators
     .filter(i => {
       const indicatorYear = i.year || realYear
-      return indicatorYear === currentYear &&
-             i.ownerDept === ownerDept &&
-             isSecondaryCollege(i.responsibleDept)
+      return (
+        indicatorYear === currentYear &&
+        i.ownerDept === ownerDept &&
+        isSecondaryCollege(i.responsibleDept)
+      )
     })
     .map(i => ({
       ...i,
@@ -564,8 +615,12 @@ const getCollegeStatsForFunctionalDept = (ownerDept: string, month: number, year
 
 // 学院看板堆叠数据（第一层：学院视图）
 const collegeBarData = computed(() => {
-  if (isCollegeDrillDown.value) {return []}
-  if (currentRole.value === 'secondary_college') {return []}
+  if (isCollegeDrillDown.value) {
+    return []
+  }
+  if (currentRole.value === 'secondary_college') {
+    return []
+  }
 
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
@@ -619,7 +674,9 @@ const collegeBarData = computed(() => {
 
 // 学院看板月度趋势数据（第二层：学院月度视图）
 const collegeMonthlyStackedData = computed(() => {
-  if (!isCollegeDrillDown.value || !drilledCollege.value) {return []}
+  if (!isCollegeDrillDown.value || !drilledCollege.value) {
+    return []
+  }
 
   const months = []
   for (let m = 1; m <= collegeSelectedMonth.value; m++) {
@@ -662,15 +719,22 @@ const collegeMonthlyStackedData = computed(() => {
 
 // 学院下钻后的月份指标列表
 const collegeMonthIndicators = computed(() => {
-  if (!isCollegeDrillDown.value || !drilledCollege.value || selectedMonthInCollegeDrillDown.value === null) {
+  if (
+    !isCollegeDrillDown.value ||
+    !drilledCollege.value ||
+    selectedMonthInCollegeDrillDown.value === null
+  ) {
     return []
   }
 
-  const strategicStore = useStrategicStore()
-  const timeContext = useTimeContextStore()
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   const month = selectedMonthInCollegeDrillDown.value
+
+  // 确保indicators已加载
+  if (!strategicStore.indicators || strategicStore.indicators.length === 0) {
+    return []
+  }
 
   let indicators = strategicStore.indicators
     .filter(i => {
@@ -726,7 +790,9 @@ const handleCloseCollegeMonthIndicatorCard = () => {
 
 // 计算二级学院的分数（权重 × 进度）
 const getCollegeRankingData = computed(() => {
-  if (currentRole.value === 'secondary_college') {return []}
+  if (currentRole.value === 'secondary_college') {
+    return []
+  }
 
   const strategicStore = useStrategicStore()
   const timeContext = useTimeContextStore()
@@ -756,7 +822,18 @@ const getCollegeRankingData = computed(() => {
   }
 
   // 按学院分组计算分数
-  const collegeMap = new Map<string, { score: number; totalIndicators: number; completedIndicators: number; ahead: number; normal: number; warning: number; delayed: number }>()
+  const collegeMap = new Map<
+    string,
+    {
+      score: number
+      totalIndicators: number
+      completedIndicators: number
+      ahead: number
+      normal: number
+      warning: number
+      delayed: number
+    }
+  >()
 
   indicators.forEach(i => {
     const college = i.responsibleDept
@@ -775,9 +852,11 @@ const getCollegeRankingData = computed(() => {
     // 分数 = 权重 × 进度
     const weight = parseFloat(i.weight) || 1
     const progress = i.progress || 0
-    stats.score += weight * progress / 100
+    stats.score += (weight * progress) / 100
     stats.totalIndicators++
-    if (progress >= 100) {stats.completedIndicators++}
+    if (progress >= 100) {
+      stats.completedIndicators++
+    }
     stats[i.status]++
   })
 
@@ -838,14 +917,12 @@ const handleCloseIndicatorCard = () => {
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
-  viewingRole?: string  // 角色类型
-  viewingDept?: string  // 部门名称
+  viewingRole?: string // 角色类型
+  viewingDept?: string // 部门名称
 }>()
 
-const strategicStore = useStrategicStore()
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
-const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
 
 // ============================================================================
@@ -857,9 +934,9 @@ const orgStore = useOrgStore()
  * - 显示骨架屏：数据加载中时显示骨架屏
  * - 空状态处理：数据为空时显示空状态提示
  */
-const { 
-  isLoading: _pageLoading, 
-  hasError: pageHasError, 
+const {
+  isLoading: _pageLoading,
+  hasError: pageHasError,
   errorMessage: pageErrorMessage,
   showSkeleton,
   startLoading,
@@ -874,7 +951,11 @@ const {
 
 // 从 strategicStore 获取加载状态
 const isDataLoading = computed(() => {
-  return strategicStore.loadingState.indicators || strategicStore.loadingState.tasks || dashboardStore.loading
+  return (
+    strategicStore.loadingState.indicators ||
+    strategicStore.loadingState.tasks ||
+    dashboardStore.loading
+  )
 })
 
 // 判断数据是否为空
@@ -883,22 +964,30 @@ const isDataEmpty = computed(() => {
 })
 
 // 监听 store 加载状态，同步到本地加载状态
-watch(isDataLoading, (loading) => {
-  if (loading) {
-    startLoading()
-  } else {
-    endLoading()
-  }
-}, { immediate: true })
+watch(
+  isDataLoading,
+  loading => {
+    if (loading) {
+      startLoading()
+    } else {
+      endLoading()
+    }
+  },
+  { immediate: true }
+)
 
 // 监听 store 错误状态
-watch(() => strategicStore.loadingState.error, (error) => {
-  if (error) {
-    setError(error)
-  } else {
-    clearError()
-  }
-}, { immediate: true })
+watch(
+  () => strategicStore.loadingState.error,
+  error => {
+    if (error) {
+      setError(error)
+    } else {
+      clearError()
+    }
+  },
+  { immediate: true }
+)
 
 // 重新加载数据函数
 const reloadData = async () => {
@@ -930,8 +1019,8 @@ const isFallbackMode = computed(() => {
 })
 
 // 当前视角角色（优先使用父组件传递的，否则使用有效角色）
-const currentRole = computed<UserRole>(() => 
-  (props.viewingRole as UserRole) || authStore.effectiveRole || 'strategic_dept'
+const currentRole = computed<UserRole>(
+  () => (props.viewingRole as UserRole) || authStore.effectiveRole || 'strategic_dept'
 )
 const currentDepartment = computed(() => props.viewingDept || authStore.effectiveDepartment || '')
 
@@ -990,24 +1079,31 @@ const dashboardData = computed<DashboardData>(() => {
   const indicators = dashboardStore.visibleIndicators
   const totalIndicators = indicators.length
   const completedIndicators = indicators.filter(i => i.progress >= 100).length
-  
+
   const basicIndicators = indicators.filter(i => i.type2 === '基础性')
   const developmentIndicators = indicators.filter(i => i.type2 === '发展性')
-  
-  const basicScore = basicIndicators.length > 0 
-    ? Math.round(basicIndicators.reduce((sum, i) => sum + i.progress, 0) / basicIndicators.length)
-    : 0
-  const developmentScore = developmentIndicators.length > 0
-    ? Math.round(developmentIndicators.reduce((sum, i) => sum + i.progress, 0) / developmentIndicators.length * 0.2)
-    : 0
-  
+
+  const basicScore =
+    basicIndicators.length > 0
+      ? Math.round(basicIndicators.reduce((sum, i) => sum + i.progress, 0) / basicIndicators.length)
+      : 0
+  const developmentScore =
+    developmentIndicators.length > 0
+      ? Math.round(
+          (developmentIndicators.reduce((sum, i) => sum + i.progress, 0) /
+            developmentIndicators.length) *
+            0.2
+        )
+      : 0
+
   const warningCount = indicators.filter(i => i.progress < 50).length
-  
+
   return {
     totalScore: basicScore + developmentScore,
     basicScore,
     developmentScore,
-    completionRate: totalIndicators > 0 ? Math.round((completedIndicators / totalIndicators) * 100) : 0,
+    completionRate:
+      totalIndicators > 0 ? Math.round((completedIndicators / totalIndicators) * 100) : 0,
     warningCount,
     totalIndicators,
     completedIndicators,
@@ -1022,9 +1118,15 @@ const dashboardData = computed<DashboardData>(() => {
 // 应用筛选
 const applyFilters = () => {
   const filter: Record<string, string | undefined> = {}
-  if (filterForm.value.department) {filter.department = filterForm.value.department}
-  if (filterForm.value.indicatorType) {filter.indicatorType = filterForm.value.indicatorType}
-  if (filterForm.value.alertLevel) {filter.alertLevel = filterForm.value.alertLevel}
+  if (filterForm.value.department) {
+    filter.department = filterForm.value.department
+  }
+  if (filterForm.value.indicatorType) {
+    filter.indicatorType = filterForm.value.indicatorType
+  }
+  if (filterForm.value.alertLevel) {
+    filter.alertLevel = filterForm.value.alertLevel
+  }
   dashboardStore.applyFilter(filter)
   showFilterPanel.value = false
 }
@@ -1049,9 +1151,11 @@ const handleBreadcrumbNavigate = (index: number) => {
 
 // 判断是否有活跃筛选
 const _hasActiveFilters = computed(() => {
-  return dashboardStore.filters.department || 
-         dashboardStore.filters.indicatorType || 
-         dashboardStore.filters.alertLevel
+  return (
+    dashboardStore.filters.department ||
+    dashboardStore.filters.indicatorType ||
+    dashboardStore.filters.alertLevel
+  )
 })
 
 // 导出功能 - 根据角色差异化导出
@@ -1073,27 +1177,27 @@ const handleExport = async () => {
         return
       }
 
-      exportData = comparison.map((item) => ({
-        '排名': item.rank,
-        '部门': item.dept,
-        '平均进度': `${item.progress}%`,
-        '得分': item.score,
-        '完成率': `${item.completionRate}%`,
-        '指标总数': item.totalIndicators,
-        '已完成': item.completedIndicators,
-        '进行中': item.totalIndicators - item.completedIndicators,
-        '预警数': item.alertCount,
-        '状态': item.status === 'success' ? '优秀' : item.status === 'warning' ? '良好' : '需改进'
+      exportData = comparison.map(item => ({
+        排名: item.rank,
+        部门: item.dept,
+        平均进度: `${item.progress}%`,
+        得分: item.score,
+        完成率: `${item.completionRate}%`,
+        指标总数: item.totalIndicators,
+        已完成: item.completedIndicators,
+        进行中: item.totalIndicators - item.completedIndicators,
+        预警数: item.alertCount,
+        状态: item.status === 'success' ? '优秀' : item.status === 'warning' ? '良好' : '需改进'
       }))
 
       fileName = `职能部门进度对比报表_${new Date().toLocaleDateString()}.xlsx`
       sheetName = '部门对比'
-
     } else if (role === 'functional_dept') {
       // 职能部门：导出学院任务分配表
-      const indicators = dashboardStore.filteredIndicators.length > 0
-        ? dashboardStore.filteredIndicators
-        : strategicStore.indicators
+      const indicators =
+        dashboardStore.filteredIndicators.length > 0
+          ? dashboardStore.filteredIndicators
+          : strategicStore.indicators
 
       const collegeIndicators = indicators.filter(i => isSecondaryCollege(i.responsibleDept))
 
@@ -1103,27 +1207,32 @@ const handleExport = async () => {
       }
 
       exportData = collegeIndicators.map((item, index) => ({
-        '序号': index + 1,
-        '学院': item.responsibleDept,
-        '核心指标': item.indicator,
-        '指标类型': item.type,
-        '权重': item.weight,
-        '完成进度': `${item.progress}%`,
-        '里程碑进度': item.milestoneProgress,
-        '审批状态': item.progressApprovalStatus === 'APPROVED' ? '已通过' :
-                     item.progressApprovalStatus === 'PENDING' ? '待审批' :
-                     item.progressApprovalStatus === 'REJECTED' ? '已驳回' : '草稿',
-        '备注': item.description || ''
+        序号: index + 1,
+        学院: item.responsibleDept,
+        核心指标: item.indicator,
+        指标类型: item.type,
+        权重: item.weight,
+        完成进度: `${item.progress}%`,
+        里程碑进度: item.milestoneProgress,
+        审批状态:
+          item.progressApprovalStatus === 'APPROVED'
+            ? '已通过'
+            : item.progressApprovalStatus === 'PENDING'
+              ? '待审批'
+              : item.progressApprovalStatus === 'REJECTED'
+                ? '已驳回'
+                : '草稿',
+        备注: item.description || ''
       }))
 
       fileName = `学院任务分配表_${authStore.user?.department}_${new Date().toLocaleDateString()}.xlsx`
       sheetName = '学院任务'
-
     } else {
       // 二级学院：导出承接任务汇总
-      const indicators = dashboardStore.filteredIndicators.length > 0
-        ? dashboardStore.filteredIndicators
-        : strategicStore.indicators
+      const indicators =
+        dashboardStore.filteredIndicators.length > 0
+          ? dashboardStore.filteredIndicators
+          : strategicStore.indicators
 
       if (indicators.length === 0) {
         ElMessage.warning('没有可导出的数据')
@@ -1131,19 +1240,24 @@ const handleExport = async () => {
       }
 
       exportData = indicators.map((item, index) => ({
-        '序号': index + 1,
-        '任务来源': item.ownerDept || '战略发展部',
-        '战略任务': item.task,
-        '核心指标': item.indicator,
-        '指标类型': item.type,
-        '指标类别': item.type2,
-        '权重': item.weight,
-        '完成进度': `${item.progress}%`,
-        '里程碑进度': item.milestoneProgress,
-        '审批状态': item.progressApprovalStatus === 'APPROVED' ? '已通过' :
-                     item.progressApprovalStatus === 'PENDING' ? '待审批' :
-                     item.progressApprovalStatus === 'REJECTED' ? '已驳回' : '草稿',
-        '备注': item.description || ''
+        序号: index + 1,
+        任务来源: item.ownerDept || '战略发展部',
+        战略任务: item.task,
+        核心指标: item.indicator,
+        指标类型: item.type,
+        指标类别: item.type2,
+        权重: item.weight,
+        完成进度: `${item.progress}%`,
+        里程碑进度: item.milestoneProgress,
+        审批状态:
+          item.progressApprovalStatus === 'APPROVED'
+            ? '已通过'
+            : item.progressApprovalStatus === 'PENDING'
+              ? '待审批'
+              : item.progressApprovalStatus === 'REJECTED'
+                ? '已驳回'
+                : '草稿',
+        备注: item.description || ''
       }))
 
       fileName = `承接任务汇总_${authStore.user?.department}_${new Date().toLocaleDateString()}.xlsx`
@@ -1156,10 +1270,7 @@ const handleExport = async () => {
 
     // 自动列宽
     const colWidths = Object.keys(exportData[0] || {}).map(key => ({
-      wch: Math.max(
-        key.length + 2,
-        ...exportData.map(row => String(row[key] || '').length)
-      )
+      wch: Math.max(key.length + 2, ...exportData.map(row => String(row[key] || '').length))
     }))
     worksheet['!cols'] = colWidths
 
@@ -1178,12 +1289,12 @@ const handleExport = async () => {
 const handleSankeyNodeClick = (nodeName: string) => {
   const authStore = useAuthStore()
   const userRole = authStore.user?.role
-  
+
   // 职能部门不能点击上级部门（战略发展部）
   if (userRole === 'functional_dept' && nodeName === '战略发展部') {
     return
   }
-  
+
   // 二级学院不能点击上级部门（战略发展部和职能部门）
   if (userRole === 'secondary_college') {
     const functionalDepts = orgStore.getAllFunctionalDepartmentNames()
@@ -1191,7 +1302,7 @@ const handleSankeyNodeClick = (nodeName: string) => {
       return
     }
   }
-  
+
   const isCollege = isSecondaryCollege(nodeName)
   dashboardStore.drillDownToDepartment(nodeName, isCollege ? 'college' : 'functional')
 }
@@ -1217,65 +1328,68 @@ const _handleFilterApply = () => {
 const _kpiCards = computed(() => {
   const data = dashboardData.value
   const _indicators = dashboardStore.visibleIndicators
-  
+
   // 计算上期数据（模拟趋势）
   const lastMonthScore = Math.max(0, data.totalScore - Math.floor(Math.random() * 10) + 5)
   const scoreTrend = data.totalScore - lastMonthScore
-  
-    return [
-      {
-        label: '战略执行总分',
-        helpText: helpTexts.totalScore,
-        value: data.totalScore,
-        unit: '分',
-        trend: Math.abs(scoreTrend),
-        isUp: scoreTrend >= 0,
-        predict: Math.min(120, data.totalScore + 8),
-        desc: '年度目标: 120分',
-        percent: Math.round((data.totalScore / 120) * 100),
-        icon: 'Aim',
-        gradient: 'primary'
-      },
-      {
-        label: '核心指标完成率',
-        helpText: helpTexts.completionRate,
-        value: data.completionRate,
-        unit: '%',
-        trend: 3.2,
-        isUp: true,
-        predict: Math.min(100, data.completionRate + 12),
-        desc: `已完成 ${data.completedIndicators}/${data.totalIndicators} 项`,
-        percent: data.completionRate,
-        icon: 'DataAnalysis',
-        gradient: 'success'
-      },
-      {
-        label: '严重预警任务',
-        helpText: helpTexts.warningCount,
-        value: data.alertIndicators.severe,
-        unit: '项',
-        trend: 2,
-        isUp: false,
-        predict: Math.max(0, data.alertIndicators.severe - 3),
-        desc: '需重点关注推进',
-        percent: Math.max(0, 100 - (data.alertIndicators.severe / Math.max(1, data.totalIndicators)) * 100),
-        icon: 'Warning',
-        gradient: 'danger'
-      },
-      {
-        label: '发展性指标得分',
-        helpText: helpTexts.developmentScore,
-        value: data.developmentScore,
-        unit: '分',
-        trend: 1.5,
-        isUp: true,
-        predict: Math.min(20, data.developmentScore + 3),
-        desc: '满分20分',
-        percent: (data.developmentScore / 20) * 100,
-        icon: 'TrendCharts',
-        gradient: 'purple'
-      }
-    ]
+
+  return [
+    {
+      label: '战略执行总分',
+      helpText: helpTexts.totalScore,
+      value: data.totalScore,
+      unit: '分',
+      trend: Math.abs(scoreTrend),
+      isUp: scoreTrend >= 0,
+      predict: Math.min(120, data.totalScore + 8),
+      desc: '年度目标: 120分',
+      percent: Math.round((data.totalScore / 120) * 100),
+      icon: 'Aim',
+      gradient: 'primary'
+    },
+    {
+      label: '核心指标完成率',
+      helpText: helpTexts.completionRate,
+      value: data.completionRate,
+      unit: '%',
+      trend: 3.2,
+      isUp: true,
+      predict: Math.min(100, data.completionRate + 12),
+      desc: `已完成 ${data.completedIndicators}/${data.totalIndicators} 项`,
+      percent: data.completionRate,
+      icon: 'DataAnalysis',
+      gradient: 'success'
+    },
+    {
+      label: '严重预警任务',
+      helpText: helpTexts.warningCount,
+      value: data.alertIndicators.severe,
+      unit: '项',
+      trend: 2,
+      isUp: false,
+      predict: Math.max(0, data.alertIndicators.severe - 3),
+      desc: '需重点关注推进',
+      percent: Math.max(
+        0,
+        100 - (data.alertIndicators.severe / Math.max(1, data.totalIndicators)) * 100
+      ),
+      icon: 'Warning',
+      gradient: 'danger'
+    },
+    {
+      label: '发展性指标得分',
+      helpText: helpTexts.developmentScore,
+      value: data.developmentScore,
+      unit: '分',
+      trend: 1.5,
+      isUp: true,
+      predict: Math.min(20, data.developmentScore + 3),
+      desc: '满分20分',
+      percent: (data.developmentScore / 20) * 100,
+      icon: 'TrendCharts',
+      gradient: 'purple'
+    }
+  ]
 })
 
 // 滞后任务列表
@@ -1297,7 +1411,9 @@ const delayedTasks = computed(() => {
 
 // 催办任务
 const handleUrge = (task: Task) => {
-  if (task.reminded) {return}
+  if (task.reminded) {
+    return
+  }
   task.reminded = true
   ElMessage.success(`已向 ${task.dept} 发送催办通知`)
 }
@@ -1305,26 +1421,33 @@ const handleUrge = (task: Task) => {
 // 雷达图数据（支持历史数据）
 const radarData = computed(() => {
   const indicators = dashboardStore.visibleIndicatorsWithHistory
-  
+
   // 按类型分组计算平均进度
   const typeGroups: Record<string, number[]> = {}
   indicators.forEach(i => {
     const type = i.type || '其他'
-    if (!typeGroups[type]) {typeGroups[type] = []}
+    if (!typeGroups[type]) {
+      typeGroups[type] = []
+    }
     typeGroups[type].push(i.progress)
   })
-  
-  const dimensions = Object.entries(typeGroups).slice(0, 5).map(([name, values]) => ({
-    name,
-    value: Math.round(values.reduce((a, b) => a + b, 0) / values.length)
-  }))
-  
+
+  const dimensions = Object.entries(typeGroups)
+    .slice(0, 5)
+    .map(([name, values]) => ({
+      name,
+      value: Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+    }))
+
   // 确保至少有5个维度
   const defaultDimensions = ['教学质量', '科研产出', '人才培养', '社会服务', '资源建设']
   while (dimensions.length < 5) {
-    dimensions.push({ name: defaultDimensions[dimensions.length], value: 60 + Math.floor(Math.random() * 30) })
+    dimensions.push({
+      name: defaultDimensions[dimensions.length],
+      value: 60 + Math.floor(Math.random() * 30)
+    })
   }
-  
+
   return dimensions
 })
 
@@ -1349,7 +1472,9 @@ const benchmarkData = computed(() => {
 // 雷达图统计数据
 const _radarStats = computed(() => {
   const data = radarData.value
-  if (!data || data.length === 0) {return { avgMatch: 0, volatility: 0 }}
+  if (!data || data.length === 0) {
+    return { avgMatch: 0, volatility: 0 }
+  }
   const avg = data.reduce((a, b) => a + b.value, 0) / data.length
   // 计算波动离散度（标准差的简化版）
   const variance = data.reduce((sum, d) => sum + Math.pow(d.value - avg, 2), 0) / data.length
@@ -1362,7 +1487,9 @@ const _radarStats = computed(() => {
 
 // 初始化雷达图
 const initRadarChart = async () => {
-  if (!radarChartRef.value) {return}
+  if (!radarChartRef.value) {
+    return
+  }
 
   const data = radarData.value
   if (!data || data.length === 0) {
@@ -1373,7 +1500,7 @@ const initRadarChart = async () => {
   // 动态加载 echarts
   const echarts = await loadEcharts()
   radarChartInstance = echarts.init(radarChartRef.value)
-  
+
   radarChartInstance.setOption({
     backgroundColor: 'transparent',
     radar: {
@@ -1385,27 +1512,29 @@ const initRadarChart = async () => {
       shape: 'circle',
       radius: '65%'
     },
-    series: [{
-      type: 'radar',
-      data: [
-        {
-          value: data.map(() => 80),
-          name: '全校平均',
-          lineStyle: { color: '#409eff', width: 1, type: 'dashed' },
-          areaStyle: { color: 'rgba(64, 158, 255, 0.05)' },
-          symbol: 'none'
-        },
-        {
-          value: data.map(d => d.value),
-          name: '当前部门',
-          lineStyle: { color: '#f56c6c', width: 2 },
-          areaStyle: { color: 'rgba(245, 108, 108, 0.25)' },
-          symbol: 'circle',
-          symbolSize: 4,
-          itemStyle: { color: '#f56c6c' }
-        }
-      ]
-    }],
+    series: [
+      {
+        type: 'radar',
+        data: [
+          {
+            value: data.map(() => 80),
+            name: '全校平均',
+            lineStyle: { color: '#409eff', width: 1, type: 'dashed' },
+            areaStyle: { color: 'rgba(64, 158, 255, 0.05)' },
+            symbol: 'none'
+          },
+          {
+            value: data.map(d => d.value),
+            name: '当前部门',
+            lineStyle: { color: '#f56c6c', width: 2 },
+            areaStyle: { color: 'rgba(245, 108, 108, 0.25)' },
+            symbol: 'circle',
+            symbolSize: 4,
+            itemStyle: { color: '#f56c6c' }
+          }
+        ]
+      }
+    ],
     tooltip: {
       trigger: 'item'
     }
@@ -1423,7 +1552,9 @@ const _benchmarkChartHeight = computed(() => {
 
 // 初始化排名对标图 - 改为堆叠柱状图
 const initBenchmarkChart = async () => {
-  if (!benchmarkChartRef.value) {return}
+  if (!benchmarkChartRef.value) {
+    return
+  }
 
   // 根据下钻状态选择数据源
   const data = isDrillDown.value ? monthlyStackedData.value : stackedBarData.value
@@ -1454,8 +1585,15 @@ const initBenchmarkChart = async () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params: { name: string; value: number; percent?: number; seriesName?: string }) => {
-        if (!Array.isArray(params) || params.length === 0) {return ''}
+      formatter: (params: {
+        name: string
+        value: number
+        percent?: number
+        seriesName?: string
+      }) => {
+        if (!Array.isArray(params) || params.length === 0) {
+          return ''
+        }
         const dataIndex = params[0].dataIndex
         const dataItem = data[dataIndex]
         const name = dataItem?.fullName || dataItem?.name || params[0].name
@@ -1647,13 +1785,16 @@ watch([isDrillDown, selectedMonth], () => {
 })
 
 // 监听年份变化，重新渲染所有图表
-watch(() => timeContext.currentYear, () => {
-  nextTick(() => {
-    initBenchmarkChart()
-    initCollegeChart()
-    initCollegeRankingChart()
-  })
-})
+watch(
+  () => timeContext.currentYear,
+  () => {
+    nextTick(() => {
+      initBenchmarkChart()
+      initCollegeChart()
+      initCollegeRankingChart()
+    })
+  }
+)
 
 // 监听指标数据变化，重新渲染学院相关图表
 // 解决异步加载数据后图表不更新的问题
@@ -1674,7 +1815,7 @@ watch(
 // 解决 departmentSummary 依赖多个 store 数据异步加载的问题
 watch(
   () => dashboardStore.departmentSummary.length,
-  (newLength) => {
+  newLength => {
     if (newLength > 0) {
       nextTick(() => {
         initBenchmarkChart()
@@ -1701,11 +1842,7 @@ watch(
 // 监听部门/角色切换，重新渲染所有图表
 // 直接监听 authStore 的 effectiveRole 和 effectiveDepartment，确保响应性
 watch(
-  [
-    () => authStore.effectiveRole,
-    () => authStore.effectiveDepartment,
-    () => props.viewingRole
-  ],
+  [() => authStore.effectiveRole, () => authStore.effectiveDepartment, () => props.viewingRole],
   () => {
     nextTick(() => {
       initBenchmarkChart()
@@ -1742,7 +1879,9 @@ const handleResize = () => {
 
 // 初始化学院看板堆叠柱状图
 const initCollegeChart = async () => {
-  if (!collegeChartRef.value) {return}
+  if (!collegeChartRef.value) {
+    return
+  }
   if (currentRole.value === 'secondary_college') {
     // 二级学院不显示此图表，清空已有实例
     if (collegeChartInstance) {
@@ -1764,7 +1903,7 @@ const initCollegeChart = async () => {
   }
 
   collegeChartRef.value.style.height = `350px`
-  
+
   // 如果已有实例，先销毁再重新创建，确保完全刷新
   if (collegeChartInstance) {
     collegeChartInstance.dispose()
@@ -1778,8 +1917,15 @@ const initCollegeChart = async () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params: { name: string; value: number; percent?: number; seriesName?: string }) => {
-        if (!Array.isArray(params) || params.length === 0) {return ''}
+      formatter: (params: {
+        name: string
+        value: number
+        percent?: number
+        seriesName?: string
+      }) => {
+        if (!Array.isArray(params) || params.length === 0) {
+          return ''
+        }
         const dataIndex = params[0].dataIndex
         const dataItem = data[dataIndex]
         const name = dataItem?.fullName || dataItem?.name || params[0].name
@@ -1957,7 +2103,9 @@ const handleBackToColleges = () => {
 
 // 初始化分院排名条形图
 const initCollegeRankingChart = async () => {
-  if (!collegeRankingChartRef.value) {return}
+  if (!collegeRankingChartRef.value) {
+    return
+  }
   if (currentRole.value === 'secondary_college') {
     // 二级学院不显示此图表，清空已有实例
     if (collegeRankingChartInstance) {
@@ -1993,7 +2141,12 @@ const initCollegeRankingChart = async () => {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
-      formatter: (params: { name: string; value: number; percent?: number; seriesName?: string }) => {
+      formatter: (params: {
+        name: string
+        value: number
+        percent?: number
+        seriesName?: string
+      }) => {
         const item = params[0]
         const dataItem = data[item.dataIndex]
         const fullName = dataItem?.fullName || item.name
@@ -2040,30 +2193,38 @@ const initCollegeRankingChart = async () => {
       },
       inverse: true
     },
-    series: [{
-      name: '分数',
-      type: 'bar',
-      barWidth: 20,
-      barGap: '30%',
-      itemStyle: {
-        borderRadius: [0, 4, 4, 0],
-        color: (params: { dataIndex: number }) => {
-          const value = params.value as number
-          if (value >= 80) {return '#67c23a'}
-          if (value >= 60) {return '#409eff'}
-          if (value >= 40) {return '#e6a23c'}
-          return '#f56c6c'
-        }
-      },
-      label: {
-        show: true,
-        position: 'right',
-        formatter: '{c}',
-        fontSize: 12,
-        color: '#606266'
-      },
-      data: data.map(d => d.value)
-    }]
+    series: [
+      {
+        name: '分数',
+        type: 'bar',
+        barWidth: 20,
+        barGap: '30%',
+        itemStyle: {
+          borderRadius: [0, 4, 4, 0],
+          color: (params: { dataIndex: number }) => {
+            const value = params.value as number
+            if (value >= 80) {
+              return '#67c23a'
+            }
+            if (value >= 60) {
+              return '#409eff'
+            }
+            if (value >= 40) {
+              return '#e6a23c'
+            }
+            return '#f56c6c'
+          }
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}',
+          fontSize: 12,
+          color: '#606266'
+        },
+        data: data.map(d => d.value)
+      }
+    ]
   })
 }
 
@@ -2192,13 +2353,13 @@ onUnmounted(() => {
       <!-- AI 摘要骨架屏 -->
       <section class="ai-summary-card skeleton-card">
         <div class="summary-icon">
-          <el-skeleton-item variant="circle" style="width: 48px; height: 48px;" />
+          <el-skeleton-item variant="circle" style="width: 48px; height: 48px" />
         </div>
-        <div class="summary-content" style="flex: 1;">
+        <div class="summary-content" style="flex: 1">
           <el-skeleton :rows="2" animated />
         </div>
         <div class="summary-stats">
-          <el-skeleton-item variant="rect" style="width: 80px; height: 40px;" />
+          <el-skeleton-item variant="rect" style="width: 80px; height: 40px" />
         </div>
       </section>
 
@@ -2207,7 +2368,7 @@ onUnmounted(() => {
         <el-col v-for="i in 3" :key="i" :xs="24" :md="8">
           <el-card shadow="hover" class="chart-card">
             <template #header>
-              <el-skeleton-item variant="text" style="width: 120px;" />
+              <el-skeleton-item variant="text" style="width: 120px" />
             </template>
             <el-skeleton :rows="6" animated />
           </el-card>
@@ -2219,7 +2380,7 @@ onUnmounted(() => {
         <div class="benchmark-col">
           <el-card shadow="hover" class="chart-card glass-card">
             <template #header>
-              <el-skeleton-item variant="text" style="width: 200px;" />
+              <el-skeleton-item variant="text" style="width: 200px" />
             </template>
             <el-skeleton :rows="8" animated />
           </el-card>
@@ -2230,10 +2391,7 @@ onUnmounted(() => {
     <!-- 数据为空状态 - Requirement 1.6 -->
     <template v-else-if="isDataEmpty">
       <section class="empty-state-container">
-        <el-empty 
-          description="暂无数据" 
-          :image-size="200"
-        >
+        <el-empty description="暂无数据" :image-size="200">
           <template #description>
             <div class="empty-description">
               <p>当前没有可显示的指标数据</p>
@@ -2271,51 +2429,66 @@ onUnmounted(() => {
 
     <!-- 正常数据展示 -->
     <template v-else>
-    <!-- AI 智能摘要卡片 -->
-    <section class="ai-summary-card">
-      <div class="summary-icon">
-        <el-icon :size="28"><Aim /></el-icon>
-      </div>
-      <div class="summary-content">
+      <!-- AI 智能摘要卡片 -->
+      <section class="ai-summary-card">
+        <div class="summary-icon">
+          <el-icon :size="28"><Aim /></el-icon>
+        </div>
+        <div class="summary-content">
           <div class="summary-header">
             <span class="summary-tag">AI Intelligence Briefing</span>
             <span class="summary-time">| UPDATE: {{ new Date().toLocaleDateString() }}</span>
           </div>
-        <p class="summary-text">
-          全校战略执行总分 <span class="highlight-primary">{{ dashboardData.totalScore }}</span>。
-          <template v-if="dashboardData.alertIndicators.severe > 0">
-            本月存在 <span class="highlight-danger">{{ dashboardData.alertIndicators.severe }} 项严重预警</span> 任务需重点关注。
-          </template>
-          <template v-else>
-            整体执行状态良好，<span class="highlight-success">无严重预警</span>。
-          </template>
-          完成率达 <span class="highlight-success">{{ dashboardData.completionRate }}%</span>，
-          {{ dashboardData.completionRate >= 80 ? '进度符合预期' : '建议加快推进滞后任务' }}。
-          <button class="drill-btn">立即下钻诊断 →</button>
-        </p>
-      </div>
-      <div class="summary-stats">
-        <div class="mini-stat">
-          <div class="mini-label">健康度</div>
-          <div class="mini-value" :class="dashboardData.completionRate >= 70 ? 'success' : 'warning'">
-            {{ Math.min(100, dashboardData.completionRate + 10) }}%
+          <p v-if="dashboardData" class="summary-text">
+            全校战略执行总分 <span class="highlight-primary">{{ dashboardData.totalScore }}</span
+            >。
+            <template
+              v-if="dashboardData.alertIndicators && dashboardData.alertIndicators.severe > 0"
+            >
+              本月存在
+              <span class="highlight-danger"
+                >{{ dashboardData.alertIndicators.severe }} 项严重预警</span
+              >
+              任务需重点关注。
+            </template>
+            <template v-else>
+              整体执行状态良好，<span class="highlight-success">无严重预警</span>。
+            </template>
+            完成率达
+            <span class="highlight-success">{{ dashboardData.completionRate || 0 }}%</span>，
+            {{
+              (dashboardData.completionRate || 0) >= 80 ? '进度符合预期' : '建议加快推进滞后任务'
+            }}。
+            <button class="drill-btn">立即下钻诊断 →</button>
+          </p>
+        </div>
+        <div class="summary-stats">
+          <div class="mini-stat">
+            <div class="mini-label">健康度</div>
+            <div
+              class="mini-value"
+              :class="(dashboardData.completionRate || 0) >= 70 ? 'success' : 'warning'"
+            >
+              {{ Math.min(100, (dashboardData.completionRate || 0) + 10) }}%
+            </div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-label">响应率</div>
+            <div class="mini-value primary">
+              {{ (2.4 - dashboardData.alertIndicators.severe * 0.1).toFixed(1) }}h
+            </div>
           </div>
         </div>
-        <div class="mini-stat">
-          <div class="mini-label">响应率</div>
-          <div class="mini-value primary">{{ (2.4 - dashboardData.alertIndicators.severe * 0.1).toFixed(1) }}h</div>
-        </div>
-      </div>
-    </section>
-    <!-- 面包屑导航 -->
-    <BreadcrumbNav 
-      v-if="dashboardStore.breadcrumbs.length > 1"
-      :items="dashboardStore.breadcrumbs" 
-      @navigate="handleBreadcrumbNavigate" 
-    />
+      </section>
+      <!-- 面包屑导航 -->
+      <BreadcrumbNav
+        v-if="dashboardStore.breadcrumbs.length > 1"
+        :items="dashboardStore.breadcrumbs"
+        @navigate="handleBreadcrumbNavigate"
+      />
 
-    <!-- KPI 核心矩阵（升级版）- 暂时隐藏 -->
-    <!--
+      <!-- KPI 核心矩阵（升级版）- 暂时隐藏 -->
+      <!--
     <el-row :gutter="16" class="stat-cards">
       <el-col v-for="(kpi, idx) in kpiCards" :key="idx" :xs="24" :sm="12" :md="6">
         <div class="kpi-card" :class="'kpi-' + kpi.gradient">
@@ -2348,692 +2521,874 @@ onUnmounted(() => {
     </el-row>
     -->
 
-    <!-- 中间深度图表层 -->
-    <div class="chart-section deep-charts benchmark-section" :class="{ 'has-detail': showIndicatorCard || showMonthIndicatorCard }">
-      <!-- 部门排名对标（仅战略发展部显示） -->
-      <div v-if="currentRole === 'strategic_dept'" class="benchmark-col">
-        <el-card shadow="hover" class="chart-card glass-card benchmark-card">
-          <template #header>
-            <div class="card-header benchmark-header">
-              <div class="header-left">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title benchmark-title">
-                    {{ isDrillDown ? `${drilledDept} - 月度趋势` : '指标完成情况分布' }}
-                    <span class="title-tag-italic">{{ isDrillDown ? 'TREND' : 'DISTRIBUTION' }}</span>
+      <!-- 中间深度图表层 -->
+      <div
+        class="chart-section deep-charts benchmark-section"
+        :class="{ 'has-detail': showIndicatorCard || showMonthIndicatorCard }"
+      >
+        <!-- 部门排名对标（仅战略发展部显示） -->
+        <div v-if="currentRole === 'strategic_dept'" class="benchmark-col">
+          <el-card shadow="hover" class="chart-card glass-card benchmark-card">
+            <template #header>
+              <div class="card-header benchmark-header">
+                <div class="header-left">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title benchmark-title">
+                      {{ isDrillDown ? `${drilledDept} - 月度趋势` : '指标完成情况分布' }}
+                      <span class="title-tag-italic">{{
+                        isDrillDown ? 'TREND' : 'DISTRIBUTION'
+                      }}</span>
+                    </span>
+                    <el-tooltip
+                      :content="
+                        isDrillDown
+                          ? '显示该部门每月的指标完成情况'
+                          : '显示各职能部门的指标完成情况分布'
+                      "
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                  <span class="card-subtitle">
+                    {{
+                      isDrillDown
+                        ? '1月 - 当前月度趋势分析'
+                        : `${selectedMonth}月 · 按状态统计 · 点击柱形查看趋势`
+                    }}
                   </span>
-                  <el-tooltip :content="isDrillDown ? '显示该部门每月的指标完成情况' : '显示各职能部门的指标完成情况分布'" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
                 </div>
-                <span class="card-subtitle">
-                  {{ isDrillDown ? '1月 - 当前月度趋势分析' : `${selectedMonth}月 · 按状态统计 · 点击柱形查看趋势` }}
-                </span>
-              </div>
-              <div class="header-right">
-                <!-- 下钻状态显示返回按钮 -->
-                <el-button
-                  v-if="isDrillDown"
-                  type="primary"
-                  size="small"
-                  class="back-btn"
-                  @click="handleBackToDepts"
-                >
-                  <el-icon><Top /></el-icon>
-                  返回部门视图
-                </el-button>
-                <!-- 月份筛选器 -->
-                <div v-else class="month-filter">
-                  <span class="filter-label">月份:</span>
-                  <el-select
-                    v-model="selectedMonth"
+                <div class="header-right">
+                  <!-- 下钻状态显示返回按钮 -->
+                  <el-button
+                    v-if="isDrillDown"
+                    type="primary"
                     size="small"
-                    class="month-select"
-                    @change="handleMonthChange"
+                    class="back-btn"
+                    @click="handleBackToDepts"
                   >
-                    <el-option
-                      v-for="m in 12"
-                      :key="m"
-                      :label="`${m}月`"
-                      :value="m"
-                    />
-                  </el-select>
-                </div>
-              </div>
-            </div>
-          </template>
-          <div ref="benchmarkChartRef" class="benchmark-chart"></div>
-        </el-card>
-      </div>
-
-      <!-- 指标完成情况卡片（选中部门后显示，下钻时隐藏） -->
-      <div v-if="currentRole !== 'secondary_college' && !isDrillDown" class="indicator-col" :class="{ 'visible': showIndicatorCard }">
-        <div class="indicator-card-wrapper">
-          <el-card v-show="selectedBenchmarkDept" shadow="hover" class="chart-card glass-card indicator-status-card">
-          <template #header>
-            <div class="card-header benchmark-header">
-              <div class="header-left">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title benchmark-title">指标完成情况 <span class="title-tag-italic">STATUS</span></span>
-                  <el-tooltip content="展示选中部门接收的各项指标及其完成状态" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-                <span class="card-subtitle">{{ selectedBenchmarkDept }} · {{ selectedDeptIndicators.length }} 项指标</span>
-              </div>
-              <div class="header-right">
-                <el-button link type="primary" size="small" @click="handleCloseIndicatorCard">
-                  <el-icon><Close /></el-icon>
-                  关闭
-                </el-button>
-              </div>
-            </div>
-          </template>
-          <div class="indicator-status-list">
-            <!-- 状态统计摘要 -->
-            <div v-if="selectedDeptIndicators.length > 0" class="status-summary">
-              <span 
-                class="status-summary-item ahead" 
-                :class="{ active: selectedStatusFilter === 'ahead' }"
-                @click="handleStatusFilterClick('ahead')"
-              >
-                <span class="status-dot"></span>超前 {{ selectedDeptStats.ahead }}
-              </span>
-              <span 
-                class="status-summary-item normal"
-                :class="{ active: selectedStatusFilter === 'normal' }"
-                @click="handleStatusFilterClick('normal')"
-              >
-                <span class="status-dot"></span>正常 {{ selectedDeptStats.normal }}
-              </span>
-              <span 
-                class="status-summary-item warning"
-                :class="{ active: selectedStatusFilter === 'warning' }"
-                @click="handleStatusFilterClick('warning')"
-              >
-                <span class="status-dot"></span>预警 {{ selectedDeptStats.warning }}
-              </span>
-              <span 
-                class="status-summary-item delayed"
-                :class="{ active: selectedStatusFilter === 'delayed' }"
-                @click="handleStatusFilterClick('delayed')"
-              >
-                <span class="status-dot"></span>延期 {{ selectedDeptStats.delayed }}
-              </span>
-            </div>
-            <div v-if="selectedDeptIndicators.length === 0" class="empty-indicator-list">
-              <el-empty description="该部门暂无接收的指标" :image-size="80" />
-            </div>
-            <div v-else-if="filteredDeptIndicators.length === 0" class="empty-indicator-list">
-              <el-empty description="没有符合筛选条件的指标" :image-size="80" />
-            </div>
-            <div v-else class="indicator-scroll-container">
-              <el-popover
-                v-for="indicator in filteredDeptIndicators"
-                :key="indicator.id"
-                placement="left"
-                :width="320"
-                trigger="hover"
-                popper-class="indicator-detail-popover"
-              >
-                <template #reference>
-                  <div class="indicator-status-item" :class="getStatusClass(indicator.status)">
-                    <div class="indicator-info">
-                      <div class="indicator-name" :title="indicator.name">{{ indicator.name }}</div>
-                      <div class="indicator-meta">
-                        <span class="indicator-type-tag" :class="indicator.type1 === '定性' ? 'type-qualitative' : 'type-quantitative'">{{ indicator.type1 }}</span>
-                        <span class="indicator-progress">进度: {{ indicator.progress }}%</span>
-                      </div>
-                    </div>
-                    <div class="indicator-status-badge" :class="getStatusClass(indicator.status)">
-                      {{ getStatusText(indicator.status) }}
-                    </div>
-                  </div>
-                </template>
-                <div class="indicator-detail-content">
-                  <h4 class="detail-title">{{ indicator.name }}</h4>
-                  <div class="detail-row">
-                    <span class="detail-label">指标类型</span>
-                    <span class="detail-value">{{ indicator.type1 }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">当前进度</span>
-                    <span class="detail-value">
-                      <el-progress 
-                        :percentage="indicator.progress" 
-                        :stroke-width="8"
-                        :color="indicator.progress >= 80 ? '#67c23a' : indicator.progress >= 50 ? '#e6a23c' : '#f56c6c'"
-                        style="width: 120px; display: inline-flex;"
-                      />
-                    </span>
-                  </div>
-                  <div v-if="indicator.targetProgress !== null || indicator.milestoneIndex" class="detail-row">
-                    <span class="detail-label">目标进度</span>
-                    <span class="detail-value">{{ indicator.targetProgress !== null ? indicator.targetProgress + '%' : '-' }}{{ indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : '' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">权重</span>
-                    <span class="detail-value">{{ indicator.weight }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">所属战略任务</span>
-                    <span class="detail-value task-content">{{ indicator.taskContent || '未关联' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">完成状态</span>
-                    <span class="detail-value">
-                      <span class="status-tag" :class="getStatusClass(indicator.status)">
-                        {{ getStatusText(indicator.status) }}
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </el-popover>
-            </div>
-          </div>
-        </el-card>
-        </div>
-      </div>
-
-      <!-- 下钻后月份指标卡片（点击月份柱子后显示） -->
-      <div v-if="currentRole === 'strategic_dept' && isDrillDown" class="indicator-col" :class="{ 'visible': showMonthIndicatorCard }">
-        <div class="indicator-card-wrapper">
-          <el-card v-show="selectedMonthInDrillDown !== null" shadow="hover" class="chart-card glass-card indicator-status-card">
-          <template #header>
-            <div class="card-header benchmark-header">
-              <div class="header-left">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title benchmark-title">
-                    {{ drilledDept }} - {{ selectedMonthInDrillDown }}月指标
-                    <span class="title-tag-italic">DETAIL</span>
-                  </span>
-                  <el-tooltip content="展示选中部门在该月份的各项指标及其完成状态" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-                <span class="card-subtitle">
-                  {{ selectedMonthInDrillDown }}月完成情况 · {{ monthIndicators.length }} 项指标
-                </span>
-              </div>
-              <div class="header-right">
-                <el-button link type="primary" size="small" @click="handleCloseMonthIndicatorCard">
-                  <el-icon><Close /></el-icon>
-                  关闭
-                </el-button>
-              </div>
-            </div>
-          </template>
-          <div class="indicator-status-list">
-            <!-- 状态统计摘要 -->
-            <div v-if="monthIndicators.length > 0" class="status-summary">
-              <span
-                class="status-summary-item ahead"
-                :class="{ active: selectedStatusFilter === 'ahead' }"
-                @click="handleStatusFilterClick('ahead')"
-              >
-                <span class="status-dot"></span>超前 {{ monthIndicatorStats.ahead }}
-              </span>
-              <span
-                class="status-summary-item normal"
-                :class="{ active: selectedStatusFilter === 'normal' }"
-                @click="handleStatusFilterClick('normal')"
-              >
-                <span class="status-dot"></span>正常 {{ monthIndicatorStats.normal }}
-              </span>
-              <span
-                class="status-summary-item warning"
-                :class="{ active: selectedStatusFilter === 'warning' }"
-                @click="handleStatusFilterClick('warning')"
-              >
-                <span class="status-dot"></span>预警 {{ monthIndicatorStats.warning }}
-              </span>
-              <span
-                class="status-summary-item delayed"
-                :class="{ active: selectedStatusFilter === 'delayed' }"
-                @click="handleStatusFilterClick('delayed')"
-              >
-                <span class="status-dot"></span>延期 {{ monthIndicatorStats.delayed }}
-              </span>
-            </div>
-            <div v-if="monthIndicators.length === 0" class="empty-indicator-list">
-              <el-empty description="该月份暂无指标数据" :image-size="80" />
-            </div>
-            <div v-else-if="filteredMonthIndicators.length === 0" class="empty-indicator-list">
-              <el-empty description="没有符合筛选条件的指标" :image-size="80" />
-            </div>
-            <div v-else class="indicator-scroll-container">
-              <el-popover
-                v-for="indicator in filteredMonthIndicators"
-                :key="indicator.id"
-                placement="left"
-                :width="320"
-                trigger="hover"
-                popper-class="indicator-detail-popover"
-              >
-                <template #reference>
-                  <div class="indicator-status-item" :class="getStatusClass(indicator.status)">
-                    <div class="indicator-info">
-                      <div class="indicator-name" :title="indicator.name">{{ indicator.name }}</div>
-                      <div class="indicator-meta">
-                        <span class="indicator-type-tag" :class="indicator.type1 === '定性' ? 'type-qualitative' : 'type-quantitative'">{{ indicator.type1 }}</span>
-                        <span class="indicator-progress">进度: {{ indicator.progress }}%</span>
-                      </div>
-                    </div>
-                    <div class="indicator-status-badge" :class="getStatusClass(indicator.status)">
-                      {{ getStatusText(indicator.status) }}
-                    </div>
-                  </div>
-                </template>
-                <div class="indicator-detail-content">
-                  <h4 class="detail-title">{{ indicator.name }}</h4>
-                  <div class="detail-row">
-                    <span class="detail-label">指标类型</span>
-                    <span class="detail-value">{{ indicator.type1 }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">当前进度</span>
-                    <span class="detail-value">
-                      <el-progress
-                        :percentage="indicator.progress"
-                        :stroke-width="8"
-                        :color="indicator.progress >= 80 ? '#67c23a' : indicator.progress >= 50 ? '#e6a23c' : '#f56c6c'"
-                        style="width: 120px; display: inline-flex;"
-                      />
-                    </span>
-                  </div>
-                  <div v-if="indicator.targetProgress !== null || indicator.milestoneIndex" class="detail-row">
-                    <span class="detail-label">目标进度</span>
-                    <span class="detail-value">{{ indicator.targetProgress !== null ? indicator.targetProgress + '%' : '-' }}{{ indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : '' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">权重</span>
-                    <span class="detail-value">{{ indicator.weight }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">所属战略任务</span>
-                    <span class="detail-value task-content">{{ indicator.taskContent || '未关联' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">完成状态</span>
-                    <span class="detail-value">
-                      <span class="status-tag" :class="getStatusClass(indicator.status)">
-                        {{ getStatusText(indicator.status) }}
-                      </span>
-                    </span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">统计月份</span>
-                    <span class="detail-value">{{ selectedMonthInDrillDown }}月</span>
-                  </div>
-                </div>
-              </el-popover>
-            </div>
-          </div>
-        </el-card>
-        </div>
-      </div>
-    </div>
-
-    <!-- 学院看板（职能部门 + 战略发展部视角） -->
-    <div v-if="currentRole === 'functional_dept' || currentRole === 'strategic_dept'" class="chart-section deep-charts college-section" :class="{ 'has-detail': showCollegeMonthIndicatorCard }">
-      <div class="college-col">
-        <el-card shadow="hover" class="chart-card glass-card college-card">
-          <template #header>
-            <div class="card-header college-header">
-              <div class="header-left">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title college-title">
-                    {{ isCollegeDrillDown ? `${drilledCollege} - 月度趋势` : '学院指标完成情况' }}
-                    <span class="title-tag-italic">{{ isCollegeDrillDown ? 'TREND' : 'COLLEGE' }}</span>
-                  </span>
-                  <el-tooltip :content="isCollegeDrillDown ? '显示该学院每月的指标完成情况' : '显示各学院的指标完成情况分布'" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-                <span class="card-subtitle">
-                  {{ isCollegeDrillDown ? '1月 - 当前月度趋势分析' : `${collegeSelectedMonth}月 · 按状态统计 · 点击柱形查看趋势` }}
-                </span>
-              </div>
-              <div class="header-right">
-                <!-- 下钻状态显示返回按钮 -->
-                <el-button
-                  v-if="isCollegeDrillDown"
-                  type="primary"
-                  size="small"
-                  class="back-btn"
-                  @click="handleBackToColleges"
-                >
-                  <el-icon><Top /></el-icon>
-                  返回学院视图
-                </el-button>
-                <!-- 月份筛选器 -->
-                <div v-else class="month-filter">
-                  <span class="filter-label">月份:</span>
-                  <el-select
-                    v-model="collegeSelectedMonth"
-                    size="small"
-                    class="month-select"
-                    @change="handleCollegeMonthChange"
-                  >
-                    <el-option
-                      v-for="m in 12"
-                      :key="m"
-                      :label="`${m}月`"
-                      :value="m"
-                    />
-                  </el-select>
-                </div>
-              </div>
-            </div>
-          </template>
-          <div ref="collegeChartRef" class="college-chart"></div>
-        </el-card>
-      </div>
-
-      <!-- 学院月份指标卡片（点击月份柱子后显示） -->
-      <div v-if="isCollegeDrillDown" class="indicator-col" :class="{ 'visible': showCollegeMonthIndicatorCard }">
-        <div class="indicator-card-wrapper">
-          <el-card v-show="selectedMonthInCollegeDrillDown !== null" shadow="hover" class="chart-card glass-card indicator-status-card">
-          <template #header>
-            <div class="card-header benchmark-header">
-              <div class="header-left">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title benchmark-title">
-                    {{ drilledCollege }} - {{ selectedMonthInCollegeDrillDown }}月指标
-                    <span class="title-tag-italic">DETAIL</span>
-                  </span>
-                  <el-tooltip content="展示选中学院在该月份的各项指标及其完成状态" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-                <span class="card-subtitle">
-                  {{ selectedMonthInCollegeDrillDown }}月完成情况 · {{ collegeMonthIndicators.length }} 项指标
-                </span>
-              </div>
-              <div class="header-right">
-                <el-button link type="primary" size="small" @click="handleCloseCollegeMonthIndicatorCard">
-                  <el-icon><Close /></el-icon>
-                  关闭
-                </el-button>
-              </div>
-            </div>
-          </template>
-          <div class="indicator-status-list">
-            <!-- 状态统计摘要 -->
-            <div v-if="collegeMonthIndicators.length > 0" class="status-summary">
-              <span
-                class="status-summary-item ahead"
-                :class="{ active: selectedStatusFilter === 'ahead' }"
-                @click="handleStatusFilterClick('ahead')"
-              >
-                <span class="status-dot"></span>超前 {{ collegeMonthIndicatorStats.ahead }}
-              </span>
-              <span
-                class="status-summary-item normal"
-                :class="{ active: selectedStatusFilter === 'normal' }"
-                @click="handleStatusFilterClick('normal')"
-              >
-                <span class="status-dot"></span>正常 {{ collegeMonthIndicatorStats.normal }}
-              </span>
-              <span
-                class="status-summary-item warning"
-                :class="{ active: selectedStatusFilter === 'warning' }"
-                @click="handleStatusFilterClick('warning')"
-              >
-                <span class="status-dot"></span>预警 {{ collegeMonthIndicatorStats.warning }}
-              </span>
-              <span
-                class="status-summary-item delayed"
-                :class="{ active: selectedStatusFilter === 'delayed' }"
-                @click="handleStatusFilterClick('delayed')"
-              >
-                <span class="status-dot"></span>延期 {{ collegeMonthIndicatorStats.delayed }}
-              </span>
-            </div>
-            <div v-if="collegeMonthIndicators.length === 0" class="empty-indicator-list">
-              <el-empty description="该月份暂无指标数据" :image-size="80" />
-            </div>
-            <div v-else-if="filteredCollegeMonthIndicators.length === 0" class="empty-indicator-list">
-              <el-empty description="没有符合筛选条件的指标" :image-size="80" />
-            </div>
-            <div v-else class="indicator-scroll-container">
-              <el-popover
-                v-for="indicator in filteredCollegeMonthIndicators"
-                :key="indicator.id"
-                placement="left"
-                :width="320"
-                trigger="hover"
-                popper-class="indicator-detail-popover"
-              >
-                <template #reference>
-                  <div class="indicator-status-item" :class="getStatusClass(indicator.status)">
-                    <div class="indicator-info">
-                      <div class="indicator-name" :title="indicator.name">{{ indicator.name }}</div>
-                      <div class="indicator-meta">
-                        <span class="indicator-type-tag" :class="indicator.type1 === '定性' ? 'type-qualitative' : 'type-quantitative'">{{ indicator.type1 }}</span>
-                        <span class="indicator-progress">进度: {{ indicator.progress }}%</span>
-                      </div>
-                    </div>
-                    <div class="indicator-status-badge" :class="getStatusClass(indicator.status)">
-                      {{ getStatusText(indicator.status) }}
-                    </div>
-                  </div>
-                </template>
-                <div class="indicator-detail-content">
-                  <h4 class="detail-title">{{ indicator.name }}</h4>
-                  <div class="detail-row">
-                    <span class="detail-label">指标类型</span>
-                    <span class="detail-value">{{ indicator.type1 }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">当前进度</span>
-                    <span class="detail-value">
-                      <el-progress
-                        :percentage="indicator.progress"
-                        :stroke-width="8"
-                        :color="indicator.progress >= 80 ? '#67c23a' : indicator.progress >= 50 ? '#e6a23c' : '#f56c6c'"
-                        style="width: 120px; display: inline-flex;"
-                      />
-                    </span>
-                  </div>
-                  <div v-if="indicator.targetProgress !== null || indicator.milestoneIndex" class="detail-row">
-                    <span class="detail-label">目标进度</span>
-                    <span class="detail-value">{{ indicator.targetProgress !== null ? indicator.targetProgress + '%' : '-' }}{{ indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : '' }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">权重</span>
-                    <span class="detail-value">{{ indicator.weight }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">来源部门</span>
-                    <span class="detail-value">{{ indicator.ownerDept }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">完成状态</span>
-                    <span class="detail-value">
-                      <span class="status-tag" :class="getStatusClass(indicator.status)">
-                        {{ getStatusText(indicator.status) }}
-                      </span>
-                    </span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">统计月份</span>
-                    <span class="detail-value">{{ selectedMonthInCollegeDrillDown }}月</span>
-                  </div>
-                </div>
-              </el-popover>
-            </div>
-          </div>
-        </el-card>
-        </div>
-      </div>
-    </div>
-
-    <!-- 分院排名看板（战略发展部 + 职能部门） -->
-    <div v-if="currentRole !== 'secondary_college'" class="chart-section deep-charts college-ranking-section">
-      <el-col :span="24">
-        <el-card shadow="hover" class="chart-card glass-card">
-          <template #header>
-            <div class="card-header">
-              <div class="header-left">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title">
-                    分院排名
-                    <span class="title-tag-italic">RANKING</span>
-                  </span>
-                  <el-tooltip content="展示各二级学院的指标完成分数排名，分数 = Σ(权重 × 进度)" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-                <span class="card-subtitle">{{ collegeRankingMonth }}月 · 按分数排名</span>
-              </div>
-              <div class="header-right">
-                <div class="filter-group">
-                  <!-- 月份筛选 -->
-                  <div class="month-filter">
+                    <el-icon><Top /></el-icon>
+                    返回部门视图
+                  </el-button>
+                  <!-- 月份筛选器 -->
+                  <div v-else class="month-filter">
                     <span class="filter-label">月份:</span>
                     <el-select
-                      v-model="collegeRankingMonth"
+                      v-model="selectedMonth"
                       size="small"
                       class="month-select"
-                      @change="handleCollegeRankingMonthChange"
+                      @change="handleMonthChange"
                     >
-                      <el-option
-                        v-for="m in 12"
-                        :key="m"
-                        :label="`${m}月`"
-                        :value="m"
-                      />
-                    </el-select>
-                  </div>
-                  <!-- 职能部门筛选（仅战略发展部可见） -->
-                  <div v-if="currentRole === 'strategic_dept'" class="dept-filter">
-                    <span class="filter-label">来源部门:</span>
-                    <el-select
-                      v-model="selectedOwnerDeptFilter"
-                      size="small"
-                      class="dept-select"
-                      @change="handleOwnerDeptFilterChange"
-                    >
-                      <el-option label="全部" value="all" />
-                      <el-option
-                        v-for="dept in availableFunctionalDepts"
-                        :key="dept"
-                        :label="dept"
-                        :value="dept"
-                      />
+                      <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
                     </el-select>
                   </div>
                 </div>
               </div>
-            </div>
-          </template>
-          <div ref="collegeRankingChartRef" class="college-ranking-chart"></div>
-        </el-card>
-      </el-col>
-    </div>
+            </template>
+            <div ref="benchmarkChartRef" class="benchmark-chart"></div>
+          </el-card>
+        </div>
 
-    <!-- 图表区域 -->
-    <el-row :gutter="16" class="chart-section">
-      <!-- 得分构成 -->
-      <el-col :xs="24" :md="8">
-        <el-card shadow="hover" class="chart-card card-animate">
-          <template #header>
-            <div class="card-header">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <span class="card-title">得分构成</span>
-                <el-tooltip :content="helpTexts.scoreComposition" placement="top" effect="light">
-                  <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                </el-tooltip>
-              </div>
-            </div>
-          </template>
-          <ScoreCompositionChart 
-            :basic-score="dashboardData.basicScore" 
-            :development-score="dashboardData.developmentScore"
-          />
-        </el-card>
-      </el-col>
-
-      <!-- 预警分布 -->
-      <el-col :xs="24" :md="8">
-        <el-card shadow="hover" class="chart-card card-animate">
-          <template #header>
-            <div class="card-header">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <span class="card-title">预警分布</span>
-                <el-tooltip :content="helpTexts.alertDistribution" placement="top" effect="light">
-                  <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                </el-tooltip>
-              </div>
-            </div>
-          </template>
-          <AlertDistributionChart 
-            :severe="dashboardData.alertIndicators.severe"
-            :moderate="dashboardData.alertIndicators.moderate"
-            :normal="dashboardData.alertIndicators.normal"
-            @click="handleAlertClick"
-          />
-        </el-card>
-      </el-col>
-
-      <!-- 完成率统计 -->
-      <el-col :xs="24" :md="8">
-        <el-card shadow="hover" class="chart-card card-animate">
-          <template #header>
-            <div class="card-header">
-              <div style="display: flex; align-items: center; gap: 4px;">
-                <span class="card-title">完成情况</span>
-                <el-tooltip :content="helpTexts.completionRate" placement="top" effect="light">
-                  <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                </el-tooltip>
-              </div>
-            </div>
-          </template>
-          <div class="completion-stats">
-            <div class="completion-ring">
-              <el-progress 
-                type="circle" 
-                :percentage="dashboardData.completionRate" 
-                :width="140"
-                :stroke-width="12"
-              >
-                <template #default="{ percentage }">
-                  <div class="completion-text">
-                    <span class="percentage">{{ percentage }}%</span>
-                    <span class="label">完成率</span>
+        <!-- 指标完成情况卡片（选中部门后显示，下钻时隐藏） -->
+        <div
+          v-if="currentRole !== 'secondary_college' && !isDrillDown"
+          class="indicator-col"
+          :class="{ visible: showIndicatorCard }"
+        >
+          <div class="indicator-card-wrapper">
+            <el-card
+              v-show="selectedBenchmarkDept"
+              shadow="hover"
+              class="chart-card glass-card indicator-status-card"
+            >
+              <template #header>
+                <div class="card-header benchmark-header">
+                  <div class="header-left">
+                    <div style="display: flex; align-items: center; gap: 4px">
+                      <span class="card-title benchmark-title"
+                        >指标完成情况 <span class="title-tag-italic">STATUS</span></span
+                      >
+                      <el-tooltip
+                        content="展示选中部门接收的各项指标及其完成状态"
+                        placement="top"
+                        effect="light"
+                      >
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                    <span class="card-subtitle"
+                      >{{ selectedBenchmarkDept }} ·
+                      {{ selectedDeptIndicators.length }} 项指标</span
+                    >
                   </div>
-                </template>
-              </el-progress>
-            </div>
-            <div class="completion-detail">
-              <div class="detail-item">
-                <span class="detail-label">总指标数</span>
-                <span class="detail-value">{{ dashboardData.totalIndicators }}</span>
+                  <div class="header-right">
+                    <el-button link type="primary" size="small" @click="handleCloseIndicatorCard">
+                      <el-icon><Close /></el-icon>
+                      关闭
+                    </el-button>
+                  </div>
+                </div>
+              </template>
+              <div class="indicator-status-list">
+                <!-- 状态统计摘要 -->
+                <div v-if="selectedDeptIndicators.length > 0" class="status-summary">
+                  <span
+                    class="status-summary-item ahead"
+                    :class="{ active: selectedStatusFilter === 'ahead' }"
+                    @click="handleStatusFilterClick('ahead')"
+                  >
+                    <span class="status-dot"></span>超前 {{ selectedDeptStats.ahead }}
+                  </span>
+                  <span
+                    class="status-summary-item normal"
+                    :class="{ active: selectedStatusFilter === 'normal' }"
+                    @click="handleStatusFilterClick('normal')"
+                  >
+                    <span class="status-dot"></span>正常 {{ selectedDeptStats.normal }}
+                  </span>
+                  <span
+                    class="status-summary-item warning"
+                    :class="{ active: selectedStatusFilter === 'warning' }"
+                    @click="handleStatusFilterClick('warning')"
+                  >
+                    <span class="status-dot"></span>预警 {{ selectedDeptStats.warning }}
+                  </span>
+                  <span
+                    class="status-summary-item delayed"
+                    :class="{ active: selectedStatusFilter === 'delayed' }"
+                    @click="handleStatusFilterClick('delayed')"
+                  >
+                    <span class="status-dot"></span>延期 {{ selectedDeptStats.delayed }}
+                  </span>
+                </div>
+                <div v-if="selectedDeptIndicators.length === 0" class="empty-indicator-list">
+                  <el-empty description="该部门暂无接收的指标" :image-size="80" />
+                </div>
+                <div v-else-if="filteredDeptIndicators.length === 0" class="empty-indicator-list">
+                  <el-empty description="没有符合筛选条件的指标" :image-size="80" />
+                </div>
+                <div v-else class="indicator-scroll-container">
+                  <el-popover
+                    v-for="indicator in filteredDeptIndicators"
+                    :key="indicator.id"
+                    placement="left"
+                    :width="320"
+                    trigger="hover"
+                    popper-class="indicator-detail-popover"
+                  >
+                    <template #reference>
+                      <div class="indicator-status-item" :class="getStatusClass(indicator.status)">
+                        <div class="indicator-info">
+                          <div class="indicator-name" :title="indicator.name">
+                            {{ indicator.name }}
+                          </div>
+                          <div class="indicator-meta">
+                            <span
+                              class="indicator-type-tag"
+                              :class="
+                                indicator.type1 === '定性'
+                                  ? 'type-qualitative'
+                                  : 'type-quantitative'
+                              "
+                              >{{ indicator.type1 }}</span
+                            >
+                            <span class="indicator-progress">进度: {{ indicator.progress }}%</span>
+                          </div>
+                        </div>
+                        <div
+                          class="indicator-status-badge"
+                          :class="getStatusClass(indicator.status)"
+                        >
+                          {{ getStatusText(indicator.status) }}
+                        </div>
+                      </div>
+                    </template>
+                    <div class="indicator-detail-content">
+                      <h4 class="detail-title">{{ indicator.name }}</h4>
+                      <div class="detail-row">
+                        <span class="detail-label">指标类型</span>
+                        <span class="detail-value">{{ indicator.type1 }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">当前进度</span>
+                        <span class="detail-value">
+                          <el-progress
+                            :percentage="indicator.progress"
+                            :stroke-width="8"
+                            :color="
+                              indicator.progress >= 80
+                                ? '#67c23a'
+                                : indicator.progress >= 50
+                                  ? '#e6a23c'
+                                  : '#f56c6c'
+                            "
+                            style="width: 120px; display: inline-flex"
+                          />
+                        </span>
+                      </div>
+                      <div
+                        v-if="indicator.targetProgress !== null || indicator.milestoneIndex"
+                        class="detail-row"
+                      >
+                        <span class="detail-label">目标进度</span>
+                        <span class="detail-value"
+                          >{{
+                            indicator.targetProgress !== null
+                              ? indicator.targetProgress + '%'
+                              : '-'
+                          }}{{
+                            indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : ''
+                          }}</span
+                        >
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">权重</span>
+                        <span class="detail-value">{{ indicator.weight }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">所属战略任务</span>
+                        <span class="detail-value task-content">{{
+                          indicator.taskContent || '未关联'
+                        }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">完成状态</span>
+                        <span class="detail-value">
+                          <span class="status-tag" :class="getStatusClass(indicator.status)">
+                            {{ getStatusText(indicator.status) }}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  </el-popover>
+                </div>
               </div>
-              <div class="detail-item">
-                <span class="detail-label">已完成</span>
-                <span class="detail-value success">{{ dashboardData.completedIndicators }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">进行中</span>
-                <span class="detail-value">{{ dashboardData.totalIndicators - dashboardData.completedIndicators }}</span>
-              </div>
-            </div>
+            </el-card>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </div>
 
-    <!-- 滞后任务响应清单（二级学院不显示） -->
-    <el-card v-if="currentRole !== 'secondary_college'" shadow="hover" class="task-list-card glass-card">
-      <template #header>
-        <div class="card-header task-card-header">
-          <div class="header-left">
-            <div class="header-icon danger">
-              <el-icon><Warning /></el-icon>
+        <!-- 下钻后月份指标卡片（点击月份柱子后显示） -->
+        <div
+          v-if="currentRole === 'strategic_dept' && isDrillDown"
+          class="indicator-col"
+          :class="{ visible: showMonthIndicatorCard }"
+        >
+          <div class="indicator-card-wrapper">
+            <el-card
+              v-show="selectedMonthInDrillDown !== null"
+              shadow="hover"
+              class="chart-card glass-card indicator-status-card"
+            >
+              <template #header>
+                <div class="card-header benchmark-header">
+                  <div class="header-left">
+                    <div style="display: flex; align-items: center; gap: 4px">
+                      <span class="card-title benchmark-title">
+                        {{ drilledDept }} - {{ selectedMonthInDrillDown }}月指标
+                        <span class="title-tag-italic">DETAIL</span>
+                      </span>
+                      <el-tooltip
+                        content="展示选中部门在该月份的各项指标及其完成状态"
+                        placement="top"
+                        effect="light"
+                      >
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                    <span class="card-subtitle">
+                      {{ selectedMonthInDrillDown }}月完成情况 · {{ monthIndicators.length }} 项指标
+                    </span>
+                  </div>
+                  <div class="header-right">
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      @click="handleCloseMonthIndicatorCard"
+                    >
+                      <el-icon><Close /></el-icon>
+                      关闭
+                    </el-button>
+                  </div>
+                </div>
+              </template>
+              <div class="indicator-status-list">
+                <!-- 状态统计摘要 -->
+                <div v-if="monthIndicators.length > 0" class="status-summary">
+                  <span
+                    class="status-summary-item ahead"
+                    :class="{ active: selectedStatusFilter === 'ahead' }"
+                    @click="handleStatusFilterClick('ahead')"
+                  >
+                    <span class="status-dot"></span>超前 {{ monthIndicatorStats.ahead }}
+                  </span>
+                  <span
+                    class="status-summary-item normal"
+                    :class="{ active: selectedStatusFilter === 'normal' }"
+                    @click="handleStatusFilterClick('normal')"
+                  >
+                    <span class="status-dot"></span>正常 {{ monthIndicatorStats.normal }}
+                  </span>
+                  <span
+                    class="status-summary-item warning"
+                    :class="{ active: selectedStatusFilter === 'warning' }"
+                    @click="handleStatusFilterClick('warning')"
+                  >
+                    <span class="status-dot"></span>预警 {{ monthIndicatorStats.warning }}
+                  </span>
+                  <span
+                    class="status-summary-item delayed"
+                    :class="{ active: selectedStatusFilter === 'delayed' }"
+                    @click="handleStatusFilterClick('delayed')"
+                  >
+                    <span class="status-dot"></span>延期 {{ monthIndicatorStats.delayed }}
+                  </span>
+                </div>
+                <div v-if="monthIndicators.length === 0" class="empty-indicator-list">
+                  <el-empty description="该月份暂无指标数据" :image-size="80" />
+                </div>
+                <div v-else-if="filteredMonthIndicators.length === 0" class="empty-indicator-list">
+                  <el-empty description="没有符合筛选条件的指标" :image-size="80" />
+                </div>
+                <div v-else class="indicator-scroll-container">
+                  <el-popover
+                    v-for="indicator in filteredMonthIndicators"
+                    :key="indicator.id"
+                    placement="left"
+                    :width="320"
+                    trigger="hover"
+                    popper-class="indicator-detail-popover"
+                  >
+                    <template #reference>
+                      <div class="indicator-status-item" :class="getStatusClass(indicator.status)">
+                        <div class="indicator-info">
+                          <div class="indicator-name" :title="indicator.name">
+                            {{ indicator.name }}
+                          </div>
+                          <div class="indicator-meta">
+                            <span
+                              class="indicator-type-tag"
+                              :class="
+                                indicator.type1 === '定性'
+                                  ? 'type-qualitative'
+                                  : 'type-quantitative'
+                              "
+                              >{{ indicator.type1 }}</span
+                            >
+                            <span class="indicator-progress">进度: {{ indicator.progress }}%</span>
+                          </div>
+                        </div>
+                        <div
+                          class="indicator-status-badge"
+                          :class="getStatusClass(indicator.status)"
+                        >
+                          {{ getStatusText(indicator.status) }}
+                        </div>
+                      </div>
+                    </template>
+                    <div class="indicator-detail-content">
+                      <h4 class="detail-title">{{ indicator.name }}</h4>
+                      <div class="detail-row">
+                        <span class="detail-label">指标类型</span>
+                        <span class="detail-value">{{ indicator.type1 }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">当前进度</span>
+                        <span class="detail-value">
+                          <el-progress
+                            :percentage="indicator.progress"
+                            :stroke-width="8"
+                            :color="
+                              indicator.progress >= 80
+                                ? '#67c23a'
+                                : indicator.progress >= 50
+                                  ? '#e6a23c'
+                                  : '#f56c6c'
+                            "
+                            style="width: 120px; display: inline-flex"
+                          />
+                        </span>
+                      </div>
+                      <div
+                        v-if="indicator.targetProgress !== null || indicator.milestoneIndex"
+                        class="detail-row"
+                      >
+                        <span class="detail-label">目标进度</span>
+                        <span class="detail-value"
+                          >{{
+                            indicator.targetProgress !== null
+                              ? indicator.targetProgress + '%'
+                              : '-'
+                          }}{{
+                            indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : ''
+                          }}</span
+                        >
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">权重</span>
+                        <span class="detail-value">{{ indicator.weight }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">所属战略任务</span>
+                        <span class="detail-value task-content">{{
+                          indicator.taskContent || '未关联'
+                        }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">完成状态</span>
+                        <span class="detail-value">
+                          <span class="status-tag" :class="getStatusClass(indicator.status)">
+                            {{ getStatusText(indicator.status) }}
+                          </span>
+                        </span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">统计月份</span>
+                        <span class="detail-value">{{ selectedMonthInDrillDown }}月</span>
+                      </div>
+                    </div>
+                  </el-popover>
+                </div>
+              </div>
+            </el-card>
+          </div>
+        </div>
+      </div>
+
+      <!-- 学院看板（职能部门 + 战略发展部视角） -->
+      <div
+        v-if="currentRole === 'functional_dept' || currentRole === 'strategic_dept'"
+        class="chart-section deep-charts college-section"
+        :class="{ 'has-detail': showCollegeMonthIndicatorCard }"
+      >
+        <div class="college-col">
+          <el-card shadow="hover" class="chart-card glass-card college-card">
+            <template #header>
+              <div class="card-header college-header">
+                <div class="header-left">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title college-title">
+                      {{ isCollegeDrillDown ? `${drilledCollege} - 月度趋势` : '学院指标完成情况' }}
+                      <span class="title-tag-italic">{{
+                        isCollegeDrillDown ? 'TREND' : 'COLLEGE'
+                      }}</span>
+                    </span>
+                    <el-tooltip
+                      :content="
+                        isCollegeDrillDown
+                          ? '显示该学院每月的指标完成情况'
+                          : '显示各学院的指标完成情况分布'
+                      "
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                  <span class="card-subtitle">
+                    {{
+                      isCollegeDrillDown
+                        ? '1月 - 当前月度趋势分析'
+                        : `${collegeSelectedMonth}月 · 按状态统计 · 点击柱形查看趋势`
+                    }}
+                  </span>
+                </div>
+                <div class="header-right">
+                  <!-- 下钻状态显示返回按钮 -->
+                  <el-button
+                    v-if="isCollegeDrillDown"
+                    type="primary"
+                    size="small"
+                    class="back-btn"
+                    @click="handleBackToColleges"
+                  >
+                    <el-icon><Top /></el-icon>
+                    返回学院视图
+                  </el-button>
+                  <!-- 月份筛选器 -->
+                  <div v-else class="month-filter">
+                    <span class="filter-label">月份:</span>
+                    <el-select
+                      v-model="collegeSelectedMonth"
+                      size="small"
+                      class="month-select"
+                      @change="handleCollegeMonthChange"
+                    >
+                      <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
+                    </el-select>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div ref="collegeChartRef" class="college-chart"></div>
+          </el-card>
+        </div>
+
+        <!-- 学院月份指标卡片（点击月份柱子后显示） -->
+        <div
+          v-if="isCollegeDrillDown"
+          class="indicator-col"
+          :class="{ visible: showCollegeMonthIndicatorCard }"
+        >
+          <div class="indicator-card-wrapper">
+            <el-card
+              v-show="selectedMonthInCollegeDrillDown !== null"
+              shadow="hover"
+              class="chart-card glass-card indicator-status-card"
+            >
+              <template #header>
+                <div class="card-header benchmark-header">
+                  <div class="header-left">
+                    <div style="display: flex; align-items: center; gap: 4px">
+                      <span class="card-title benchmark-title">
+                        {{ drilledCollege }} - {{ selectedMonthInCollegeDrillDown }}月指标
+                        <span class="title-tag-italic">DETAIL</span>
+                      </span>
+                      <el-tooltip
+                        content="展示选中学院在该月份的各项指标及其完成状态"
+                        placement="top"
+                        effect="light"
+                      >
+                        <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </div>
+                    <span class="card-subtitle">
+                      {{ selectedMonthInCollegeDrillDown }}月完成情况 ·
+                      {{ collegeMonthIndicators.length }} 项指标
+                    </span>
+                  </div>
+                  <div class="header-right">
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      @click="handleCloseCollegeMonthIndicatorCard"
+                    >
+                      <el-icon><Close /></el-icon>
+                      关闭
+                    </el-button>
+                  </div>
+                </div>
+              </template>
+              <div class="indicator-status-list">
+                <!-- 状态统计摘要 -->
+                <div v-if="collegeMonthIndicators.length > 0" class="status-summary">
+                  <span
+                    class="status-summary-item ahead"
+                    :class="{ active: selectedStatusFilter === 'ahead' }"
+                    @click="handleStatusFilterClick('ahead')"
+                  >
+                    <span class="status-dot"></span>超前 {{ collegeMonthIndicatorStats.ahead }}
+                  </span>
+                  <span
+                    class="status-summary-item normal"
+                    :class="{ active: selectedStatusFilter === 'normal' }"
+                    @click="handleStatusFilterClick('normal')"
+                  >
+                    <span class="status-dot"></span>正常 {{ collegeMonthIndicatorStats.normal }}
+                  </span>
+                  <span
+                    class="status-summary-item warning"
+                    :class="{ active: selectedStatusFilter === 'warning' }"
+                    @click="handleStatusFilterClick('warning')"
+                  >
+                    <span class="status-dot"></span>预警 {{ collegeMonthIndicatorStats.warning }}
+                  </span>
+                  <span
+                    class="status-summary-item delayed"
+                    :class="{ active: selectedStatusFilter === 'delayed' }"
+                    @click="handleStatusFilterClick('delayed')"
+                  >
+                    <span class="status-dot"></span>延期 {{ collegeMonthIndicatorStats.delayed }}
+                  </span>
+                </div>
+                <div v-if="collegeMonthIndicators.length === 0" class="empty-indicator-list">
+                  <el-empty description="该月份暂无指标数据" :image-size="80" />
+                </div>
+                <div
+                  v-else-if="filteredCollegeMonthIndicators.length === 0"
+                  class="empty-indicator-list"
+                >
+                  <el-empty description="没有符合筛选条件的指标" :image-size="80" />
+                </div>
+                <div v-else class="indicator-scroll-container">
+                  <el-popover
+                    v-for="indicator in filteredCollegeMonthIndicators"
+                    :key="indicator.id"
+                    placement="left"
+                    :width="320"
+                    trigger="hover"
+                    popper-class="indicator-detail-popover"
+                  >
+                    <template #reference>
+                      <div class="indicator-status-item" :class="getStatusClass(indicator.status)">
+                        <div class="indicator-info">
+                          <div class="indicator-name" :title="indicator.name">
+                            {{ indicator.name }}
+                          </div>
+                          <div class="indicator-meta">
+                            <span
+                              class="indicator-type-tag"
+                              :class="
+                                indicator.type1 === '定性'
+                                  ? 'type-qualitative'
+                                  : 'type-quantitative'
+                              "
+                              >{{ indicator.type1 }}</span
+                            >
+                            <span class="indicator-progress">进度: {{ indicator.progress }}%</span>
+                          </div>
+                        </div>
+                        <div
+                          class="indicator-status-badge"
+                          :class="getStatusClass(indicator.status)"
+                        >
+                          {{ getStatusText(indicator.status) }}
+                        </div>
+                      </div>
+                    </template>
+                    <div class="indicator-detail-content">
+                      <h4 class="detail-title">{{ indicator.name }}</h4>
+                      <div class="detail-row">
+                        <span class="detail-label">指标类型</span>
+                        <span class="detail-value">{{ indicator.type1 }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">当前进度</span>
+                        <span class="detail-value">
+                          <el-progress
+                            :percentage="indicator.progress"
+                            :stroke-width="8"
+                            :color="
+                              indicator.progress >= 80
+                                ? '#67c23a'
+                                : indicator.progress >= 50
+                                  ? '#e6a23c'
+                                  : '#f56c6c'
+                            "
+                            style="width: 120px; display: inline-flex"
+                          />
+                        </span>
+                      </div>
+                      <div
+                        v-if="indicator.targetProgress !== null || indicator.milestoneIndex"
+                        class="detail-row"
+                      >
+                        <span class="detail-label">目标进度</span>
+                        <span class="detail-value"
+                          >{{
+                            indicator.targetProgress !== null
+                              ? indicator.targetProgress + '%'
+                              : '-'
+                          }}{{
+                            indicator.milestoneIndex ? ' (' + indicator.milestoneIndex + ')' : ''
+                          }}</span
+                        >
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">权重</span>
+                        <span class="detail-value">{{ indicator.weight }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">来源部门</span>
+                        <span class="detail-value">{{ indicator.ownerDept }}</span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">完成状态</span>
+                        <span class="detail-value">
+                          <span class="status-tag" :class="getStatusClass(indicator.status)">
+                            {{ getStatusText(indicator.status) }}
+                          </span>
+                        </span>
+                      </div>
+                      <div class="detail-row">
+                        <span class="detail-label">统计月份</span>
+                        <span class="detail-value">{{ selectedMonthInCollegeDrillDown }}月</span>
+                      </div>
+                    </div>
+                  </el-popover>
+                </div>
+              </div>
+            </el-card>
+          </div>
+        </div>
+      </div>
+
+      <!-- 分院排名看板（战略发展部 + 职能部门） -->
+      <div
+        v-if="currentRole !== 'secondary_college'"
+        class="chart-section deep-charts college-ranking-section"
+      >
+        <el-col :span="24">
+          <el-card shadow="hover" class="chart-card glass-card">
+            <template #header>
+              <div class="card-header">
+                <div class="header-left">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title">
+                      分院排名
+                      <span class="title-tag-italic">RANKING</span>
+                    </span>
+                    <el-tooltip
+                      content="展示各二级学院的指标完成分数排名，分数 = Σ(权重 × 进度)"
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                  <span class="card-subtitle">{{ collegeRankingMonth }}月 · 按分数排名</span>
+                </div>
+                <div class="header-right">
+                  <div class="filter-group">
+                    <!-- 月份筛选 -->
+                    <div class="month-filter">
+                      <span class="filter-label">月份:</span>
+                      <el-select
+                        v-model="collegeRankingMonth"
+                        size="small"
+                        class="month-select"
+                        @change="handleCollegeRankingMonthChange"
+                      >
+                        <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
+                      </el-select>
+                    </div>
+                    <!-- 职能部门筛选（仅战略发展部可见） -->
+                    <div v-if="currentRole === 'strategic_dept'" class="dept-filter">
+                      <span class="filter-label">来源部门:</span>
+                      <el-select
+                        v-model="selectedOwnerDeptFilter"
+                        size="small"
+                        class="dept-select"
+                        @change="handleOwnerDeptFilterChange"
+                      >
+                        <el-option label="全部" value="all" />
+                        <el-option
+                          v-for="dept in availableFunctionalDepts"
+                          :key="dept"
+                          :label="dept"
+                          :value="dept"
+                        />
+                      </el-select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div ref="collegeRankingChartRef" class="college-ranking-chart"></div>
+          </el-card>
+        </el-col>
+      </div>
+
+      <!-- 图表区域 -->
+      <el-row :gutter="16" class="chart-section">
+        <!-- 得分构成 -->
+        <el-col :xs="24" :md="8">
+          <el-card shadow="hover" class="chart-card card-animate">
+            <template #header>
+              <div class="card-header">
+                <div style="display: flex; align-items: center; gap: 4px">
+                  <span class="card-title">得分构成</span>
+                  <el-tooltip :content="helpTexts.scoreComposition" placement="top" effect="light">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </div>
+            </template>
+            <ScoreCompositionChart
+              :basic-score="dashboardData.basicScore"
+              :development-score="dashboardData.developmentScore"
+            />
+          </el-card>
+        </el-col>
+
+        <!-- 预警分布 -->
+        <el-col :xs="24" :md="8">
+          <el-card shadow="hover" class="chart-card card-animate">
+            <template #header>
+              <div class="card-header">
+                <div style="display: flex; align-items: center; gap: 4px">
+                  <span class="card-title">预警分布</span>
+                  <el-tooltip :content="helpTexts.alertDistribution" placement="top" effect="light">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </div>
+            </template>
+            <AlertDistributionChart
+              :severe="dashboardData.alertIndicators.severe"
+              :moderate="dashboardData.alertIndicators.moderate"
+              :normal="dashboardData.alertIndicators.normal"
+              @click="handleAlertClick"
+            />
+          </el-card>
+        </el-col>
+
+        <!-- 完成率统计 -->
+        <el-col :xs="24" :md="8">
+          <el-card shadow="hover" class="chart-card card-animate">
+            <template #header>
+              <div class="card-header">
+                <div style="display: flex; align-items: center; gap: 4px">
+                  <span class="card-title">完成情况</span>
+                  <el-tooltip :content="helpTexts.completionRate" placement="top" effect="light">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                  </el-tooltip>
+                </div>
+              </div>
+            </template>
+            <div class="completion-stats">
+              <div class="completion-ring">
+                <el-progress
+                  type="circle"
+                  :percentage="dashboardData.completionRate || 0"
+                  :width="140"
+                  :stroke-width="12"
+                >
+                  <template #default="{ percentage }">
+                    <div class="completion-text">
+                      <span class="percentage">{{ percentage }}%</span>
+                      <span class="label">完成率</span>
+                    </div>
+                  </template>
+                </el-progress>
+              </div>
+              <div class="completion-detail">
+                <div class="detail-item">
+                  <span class="detail-label">总指标数</span>
+                  <span class="detail-value">{{ dashboardData.totalIndicators }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">已完成</span>
+                  <span class="detail-value success">{{ dashboardData.completedIndicators }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">进行中</span>
+                  <span class="detail-value">{{
+                    dashboardData.totalIndicators - dashboardData.completedIndicators
+                  }}</span>
+                </div>
+              </div>
             </div>
+          </el-card>
+        </el-col>
+      </el-row>
+
+      <!-- 滞后任务响应清单（二级学院不显示） -->
+      <el-card
+        v-if="currentRole !== 'secondary_college'"
+        shadow="hover"
+        class="task-list-card glass-card"
+      >
+        <template #header>
+          <div class="card-header task-card-header">
+            <div class="header-left">
+              <div class="header-icon danger">
+                <el-icon><Warning /></el-icon>
+              </div>
               <div class="header-title-group">
-                <div style="display: flex; align-items: center; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 4px">
                   <span class="card-title task-title">TOP 滞后任务响应清单</span>
                   <el-tooltip :content="helpTexts.delayedTasks" placement="top" effect="light">
                     <el-icon class="help-icon"><QuestionFilled /></el-icon>
@@ -3041,146 +3396,166 @@ onUnmounted(() => {
                 </div>
                 <span class="card-subtitle">HIGH PRIORITY PENDING ACTIONS</span>
               </div>
-          </div>
-          <el-button link type="primary" size="small" class="view-all-btn">VIEW ALL ISSUES →</el-button>
-        </div>
-      </template>
-      <el-table :data="delayedTasks" style="width: 100%" :show-header="true" class="task-table">
-        <el-table-column label="战略任务内容" min-width="240">
-          <template #default="{ row }">
-            <div class="task-name-primary">{{ row.name }}</div>
-            <div class="task-ref-id">REF_ID: {{ row.id }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="责任主体" width="140" align="center">
-          <template #default="{ row }">
-            <span class="dept-badge">{{ row.dept }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="当前进度" width="160" align="center">
-          <template #default="{ row }">
-            <div class="progress-cell-new">
-              <div class="progress-bar-wrapper">
-                <div class="progress-bar-fill" :style="{ width: row.progress + '%' }"></div>
-              </div>
-              <span class="delayed-tag">DELAYED {{ row.days }}D</span>
             </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="闭环管理" width="130" align="center">
-          <template #default="{ row }">
-            <button 
-              class="urge-btn"
-              :class="{ disabled: row.reminded }"
-              :disabled="row.reminded"
-              @click="handleUrge(row)"
+            <el-button link type="primary" size="small" class="view-all-btn"
+              >VIEW ALL ISSUES →</el-button
             >
-              {{ row.reminded ? '已催办' : '一键催办' }}
-            </button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="delayedTasks.length === 0" description="暂无滞后任务，执行状态良好！" />
-    </el-card>
-
-    <!-- 三级联动图表区域 -->
-
-    <!-- 战略发展部 - 组织级视图 -->
-    <template v-if="currentRole === 'strategic_dept' && dashboardStore.currentOrgLevel === 'strategy'">
-      <el-row :gutter="16" style="margin-top: 16px;">
-        <!-- 全校任务流转图 -->
-        <el-col :span="24">
-          <el-card shadow="hover" class="chart-card card-animate">
-            <template #header>
-              <div class="card-header">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title">全校任务流转图</span>
-                  <el-tooltip content="显示战略处到职能部门到学院的任务分发情况，点击节点可下钻" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
+          </div>
+        </template>
+        <el-table :data="delayedTasks" style="width: 100%" :show-header="true" class="task-table">
+          <el-table-column label="战略任务内容" min-width="240">
+            <template #default="{ row }">
+              <div class="task-name-primary">{{ row.name }}</div>
+              <div class="task-ref-id">REF_ID: {{ row.id }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="责任主体" width="140" align="center">
+            <template #default="{ row }">
+              <span class="dept-badge">{{ row.dept }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="当前进度" width="160" align="center">
+            <template #default="{ row }">
+              <div class="progress-cell-new">
+                <div class="progress-bar-wrapper">
+                  <div class="progress-bar-fill" :style="{ width: row.progress + '%' }"></div>
                 </div>
+                <span class="delayed-tag">DELAYED {{ row.days }}D</span>
               </div>
             </template>
-            <TaskSankeyChart
-              :data="dashboardStore.sankeyData"
-              title=""
-              @node-click="handleSankeyNodeClick"
-              @link-click="handleSankeyLinkClick"
-            />
-          </el-card>
-        </el-col>
-      </el-row>
-    </template>
-
-    <!-- 职能部门视图 -->
-    <template v-if="currentRole === 'functional_dept'">
-      <el-row :gutter="16" style="margin-top: 16px;">
-        <!-- 本部门任务下发流向 -->
-        <el-col :span="24">
-          <el-card shadow="hover" class="chart-card card-animate">
-            <template #header>
-              <div class="card-header">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title">本部门任务下发流向</span>
-                  <el-tooltip content="显示本部门向各学院分发的任务情况" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-              </div>
+          </el-table-column>
+          <el-table-column label="闭环管理" width="130" align="center">
+            <template #default="{ row }">
+              <button
+                class="urge-btn"
+                :class="{ disabled: row.reminded }"
+                :disabled="row.reminded"
+                @click="handleUrge(row)"
+              >
+                {{ row.reminded ? '已催办' : '一键催办' }}
+              </button>
             </template>
-            <TaskSankeyChart
-              :data="dashboardStore.sankeyData"
-              title=""
-              @node-click="handleSankeyNodeClick"
-            />
-          </el-card>
-        </el-col>
-      </el-row>
-    </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="delayedTasks.length === 0" description="暂无滞后任务，执行状态良好！" />
+      </el-card>
 
-    <!-- 二级学院视图 -->
-    <template v-if="currentRole === 'secondary_college'">
-      <el-row :gutter="16" style="margin-top: 16px;">
-        <!-- 任务来源分布 -->
-        <el-col :xs="24" :md="10">
-          <el-card shadow="hover" class="chart-card card-animate">
-            <template #header>
-              <div class="card-header">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title">任务来源分布</span>
-                  <el-tooltip content="显示本学院承接的任务来自哪些职能部门，点击可筛选" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
-                </div>
-              </div>
-            </template>
-            <SourcePieChart
-              :data="dashboardStore.taskSourceDistribution"
-              title=""
-              @click="handleSourceClick"
-            />
-          </el-card>
-        </el-col>
+      <!-- 三级联动图表区域 -->
 
-        <!-- 承接任务汇总 -->
-        <el-col :xs="24" :md="14">
-          <el-card shadow="hover" class="chart-card card-animate">
-            <template #header>
-              <div class="card-header">
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <span class="card-title">承接任务汇总</span>
-                  <el-tooltip content="本学院承接的所有任务进度汇总" placement="top" effect="light">
-                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
-                  </el-tooltip>
+      <!-- 战略发展部 - 组织级视图 -->
+      <template
+        v-if="currentRole === 'strategic_dept' && dashboardStore.currentOrgLevel === 'strategy'"
+      >
+        <el-row :gutter="16" style="margin-top: 16px">
+          <!-- 全校任务流转图 -->
+          <el-col :span="24">
+            <el-card shadow="hover" class="chart-card card-animate">
+              <template #header>
+                <div class="card-header">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title">全校任务流转图</span>
+                    <el-tooltip
+                      content="显示战略处到职能部门到学院的任务分发情况，点击节点可下钻"
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
                 </div>
-              </div>
-            </template>
-            <DepartmentProgressChart :departments="dashboardStore.departmentSummary" />
-          </el-card>
-        </el-col>
-      </el-row>
-    </template>
-    </template><!-- 结束 v-else 正常数据展示 -->
+              </template>
+              <TaskSankeyChart
+                :data="dashboardStore.sankeyData"
+                title=""
+                @node-click="handleSankeyNodeClick"
+                @link-click="handleSankeyLinkClick"
+              />
+            </el-card>
+          </el-col>
+        </el-row>
+      </template>
+
+      <!-- 职能部门视图 -->
+      <template v-if="currentRole === 'functional_dept'">
+        <el-row :gutter="16" style="margin-top: 16px">
+          <!-- 本部门任务下发流向 -->
+          <el-col :span="24">
+            <el-card shadow="hover" class="chart-card card-animate">
+              <template #header>
+                <div class="card-header">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title">本部门任务下发流向</span>
+                    <el-tooltip
+                      content="显示本部门向各学院分发的任务情况"
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </div>
+              </template>
+              <TaskSankeyChart
+                :data="dashboardStore.sankeyData"
+                title=""
+                @node-click="handleSankeyNodeClick"
+              />
+            </el-card>
+          </el-col>
+        </el-row>
+      </template>
+
+      <!-- 二级学院视图 -->
+      <template v-if="currentRole === 'secondary_college'">
+        <el-row :gutter="16" style="margin-top: 16px">
+          <!-- 任务来源分布 -->
+          <el-col :xs="24" :md="10">
+            <el-card shadow="hover" class="chart-card card-animate">
+              <template #header>
+                <div class="card-header">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title">任务来源分布</span>
+                    <el-tooltip
+                      content="显示本学院承接的任务来自哪些职能部门，点击可筛选"
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </div>
+              </template>
+              <SourcePieChart
+                :data="dashboardStore.taskSourceDistribution"
+                title=""
+                @click="handleSourceClick"
+              />
+            </el-card>
+          </el-col>
+
+          <!-- 承接任务汇总 -->
+          <el-col :xs="24" :md="14">
+            <el-card shadow="hover" class="chart-card card-animate">
+              <template #header>
+                <div class="card-header">
+                  <div style="display: flex; align-items: center; gap: 4px">
+                    <span class="card-title">承接任务汇总</span>
+                    <el-tooltip
+                      content="本学院承接的所有任务进度汇总"
+                      placement="top"
+                      effect="light"
+                    >
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </div>
+                </div>
+              </template>
+              <DepartmentProgressChart :departments="dashboardStore.departmentSummary" />
+            </el-card>
+          </el-col>
+        </el-row>
+      </template> </template
+    ><!-- 结束 v-else 正常数据展示 -->
   </div>
 </template>
 
@@ -3352,9 +3727,15 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.mini-value.success { color: var(--color-success); }
-.mini-value.warning { color: var(--color-warning); }
-.mini-value.primary { color: var(--color-primary); }
+.mini-value.success {
+  color: var(--color-success);
+}
+.mini-value.warning {
+  color: var(--color-warning);
+}
+.mini-value.primary {
+  color: var(--color-primary);
+}
 
 /* ========== 工具栏 ========== */
 .dashboard-toolbar {
@@ -3551,7 +3932,7 @@ onUnmounted(() => {
 
 /* 学院卡片边框样式 */
 .college-card {
-  border-left: 3px solid #E6A23C; /* 橙色边框区分学院看板 */
+  border-left: 3px solid #e6a23c; /* 橙色边框区分学院看板 */
 }
 
 /* 学院卡片头部样式 - 与 benchmark-header 一致 */
@@ -3811,9 +4192,15 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.radar-stat-value.primary { color: var(--color-primary); }
-.radar-stat-value.success { color: var(--color-success); }
-.radar-stat-value.danger { color: var(--color-danger); }
+.radar-stat-value.primary {
+  color: var(--color-primary);
+}
+.radar-stat-value.success {
+  color: var(--color-success);
+}
+.radar-stat-value.danger {
+  color: var(--color-danger);
+}
 
 /* ========== 图表区域 ========== */
 .chart-section .el-col {
@@ -4501,24 +4888,24 @@ onUnmounted(() => {
   .ai-summary-card {
     flex-direction: column;
   }
-  
+
   .summary-stats {
     width: 100%;
     justify-content: center;
   }
-  
+
   .kpi-value {
     font-size: 28px;
   }
-  
+
   .benchmark-chart {
     height: 280px;
   }
-  
+
   .radar-chart {
     height: 220px;
   }
-  
+
   .empty-state-container {
     min-height: 300px;
     padding: var(--spacing-xl);
