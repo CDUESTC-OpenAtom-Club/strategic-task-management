@@ -13,9 +13,13 @@ import { logger } from '@/utils/logger'
 
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
-  
+
   const indicators = ref<StrategicIndicator[]>([])
   const loading = ref(false)
+  const loadingState = ref({
+    indicators: false,
+    tasks: false
+  })
   const error = ref<string | null>(null)
   
   // ============ Getters ============
@@ -32,8 +36,9 @@ export const useStrategicStore = defineStore('strategic', () => {
   
   async function loadIndicatorsByYear(year: number) {
     loading.value = true
+    loadingState.value.indicators = true
     error.value = null
-    
+
     try {
       logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
       const response = await indicatorApi.getAllIndicators(year)
@@ -50,6 +55,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       throw err
     } finally {
       loading.value = false
+      loadingState.value.indicators = false
     }
   }
   
@@ -106,6 +112,7 @@ export const useStrategicStore = defineStore('strategic', () => {
   return {
     indicators,
     loading,
+    loadingState,
     error,
     activeIndicators,
     strategicIndicators,

@@ -28,7 +28,20 @@ import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitor
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
-  const dashboardData = ref<DashboardData | null>(null)
+  const dashboardData = ref<DashboardData>({
+    totalScore: 0,
+    basicScore: 0,
+    developmentScore: 0,
+    completionRate: 0,
+    warningCount: 0,
+    totalIndicators: 0,
+    completedIndicators: 0,
+    alertIndicators: {
+      severe: 0,
+      moderate: 0,
+      normal: 0
+    }
+  })
   const departmentProgress = ref<DepartmentProgress[]>([])
   const recentActivities = ref<Array<Record<string, unknown>>>([])
   const loading = ref(false)

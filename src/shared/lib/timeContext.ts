@@ -45,6 +45,11 @@ export const useTimeContextStore = defineStore('timeContext', () => {
    */
   const isHistoricalMode = computed(() => currentYear.value !== realCurrentYear.value)
 
+  /**
+   * Whether we're viewing current year
+   */
+  const isCurrentYear = computed(() => currentYear.value === realCurrentYear.value)
+
   // ============ Actions ============
 
   /**
@@ -86,6 +91,7 @@ export const useTimeContextStore = defineStore('timeContext', () => {
     realCurrentYear,
     availableYears,
     isHistoricalMode,
+    isCurrentYear,
     setYear,
     resetToCurrentYear,
     getYearStatus,

@@ -1,243 +1,72 @@
 /**
- * 统一的模拟指标数据
- *
- * ⚠️ 已废弃：现在所有数据都从后端真实数据库获取
- * 数据库：PostgreSQL @ 175.24.139.148:8386/strategic
- *
- * @deprecated 此文件已废弃，请使用后端API获取真实数据
- * @see src/api/fallback.ts 降级机制已禁用
+ * 统一的模拟指标数据 - 与后端实体类型对齐
+ * 使用当前系统类型，基于 src/mock/fixtures/ 中的旧数据结构重新生成
  */
-import type { StrategicIndicator, Milestone, DashboardData, DepartmentProgress } from '@/types'
+import type { Indicator, DashboardData, DepartmentProgress } from '@/types/entities'
+import {
+  indicators2023,
+  indicators2024,
+  indicators2025,
+  indicators2026,
+  allIndicators,
+  allHistoricalIndicators
+} from './indicators'
 
-// ============ 工具函数 ============
-
-/**
- * 生成季度里程碑
- */
-export const generateQuarterlyMilestones = (year: number, progress: number): Milestone[] => {
-  const milestones: Milestone[] = []
-  for (let q = 1; q <= 4; q++) {
-    const targetProgress = q * 25
-    const deadline = `${year}-${String(q * 3).padStart(2, '0')}-${q === 1 ? '31' : q === 2 ? '30' : q === 3 ? '30' : '31'}`
-    const status: 'completed' | 'pending' | 'overdue' = progress >= targetProgress ? 'completed' : 'pending'
-    milestones.push({
-      id: `mock-${year}-q${q}`,
-      name: `Q${q}: 阶段目标`,
-      targetProgress,
-      deadline,
-      status
-    })
-  }
-  return milestones
-}
-
-// ============ 模拟指标数据 ============
+// ============ 导出所有年份数据 ============
 
 /**
  * 2026年指标数据（当前工作年份）
  */
-export const mockIndicators2026: StrategicIndicator[] = [
-  // 战略任务1：全力促进毕业生多元化高质量就业创业
-  {
-    id: '2026-101',
-    name: '优质就业比例不低于15%',
-    isQualitative: false,
-    type1: '定量',
-    type2: '发展性',
-    progress: 8,
-    createTime: '2026年1月5日',
-    weight: 20,
-    remark: '力争突破',
-    canWithdraw: false,
-    taskContent: '全力促进毕业生多元化高质量就业创业',
-    milestones: generateQuarterlyMilestones(2026, 8),
-    targetValue: 15,
-    unit: '%',
-    responsibleDept: '就业创业指导中心',
-    responsiblePerson: '张老师',
-    status: 'active',
-    isStrategic: true,
-    ownerDept: '战略发展部',
-    year: 2026,
-    statusAudit: []
-  },
-  {
-    id: '2026-102',
-    name: '毕业生就业率不低于95%',
-    isQualitative: false,
-    type1: '定量',
-    type2: '发展性',
-    progress: 12,
-    createTime: '2026年1月5日',
-    weight: 20,
-    remark: '确保就业率稳定',
-    canWithdraw: false,
-    taskContent: '全力促进毕业生多元化高质量就业创业',
-    milestones: generateQuarterlyMilestones(2026, 12),
-    targetValue: 95,
-    unit: '%',
-    responsibleDept: '就业创业指导中心',
-    responsiblePerson: '张老师',
-    status: 'active',
-    isStrategic: true,
-    ownerDept: '战略发展部',
-    year: 2026,
-    statusAudit: []
-  },
-  {
-    id: '2026-401',
-    name: '提升教学质量，课程优良率达87%以上',
-    isQualitative: false,
-    type1: '定量',
-    type2: '基础性',
-    progress: 12,
-    createTime: '2026年1月5日',
-    weight: 30,
-    remark: '中长期发展规划核心内容',
-    canWithdraw: false,
-    taskContent: '全力促进毕业生多元化高质量就业创业',
-    milestones: generateQuarterlyMilestones(2026, 12),
-    targetValue: 87,
-    unit: '%',
-    responsibleDept: '教务处',
-    responsiblePerson: '陈处长',
-    status: 'active',
-    isStrategic: true,
-    ownerDept: '战略发展部',
-    year: 2026,
-    statusAudit: []
-  },
-  // 二级学院子指标
-  {
-    id: '2026-101-1',
-    name: '计算机学院优质就业比例不低于18%',
-    isQualitative: false,
-    type1: '定量',
-    type2: '发展性',
-    progress: 15,
-    createTime: '2026年1月10日',
-    weight: 25,
-    remark: '工科学院就业质量要求更高',
-    canWithdraw: false,
-    taskContent: '全力促进毕业生多元化高质量就业创业',
-    milestones: generateQuarterlyMilestones(2026, 15),
-    targetValue: 18,
-    unit: '%',
-    responsibleDept: '计算机学院',
-    responsiblePerson: '赵院长',
-    status: 'active',
-    isStrategic: false,
-    ownerDept: '就业创业指导中心',
-    parentIndicatorId: '2026-101',
-    year: 2026,
-    progressApprovalStatus: 'pending',
-    pendingProgress: 20,
-    pendingRemark: '已完成Q1就业数据统计，优质就业比例达到20%',
-    statusAudit: []
-  },
-  {
-    id: '2026-401-1',
-    name: '计算机学院课程优良率达90%',
-    isQualitative: false,
-    type1: '定量',
-    type2: '基础性',
-    progress: 10,
-    createTime: '2026年1月10日',
-    weight: 25,
-    remark: '工科专业教学质量领先',
-    canWithdraw: false,
-    taskContent: '全力促进毕业生多元化高质量就业创业',
-    milestones: generateQuarterlyMilestones(2026, 10),
-    targetValue: 90,
-    unit: '%',
-    responsibleDept: '计算机学院',
-    responsiblePerson: '赵院长',
-    status: 'active',
-    isStrategic: false,
-    ownerDept: '教务处',
-    parentIndicatorId: '2026-401',
-    year: 2026,
-    progressApprovalStatus: 'pending',
-    pendingProgress: 15,
-    pendingRemark: '本学期课程优良率统计完成，达到15%',
-    statusAudit: []
-  }
-]
+export const mockIndicators2026: Indicator[] = indicators2026
 
 /**
- * 历史年份指标数据（精简版，用于降级）
+ * 2025年指标数据（历史归档）
  */
-export const mockIndicators2025: StrategicIndicator[] = [
-  {
-    id: '2025-101',
-    name: '课程优良率达85%以上',
-    isQualitative: false,
-    type1: '定量',
-    type2: '基础性',
-    progress: 76,
-    createTime: '2025年1月6日',
-    weight: 30,
-    remark: '2025年度教学质量核心指标',
-    canWithdraw: false,
-    taskContent: '提升教学质量，深化教学改革',
-    milestones: generateQuarterlyMilestones(2025, 76),
-    targetValue: 85,
-    unit: '%',
-    responsibleDept: '教务处',
-    responsiblePerson: '陈处长',
-    status: 'archived',
-    isStrategic: true,
-    ownerDept: '战略发展部',
-    year: 2025,
-    statusAudit: []
-  },
-  {
-    id: '2025-301',
-    name: '毕业生就业率达90%以上',
-    isQualitative: false,
-    type1: '定量',
-    type2: '基础性',
-    progress: 90,
-    createTime: '2025年1月6日',
-    weight: 35,
-    remark: '就业工作核心指标',
-    canWithdraw: false,
-    taskContent: '全力促进毕业生多元化高质量就业创业',
-    milestones: generateQuarterlyMilestones(2025, 90),
-    targetValue: 90,
-    unit: '%',
-    responsibleDept: '就业创业指导中心',
-    responsiblePerson: '张老师',
-    status: 'archived',
-    isStrategic: true,
-    ownerDept: '战略发展部',
-    year: 2025,
-    statusAudit: []
-  }
-]
-
-// ============ 合并导出 ============
+export const mockIndicators2025: Indicator[] = indicators2025
 
 /**
  * 所有模拟指标数据
  */
-export const allMockIndicators: StrategicIndicator[] = [
-  ...mockIndicators2026,
-  ...mockIndicators2025
-]
+export const allMockIndicators: Indicator[] = allIndicators
+
+/**
+ * 所有历史指标数据（不含2026年）
+ */
+export const allHistoricalMockIndicators: Indicator[] = allHistoricalIndicators
 
 /**
  * 按年份获取指标
  */
-export function getMockIndicatorsByYear(year: number): StrategicIndicator[] {
-  return allMockIndicators.filter(ind => ind.year === year)
+export function getMockIndicatorsByYear(year: number): Indicator[] {
+  switch (year) {
+    case 2023:
+      return indicators2023
+    case 2024:
+      return indicators2024
+    case 2025:
+      return indicators2025
+    case 2026:
+      return indicators2026
+    default:
+      return []
+  }
 }
 
 /**
  * 获取当前年份指标（2026）
  */
-export function getCurrentYearMockIndicators(): StrategicIndicator[] {
+export function getCurrentYearMockIndicators(): Indicator[] {
   return mockIndicators2026
+}
+
+/**
+ * 获取指定年份和ID的指标
+ */
+export function getMockIndicatorById(id: number | string, year: number = 2026): Indicator | undefined {
+  const indicators = getMockIndicatorsByYear(year)
+  return indicators.find(ind =>
+    typeof id === 'number' ? ind.indicatorId === id : ind.indicatorId === parseInt(id)
+  )
 }
 
 // ============ 模拟仪表盘数据 ============
