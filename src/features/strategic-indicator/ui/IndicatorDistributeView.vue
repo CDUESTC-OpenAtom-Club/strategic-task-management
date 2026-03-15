@@ -17,7 +17,7 @@ import {
   ElSpace,
   ElMessage,
   ElDescriptions,
-  ElDescriptionsItem
+  ElDescriptionsItem,
   ElTag,
   ElTree,
   type FormInstance
@@ -43,7 +43,9 @@ const formData = ref({
 const indicatorId = computed(() => Number(route.params.id))
 
 const statusConfig = computed(() =>
-  indicator.value ? STATUS_CONFIG[indicator.value.status] || STATUS_CONFIG.DRAFT : STATUS_CONFIG.DRAFT
+  indicator.value
+    ? STATUS_CONFIG[indicator.value.status] || STATUS_CONFIG.DRAFT
+    : STATUS_CONFIG.DRAFT
 )
 
 const levelConfig = computed(() =>
@@ -101,10 +103,14 @@ async function fetchIndicatorDetail() {
 }
 
 async function handleSubmit() {
-  if (!formRef.value) return
+  if (!formRef.value) {
+    return
+  }
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  await formRef.value.validate(async valid => {
+    if (!valid) {
+      return
+    }
 
     submitting.value = true
     try {
@@ -177,9 +183,7 @@ function handleBack() {
               {{ statusConfig.label }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="权重">
-            {{ indicator.weight }}%
-          </el-descriptions-item>
+          <el-descriptions-item label="权重"> {{ indicator.weight }}% </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -189,12 +193,7 @@ function handleBack() {
           <span class="card-title">下发配置</span>
         </template>
 
-        <el-form
-          ref="formRef"
-          :model="formData"
-          :rules="formRules"
-          label-width="120px"
-        >
+        <el-form ref="formRef" :model="formData" :rules="formRules" label-width="120px">
           <el-form-item label="目标组织" prop="targetOrgIds">
             <el-tree
               v-model="formData.targetOrgIds"
@@ -226,16 +225,10 @@ function handleBack() {
 
           <el-form-item>
             <el-space>
-              <el-button
-                type="primary"
-                :loading="submitting"
-                @click="handleSubmit"
-              >
+              <el-button type="primary" :loading="submitting" @click="handleSubmit">
                 确认下发
               </el-button>
-              <el-button @click="handleCancel">
-                取消
-              </el-button>
+              <el-button @click="handleCancel"> 取消 </el-button>
             </el-space>
           </el-form-item>
         </el-form>

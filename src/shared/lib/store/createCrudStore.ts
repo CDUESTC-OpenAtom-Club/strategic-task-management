@@ -33,7 +33,6 @@
  */
 
 import { ref, computed, type Ref } from 'vue'
-import type { PiniaPluginContext } from 'pinia'
 
 /**
  * Pagination filters interface
@@ -159,7 +158,7 @@ export function createCrudStore<
   const hasError = computed(() => error.value !== null)
   const hasMore = computed(() => {
     const currentPage = (filters.value.page || 0) + 1
-    return currentPage < (total.value / (filters.value.size || defaultPageSize))
+    return currentPage < total.value / (filters.value.size || defaultPageSize)
   })
 
   // ============ Query Actions ============
@@ -217,7 +216,9 @@ export function createCrudStore<
    * Load next page
    */
   async function loadNextPage() {
-    if (!hasMore.value || loading.value) return
+    if (!hasMore.value || loading.value) {
+      return
+    }
 
     const currentPage = filters.value.page || 0
     await fetchItems({ page: currentPage + 1 } as Partial<Filters>)
@@ -228,7 +229,9 @@ export function createCrudStore<
    */
   async function loadPrevPage() {
     const currentPage = filters.value.page || 0
-    if (currentPage <= 0 || loading.value) return
+    if (currentPage <= 0 || loading.value) {
+      return
+    }
 
     await fetchItems({ page: currentPage - 1 } as Partial<Filters>)
   }
@@ -237,7 +240,9 @@ export function createCrudStore<
    * Go to specific page
    */
   async function goToPage(page: number) {
-    if (page < 0 || loading.value) return
+    if (page < 0 || loading.value) {
+      return
+    }
     await fetchItems({ page } as Partial<Filters>)
   }
 
