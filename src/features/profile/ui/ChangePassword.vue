@@ -65,7 +65,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
-import api from '@/api'
+import api from '@/shared/api'
 
 const router = useRouter()
 const authStore = useAuthStore()

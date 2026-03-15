@@ -1,4 +1,4 @@
-﻿import { Request, Response } from 'express'
+import { IncomingMessage, ServerResponse } from 'http'
 
 // Mock数据
 const mockOrgs = [
@@ -80,61 +80,73 @@ const mockTasks = [
   }
 ]
 
+// 辅助函数：发送 JSON 响应
+function sendJson(res: ServerResponse, statusCode: number, data: unknown) {
+  res.setHeader('Content-Type', 'application/json')
+  res.statusCode = statusCode
+  res.end(JSON.stringify(data))
+}
+
 // Mock API处理器
-export function mockApiMiddleware(req: Request, res: Response, next: Function) {
+export function mockApiMiddleware(
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: () => void
+) {
   const { method, url } = req
-  
+
   // 只处理API请求
-  if (!url.startsWith('/api/')) {
+  if (!url || !url.startsWith('/api/')) {
     return next()
   }
-  
-  if (import.meta.env.DEV) {
-    // eslint-disable-next-line no-console
-    console.log('[Mock API]', method, url)
-  }
-  
+
+  // 支持 /api/ 和 /api/v1/ 前缀
+  const normalizedUrl = url.replace('/api/v1', '/api')
+
+  // eslint-disable-next-line no-console
+  console.log('[Mock API]', method, url, '→', normalizedUrl)
+
   // 模拟网络延迟
   setTimeout(() => {
     try {
       // 组织API
-      if (url === '/api/orgs' && method === 'GET') {
-        res.json({
+      if (normalizedUrl === '/api/orgs' && method === 'GET') {
+        sendJson(res, 200, {
           success: true,
           data: mockOrgs,
           message: '获取组织列表成功'
         })
         return
       }
-      
+
       // 指标API
-      if (url === '/api/indicators' && method === 'GET') {
-        res.json({
+      if (normalizedUrl === '/api/indicators' && method === 'GET') {
+        sendJson(res, 200, {
           success: true,
           data: mockIndicators,
           message: '获取指标列表成功'
         })
         return
       }
-      
+
       // 任务API
-      if (url === '/api/tasks' && method === 'GET') {
-        res.json({
+      if (normalizedUrl === '/api/tasks' && method === 'GET') {
+        sendJson(res, 200, {
           success: true,
           data: mockTasks,
           message: '获取任务列表成功'
         })
         return
       }
-      
+
       // 如果没有匹配的API，返回404
-      res.status(404).json({
+      sendJson(res, 404, {
         success: false,
         message: `API endpoint not found: ${method} ${url}`
       })
     } catch (error) {
       console.error('[Mock API] Error:', error)
-      res.status(500).json({
+      sendJson(res, 500, {
         success: false,
         message: 'Internal server error'
       })

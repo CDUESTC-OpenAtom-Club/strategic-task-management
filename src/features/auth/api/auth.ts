@@ -5,7 +5,7 @@
  * Based on backend API documentation: sism-backend/docs/API接口文档.md
  */
 
-import api from '@/api'
+import api from '@/shared/api'
 import type { LoginCredentials, LoginResponse } from '@/entities/user/model/types'
 import type { ApiResponse } from './types'
 

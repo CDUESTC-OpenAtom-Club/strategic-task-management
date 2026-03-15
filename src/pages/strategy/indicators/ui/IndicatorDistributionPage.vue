@@ -13,7 +13,7 @@ import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
 import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/features/task/ui/TaskApprovalDrawer.vue'
-import { indicatorApi } from '@/api'
+import { indicatorApi } from '@/shared/api'
 
 // 接收父组件传递的视角角色和部�?
 const props = defineProps<{

@@ -1,6 +1,10 @@
 /**
  * 预警告警 API
  * 用于 Dashboard 和消息中心的预警统计
+ *
+ * 注意：根据后端API文档，预警和告警是分开的两个模块
+ * - 预警：/api/v1/warnings/
+ * - 告警：/api/v1/alerts/
  */
 
 import { apiClient } from '@/shared/api/client'
@@ -57,6 +61,7 @@ export interface AlertStats {
 export const alertApi = {
   /**
    * 获取告警统计
+   * 使用正确的后端API路径：/api/v1/alerts/stats
    */
   getStats: async () => {
     const response = await apiClient.get<{
@@ -69,6 +74,7 @@ export const alertApi = {
 
   /**
    * 获取未关闭的告警事件
+   * 使用正确的路径：/api/v1/alerts/events/unclosed
    */
   getUnclosedAlerts: async () => {
     const response = await apiClient.get<{
@@ -81,6 +87,7 @@ export const alertApi = {
 
   /**
    * 获取活跃的预警事件
+   * 使用正确的路径：/api/v1/warnings/events
    */
   getActiveWarnings: async (params?: {
     indicatorId?: number
@@ -101,6 +108,7 @@ export const alertApi = {
 
   /**
    * 确认预警
+   * 使用正确的路径：/api/v1/warnings/events/{id}/acknowledge
    */
   acknowledgeWarning: async (id: number) => {
     const response = await apiClient.post<{
@@ -113,6 +121,7 @@ export const alertApi = {
 
   /**
    * 处理告警
+   * 使用正确的路径：/api/v1/alerts/events/{id}/process
    */
   processAlert: async (id: number, data: {
     assigneeId?: number

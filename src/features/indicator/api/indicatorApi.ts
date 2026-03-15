@@ -7,7 +7,7 @@ import type {
 } from '@/types'
 import { logger } from '@/utils/logger'
 // 导入统一的 IndicatorVO 和 MilestoneVO 接口，避免重复定义
-import type { IndicatorVO, MilestoneVO, IndicatorCreateRequest } from '@/api/types/backend-aligned'
+import type { IndicatorVO, MilestoneVO, IndicatorCreateRequest } from '@/shared/api/types/backend-aligned'
 
 /**
  * 重试辅助函数 - 使用指数退避策略

@@ -876,7 +876,7 @@ export const planFillApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<PlanFill[]>>('/plan-fills/pending', { orgId: auditorOrgId })
+    return apiClient.get<ApiResponse<PlanFill[]>>('/reports/pending-approval', { orgId: auditorOrgId })
   },
 
   /**
@@ -913,7 +913,20 @@ export const planFillApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<PlanFill>>(`/plan-fills/${fillId}/audit`, form)
+      // 使用正确的后端API路径：/api/v1/reports/approve
+      // 转换前端参数格式为后端API格式
+      const requestBody = {
+        reportId: fillId,
+        action: form.action?.toUpperCase() === 'APPROVE' ? 'APPROVE'
+              : form.action?.toUpperCase() === 'REJECT' ? 'REJECT'
+              : form.action?.toUpperCase() === 'RETURN' ? 'RETURN'
+              : 'APPROVE',
+        approved: form.action?.toLowerCase() === 'approve',
+        comment: form.comment,
+        approvalNotes: form.comment,
+        rejectionReason: form.action?.toLowerCase() === 'reject' ? form.comment : undefined
+      }
+      return apiClient.post<ApiResponse<PlanFill>>(`/reports/approve`, requestBody)
     })
   }
 }

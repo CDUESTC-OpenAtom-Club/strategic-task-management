@@ -4,7 +4,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
-import { mockApiPlugin } from './src/mock/mockApiPlugin'
+import { mockApiPlugin } from './src/shared/api/mocks/mockApiPlugin'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -82,8 +82,9 @@ export default defineConfig(({ mode }) => {
                 proxy.on('error', (err, _req, _res) => {
                   console.error('⚠️ [Proxy Error]', err.message)
                 })
-                proxy.on('proxyReq', (proxyReq, req, _res) => {
-                  console.log('📤 [Proxy Request]', req.method, req.url, '→', options.target + req.url)
+                proxy.on('proxyReq', (_proxyReq, req, _res) => {
+                  const targetUrl = options.target ? options.target + (req.url || '') : req.url
+                  console.log('📤 [Proxy Request]', req.method, req.url, '→', targetUrl)
                 })
                 proxy.on('proxyRes', (proxyRes, req, _res) => {
                   console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url)

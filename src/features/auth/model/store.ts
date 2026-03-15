@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User, UserRole } from '@/types'
-import api from '@/api'
+import api from '@/shared/api'
 import { logger } from '@/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/utils/tokenManager'
 import { parseLoginResponse, mapBackendUser } from '@/utils/authHelpers'

@@ -38,7 +38,7 @@ import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/features/task/ui/TaskApprovalDrawer.vue'
 import PlanApprovalDrawer from '@/features/approval/ui/PlanApprovalDrawer.vue'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
-import { indicatorApi } from '@/features/indicator/api/indicatorApi'
+import { indicatorApi } from '@/features/strategic-indicator/api/indicator'
 
 // 使用共享 Store
 const strategicStore = useStrategicStore()

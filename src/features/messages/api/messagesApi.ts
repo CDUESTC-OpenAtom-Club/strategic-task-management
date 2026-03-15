@@ -5,6 +5,7 @@
 
 import { apiClient } from '@/shared/api/client'
 import { alertApi, type WarningEvent, type AlertEvent } from '@/shared/api/monitoringApi'
+import { useAuthStore } from '@/features/auth/model/store'
 
 /**
  * 消息类型
@@ -37,7 +38,7 @@ export const messagesApi = {
     try {
       // 并行获取各类消息
       const [notifications, warnings, alerts] = await Promise.allSettled([
-        apiClient.get<{ code: number; message: string; data: MessageItem[] }>('/messages'),
+        this.getMessages(),
         alertApi.getActiveWarnings({ page: 1, size: 20 }),
         alertApi.getUnclosedAlerts()
       ])
@@ -45,7 +46,7 @@ export const messagesApi = {
       const messages: MessageItem[] = []
 
       // 添加通知消息
-      if (notifications.status === 'fulfilled' && notifications.value.data?.data) {
+      if (notifications.status === 'fulfilled' && notifications.value?.data?.data) {
         messages.push(
           ...notifications.value.data.data.map((msg: MessageItem) => ({
             ...msg,
@@ -100,11 +101,7 @@ export const messagesApi = {
       console.error('获取消息失败:', error)
       // 失败时至少返回通知消息
       try {
-        const response = await apiClient.get<{
-          code: number
-          message: string
-          data: MessageItem[]
-        }>('/messages')
+        const response = await this.getMessages()
         return response.data.data.map((msg: MessageItem) => ({
           ...msg,
           type: (msg.type || 'NOTIFICATION') as MessageType
@@ -117,16 +114,24 @@ export const messagesApi = {
 
   /**
    * 获取通知消息
+   * 使用正确的后端API路径：/api/v1/notifications/user/{userId}
    */
   async getMessages() {
-    return await apiClient.get('/messages')
+    const authStore = useAuthStore()
+    const userId = authStore.user?.id
+    if (!userId) {
+      throw new Error('用户未登录')
+    }
+    return await apiClient.get(`/notifications/user/${userId}`)
   },
 
   /**
    * 标记为已读
+   * 使用正确的后端API路径：/api/v1/notifications/{notificationId}/read
+   * 使用PUT方法（后端文档定义）
    */
-  async markAsRead(id: string) {
-    return await apiClient.patch(`/messages/${id}/read`)
+  async markAsRead(id: string | number) {
+    return await apiClient.put(`/notifications/${id}/read`)
   },
 
   /**
@@ -149,9 +154,33 @@ export const messagesApi = {
 
   /**
    * 批量标记为已读
+   * 使用正确的后端API路径：/api/v1/notifications/bulk-read
+   * 使用PUT方法（后端文档定义）
    */
   async markMultipleAsRead(ids: (string | number)[]) {
-    return await apiClient.patch('/messages/batch-read', { ids })
+    const authStore = useAuthStore()
+    const userId = authStore.user?.id
+    if (!userId) {
+      throw new Error('用户未登录')
+    }
+    return await apiClient.put('/notifications/bulk-read', {
+      notificationIds: ids,
+      userId
+    })
+  },
+
+  /**
+   * 标记所有通知为已读
+   * 使用正确的后端API路径：/api/v1/notifications/user/{userId}/read-all
+   * 使用PUT方法（后端文档定义）
+   */
+  async markAllAsRead() {
+    const authStore = useAuthStore()
+    const userId = authStore.user?.id
+    if (!userId) {
+      throw new Error('用户未登录')
+    }
+    return await apiClient.put(`/notifications/user/${userId}/read-all`)
   },
 
   /**

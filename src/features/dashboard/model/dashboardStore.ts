@@ -22,7 +22,7 @@ import { useAuthStore } from './auth'
 import { useTimeContextStore } from './timeContext'
 import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from './org'
-import api from '@/api'
+import api from '@/shared/api'
 import { logger } from '@/utils/logger'
 import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitoringApi'
 

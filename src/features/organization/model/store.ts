@@ -1,6 +1,6 @@
 /**
  * Organization Feature Store
- * 
+ *
  * Migrated from stores/org.ts
  * Organization and department management
  */
@@ -8,14 +8,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { logger } from '@/utils/logger'
-
-export interface Department {
-  id: number
-  name: string
-  type: 'strategic_dept' | 'functional_dept' | 'secondary_college'
-  sortOrder: number
-  parentId?: number
-}
+import type { Department } from '@/features/organization/api'
 
 export const useOrganizationStore = defineStore('organization', () => {
   // ============ State ============
@@ -57,7 +50,7 @@ export const useOrganizationStore = defineStore('organization', () => {
 
     try {
       // 动态导入 API
-      const { orgApi } = await import('@/api')
+      const { orgApi } = await import('@/features/organization/api')
       const depts = await orgApi.getAllDepartments()
 
       if (depts.length === 0 && retryCount < maxRetries) {

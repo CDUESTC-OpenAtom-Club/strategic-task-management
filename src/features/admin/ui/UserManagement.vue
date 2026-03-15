@@ -32,7 +32,7 @@ import {
   Key
 } from '@element-plus/icons-vue'
 import type { UserManagementItem, UserForm, Organization, UserRole } from '@/types'
-import api from '@/api'
+import api from '@/shared/api'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useAuditLogStore } from '@/features/admin/model/auditLog'
 

@@ -18,13 +18,7 @@ import type {
 /* eslint-enable no-restricted-syntax */
 import { logger } from '@/utils/logger'
 // 导入统一的 IndicatorVO 接口，避免重复定义
-import type { IndicatorVO } from '@/api/types/backend-aligned'
-
-// 后端返回的战略任务 VO (已移至 backend-aligned.ts)
-export type { TaskVO as StrategicTaskVO } from '@/api/types/backend-aligned'
-
-// 后端返回的考核周期 VO (已移至 backend-aligned.ts)
-export type { AssessmentCycleVO } from '@/api/types/backend-aligned'
+import type { IndicatorVO, TaskVO as StrategicTaskVO, AssessmentCycleVO } from '@/types/backend-aligned'
 
 /**
  * 指数退避重试辅助函数

@@ -8,7 +8,7 @@ import type { Indicator } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
 import IndicatorFillForm from '@/shared/ui/form/indicator/IndicatorFillForm.vue'
 import IndicatorFillHistory from '@/shared/ui/form/indicator/IndicatorFillHistory.vue'
-import { indicatorApi } from '@/api'
+import { indicatorApi } from '@/shared/api'
 import { logger } from '@/utils/logger'
 
 /**

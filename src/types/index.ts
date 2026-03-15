@@ -654,12 +654,19 @@ export interface PlanSubmitForm {
 }
 
 /**
- * 审核表单
+ * 审核表单 - 后端API格式
  */
 export interface AuditForm {
-  fill_id: string | number // 可以是 PlanFill 或 IndicatorFill 的 ID
-  action: 'approve' | 'reject'
+  fill_id?: string | number // 可以是 PlanFill 或 IndicatorFill 的 ID（前端使用）
+  action: 'approve' | 'reject' | 'return' // 前端使用
   comment?: string
+  // 后端API格式字段
+  reportId?: string | number
+  approved?: boolean
+  action?: 'APPROVE' | 'REJECT' | 'RETURN'
+  approvalNotes?: string
+  rejectionReason?: string
+  improvementSuggestions?: string
 }
 
 // ============================================================

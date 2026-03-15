@@ -5,10 +5,10 @@ import type {
   IndicatorDistributionEligibility,
   BatchDistributionRequest 
 } from '@/types'
-import type { 
-  IndicatorVO, 
-  DistributionStatus 
-} from '@/api/types/backend-aligned'
+import type {
+  IndicatorVO,
+  DistributionStatus
+} from '@/shared/api/types/backend-aligned'
 import { logger } from '@/utils/logger'
 
 /**
@@ -56,7 +56,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
  */
 
 // Re-export types for backward compatibility
-export type { IndicatorVO, MilestoneVO, DistributionStatus, IndicatorCreateRequest } from '@/api/types/backend-aligned'
+export type { IndicatorVO, MilestoneVO, DistributionStatus, IndicatorCreateRequest } from '@/shared/api/types/backend-aligned'
 
 export const indicatorApi = {
   /**
@@ -107,7 +107,7 @@ export const indicatorApi = {
    * 搜索指标
    */
   async searchIndicators(keyword: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators/search', { keyword })
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators/search', { params: { keyword } })
   },
 
   // ==================== 指标下发相关接口 ====================
@@ -226,14 +226,10 @@ export const indicatorApi = {
 
   /**
    * 发布/变更指标的下发状态
-   * 
-   * 对应后端方案A接口：PATCH /indicators/{id}/distribution-status
-   * 将已存在的草稿指标（DRAFT）推进到 DISTRIBUTED，或撤回到 DRAFT。
-   * 
-   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
-   * 
-   * **对应前后端协作任务清单 - 后端任务：新增 PATCH 接口**
-   * 
+   *
+   * 注意：后端未实现 PATCH /indicators/{id}/distribution-status 接口
+   * 使用已有的下发和撤回接口来实现类似功能
+   *
    * @param indicatorId 指标ID
    * @param distributionStatus 目标状态（DISTRIBUTED=下发, DRAFT=撤回草稿）
    */
@@ -241,12 +237,15 @@ export const indicatorApi = {
     indicatorId: string,
     distributionStatus: DistributionStatus
   ): Promise<ApiResponse<IndicatorVO>> {
-    return withRetry(async () => {
-      return apiClient.patch<ApiResponse<IndicatorVO>>(
-        `/indicators/${indicatorId}/distribution-status`,
-        { distributionStatus }
-      )
-    })
+    if (distributionStatus === 'DISTRIBUTED') {
+      // 如果目标状态是 DISTRIBUTED，使用分发接口
+      // 注意：这里需要提供 targetOrgId，但目前接口不提供，需要从其他地方获取
+      // 暂时抛出错误，提示使用正确的分发接口
+      throw new Error('请使用 distributeIndicator 接口进行指标分发，需要提供目标组织ID')
+    } else {
+      // 如果目标状态是 DRAFT，使用撤回接口
+      return this.withdrawIndicator(indicatorId)
+    }
   },
 
   /**

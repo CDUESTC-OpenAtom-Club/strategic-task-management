@@ -20,16 +20,17 @@ import type {
 
 /**
  * API endpoints for dashboard functionality
+ * 注意：后端API位于 /api/v1/analytics/ 路径下
  */
 export const dashboardApi = {
   /**
    * Get dashboard overview data
-   * Returns completion rates, scores, and warning counts
+   * 使用正确的后端API路径：/api/v1/analytics/dashboard/overview
    */
   async getDashboardData(): Promise<DashboardData> {
     try {
       logger.debug('[dashboardApi] Fetching dashboard data')
-      return await apiClient.get<DashboardData>('/dashboard')
+      return await apiClient.get<DashboardData>('/analytics/dashboard/overview')
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch dashboard data:', error)
       throw error
@@ -38,12 +39,12 @@ export const dashboardApi = {
 
   /**
    * Get department progress data
-   * Returns progress metrics for all departments
+   * 使用正确的后端API路径：/api/v1/analytics/dashboard/charts
    */
   async getDepartmentProgress(): Promise<DepartmentProgress[]> {
     try {
       logger.debug('[dashboardApi] Fetching department progress')
-      return await apiClient.get<DepartmentProgress[]>('/dashboard/department-progress')
+      return await apiClient.get<DepartmentProgress[]>('/analytics/dashboard/charts')
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch department progress:', error)
       throw error
@@ -52,26 +53,29 @@ export const dashboardApi = {
 
   /**
    * Get recent activities
-   * Returns recent system activities and updates
+
+   * 注意：后端文档中未明确定义此接口
+   * 使用/analytics/activities作为临时路径，需要后端确认
    */
   async getRecentActivities(): Promise<Array<Record<string, unknown>>> {
     try {
       logger.debug('[dashboardApi] Fetching recent activities')
-      return await apiClient.get<Array<Record<string, unknown>>>('/dashboard/recent-activities')
+      return await apiClient.get<Array<Record<string, unknown>>>('/analytics/activities')
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch recent activities:', error)
-      throw error
+      // 返回空数组而不是抛出错误，保持UI稳定性
+      return []
     }
   },
 
   /**
    * Get alert summary
-   * Returns distribution of alerts by severity
+   * 使用正确的后端API路径：/api/v1/alerts/events/unclosed
    */
   async getAlertSummary(): Promise<AlertSummary> {
     try {
       logger.debug('[dashboardApi] Fetching alert summary')
-      return await apiClient.get<AlertSummary>('/dashboard/alerts')
+      return await apiClient.get<AlertSummary>('/alerts/events/unclosed')
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch alert summary:', error)
       throw error
@@ -80,7 +84,8 @@ export const dashboardApi = {
 
   /**
    * Get filtered dashboard data
-   * Returns dashboard data filtered by department, indicator type, or alert level
+   * 注意：后端文档中未明确定义此接口
+   * 临时复用overview接口，需要后端确认
    */
   async getFilteredDashboardData(params: {
     department?: string
@@ -90,7 +95,7 @@ export const dashboardApi = {
   }): Promise<DashboardData> {
     try {
       logger.debug('[dashboardApi] Fetching filtered dashboard data:', params)
-      return await apiClient.get<DashboardData>('/dashboard/filtered', params)
+      return await apiClient.get<DashboardData>('/analytics/dashboard/overview', { params })
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch filtered dashboard data:', error)
       throw error
