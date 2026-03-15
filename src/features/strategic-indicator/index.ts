@@ -95,5 +95,11 @@ export { default as IndicatorDistributionDialog } from './ui/IndicatorDistributi
 export { default as IndicatorDetailDialog } from './ui/IndicatorDetailDialog.vue'
 export { default as IndicatorFillView } from './ui/IndicatorFillView.vue'
 
+// View Components (Full-page views)
+export { default as IndicatorListView } from './ui/IndicatorListView.vue'
+export { default as IndicatorDetailView } from './ui/IndicatorDetailView.vue'
+export { default as IndicatorEditView } from './ui/IndicatorEditView.vue'
+export { default as IndicatorDistributeView } from './ui/IndicatorDistributeView.vue'
+
 // Re-export shared form components
 export { IndicatorFillForm, IndicatorFillHistory, MilestoneTimeline } from '@/shared/ui/form'

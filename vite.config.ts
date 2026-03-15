@@ -100,12 +100,90 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            vue: ['vue', 'vue-router', 'pinia'],
-            'element-plus': ['element-plus'],
-            echarts: ['echarts'],
-            xlsx: ['xlsx']
-          }
+          // 优化代码分割策略
+          manualChunks(id) {
+            // node_modules 包分组
+            if (id.includes('node_modules')) {
+              // Vue 核心库
+              if (id.includes('vue') || id.includes('pinia') || id.includes('@vue')) {
+                return 'vue-core'
+              }
+              // Vue Router
+              if (id.includes('vue-router')) {
+                return 'vue-router'
+              }
+              // Element Plus
+              if (id.includes('element-plus') || id.includes('@element-plus')) {
+                return 'element-plus'
+              }
+              // ECharts 相关
+              if (id.includes('echarts') || id.includes('vue-echarts')) {
+                return 'echarts'
+              }
+              // 工具库
+              if (id.includes('axios') || id.includes('lodash-es') || id.includes('dayjs')) {
+                return 'utils'
+              }
+              // Excel 处理
+              if (id.includes('xlsx')) {
+                return 'xlsx'
+              }
+              // PDF 生成
+              if (id.includes('jspdf') || id.includes('html2canvas')) {
+                return 'pdf'
+              }
+              // 其他第三方库
+              return 'vendor'
+            }
+
+            // 业务代码分组
+            // shared/ui 组件
+            if (id.includes('/src/shared/ui/')) {
+              return 'shared-ui'
+            }
+            // shared/lib 工具
+            if (id.includes('/src/shared/lib/')) {
+              return 'shared-lib'
+            }
+            // features 模块
+            if (id.includes('/src/features/')) {
+              // features 按功能分组
+              if (id.includes('/features/dashboard/')) {
+                return 'feature-dashboard'
+              }
+              if (id.includes('/features/admin/')) {
+                return 'feature-admin'
+              }
+              if (id.includes('/features/auth/')) {
+                return 'feature-auth'
+              }
+              if (id.includes('/features/plan/')) {
+                return 'feature-plan'
+              }
+              if (id.includes('/features/task/')) {
+                return 'feature-task'
+              }
+              if (id.includes('/features/strategic-indicator/')) {
+                return 'feature-indicator'
+              }
+              if (id.includes('/features/approval/')) {
+                return 'feature-approval'
+              }
+              return 'features'
+            }
+          },
+          // 文件命名策略
+          chunkFileNames: 'assets/js/[name]-[hash].js',
+          entryFileNames: 'assets/js/[name]-[hash].js',
+          assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
+        }
+      },
+      // Terser 压缩配置
+      terserOptions: {
+        compress: {
+          drop_console: true, // 生产环境移除 console
+          drop_debugger: true,
+          pure_funcs: ['console.log', 'console.info', 'console.debug']
         }
       }
     }

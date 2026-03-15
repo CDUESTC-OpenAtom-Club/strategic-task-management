@@ -7,7 +7,7 @@
  */
 
 // Views
-export { default as DashboardView } from './views/DashboardView.vue'
+export { default as DashboardView } from './ui/DashboardView.vue'
 
 // Store
-export { default as dashboardStore } from './stores/dashboardStore'
+export { useDashboardStore } from './model/store'

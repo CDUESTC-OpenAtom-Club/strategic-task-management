@@ -2,20 +2,20 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Download, Warning, Aim, Refresh, QuestionFilled, Top, Close } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole } from '@/types'
-import { useStrategicStore } from '@/stores/strategic'
-import { useDashboardStore } from '@/stores/dashboard'
-import { useAuthStore } from '@/stores/auth'
-import { useTimeContextStore } from '@/stores/timeContext'
-import BreadcrumbNav from '@/components/common/BreadcrumbNav.vue'
-import ScoreCompositionChart from '@/components/charts/ScoreCompositionChart.vue'
-import AlertDistributionChart from '@/components/charts/AlertDistributionChart.vue'
-import DepartmentProgressChart from '@/components/charts/DepartmentProgressChart.vue'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useDashboardStore } from '@/features/dashboard/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import BreadcrumbNav from '@/shared/ui/layout/BreadcrumbNav.vue'
+import ScoreCompositionChart from '@/shared/ui/charts/ScoreCompositionChart.vue'
+import AlertDistributionChart from '@/shared/ui/charts/AlertDistributionChart.vue'
+import DepartmentProgressChart from '@/shared/ui/charts/DepartmentProgressChart.vue'
 // 新增图表组件
-import TaskSankeyChart from '@/components/charts/TaskSankeyChart.vue'
-import SourcePieChart from '@/components/charts/SourcePieChart.vue'
+import TaskSankeyChart from '@/shared/ui/charts/TaskSankeyChart.vue'
+import SourcePieChart from '@/shared/ui/charts/SourcePieChart.vue'
 import { ElMessage } from 'element-plus'
 import { isSecondaryCollege } from '@/utils/colors'
-import { useOrgStore } from '@/stores/org'
+import { useOrgStore } from '@/features/organization/model/store'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/composables/useLoadingState'
 
@@ -35,6 +35,7 @@ const loadXLSX = async () => {
     XLSX = await import('xlsx')
   }
   return XLSX
+}
 
 // 帮助提示内容
 const helpTexts = {

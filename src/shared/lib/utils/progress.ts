@@ -12,9 +12,9 @@ export type ProgressStatus = 'normal' | 'warning' | 'danger' | 'success'
  * @returns Progress status
  */
 export function getProgressStatus(progress: number): ProgressStatus {
-  if (progress >= 100) return 'success'
-  if (progress < 30) return 'danger'
-  if (progress < 60) return 'warning'
+  if (progress >= 100) {return 'success'}
+  if (progress < 30) {return 'danger'}
+  if (progress < 60) {return 'warning'}
   return 'normal'
 }
 

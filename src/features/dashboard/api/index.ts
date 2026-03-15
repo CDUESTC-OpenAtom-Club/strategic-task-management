@@ -4,4 +4,5 @@
  * @module features/dashboard/api
  */
 
-export * from './dashboardApi'
+export * from './query'
+export { dashboardApi } from './dashboardApi'
