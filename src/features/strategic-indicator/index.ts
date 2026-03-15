@@ -92,6 +92,8 @@ export { default as IndicatorCard } from './ui/IndicatorCard.vue'
 export { default as IndicatorForm } from './ui/IndicatorForm.vue'
 export { default as IndicatorList } from './ui/IndicatorList.vue'
 export { default as IndicatorDistributionDialog } from './ui/IndicatorDistributionDialog.vue'
+export { default as IndicatorDetailDialog } from './ui/IndicatorDetailDialog.vue'
+export { default as IndicatorFillView } from './ui/IndicatorFillView.vue'
 
 // Re-export shared form components
 export { IndicatorFillForm, IndicatorFillHistory, MilestoneTimeline } from '@/shared/ui/form'

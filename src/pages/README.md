@@ -29,7 +29,7 @@ pages/
 
 ```vue
 <script setup lang="ts">
-import { IndicatorList } from '@/features/indicator'
+import { IndicatorList } from '@/features/strategic-indicator'
 import { IndicatorStats } from '@/widgets/indicator-stats'
 
 const currentYear = ref(new Date().getFullYear())

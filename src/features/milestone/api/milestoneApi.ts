@@ -5,45 +5,8 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient } from '@/shared/api/client'
+import { apiClient } from '@/shared/lib/api'
 import type { ApiResponse, Milestone, MilestonePairingStatus, MilestoneReportValidation } from '@/types'
-import { logger } from '@/utils/logger'
-
-/**
- * 重试辅助函数 - 使用指数退避策略
- *
- * 对关键操作提供显式重试逻辑，最多重试3次
- * 使用指数退避策略：第1次重试等待1秒，第2次等待2秒，第3次等待3秒
- *
- * **Validates: Requirements 2.4**
- *
- * @param fn 需要重试的异步函数
- * @param maxRetries 最大重试次数（默认3次）
- * @returns 函数执行结果
- */
-async function _withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promise<T> {
-  let lastError: Error
-
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      lastError = error as Error
-
-      logger.warn(`[Retry] Attempt ${attempt}/${maxRetries} failed:`, error)
-
-      if (attempt < maxRetries) {
-        // 指数退避: 1s, 2s, 3s
-        const delayMs = attempt * 1000
-        logger.debug(`[Retry] Waiting ${delayMs}ms before next attempt`)
-        await new Promise(resolve => setTimeout(resolve, delayMs))
-      }
-    }
-  }
-
-  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError!)
-  throw lastError!
-}
 
 export const milestoneApi = {
   /**

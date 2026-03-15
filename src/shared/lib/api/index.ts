@@ -61,8 +61,15 @@ export {
 // Export retry utilities
 export {
   createRetryInterceptor,
-  withRetry,
+  withRetry as withRetryInterceptor,
   withoutRetry,
   forceRetry,
   type RetryConfig
 } from './retry'
+
+// Export wrapper functions for explicit retry
+export {
+  withRetry,
+  withExponentialRetry,
+  apiClient
+} from './wrappers'

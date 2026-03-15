@@ -4,7 +4,7 @@ import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-pl
 import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuditLogStore } from '@/features/admin/model/auditLog'
-import MilestoneTimeline from './MilestoneTimeline.vue'
+import MilestoneTimeline from '@/shared/ui/form/indicator/MilestoneTimeline.vue'
 import ApprovalHistory from '@/features/approval/ui/ApprovalHistory.vue'
 
 const props = defineProps<{
@@ -44,9 +44,9 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
       id: '2',
       action: 'approve',
       operator: 'admin',
-      operatorName: '李主�?,
+      operatorName: '李主任',
       operateTime: new Date('2025-11-22'),
-      comment: '审批通过，请按计划执�?
+      comment: '审批通过，请按计划执行'
     }
   ]
 })
@@ -66,7 +66,7 @@ const getTypeTagType = (type: string) => {
 }
 
 const getType2TagType = (type: string) => {
-  return type === '基础�? ? 'info' : 'warning'
+  return type === '基础型' ? 'info' : 'warning'
 }
 
 const getProgressStatus = (progress: number) => {
@@ -136,7 +136,7 @@ const getActionLabel = (action: string) => {
                   {{ indicator.type2 }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="目标值?>
+              <el-descriptions-item label="目标值">
                 {{ indicator.targetValue }} {{ indicator.unit }}
               </el-descriptions-item>
               <el-descriptions-item label="权重">
@@ -145,14 +145,14 @@ const getActionLabel = (action: string) => {
               <el-descriptions-item label="责任部门">
                 {{ indicator.responsibleDept }}
               </el-descriptions-item>
-              <el-descriptions-item label="责任�?>
+              <el-descriptions-item label="责任人">
                 {{ indicator.responsiblePerson }}
               </el-descriptions-item>
               <el-descriptions-item label="创建时间" :span="2">
                 {{ formatDate(indicator.createTime) }}
               </el-descriptions-item>
               <el-descriptions-item label="备注" :span="2">
-                {{ indicator.remark || '�? }}
+                {{ indicator.remark || '无' }}
               </el-descriptions-item>
             </el-descriptions>
             
@@ -168,8 +168,8 @@ const getActionLabel = (action: string) => {
           </div>
         </el-tab-pane>
 
-        <!-- 里程碑进�?-->
-        <el-tab-pane label="里程�? name="milestones">
+        <!-- 里程碑进度 -->
+        <el-tab-pane label="里程碑" name="milestones">
           <MilestoneTimeline :milestones="indicator.milestones" />
         </el-tab-pane>
 
@@ -192,14 +192,14 @@ const getActionLabel = (action: string) => {
                   <el-tag size="small">{{ getActionLabel(row.action) }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="operatorName" label="操作�? width="100" />
+              <el-table-column prop="operatorName" label="操作人" width="100" />
               <el-table-column label="变更内容">
                 <template #default="{ row }">
                   <div v-if="row.changes && row.changes.length > 0">
                     <div v-for="change in row.changes" :key="change.field" class="change-item">
                       <span class="field-label">{{ change.fieldLabel }}:</span>
                       <span class="old-value">{{ change.oldValue }}</span>
-                      <span class="arrow">�?/span>
+                      <span class="arrow">→</span>
                       <span class="new-value">{{ change.newValue }}</span>
                     </div>
                   </div>

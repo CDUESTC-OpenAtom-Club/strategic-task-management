@@ -5,57 +5,19 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient } from '@/shared/api/client'
+import { apiClient, withRetry } from '@/shared/lib/api'
 /* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
-import type { 
-  ApiResponse, 
-  StrategicTask, 
+import type {
+  ApiResponse,
+  StrategicTask,
   StrategicIndicator,
   CreateStrategicTaskRequest,
   UpdateStrategicTaskRequest,
   PendingApproval
 } from '@/types'
 /* eslint-enable no-restricted-syntax */
-import { logger } from '@/utils/logger'
 // 导入统一的 IndicatorVO 接口，避免重复定义
 import type { IndicatorVO, TaskVO as StrategicTaskVO, AssessmentCycleVO } from '@/types/backend-aligned'
-
-/**
- * 指数退避重试辅助函数
- * 在业务层实现重试逻辑，而不是在 apiClient 中
- */
-async function withRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> {
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation()
-    } catch (error: unknown) {
-      lastError = error
-      
-      // 如果是 4xx 错误，不重试
-      if (error.code >= 400 && error.code < 500) {
-        throw error
-      }
-
-      // 最后一次尝试，直接抛出错误
-      if (attempt === maxRetries) {
-        throw error
-      }
-
-      // 指数退避延迟
-      const delay = baseDelay * Math.pow(2, attempt)
-      logger.warn(`[API] Retry attempt ${attempt + 1}/${maxRetries} after ${delay}ms`, { error: error.message })
-      await new Promise(resolve => setTimeout(resolve, delay))
-    }
-  }
-
-  throw lastError
-}
 
 /**
  * 将后端 VO 转换为前端 StrategicTask 类型
