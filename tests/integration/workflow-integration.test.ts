@@ -1,6 +1,6 @@
 /**
  * Complete Workflow Integration Tests
- * 
+ *
  * End-to-end integration tests combining API, state, and routing.
  */
 
@@ -9,6 +9,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useIndicatorStore } from '@/features/strategic-indicator/model/store'
 import type { User } from '@/entities/user/model/types'
+import { getTestCredentials } from '../../helpers/testCredentials'
 
 // Mock all dependencies
 vi.mock('@/api', () => ({
@@ -64,23 +65,24 @@ describe('Complete Workflow Integration', () => {
       // Step 2: Mock successful login
       const mockApi = await import('@/api')
       const mockAuthHelpers = await import('@/utils/authHelpers')
-      
+
       mockApi.default.post.mockResolvedValue({
         code: 0,
         data: { token: 'workflow-token', user: mockUser }
       })
-      
+
       mockAuthHelpers.parseLoginResponse.mockReturnValue({
         success: true,
         data: { token: 'workflow-token', user: mockUser }
       })
-      
+
       mockAuthHelpers.mapBackendUser.mockReturnValue(mockUser)
 
       // Step 3: Perform login
+      const testCreds = getTestCredentials('STANDARD')
       const loginResult = await authStore.login({
-        username: 'testuser',
-        password: 'password123'
+        username: testCreds.username,
+        password: testCreds.password
       })
 
       // Step 4: Verify authentication state
@@ -90,7 +92,7 @@ describe('Complete Workflow Integration', () => {
 
       // Step 5: Mock data fetch
       const mockQuery = await import('@/features/strategic-indicator/api/query')
-      
+
       mockQuery.queryIndicators.mockResolvedValue({
         content: [],
         totalElements: 0

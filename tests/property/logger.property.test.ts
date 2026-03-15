@@ -1,11 +1,11 @@
 /**
  * Property-Based Tests for Logger Utility
- * 
+ *
  * **Feature: sism-enterprise-optimization**
- * 
+ *
  * These tests verify the correctness properties P3 and P4 defined in the design document
  * for the unified logging utility.
- * 
+ *
  * **Validates: Requirements 1.3.1, 1.3.2, 1.3.3, 1.3.4, 1.3.5**
  */
 
@@ -17,8 +17,9 @@ import {
   isSensitiveField,
   shouldLog,
   REDACTED_VALUE,
-  type LogLevel,
+  type LogLevel
 } from '@/utils/logger'
+import { getTestCredentials, getMockToken } from '../helpers/testCredentials'
 
 // 所有日志级别
 const _ALL_LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
@@ -28,15 +29,15 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
   warn: 2,
-  error: 3,
+  error: 3
 }
 
 /**
  * **Property P3: 日志敏感数据过滤**
  * **Validates: Requirements 1.3.4**
- * 
+ *
  * 属性: 对于任意包含敏感字段的对象，日志输出不应包含原始敏感值。
- * 
+ *
  * ∀ obj with sensitiveFields, ∀ logLevel:
  *   log(logLevel, obj) → output ∩ sensitiveValues(obj) = ∅
  */
@@ -88,34 +89,26 @@ describe('Property P3: 日志敏感数据过滤', () => {
 
   it('should redact sensitive field values in objects', () => {
     fc.assert(
-      fc.property(
-        sensitiveFieldArb,
-        sensitiveValueArb,
-        (fieldName, sensitiveValue) => {
-          const obj = { [fieldName]: sensitiveValue }
-          const filtered = filterSensitiveData(obj) as Record<string, unknown>
-          
-          // 敏感字段的值应该被替换为 REDACTED
-          return filtered[fieldName] === REDACTED_VALUE
-        }
-      ),
+      fc.property(sensitiveFieldArb, sensitiveValueArb, (fieldName, sensitiveValue) => {
+        const obj = { [fieldName]: sensitiveValue }
+        const filtered = filterSensitiveData(obj) as Record<string, unknown>
+
+        // 敏感字段的值应该被替换为 REDACTED
+        return filtered[fieldName] === REDACTED_VALUE
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should preserve non-sensitive field values', () => {
     fc.assert(
-      fc.property(
-        nonSensitiveFieldArb,
-        fc.string(),
-        (fieldName, value) => {
-          const obj = { [fieldName]: value }
-          const filtered = filterSensitiveData(obj) as Record<string, unknown>
-          
-          // 非敏感字段的值应该保持不变
-          return filtered[fieldName] === value
-        }
-      ),
+      fc.property(nonSensitiveFieldArb, fc.string(), (fieldName, value) => {
+        const obj = { [fieldName]: value }
+        const filtered = filterSensitiveData(obj) as Record<string, unknown>
+
+        // 非敏感字段的值应该保持不变
+        return filtered[fieldName] === value
+      }),
       { numRuns: 100 }
     )
   })
@@ -132,12 +125,12 @@ describe('Property P3: 日志敏感数据过滤', () => {
             [normalField]: normalValue,
             nested: {
               [sensitiveField]: sensitiveValue,
-              other: 'visible',
-            },
+              other: 'visible'
+            }
           }
           const filtered = filterSensitiveData(obj) as Record<string, unknown>
           const nestedFiltered = filtered.nested as Record<string, unknown>
-          
+
           // 嵌套对象中的敏感字段也应该被过滤
           return (
             nestedFiltered[sensitiveField] === REDACTED_VALUE &&
@@ -158,7 +151,7 @@ describe('Property P3: 日志敏感数据过滤', () => {
         (fieldName, values) => {
           const arr = values.map(v => ({ [fieldName]: v }))
           const filtered = filterSensitiveData(arr) as Array<Record<string, unknown>>
-          
+
           // 数组中每个对象的敏感字段都应该被过滤
           return filtered.every(item => item[fieldName] === REDACTED_VALUE)
         }
@@ -176,18 +169,19 @@ describe('Property P3: 日志敏感数据过滤', () => {
         fc.string(),
         (sensitiveField, sensitiveValue, normalField, normalValue) => {
           // 确保字段名不同
-          if (sensitiveField === normalField) {return true}
-          
+          if (sensitiveField === normalField) {
+            return true
+          }
+
           const obj = {
             [sensitiveField]: sensitiveValue,
-            [normalField]: normalValue,
+            [normalField]: normalValue
           }
           const filtered = filterSensitiveData(obj) as Record<string, unknown>
-          
+
           // 敏感字段被过滤，非敏感字段保持不变
           return (
-            filtered[sensitiveField] === REDACTED_VALUE &&
-            filtered[normalField] === normalValue
+            filtered[sensitiveField] === REDACTED_VALUE && filtered[normalField] === normalValue
           )
         }
       ),
@@ -197,24 +191,18 @@ describe('Property P3: 日志敏感数据过滤', () => {
 
   it('should correctly identify sensitive field names', () => {
     fc.assert(
-      fc.property(
-        sensitiveFieldArb,
-        (fieldName) => {
-          return isSensitiveField(fieldName) === true
-        }
-      ),
+      fc.property(sensitiveFieldArb, fieldName => {
+        return isSensitiveField(fieldName) === true
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should correctly identify non-sensitive field names', () => {
     fc.assert(
-      fc.property(
-        nonSensitiveFieldArb,
-        (fieldName) => {
-          return isSensitiveField(fieldName) === false
-        }
-      ),
+      fc.property(nonSensitiveFieldArb, fieldName => {
+        return isSensitiveField(fieldName) === false
+      }),
       { numRuns: 100 }
     )
   })
@@ -226,12 +214,9 @@ describe('Property P3: 日志敏感数据过滤', () => {
 
   it('should handle primitive values', () => {
     fc.assert(
-      fc.property(
-        fc.oneof(fc.string(), fc.integer(), fc.boolean()),
-        (value) => {
-          return filterSensitiveData(value) === value
-        }
-      ),
+      fc.property(fc.oneof(fc.string(), fc.integer(), fc.boolean()), value => {
+        return filterSensitiveData(value) === value
+      }),
       { numRuns: 100 }
     )
   })
@@ -239,7 +224,7 @@ describe('Property P3: 日志敏感数据过滤', () => {
   it('should handle circular references gracefully', () => {
     const obj: Record<string, unknown> = { name: 'test' }
     obj.self = obj
-    
+
     // 不应该抛出错误
     const filtered = filterSensitiveData(obj) as Record<string, unknown>
     expect(filtered.name).toBe('test')
@@ -250,9 +235,9 @@ describe('Property P3: 日志敏感数据过滤', () => {
 /**
  * **Property P4: 日志级别控制**
  * **Validates: Requirements 1.3.1, 1.3.2, 1.3.3**
- * 
+ *
  * 属性: 当日志级别设置为 L 时，只有级别 ≥ L 的日志才会输出。
- * 
+ *
  * ∀ configLevel ∈ LogLevels, ∀ logLevel ∈ LogLevels:
  *   setLevel(configLevel) → log(logLevel, msg) outputs iff logLevel ≥ configLevel
  */
@@ -276,12 +261,12 @@ describe('Property P4: 日志级别控制', () => {
         logLevelArb,
         logLevelArb,
         fc.string({ minLength: 1 }),
-        (configLevel, logLevel, message) => {
+        (configLevel, logLevel, _message) => {
           logger.setLevel(configLevel)
-          
+
           const expectedOutput = LOG_LEVEL_PRIORITY[logLevel] >= LOG_LEVEL_PRIORITY[configLevel]
           const actualOutput = shouldLog(logLevel, configLevel)
-          
+
           return actualOutput === expectedOutput
         }
       ),
@@ -291,61 +276,46 @@ describe('Property P4: 日志级别控制', () => {
 
   it('should not output debug logs when level is info or higher', () => {
     fc.assert(
-      fc.property(
-        fc.constantFrom<LogLevel>('info', 'warn', 'error'),
-        (configLevel) => {
-          return shouldLog('debug', configLevel) === false
-        }
-      ),
+      fc.property(fc.constantFrom<LogLevel>('info', 'warn', 'error'), configLevel => {
+        return shouldLog('debug', configLevel) === false
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should not output info logs when level is warn or higher', () => {
     fc.assert(
-      fc.property(
-        fc.constantFrom<LogLevel>('warn', 'error'),
-        (configLevel) => {
-          return shouldLog('info', configLevel) === false
-        }
-      ),
+      fc.property(fc.constantFrom<LogLevel>('warn', 'error'), configLevel => {
+        return shouldLog('info', configLevel) === false
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should always output error logs regardless of config level', () => {
     fc.assert(
-      fc.property(
-        logLevelArb,
-        (configLevel) => {
-          return shouldLog('error', configLevel) === true
-        }
-      ),
+      fc.property(logLevelArb, configLevel => {
+        return shouldLog('error', configLevel) === true
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should always output warn logs when level is warn or lower', () => {
     fc.assert(
-      fc.property(
-        fc.constantFrom<LogLevel>('debug', 'info', 'warn'),
-        (configLevel) => {
-          return shouldLog('warn', configLevel) === true
-        }
-      ),
+      fc.property(fc.constantFrom<LogLevel>('debug', 'info', 'warn'), configLevel => {
+        return shouldLog('warn', configLevel) === true
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should correctly track current log level', () => {
     fc.assert(
-      fc.property(
-        logLevelArb,
-        (level) => {
-          logger.setLevel(level)
-          return logger.getLevel() === level
-        }
-      ),
+      fc.property(logLevelArb, level => {
+        logger.setLevel(level)
+        return logger.getLevel() === level
+      }),
       { numRuns: 100 }
     )
   })
@@ -359,13 +329,10 @@ describe('Property P4: 日志级别控制', () => {
 
   it('should output logs at exact config level', () => {
     fc.assert(
-      fc.property(
-        logLevelArb,
-        (level) => {
-          // 当配置级别和日志级别相同时，应该输出
-          return shouldLog(level, level) === true
-        }
-      ),
+      fc.property(logLevelArb, level => {
+        // 当配置级别和日志级别相同时，应该输出
+        return shouldLog(level, level) === true
+      }),
       { numRuns: 100 }
     )
   })
@@ -378,16 +345,16 @@ describe('Property P4: 日志级别控制', () => {
         fc.string({ minLength: 1, maxLength: 50 }),
         (configLevel, logLevel, message) => {
           logger.setLevel(configLevel)
-          
+
           let outputCaptured = false
           let capturedLevel: LogLevel | null = null
-          
+
           // 设置输出捕获
           logger._setOutputCapture((level: LogLevel) => {
             outputCaptured = true
             capturedLevel = level
           })
-          
+
           // 调用对应的日志方法
           switch (logLevel) {
             case 'debug':
@@ -403,12 +370,12 @@ describe('Property P4: 日志级别控制', () => {
               logger.error(message)
               break
           }
-          
+
           // 清理捕获
           logger._setOutputCapture(null)
-          
+
           const shouldOutput = LOG_LEVEL_PRIORITY[logLevel] >= LOG_LEVEL_PRIORITY[configLevel]
-          
+
           if (shouldOutput) {
             return outputCaptured && capturedLevel === logLevel
           } else {
@@ -435,36 +402,45 @@ describe('Logger Integration Tests', () => {
 
   it('should filter sensitive data in log arguments', () => {
     let capturedArgs: unknown[] = []
-    
+
     logger._setOutputCapture((_level: LogLevel, _message: string, args: unknown[]) => {
       capturedArgs = args
     })
-    
-    logger.info('User login', { username: 'test', password: 'secret123', token: 'abc123' })
-    
+
+    // Use mock credentials for testing - these should be filtered
+    const testCreds = getTestCredentials('STANDARD')
+    const mockToken = getMockToken('VALID')
+    logger.info('User login', {
+      username: testCreds.username,
+      password: testCreds.password,
+      token: mockToken
+    })
+
     const loggedData = capturedArgs[0] as Record<string, unknown>
-    expect(loggedData.username).toBe('test')
+    expect(loggedData.username).toBe(testCreds.username)
     expect(loggedData.password).toBe(REDACTED_VALUE)
     expect(loggedData.token).toBe(REDACTED_VALUE)
   })
 
   it('should handle multiple arguments with sensitive data', () => {
     let capturedArgs: unknown[] = []
-    
+
     logger._setOutputCapture((_level: LogLevel, _message: string, args: unknown[]) => {
       capturedArgs = args
     })
-    
+
     logger.debug(
       'API call',
       { url: '/api/login' },
       { authorization: 'Bearer xyz' },
       { data: { apiKey: 'key123' } }
     )
-    
+
     expect((capturedArgs[0] as Record<string, unknown>).url).toBe('/api/login')
     expect((capturedArgs[1] as Record<string, unknown>).authorization).toBe(REDACTED_VALUE)
-    expect(((capturedArgs[2] as Record<string, unknown>).data as Record<string, unknown>).apiKey).toBe(REDACTED_VALUE)
+    expect(
+      ((capturedArgs[2] as Record<string, unknown>).data as Record<string, unknown>).apiKey
+    ).toBe(REDACTED_VALUE)
   })
 
   it('should handle empty objects and arrays', () => {
@@ -476,7 +452,7 @@ describe('Logger Integration Tests', () => {
     const date = new Date()
     const obj = { createdAt: date, token: 'secret' }
     const filtered = filterSensitiveData(obj) as Record<string, unknown>
-    
+
     expect(filtered.createdAt).toBe(date)
     expect(filtered.token).toBe(REDACTED_VALUE)
   })

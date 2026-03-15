@@ -26,7 +26,7 @@ export function mockApiPlugin(options: MockApiPluginOptions = {}): Plugin {
         return
       }
 
-      console.log('🎭 [Mock API Plugin] 已启用基础 mock 服务')
+      // console.log('🎭 [Mock API Plugin] 已启用基础 mock 服务')
 
       // 添加简单的 mock 服务中间件
       server.middlewares.use((req, res, next) => {
@@ -52,7 +52,7 @@ export function mockApiPlugin(options: MockApiPluginOptions = {}): Plugin {
         return
       }
 
-      console.log('🎭 [Mock API Plugin] 构建完成，mock 服务已停止')
+      // console.log('🎭 [Mock API Plugin] 构建完成，mock 服务已停止')
     }
   }
 }

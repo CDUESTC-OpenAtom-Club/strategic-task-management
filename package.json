@@ -22,6 +22,7 @@
     "@element-plus/icons-vue": "^2.3.2",
     "@types/nprogress": "^0.2.3",
     "axios": "^1.7.9",
+    "commitlint": "^20.4.4",
     "dayjs": "^1.11.13",
     "dotenv": "^17.2.3",
     "echarts": "^5.5.1",

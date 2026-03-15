@@ -16,6 +16,7 @@ import {
   validateMilestone,
   validateLoginCredentials
 } from '@/types/schemas'
+import { TEST_CREDENTIALS } from '../helpers/testCredentials'
 
 describe('Zod Schemas', () => {
   describe('UserRoleSchema', () => {
@@ -169,7 +170,7 @@ describe('Zod Schemas', () => {
     it('should accept valid credentials', () => {
       const credentials = {
         username: 'testuser',
-        password: 'password123'
+        password: TEST_CREDENTIALS.STANDARD.password
       }
       const result = LoginCredentialsSchema.parse(credentials)
       expect(result.username).toBe('testuser')
@@ -178,7 +179,7 @@ describe('Zod Schemas', () => {
     it('should reject empty username', () => {
       const credentials = {
         username: '',
-        password: 'password123'
+        password: TEST_CREDENTIALS.STANDARD.password
       }
       expect(() => LoginCredentialsSchema.parse(credentials)).toThrow()
     })
@@ -186,7 +187,7 @@ describe('Zod Schemas', () => {
     it('should reject short password', () => {
       const credentials = {
         username: 'testuser',
-        password: '12345'
+        password: TEST_CREDENTIALS.WEAK.password
       }
       expect(() => LoginCredentialsSchema.parse(credentials)).toThrow()
     })
@@ -285,7 +286,7 @@ describe('Zod Schemas', () => {
       it('should return success for valid credentials', () => {
         const credentials = {
           username: 'testuser',
-          password: 'password123'
+          password: TEST_CREDENTIALS.STANDARD.password
         }
 
         const result = validateLoginCredentials(credentials)
@@ -296,7 +297,7 @@ describe('Zod Schemas', () => {
       it('should return errors for invalid credentials', () => {
         const credentials = {
           username: '',
-          password: '123'
+          password: TEST_CREDENTIALS.WEAK.password
         }
 
         const result = validateLoginCredentials(credentials)

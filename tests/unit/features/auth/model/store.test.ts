@@ -1,6 +1,6 @@
 /**
  * Unit Tests for Auth Store
- * 
+ *
  * Tests for features/auth/model/store.ts
  */
 
@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/features/auth/model/store'
 import type { User } from '@/types'
+import { getTestCredentials } from '../../../../helpers/testCredentials'
 
 // Mock dependencies
 vi.mock('@/api', () => ({
@@ -66,10 +67,10 @@ describe('Auth Store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     authStore = useAuthStore()
-    
+
     // Clear localStorage
     localStorage.clear()
-    
+
     // Reset all mocks
     vi.clearAllMocks()
   })
@@ -105,7 +106,7 @@ describe('Auth Store', () => {
 
     it('should compute isAuthenticated correctly', () => {
       expect(authStore.isAuthenticated).toBe(true)
-      
+
       authStore.token = null
       expect(authStore.isAuthenticated).toBe(false)
     })
@@ -128,30 +129,30 @@ describe('Auth Store', () => {
 
     it('should compute effective role and department with viewing as', () => {
       authStore.setViewingAs('functional_dept', 'Finance Department')
-      
+
       expect(authStore.effectiveRole).toBe('functional_dept')
       expect(authStore.effectiveDepartment).toBe('Finance Department')
     })
   })
 
   describe('Login Action', () => {
-    const mockCredentials = { username: 'testuser', password: 'password' }
-    
+    const mockCredentials = getTestCredentials('STANDARD')
+
     it('should handle successful login', async () => {
       const mockApi = await import('@/api')
       const mockAuthHelpers = await import('@/utils/authHelpers')
-      
+
       // Mock successful API response
       mockApi.default.post.mockResolvedValue({
         code: 0,
         data: { token: 'mock-token', user: mockUser }
       })
-      
+
       mockAuthHelpers.parseLoginResponse.mockReturnValue({
         success: true,
         data: { token: 'mock-token', user: mockUser }
       })
-      
+
       mockAuthHelpers.mapBackendUser.mockReturnValue(mockUser)
 
       const result = await authStore.login(mockCredentials)
@@ -179,7 +180,7 @@ describe('Auth Store', () => {
     it('should handle parse error', async () => {
       const mockApi = await import('@/api')
       const mockAuthHelpers = await import('@/utils/authHelpers')
-      
+
       mockApi.default.post.mockResolvedValue({ code: 0 })
       mockAuthHelpers.parseLoginResponse.mockReturnValue({
         success: false,
@@ -203,7 +204,7 @@ describe('Auth Store', () => {
 
     it('should clear all auth data', () => {
       const mockTokenManager = vi.mocked(await import('@/utils/tokenManager'))
-      
+
       authStore.logout()
 
       expect(authStore.user).toBe(null)
@@ -232,14 +233,14 @@ describe('Auth Store', () => {
 
     it('should handle functional_dept permissions', () => {
       authStore.user = { ...mockUser, role: 'functional_dept' }
-      
+
       expect(authStore.hasPermission('indicators', 'read')).toBe(true)
       expect(authStore.hasPermission('strategic_tasks', 'create')).toBe(false)
     })
 
     it('should handle secondary_college permissions', () => {
       authStore.user = { ...mockUser, role: 'secondary_college' }
-      
+
       expect(authStore.hasPermission('reports', 'create')).toBe(true)
       expect(authStore.hasPermission('indicators', 'create')).toBe(false)
     })
@@ -252,7 +253,7 @@ describe('Auth Store', () => {
 
     it('should set viewing as role and department', () => {
       authStore.setViewingAs('functional_dept', 'Finance Department')
-      
+
       expect(authStore.viewingAsRole).toBe('functional_dept')
       expect(authStore.viewingAsDepartment).toBe('Finance Department')
       expect(authStore.effectiveRole).toBe('functional_dept')
@@ -262,7 +263,7 @@ describe('Auth Store', () => {
     it('should reset viewing as', () => {
       authStore.setViewingAs('functional_dept', 'Finance Department')
       authStore.resetViewingAs()
-      
+
       expect(authStore.viewingAsRole).toBe(null)
       expect(authStore.viewingAsDepartment).toBe(null)
       expect(authStore.effectiveRole).toBe('strategic_dept')
@@ -274,7 +275,7 @@ describe('Auth Store', () => {
     it('should fetch user data when token exists', async () => {
       const mockApi = await import('@/api')
       authStore.token = 'mock-token'
-      
+
       mockApi.default.get.mockResolvedValue({
         code: 0,
         data: mockUser
@@ -289,7 +290,7 @@ describe('Auth Store', () => {
     it('should logout on fetch user failure', async () => {
       const mockApi = await import('@/api')
       authStore.token = 'mock-token'
-      
+
       mockApi.default.get.mockRejectedValue(new Error('Unauthorized'))
 
       const logoutSpy = vi.spyOn(authStore, 'logout')
