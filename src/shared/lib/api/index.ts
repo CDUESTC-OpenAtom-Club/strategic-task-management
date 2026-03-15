@@ -1,6 +1,6 @@
 /**
  * API Module
- * 
+ *
  * Unified API client with comprehensive features:
  * - Request/response interceptors
  * - Authentication token handling
@@ -9,21 +9,21 @@
  * - Automatic retry with exponential backoff
  * - Request cancellation support
  * - Loading state management
- * 
+ *
  * Usage:
  * ```typescript
  * import { apiClient } from '@/shared/lib/api'
- * 
+ *
  * // Simple GET request
  * const data = await apiClient.get('/users')
- * 
+ *
  * // POST with data
  * const result = await apiClient.post('/users', { name: 'John' })
- * 
+ *
  * // With cancellation
  * const cancelToken = apiClient.createCancelToken('fetchUsers')
  * const users = await apiClient.get('/users', {}, { cancelToken })
- * 
+ *
  * // Cancel request
  * apiClient.cancelRequest('fetchUsers')
  * ```
@@ -68,8 +68,4 @@ export {
 } from './retry'
 
 // Export wrapper functions for explicit retry
-export {
-  withRetry,
-  withExponentialRetry,
-  apiClient
-} from './wrappers'
+export { withRetry, withExponentialRetry } from './wrappers'
