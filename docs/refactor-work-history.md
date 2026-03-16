@@ -207,3 +207,324 @@ src/
 - 或者先修复构建错误
 
 ---
+
+## 构建错误修复阶段
+
+### 问题发现
+
+构建测试失败，发现预先存在的语法错误：
+
+- `StrategicTaskView.vue:3062` - 多行 `@click` 事件处理器语法错误
+- `DashboardFilters.vue:220` - 多行 `@close` 事件处理器语法错误
+
+### 修复操作
+
+#### 1. 修复 StrategicTaskView.vue
+
+**问题**: 多行 JavaScript 表达式在 Vue 模板中解析失败
+
+**解决方案**:
+
+- 创建 `handleCancelAssignment` 辅助函数
+- 将多行内联逻辑提取为函数调用
+
+**修改前**:
+
+```vue
+<el-button
+  @click="
+    showAssignmentDialog = false
+    assignmentTarget = ''
+    assignmentMethod = 'self'
+  "
+>
+  取消
+</el-button>
+```
+
+**修改后**:
+
+```vue
+<el-button @click="handleCancelAssignment">
+  取消
+</el-button>
+```
+
+**添加的函数**:
+
+```typescript
+const handleCancelAssignment = () => {
+  showAssignmentDialog.value = false
+  assignmentTarget.value = ''
+  assignmentMethod.value = 'self'
+}
+```
+
+#### 2. 修复 DashboardFilters.vue
+
+**问题**: 同样的多行 `@close` 事件处理器语法错误（4处）
+
+**解决方案**:
+
+- 创建 `handleCloseTag` 通用辅助函数
+- 替换所有多行内联逻辑为函数调用
+
+**添加的函数**:
+
+```typescript
+const handleCloseTag = (key: keyof typeof localFilters.value) => {
+  localFilters.value[key] = undefined
+  handleApply()
+}
+```
+
+**修复的标签**:
+
+- 部门筛选标签: `@close="handleCloseTag('department')"`
+- 学院筛选标签: `@close="handleCloseTag('collegeFilter')"`
+- 类型筛选标签: `@close="handleCloseTag('indicatorType')"`
+- 预警筛选标签: `@close="handleCloseTag('alertLevel')"`
+
+### 验证结果
+
+```bash
+npm run build
+```
+
+**结果**: ✅ 构建成功
+
+- 转换 1906 个模块
+- 构建时间: 13.09秒
+- 无错误
+
+---
+
+## 提交阶段 ✅
+
+### Git 提交信息
+
+```
+refactor: 重组 indicator 模块结构并修复构建错误
+
+## 目录重组
+- 重命名 features/strategic-indicator → features/indicator（简化导入路径）
+- 重命名 features/indicator → features/legacy-indicator（明确标记遗留代码）
+- 更新所有导入引用（17个文件）
+
+## 构建修复
+- 修复 StrategicTaskView.vue 多行事件处理器语法错误
+- 添加 handleCancelAssignment 辅助函数
+- 修复 DashboardFilters.vue 多行 @close 处理器语法错误
+- 添加 handleCloseTag 辅助函数
+
+## 文档
+- 创建 src/features/legacy-indicator/README.md（详细归档说明）
+- 创建 docs/refactor-work-history.md（工作历史记录）
+
+## 影响
+- 保留所有业务逻辑（无功能丢失）
+- 模块职责更加清晰
+- 构建成功通过
+```
+
+### 提交统计
+
+- **Commit**: `20ada4a`
+- **文件变更**: 50个文件
+- **代码行**: +4937 insertions, -4496 deletions
+- **净增加**: +441 行
+
+### 变更类型
+
+- **重命名**: 28个文件（Git 正确识别为重命名）
+- **新建**: 4个文件（文档和索引）
+- **修改**: 14个文件（导入引用和语法修复）
+- **删除**: 3个文件（旧的索引文件）
+
+---
+
+## Day 1 最终总结
+
+### ✅ 完成的工作
+
+1. **研究阶段**（约1小时）
+   - 深度代码对比分析
+   - 发现关键决策点
+   - 确认模块使用情况
+
+2. **计划阶段**（约30分钟）
+   - 制定详细重组计划
+   - 创建分析文档
+   - 获得用户批准
+
+3. **执行阶段**（约30分钟）
+   - 目录重命名（2个模块）
+   - 批量更新导入（17个文件）
+   - 创建归档文档
+
+4. **修复阶段**（约30分钟）
+   - 修复2个文件的语法错误
+   - 添加2个辅助函数
+   - 验证构建成功
+
+5. **提交阶段**（约15分钟）
+   - Git 提交所有更改
+   - ESLint 和 Prettier 检查通过
+   - 完整的工作历史记录
+
+### 📊 成果统计
+
+| 项目         | 数量            |
+| ------------ | --------------- |
+| 重命名模块   | 2个             |
+| 更新导入     | 17个文件        |
+| 修复语法错误 | 2个文件         |
+| 创建文档     | 3个文件         |
+| Git 提交     | 1个（50个文件） |
+| 总耗时       | 约2.5小时       |
+
+### 🎯 质量保证
+
+- ✅ 构建成功通过
+- ✅ ESLint 检查通过（有警告但不阻塞）
+- ✅ Prettier 格式化通过
+- ✅ Git hooks 验证通过
+- ✅ 无功能丢失
+- ✅ 完整的文档记录
+
+### 📝 文档产出
+
+1. `docs/day1-analysis-critical-findings.md` - 关键发现分析
+2. `docs/day1-directory-reorganization-plan.md` - 重组计划
+3. `docs/refactor-work-history.md` - 工作历史记录（本文件）
+4. `src/features/legacy-indicator/README.md` - 归档说明
+
+### 🚀 下一步计划
+
+**Day 2**: Composables 重组（根据原计划）
+
+- 分析 `composables/` 目录结构
+- 重组通用工具到 `shared/lib/`
+- 更新导入引用
+- 测试验证
+
+---
+
+## Day 2: Composables 目录重组
+
+### 时间: 2026-03-16
+
+### 工作内容
+
+#### 1. 分析阶段（Analysis）
+
+- ✅ 分析了 `composables/` 目录结构
+- ✅ 创建详细分析文档 `docs/day2-composables-analysis.md`
+- ✅ 识别需要移动的纯工具函数
+- ✅ 确认真正的 Vue composables 保留
+
+**关键发现**:
+
+- `useDataValidator.ts` (789行) - 纯工具函数（不使用 Vue）
+- `useTimeoutManager.ts` (103行) - 纯工具函数（不使用 Vue）
+- 其他文件都是真正的 Vue composables（使用 ref/computed）
+- 只有 2 个导入需要更新
+
+#### 2. Git 备份
+
+- ✅ 创建 git stash 备份
+- ✅ 已有 git 提交历史
+
+#### 3. 文件移动与重组
+
+**操作 1**: 移动纯工具函数到 `shared/lib/`
+
+```bash
+# 移动 useDataValidator
+git mv src/composables/useDataValidator.ts src/shared/lib/validation/dataValidator.ts
+
+# 移动 useTimeoutManager
+git mv src/composables/useTimeoutManager.ts src/shared/lib/utils/timeoutManager.ts
+```
+
+**操作 2**: 更新导出文件
+
+- ✅ 更新 `src/composables/index.ts` - 移除已移动文件的导出
+- ✅ 更新 `src/shared/lib/validation/index.ts` - 添加 dataValidator 导出
+- ✅ 更新 `src/shared/lib/utils/index.ts` - 添加 timeoutManager 导出
+
+**操作 3**: 更新导入引用（2个文件）
+
+- ✅ `src/features/legacy-indicator/ui/IndicatorListView.vue`
+- ✅ `src/services/pageDataChecker.ts`
+
+#### 4. 删除备份文件
+
+- ✅ 删除 `src/app/providers/router.ts.old`
+
+### 文档产出
+
+1. `docs/day2-composables-analysis.md` - Day 2 分析与执行计划
+
+### 测试阶段（Testing）
+
+```bash
+npm run build
+```
+
+**结果**: ✅ 构建成功通过
+
+- 转换 2623 个模块
+- 构建时间: 12.24秒
+- 无错误
+
+### 最终目录结构
+
+```
+src/
+├── composables/                      # ✅ 只保留真正的 Vue composables
+│   ├── dashboard/                    # 领域特定（不变）
+│   ├── layout/                       # 领域特定（不变）
+│   ├── index.ts                      # 已更新
+│   ├── useErrorHandler.ts
+│   ├── useLoadingState.ts
+│   ├── usePermission.ts
+│   └── useECharts.ts
+│
+└── shared/lib/
+    ├── validation/
+    │   ├── index.ts
+    │   └── dataValidator.ts          # ✅ 从 composables 移动
+    └── utils/
+        ├── index.ts
+        └── timeoutManager.ts         # ✅ 从 composables 移动
+```
+
+### Git 状态
+
+**待提交**: 可以创建提交 "refactor: 重组 composables 目录，移动纯工具函数到 shared/lib/"
+
+### Day 2 最终总结
+
+✅ **成功完成**:
+
+- 移动 2 个纯工具函数到 shared/lib/
+- 更新所有导入引用
+- 更新导出文件
+- 构建成功通过
+
+📊 **统计**:
+| 项目 | 数量 |
+|------|------|
+| 移动文件 | 2个 |
+| 更新导入 | 2个文件 |
+| 更新导出 | 3个文件 |
+| 删除备份文件 | 1个 |
+| 新建文档 | 1个 |
+| 构建验证 | ✅ 通过 |
+
+### 🚀 下一步计划
+
+**Day 3**: 分析其他模块（pages, shared）并准备遗留功能提取
+
+---

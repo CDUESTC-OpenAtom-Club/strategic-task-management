@@ -42,3 +42,9 @@ export { performanceMonitor, recordApiLatency } from './performance'
 
 // Token 管理
 export { tokenManager, TokenRefreshError } from './tokenManager'
+
+// ============================================================================
+// 新增: 从 composables 移动过来的工具
+// ============================================================================
+
+export * from './timeoutManager'

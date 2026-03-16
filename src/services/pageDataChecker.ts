@@ -1,12 +1,12 @@
 /**
  * 页面数据检查服务
- * 
+ *
  * 用于系统性验证各页面数据是否正确从数据库获取
- * 
+ *
  * Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 8.4
  */
 import type { StrategicIndicator } from '@/types'
-import { useDataValidator } from '@/composables/useDataValidator'
+import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 
 // ============================================================================
 // 类型定义
@@ -43,7 +43,6 @@ export interface CheckReport {
   }
   pageResults: PageCheckResult[]
 }
-
 
 // ============================================================================
 // PageDataChecker 类
@@ -111,7 +110,6 @@ export class PageDataChecker {
     }
   }
 
-
   /**
    * 检查指标列表页面数据
    */
@@ -178,7 +176,9 @@ export class PageDataChecker {
     const deptWeights = new Map<string, number>()
     strategicIndicators.forEach(i => {
       const dept = i.responsibleDept
-      if (!dept) {return} // Skip indicators without responsible department
+      if (!dept) {
+        return
+      } // Skip indicators without responsible department
       const current = deptWeights.get(dept) || 0
       deptWeights.set(dept, current + (i.weight || 0))
     })
@@ -206,25 +206,30 @@ export class PageDataChecker {
     }
   }
 
-
   /**
    * 生成检查报告
    */
   generateReport(results: PageCheckResult[]): CheckReport {
     const totalIssues = results.reduce((sum, r) => sum + r.issues.length, 0)
     const errors = results.reduce(
-      (sum, r) => sum + r.issues.filter(i => i.severity === 'error').length, 0
+      (sum, r) => sum + r.issues.filter(i => i.severity === 'error').length,
+      0
     )
     const warnings = results.reduce(
-      (sum, r) => sum + r.issues.filter(i => i.severity === 'warning').length, 0
+      (sum, r) => sum + r.issues.filter(i => i.severity === 'warning').length,
+      0
     )
     const infos = results.reduce(
-      (sum, r) => sum + r.issues.filter(i => i.severity === 'info').length, 0
+      (sum, r) => sum + r.issues.filter(i => i.severity === 'info').length,
+      0
     )
 
     let overallHealth: 'healthy' | 'warning' | 'critical' = 'healthy'
-    if (errors > 0) {overallHealth = 'critical'}
-    else if (warnings > 0) {overallHealth = 'warning'}
+    if (errors > 0) {
+      overallHealth = 'critical'
+    } else if (warnings > 0) {
+      overallHealth = 'warning'
+    }
 
     return {
       generatedAt: new Date(),
@@ -246,8 +251,10 @@ export class PageDataChecker {
       console.log(`生成时间: ${report.generatedAt.toLocaleString()}`)
       console.log(`检查页面: ${report.pagesChecked}`)
       console.log(`整体健康: ${report.overallHealth}`)
-      console.log(`问题统计: 错误=${report.summary.errors}, 警告=${report.summary.warnings}, 信息=${report.summary.infos}`)
-      
+      console.log(
+        `问题统计: 错误=${report.summary.errors}, 警告=${report.summary.warnings}, 信息=${report.summary.infos}`
+      )
+
       report.pageResults.forEach(result => {
         console.group(`📄 ${result.pageName}`)
         console.log(`数据来源: ${result.dataSource}`)
@@ -257,7 +264,7 @@ export class PageDataChecker {
         }
         console.groupEnd()
       })
-      
+
       console.groupEnd()
       /* eslint-enable no-console */
     }

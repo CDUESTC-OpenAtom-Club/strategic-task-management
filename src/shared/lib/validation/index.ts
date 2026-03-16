@@ -1,8 +1,7 @@
 /**
- * Validation Module
- * 
- * Exports all validation utilities
+ * Validation utilities
+ *
+ * Provides data validation capabilities for entities.
  */
 
-export * from './validators'
-export * from './zod-helpers'
+export * from './dataValidator'

@@ -1,40 +1,21 @@
 /**
- * Composables Module - Backward Compatibility Layer
+ * Composables Module
  *
- * This file provides backward compatibility for imports from the old composables directory.
- * All composables have been migrated to their appropriate FSD locations.
+ * Vue 3 Composition API composables for reactive state management.
  *
- * Migration Map:
- * - useECharts → @/shared/lib/charts/useECharts
- * - useErrorHandler → @/shared/lib/error-handling/useErrorHandler
- * - useDataValidator → @/shared/lib/validation/useDataValidator
- * - useLoadingState → @/shared/lib/loading/useLoadingState
- * - usePermission → @/shared/lib/authorization/usePermission
- * - useTimeoutManager → @/shared/lib/timing/useTimeoutManager
- *
- * @deprecated Import from the new FSD locations instead
+ * Note: Pure utility functions have been moved to shared/lib/:
+ * - useDataValidator → @/shared/lib/validation/dataValidator
+ * - useTimeoutManager → @/shared/lib/utils/timeoutManager
  */
 
-// Charts
-export * from '@/shared/lib/charts'
-
-// Error handling
-export * from '@/shared/lib/error-handling'
-
-// Validation
-export { useDataValidator } from '@/shared/lib/validation/useDataValidator'
-
-// Loading state
-export * from '@/shared/lib/loading'
-
-// Authorization
-export * from '@/shared/lib/authorization'
-
-// Timing
-export * from '@/shared/lib/timing'
-
-// Dashboard composables (feature-specific, to be migrated in Phase 2)
+// Dashboard composables (feature-specific)
 export * from './dashboard'
 
-// Layout composables (to be migrated in Phase 2)
+// Layout composables
 export * from './layout'
+
+// General Vue composables
+export { useErrorHandler } from './useErrorHandler'
+export { useLoadingState } from './useLoadingState'
+export { usePermission } from './usePermission'
+export { useECharts } from './useECharts'

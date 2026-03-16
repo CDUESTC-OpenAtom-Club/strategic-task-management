@@ -34,7 +34,7 @@ import {
 import type { StatusAuditEntry as _StatusAuditEntry } from '@/types'
 import { useOrgStore } from '@/stores/org'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
-import { useDataValidator } from '@/composables/useDataValidator'
+import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
   MILESTONE_STATUS_VALUES,
