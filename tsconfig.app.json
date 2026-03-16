@@ -6,15 +6,12 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@components/*": ["src/components/*"],
-      "@views/*": ["src/views/*"],
-      "@stores/*": ["src/stores/*"],
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"],
-      "@api/*": ["src/api/*"],
-      "@/features/*": ["src/features/*"],
-      "@/shared/*": ["src/shared/*"],
-      "@/app/*": ["src/app/*"]
+      "@/1-app/*": ["src/1-app/*"],
+      "@/2-pages/*": ["src/2-pages/*"],
+      "@/3-features/*": ["src/3-features/*"],
+      "@/4-entities/*": ["src/4-entities/*"],
+      "@/5-shared/*": ["src/5-shared/*"],
+      "@/6-processes/*": ["src/6-processes/*"]
     },
 
     /* Linting */

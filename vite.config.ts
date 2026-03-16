@@ -4,7 +4,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
-import { mockApiPlugin } from './src/shared/api/mocks/mockApiPlugin'
+import { mockApiPlugin } from './src/5-shared/api/mocks/mockApiPlugin'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -55,14 +55,12 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
-        '@views': fileURLToPath(new URL('./src/views', import.meta.url)),
-        '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
-        '@types': fileURLToPath(new URL('./src/types', import.meta.url)),
-        '@utils': fileURLToPath(new URL('./src/utils', import.meta.url)),
-        '@api': fileURLToPath(new URL('./src/api', import.meta.url)),
-        '@/features': fileURLToPath(new URL('./src/features', import.meta.url)),
-        '@/shared': fileURLToPath(new URL('./src/shared', import.meta.url))
+        '@/1-app': fileURLToPath(new URL('./src/1-app', import.meta.url)),
+        '@/2-pages': fileURLToPath(new URL('./src/2-pages', import.meta.url)),
+        '@/3-features': fileURLToPath(new URL('./src/3-features', import.meta.url)),
+        '@/4-entities': fileURLToPath(new URL('./src/4-entities', import.meta.url)),
+        '@/5-shared': fileURLToPath(new URL('./src/5-shared', import.meta.url)),
+        '@/6-processes': fileURLToPath(new URL('./src/6-processes', import.meta.url))
       }
     },
     server: {
@@ -138,35 +136,34 @@ export default defineConfig(({ mode }) => {
 
             // 业务代码分组
             // shared/ui 组件
-            if (id.includes('/src/shared/ui/')) {
+            if (id.includes('/src/5-shared/ui/')) {
               return 'shared-ui'
             }
             // shared/lib 工具
-            if (id.includes('/src/shared/lib/')) {
+            if (id.includes('/src/5-shared/lib/')) {
               return 'shared-lib'
             }
             // features 模块
-            if (id.includes('/src/features/')) {
-              // features 按功能分组
-              if (id.includes('/features/dashboard/')) {
+            if (id.includes('/src/3-features/')) {
+              if (id.includes('/3-features/dashboard/')) {
                 return 'feature-dashboard'
               }
-              if (id.includes('/features/admin/')) {
+              if (id.includes('/3-features/admin/')) {
                 return 'feature-admin'
               }
-              if (id.includes('/features/auth/')) {
+              if (id.includes('/3-features/auth/')) {
                 return 'feature-auth'
               }
-              if (id.includes('/features/plan/')) {
+              if (id.includes('/3-features/plan/')) {
                 return 'feature-plan'
               }
-              if (id.includes('/features/task/')) {
+              if (id.includes('/3-features/task/')) {
                 return 'feature-task'
               }
-              if (id.includes('/features/strategic-indicator/')) {
+              if (id.includes('/3-features/indicator/')) {
                 return 'feature-indicator'
               }
-              if (id.includes('/features/approval/')) {
+              if (id.includes('/3-features/approval/')) {
                 return 'feature-approval'
               }
               return 'features'

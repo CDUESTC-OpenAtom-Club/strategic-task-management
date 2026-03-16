@@ -8,4 +8,4 @@
  */
 
 // Import and execute application initialization from app layer
-import './app/main'
+import './1-app/app-main'
