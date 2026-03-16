@@ -7,7 +7,7 @@
  * @see Requirements 2.4, 2.6 - 使用简化的 apiClient
  */
 import { apiClient } from '@/shared/api/client'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import { orgListResponseSchema, type OrgVO, type OrgType } from './org.schema'
 
 // 重新导出 OrgVO 类型供其他模块使用
@@ -88,7 +88,9 @@ export const orgApi = {
    */
   async getAllOrgs(): Promise<OrgVO[]> {
     try {
-      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>('/orgs')
+      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(
+        '/orgs'
+      )
 
       // Zod 运行时验证
       const result = orgListResponseSchema.safeParse(response)
@@ -122,17 +124,24 @@ export const orgApi = {
    */
   async getAllDepartments(): Promise<Department[]> {
     try {
-      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>('/orgs')
+      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(
+        '/orgs'
+      )
 
       // Direct transformation without Zod validation to avoid issues
-      if (response && typeof response === 'object' && 'data' in response && Array.isArray(response.data)) {
+      if (
+        response &&
+        typeof response === 'object' &&
+        'data' in response &&
+        Array.isArray(response.data)
+      ) {
         return response.data.map((org: Record<string, unknown>) => {
           const id = org.id || org.orgId
           const name = org.name || org.orgName
           const type = org.type || org.orgType
 
           if (!id || !name || !type) {
-            console.warn('Invalid org data:', org)
+            logger.warn('Invalid org data:', org)
           }
 
           return {

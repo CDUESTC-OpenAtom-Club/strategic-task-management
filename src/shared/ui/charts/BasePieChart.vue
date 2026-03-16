@@ -14,7 +14,7 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getGradientColor } from '@/utils/colors'
+import { getGradientColor } from '@/shared/lib/utils/colors'
 import type { EChartsOption } from 'echarts'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
@@ -79,7 +79,10 @@ const chartOption = computed<EChartsOption>(() => {
   // 图例位置配置
   const legendConfig: Record<string, unknown> = {
     show: props.showLegend,
-    orient: props.legendPosition === 'top' || props.legendPosition === 'bottom' ? 'horizontal' : 'vertical',
+    orient:
+      props.legendPosition === 'top' || props.legendPosition === 'bottom'
+        ? 'horizontal'
+        : 'vertical',
     itemWidth: 10,
     itemHeight: 10,
     textStyle: { fontSize: 12 }
@@ -173,10 +176,12 @@ const chartOption = computed<EChartsOption>(() => {
           value: item.value,
           name: item.name,
           itemStyle: {
-            color: item.color || getGradientColor(
-              item.color || `hsl(${index * 60}, 70%, 50%)`,
-              `${item.color || `hsl(${index * 60}, 70%, 50%)`}CC`
-            )
+            color:
+              item.color ||
+              getGradientColor(
+                item.color || `hsl(${index * 60}, 70%, 50%)`,
+                `${item.color || `hsl(${index * 60}, 70%, 50%)`}CC`
+              )
           }
         }))
       }
@@ -187,7 +192,9 @@ const chartOption = computed<EChartsOption>(() => {
 
 /** 处理图表点击 */
 const handleChartClick = (params: { dataIndex: number }) => {
-  if (!props.clickable) {return}
+  if (!props.clickable) {
+    return
+  }
 
   const index = params.dataIndex
   if (index >= 0 && index < props.data.length) {

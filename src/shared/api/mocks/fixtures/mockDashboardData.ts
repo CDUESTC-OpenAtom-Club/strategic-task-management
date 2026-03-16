@@ -1,4 +1,4 @@
-import type { Indicator, StrategicTask, Milestone } from '@/types/entities'
+import type { Indicator, StrategicTask, Milestone } from '@/shared/types/entities'
 import { mockIndicators } from './mockIndicators'
 import { mockStrategicTasks } from './mockStrategicTasks'
 import { mockMilestones } from './mockMilestones'
@@ -57,9 +57,17 @@ function calculateDepartmentStats(indicators: Indicator[]): DashboardStats['depa
     if (!deptMap.has(dept)) {
       deptMap.set(dept, { total: 0, completed: 0, inProgress: 0, progressSum: 0 })
     }
-    const stats = deptMap.get(dept)!
-    stats.total++
-    stats.progressSum += indicator.progress
+    const stats = deptMap.get(dept)
+    if (stats) {
+      stats.total++
+      stats.progressSum += indicator.progress
+
+      if (indicator.progress >= 100) {
+        stats.completed++
+      } else if (indicator.progress > 0) {
+        stats.inProgress++
+      }
+    }
 
     if (indicator.progress >= 100) {
       stats.completed++

@@ -1,8 +1,8 @@
 <template>
-  <el-form 
-    ref="formRef" 
-    :model="formData" 
-    :rules="rules" 
+  <el-form
+    ref="formRef"
+    :model="formData"
+    :rules="rules"
     class="login-form"
     @keyup.enter="handleSubmit"
   >
@@ -42,15 +42,8 @@
     </el-form-item>
 
     <div class="form-options">
-      <el-checkbox v-model="formData.rememberMe" :disabled="loading">
-        记住用户名
-      </el-checkbox>
-      <el-button 
-        type="primary" 
-        link 
-        :disabled="loading"
-        @click="$emit('forgot-password')"
-      >
+      <el-checkbox v-model="formData.rememberMe" :disabled="loading"> 记住用户名 </el-checkbox>
+      <el-button type="primary" link :disabled="loading" @click="$emit('forgot-password')">
         忘记密码？
       </el-button>
     </div>
@@ -71,22 +64,12 @@
 
     <!-- Error display -->
     <div v-if="errorMessage" class="error-message">
-      <el-alert
-        :title="errorMessage"
-        type="error"
-        :closable="false"
-        show-icon
-      />
+      <el-alert :title="errorMessage" type="error" :closable="false" show-icon />
     </div>
 
     <!-- Lock warning -->
     <div v-if="isLocked" class="lock-warning">
-      <el-alert
-        title="账户已被临时锁定"
-        type="warning"
-        :closable="false"
-        show-icon
-      >
+      <el-alert title="账户已被临时锁定" type="warning" :closable="false" show-icon>
         <template #default>
           <p>由于多次登录失败，账户已被临时锁定。</p>
           <p>请5分钟后重试或联系管理员。</p>
@@ -112,6 +95,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import type { LoginFormState } from '../model/types'
 import { VALIDATION_RULES, SESSION_CONFIG, TOKEN_KEYS } from '../model/constants'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Props
 interface Props {
@@ -148,13 +132,15 @@ const isLocked = ref(false)
 let lockTimer: ReturnType<typeof setTimeout> | null = null
 
 // Computed
-const remainingAttempts = computed(() => 
-  SESSION_CONFIG.MAX_LOGIN_ATTEMPTS - errorCount.value
-)
+const remainingAttempts = computed(() => SESSION_CONFIG.MAX_LOGIN_ATTEMPTS - errorCount.value)
 
 const buttonText = computed(() => {
-  if (props.loading) {return '登录中...'}
-  if (isLocked.value) {return '账户已锁定'}
+  if (props.loading) {
+    return '登录中...'
+  }
+  if (isLocked.value) {
+    return '账户已锁定'
+  }
   return '登 录'
 })
 
@@ -162,20 +148,20 @@ const buttonText = computed(() => {
 const rules: FormRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
-    { 
-      min: VALIDATION_RULES.USERNAME_MIN_LENGTH, 
-      max: VALIDATION_RULES.USERNAME_MAX_LENGTH, 
-      message: `用户名长度应在 ${VALIDATION_RULES.USERNAME_MIN_LENGTH}-${VALIDATION_RULES.USERNAME_MAX_LENGTH} 个字符之间`, 
-      trigger: 'blur' 
+    {
+      min: VALIDATION_RULES.USERNAME_MIN_LENGTH,
+      max: VALIDATION_RULES.USERNAME_MAX_LENGTH,
+      message: `用户名长度应在 ${VALIDATION_RULES.USERNAME_MIN_LENGTH}-${VALIDATION_RULES.USERNAME_MAX_LENGTH} 个字符之间`,
+      trigger: 'blur'
     }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { 
-      min: VALIDATION_RULES.PASSWORD_MIN_LENGTH, 
-      max: VALIDATION_RULES.PASSWORD_MAX_LENGTH, 
-      message: `密码长度应在 ${VALIDATION_RULES.PASSWORD_MIN_LENGTH}-${VALIDATION_RULES.PASSWORD_MAX_LENGTH} 个字符之间`, 
-      trigger: 'blur' 
+    {
+      min: VALIDATION_RULES.PASSWORD_MIN_LENGTH,
+      max: VALIDATION_RULES.PASSWORD_MAX_LENGTH,
+      message: `密码长度应在 ${VALIDATION_RULES.PASSWORD_MIN_LENGTH}-${VALIDATION_RULES.PASSWORD_MAX_LENGTH} 个字符之间`,
+      trigger: 'blur'
     }
   ]
 }
@@ -198,7 +184,7 @@ const handleSubmit = async () => {
 
   try {
     await formRef.value.validate()
-    
+
     // Emit submit event
     emit('submit', {
       username: formData.username,
@@ -212,13 +198,13 @@ const handleSubmit = async () => {
       localStorage.removeItem(TOKEN_KEYS.REMEMBERED_USERNAME)
     }
   } catch (error) {
-    console.error('Form validation failed:', error)
+    logger.error('Form validation failed:', error)
   }
 }
 
 const incrementErrorCount = () => {
   errorCount.value++
-  
+
   if (errorCount.value >= SESSION_CONFIG.MAX_LOGIN_ATTEMPTS) {
     isLocked.value = true
     startAutoUnlock()
@@ -235,8 +221,10 @@ const resetErrorCount = () => {
 }
 
 const startAutoUnlock = () => {
-  if (lockTimer) {clearTimeout(lockTimer)}
-  
+  if (lockTimer) {
+    clearTimeout(lockTimer)
+  }
+
   lockTimer = setTimeout(() => {
     resetErrorCount()
     ElMessage.success('账户已解锁，请重新登录')

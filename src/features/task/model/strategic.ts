@@ -1,6 +1,6 @@
 /**
  * Strategic Store
- * 
+ *
  * Manages strategic indicators and tasks.
  * Note: This store should eventually be migrated to features/task/model/store.ts
  */
@@ -9,7 +9,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { StrategicIndicator } from '@/types'
 import { indicatorApi } from '@/features/strategic-indicator/api/indicator'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
@@ -21,19 +21,15 @@ export const useStrategicStore = defineStore('strategic', () => {
     tasks: false
   })
   const error = ref<string | null>(null)
-  
+
   // ============ Getters ============
-  
-  const activeIndicators = computed(() => 
-    indicators.value.filter(i => i.status === 'active')
-  )
-  
-  const strategicIndicators = computed(() =>
-    indicators.value.filter(i => i.isStrategic === true)
-  )
-  
+
+  const activeIndicators = computed(() => indicators.value.filter(i => i.status === 'active'))
+
+  const strategicIndicators = computed(() => indicators.value.filter(i => i.isStrategic === true))
+
   // ============ Actions ============
-  
+
   async function loadIndicatorsByYear(year: number) {
     loading.value = true
     loadingState.value.indicators = true
@@ -58,7 +54,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       loadingState.value.indicators = false
     }
   }
-  
+
   async function updateIndicator(id: string, data: Partial<StrategicIndicator>) {
     try {
       logger.debug(`[Strategic Store] Updating indicator ${id}`)
@@ -74,14 +70,14 @@ export const useStrategicStore = defineStore('strategic', () => {
       } else {
         throw new Error(response.message || 'Failed to update indicator')
       }
-      
+
       return response
     } catch (err) {
       logger.error('[Strategic Store] Failed to update indicator:', err)
       throw err
     }
   }
-  
+
   async function deleteIndicator(id: string) {
     try {
       logger.debug(`[Strategic Store] Deleting indicator ${id}`)
@@ -97,18 +93,18 @@ export const useStrategicStore = defineStore('strategic', () => {
       } else {
         throw new Error(response.message || 'Failed to delete indicator')
       }
-      
+
       return response
     } catch (err) {
       logger.error('[Strategic Store] Failed to delete indicator:', err)
       throw err
     }
   }
-  
+
   function clearError() {
     error.value = null
   }
-  
+
   return {
     indicators,
     loading,

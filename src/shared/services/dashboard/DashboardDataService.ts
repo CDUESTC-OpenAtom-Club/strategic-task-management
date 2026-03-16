@@ -5,12 +5,12 @@
  * 分离数据层逻辑，使组件更专注于 UI 展示
  */
 
-import type { DashboardData } from '@/types'
+import type { DashboardData, Indicator } from '@/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 export class DashboardDataService {
   private strategicStore: ReturnType<typeof useStrategicStore>
@@ -66,10 +66,7 @@ export class DashboardDataService {
   /**
    * 根据角色和时间上下文过滤指标
    */
-  private filterIndicatorsByRoleAndTime(
-    indicators: any[],
-    currentYear: number
-  ): any[] {
+  private filterIndicatorsByRoleAndTime(indicators: Indicator[], currentYear: number): Indicator[] {
     const { currentUser } = this.authStore
     const orgLevel = this.orgStore.currentOrgLevel
 
@@ -99,7 +96,7 @@ export class DashboardDataService {
   /**
    * 计算摘要信息
    */
-  private calculateSummary(indicators: any[]) {
+  private calculateSummary(indicators: Indicator[]) {
     const total = indicators.length
     const completed = indicators.filter(i => i.progress >= 100).length
     const inProgress = indicators.filter(i => i.progress > 0 && i.progress < 100).length
@@ -117,17 +114,24 @@ export class DashboardDataService {
   /**
    * 计算统计数据
    */
-  private calculateStatistics(indicators: any[]) {
+  private calculateStatistics(indicators: Indicator[]) {
     const basicIndicators = indicators.filter(i => i.type2 === '基础性')
     const developmentIndicators = indicators.filter(i => i.type2 === '发展性')
 
-    const basicAvg = basicIndicators.length > 0
-      ? Math.round(basicIndicators.reduce((sum, i) => sum + i.progress, 0) / basicIndicators.length)
-      : 0
+    const basicAvg =
+      basicIndicators.length > 0
+        ? Math.round(
+            basicIndicators.reduce((sum, i) => sum + i.progress, 0) / basicIndicators.length
+          )
+        : 0
 
-    const developmentAvg = developmentIndicators.length > 0
-      ? Math.round(developmentIndicators.reduce((sum, i) => sum + i.progress, 0) / developmentIndicators.length)
-      : 0
+    const developmentAvg =
+      developmentIndicators.length > 0
+        ? Math.round(
+            developmentIndicators.reduce((sum, i) => sum + i.progress, 0) /
+              developmentIndicators.length
+          )
+        : 0
 
     return {
       basicAvg,

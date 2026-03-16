@@ -1,6 +1,6 @@
 /**
  * API Interceptors
- * 
+ *
  * Request and response interceptors with:
  * - Authentication token injection
  * - Request ID generation
@@ -12,6 +12,7 @@
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import { handleApiError } from './errorHandler'
+import { logger } from '../utils/logger'
 
 /**
  * Interceptor configuration
@@ -36,7 +37,7 @@ function generateRequestId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
   }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0
     const v = c === 'x' ? r : (r & 0x3) | 0x8
     return v.toString(16)
@@ -90,7 +91,7 @@ export function setupRequestInterceptors(
 
       // Log request (development only)
       if (enableLogging) {
-        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
+        logger.debug(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, {
           params: config.params,
           data: config.data,
           requestId: config._requestId
@@ -99,9 +100,9 @@ export function setupRequestInterceptors(
 
       return config
     },
-    (error) => {
+    error => {
       if (enableLogging) {
-        console.error('[API Request Error]', error)
+        logger.error('[API Request Error]', error)
       }
       return Promise.reject(error)
     }
@@ -123,16 +124,11 @@ export function setupResponseInterceptors(
 
       // Log response (development only)
       if (enableLogging) {
-        const duration = requestConfig._startTime
-          ? Date.now() - requestConfig._startTime
-          : 0
-        console.log(
-          `[API Response] ${response.status} ${response.config.url} (${duration}ms)`,
-          {
-            data: response.data,
-            requestId: requestConfig._requestId
-          }
-        )
+        const duration = requestConfig._startTime ? Date.now() - requestConfig._startTime : 0
+        logger.debug(`[API Response] ${response.status} ${response.config.url} (${duration}ms)`, {
+          data: response.data,
+          requestId: requestConfig._requestId
+        })
       }
 
       // Normalize response format
@@ -143,10 +139,8 @@ export function setupResponseInterceptors(
 
       // Log error (development only)
       if (enableLogging) {
-        const duration = requestConfig?._startTime
-          ? Date.now() - requestConfig._startTime
-          : 0
-        console.error(
+        const duration = requestConfig?._startTime ? Date.now() - requestConfig._startTime : 0
+        logger.error(
           `[API Error] ${error.response?.status || 'Network Error'} ${error.config?.url} (${duration}ms)`,
           {
             message: error.message,
@@ -254,13 +248,13 @@ async function handle401Error(
   // Prevent infinite retry loop
   if (requestConfig._retry) {
     if (enableLogging) {
-      console.warn('[API Auth] Token refresh failed, redirecting to login')
+      logger.warn('[API Auth] Token refresh failed, redirecting to login')
     }
-    
+
     // Clear auth state and redirect to login
     localStorage.removeItem('token')
     window.location.href = '/login'
-    
+
     return Promise.reject(handleApiError(error))
   }
 
@@ -269,14 +263,14 @@ async function handle401Error(
 
   try {
     if (enableLogging) {
-      console.log('[API Auth] Attempting to refresh token...')
+      logger.debug('[API Auth] Attempting to refresh token...')
     }
 
     // Refresh token
     const newToken = await refreshAccessToken()
 
     if (enableLogging) {
-      console.log('[API Auth] Token refreshed successfully, retrying request')
+      logger.debug('[API Auth] Token refreshed successfully, retrying request')
     }
 
     // Update token in storage
@@ -289,7 +283,7 @@ async function handle401Error(
     return client.request(requestConfig)
   } catch (refreshError) {
     if (enableLogging) {
-      console.error('[API Auth] Token refresh failed:', refreshError)
+      logger.error('[API Auth] Token refresh failed:', refreshError)
     }
 
     // Clear auth state and redirect to login

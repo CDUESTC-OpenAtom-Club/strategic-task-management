@@ -1,12 +1,12 @@
 /**
- * useIndicatorStatus - 指标状态计算 Composable
+ * useIndicatorStatus - 指标状态计算 Model
  *
  * 职责:
  * - 计算指标状态（正常、超前、预警、延期）
  * - 获取当前目标进度
  * - 提供状态相关的工具函数
  *
- * @module composables/dashboard
+ * @module features/dashboard/model
  */
 
 import type { StrategicIndicator } from '@/types'
@@ -27,8 +27,8 @@ export function getIndicatorStatus(indicator: StrategicIndicator): IndicatorStat
   const currentProgress = indicator.progress || 0
 
   // 按deadline排序里程碑
-  const sortedMilestones = [...milestones].sort((a, b) =>
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )
 
   // 检查是否有已过期但未达标的里程碑（延期）
@@ -65,7 +65,9 @@ export function getIndicatorStatus(indicator: StrategicIndicator): IndicatorStat
   // 检查是否预警（距离deadline ≤ 3天且未达标）
   const nextDeadline = new Date(nextMilestone.deadline)
   nextDeadline.setHours(23, 59, 59, 999)
-  const daysUntilDeadline = Math.ceil((nextDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const daysUntilDeadline = Math.ceil(
+    (nextDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  )
 
   if (daysUntilDeadline <= 3 && currentProgress < nextMilestone.targetProgress) {
     return 'warning'
@@ -113,8 +115,8 @@ export function getCurrentTargetProgress(indicator: StrategicIndicator): number 
   }
 
   // 按deadline排序里程碑
-  const sortedMilestones = [...milestones].sort((a, b) =>
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
   )
 
   // 找到离今天最近的里程碑（deadline >= 今天）
@@ -135,7 +137,9 @@ export function getCurrentTargetProgress(indicator: StrategicIndicator): number 
  * 计算进度百分比
  */
 export function getProgressPercentage(current: number, target: number): number {
-  if (target === 0) {return 0}
+  if (target === 0) {
+    return 0
+  }
   return Math.min(100, Math.round((current / target) * 100))
 }
 

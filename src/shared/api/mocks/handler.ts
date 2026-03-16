@@ -4,7 +4,7 @@
  */
 
 import type { InternalAxiosRequestConfig } from 'axios'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import {
   mockUsers,
   mockAnnouncements,
@@ -86,7 +86,7 @@ export class MockApiHandler {
         response = await this.handleGetAssessmentCycles(query)
       } else if (path.startsWith('/api/assessment-cycles/') && method === 'GET') {
         const id = path.split('/').pop()
-        response = await this.handleGetAssessmentCycle(id!)
+        response = await this.handleGetAssessmentCycle(id ?? '0')
       }
       // ============================================
       // 战略任务 API
@@ -95,15 +95,15 @@ export class MockApiHandler {
         response = await this.handleGetStrategicTasks(query)
       } else if (path.startsWith('/api/strategic-tasks/') && method === 'GET') {
         const id = path.split('/').pop()
-        response = await this.handleGetStrategicTask(id!)
+        response = await this.handleGetStrategicTask(id ?? '0')
       } else if (path === '/api/strategic-tasks' && method === 'POST') {
         response = await this.handleCreateStrategicTask(data)
       } else if (path.startsWith('/api/strategic-tasks/') && method === 'PUT') {
         const id = path.split('/').pop()
-        response = await this.handleUpdateStrategicTask(id!, data)
+        response = await this.handleUpdateStrategicTask(id ?? '0', data)
       } else if (path.startsWith('/api/strategic-tasks/') && method === 'DELETE') {
         const id = path.split('/').pop()
-        response = await this.handleDeleteStrategicTask(id!)
+        response = await this.handleDeleteStrategicTask(id ?? '0')
       }
       // ============================================
       // 指标 API（与后端对齐）
@@ -112,15 +112,15 @@ export class MockApiHandler {
         response = await this.handleGetIndicators(query)
       } else if (path.startsWith('/api/indicators/') && method === 'GET') {
         const id = path.split('/').pop()
-        response = await this.handleGetIndicator(id!)
+        response = await this.handleGetIndicator(id ?? '0')
       } else if (path === '/api/indicators' && method === 'POST') {
         response = await this.handleCreateIndicator(data)
       } else if (path.startsWith('/api/indicators/') && method === 'PUT') {
         const id = path.split('/').pop()
-        response = await this.handleUpdateIndicator(id!, data)
+        response = await this.handleUpdateIndicator(id ?? '0', data)
       } else if (path.startsWith('/api/indicators/') && method === 'DELETE') {
         const id = path.split('/').pop()
-        response = await this.handleDeleteIndicator(id!)
+        response = await this.handleDeleteIndicator(id ?? '0')
       }
       // ============================================
       // 里程碑 API
@@ -129,15 +129,15 @@ export class MockApiHandler {
         response = await this.handleGetMilestones(query)
       } else if (path.startsWith('/api/milestones/') && method === 'GET') {
         const id = path.split('/').pop()
-        response = await this.handleGetMilestone(id!)
+        response = await this.handleGetMilestone(id ?? '0')
       } else if (path === '/api/milestones' && method === 'POST') {
         response = await this.handleCreateMilestone(data)
       } else if (path.startsWith('/api/milestones/') && method === 'PUT') {
         const id = path.split('/').pop()
-        response = await this.handleUpdateMilestone(id!, data)
+        response = await this.handleUpdateMilestone(id ?? '0', data)
       } else if (path.startsWith('/api/milestones/') && method === 'DELETE') {
         const id = path.split('/').pop()
-        response = await this.handleDeleteMilestone(id!)
+        response = await this.handleDeleteMilestone(id ?? '0')
       }
       // ============================================
       // 组织架构 API

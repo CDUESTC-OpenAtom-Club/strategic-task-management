@@ -32,9 +32,16 @@ import {
   Download as _Download,
   Paperclip as _Paperclip
 } from '@element-plus/icons-vue'
-import type { Plan, Task as _Task, Indicator as _Indicator, IndicatorFill, Milestone } from '@/types'
+import type {
+  Plan,
+  Task as _Task,
+  Indicator as _Indicator,
+  IndicatorFill,
+  Milestone
+} from '@/types'
 import IndicatorFillForm from '@/shared/ui/form/indicator/IndicatorFillForm.vue'
 import IndicatorFillHistory from '@/shared/ui/form/indicator/IndicatorFillHistory.vue'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 填报工作区 - 分栏式布局
@@ -64,19 +71,25 @@ const activeTab = ref<'info' | 'history' | 'fill'>('info')
 
 // 当前选中的任务
 const selectedTask = computed(() => {
-  if (!plan.value || !selectedTaskId.value) {return null}
+  if (!plan.value || !selectedTaskId.value) {
+    return null
+  }
   return plan.value.tasks.find(t => t.id === selectedTaskId.value) || null
 })
 
 // 当前选中的指标
 const selectedIndicator = computed(() => {
-  if (!selectedTask.value || !selectedIndicatorId.value) {return null}
+  if (!selectedTask.value || !selectedIndicatorId.value) {
+    return null
+  }
   return selectedTask.value.indicators.find(i => i.id === selectedIndicatorId.value) || null
 })
 
 // 树形数据
 const treeData = computed(() => {
-  if (!plan.value) {return []}
+  if (!plan.value) {
+    return []
+  }
   return plan.value.tasks.map(task => ({
     id: task.id,
     label: task.name,
@@ -97,7 +110,9 @@ const currentKey = computed(() => {
 
 // 填报统计
 const _fillStats = computed(() => {
-  if (!selectedIndicator.value) {return null}
+  if (!selectedIndicator.value) {
+    return null
+  }
   const indicator = selectedIndicator.value
   return {
     totalFills: indicator.fill_count || 0,
@@ -140,11 +155,30 @@ const loadPlan = async () => {
               id: 'ind-001',
               task_id: 'task-001',
               name: '党建工作成效',
-              definition: '根据年度党建工作考核标准，评估党组织建设、党员发展、党风廉政建设等方面的成效。',
+              definition:
+                '根据年度党建工作考核标准，评估党组织建设、党员发展、党风廉政建设等方面的成效。',
               milestones: [
-                { id: 'ms-001', name: '第一季度检查', targetProgress: 25, deadline: '2025-03-31', status: 'pending' },
-                { id: 'ms-002', name: '半年总结', targetProgress: 50, deadline: '2025-06-30', status: 'pending' },
-                { id: 'ms-003', name: '年度考核', targetProgress: 100, deadline: '2025-12-31', status: 'pending' }
+                {
+                  id: 'ms-001',
+                  name: '第一季度检查',
+                  targetProgress: 25,
+                  deadline: '2025-03-31',
+                  status: 'pending'
+                },
+                {
+                  id: 'ms-002',
+                  name: '半年总结',
+                  targetProgress: 50,
+                  deadline: '2025-06-30',
+                  status: 'pending'
+                },
+                {
+                  id: 'ms-003',
+                  name: '年度考核',
+                  targetProgress: 100,
+                  deadline: '2025-12-31',
+                  status: 'pending'
+                }
               ],
               latest_progress: 25,
               latest_fill_date: '2025-01-15',
@@ -156,9 +190,27 @@ const loadPlan = async () => {
               name: '校园文化建设',
               definition: '评估校园文化活动的开展情况、文化设施建设、文化氛围营造等。',
               milestones: [
-                { id: 'ms-004', name: '文化活动开展', targetProgress: 40, deadline: '2025-06-30', status: 'pending' },
-                { id: 'ms-005', name: '文化设施建设', targetProgress: 70, deadline: '2025-10-31', status: 'pending' },
-                { id: 'ms-006', name: '年终评估', targetProgress: 100, deadline: '2025-12-31', status: 'pending' }
+                {
+                  id: 'ms-004',
+                  name: '文化活动开展',
+                  targetProgress: 40,
+                  deadline: '2025-06-30',
+                  status: 'pending'
+                },
+                {
+                  id: 'ms-005',
+                  name: '文化设施建设',
+                  targetProgress: 70,
+                  deadline: '2025-10-31',
+                  status: 'pending'
+                },
+                {
+                  id: 'ms-006',
+                  name: '年终评估',
+                  targetProgress: 100,
+                  deadline: '2025-12-31',
+                  status: 'pending'
+                }
               ],
               latest_progress: 0,
               fill_count: 0
@@ -178,9 +230,27 @@ const loadPlan = async () => {
               name: '科研项目立项数',
               definition: '统计年度内新增的国家级、省级科研项目立项数量。',
               milestones: [
-                { id: 'ms-007', name: '第一季度目标', targetProgress: 25, deadline: '2025-03-31', status: 'completed' },
-                { id: 'ms-008', name: '半年目标', targetProgress: 50, deadline: '2025-06-30', status: 'pending' },
-                { id: 'ms-009', name: '年度目标', targetProgress: 100, deadline: '2025-12-31', status: 'pending' }
+                {
+                  id: 'ms-007',
+                  name: '第一季度目标',
+                  targetProgress: 25,
+                  deadline: '2025-03-31',
+                  status: 'completed'
+                },
+                {
+                  id: 'ms-008',
+                  name: '半年目标',
+                  targetProgress: 50,
+                  deadline: '2025-06-30',
+                  status: 'pending'
+                },
+                {
+                  id: 'ms-009',
+                  name: '年度目标',
+                  targetProgress: 100,
+                  deadline: '2025-12-31',
+                  status: 'pending'
+                }
               ],
               latest_progress: 30,
               latest_fill_date: '2025-01-20',
@@ -192,8 +262,20 @@ const loadPlan = async () => {
               name: '学生就业率',
               definition: '统计应届毕业生的就业率，包括直接就业、升学、创业等。',
               milestones: [
-                { id: 'ms-010', name: '初次就业率', targetProgress: 60, deadline: '2025-08-31', status: 'pending' },
-                { id: 'ms-011', name: '年终就业率', targetProgress: 95, deadline: '2025-12-31', status: 'pending' }
+                {
+                  id: 'ms-010',
+                  name: '初次就业率',
+                  targetProgress: 60,
+                  deadline: '2025-08-31',
+                  status: 'pending'
+                },
+                {
+                  id: 'ms-011',
+                  name: '年终就业率',
+                  targetProgress: 95,
+                  deadline: '2025-12-31',
+                  status: 'pending'
+                }
               ],
               latest_progress: 0,
               fill_count: 0
@@ -211,7 +293,7 @@ const loadPlan = async () => {
       selectedIndicatorId.value = plan.value.tasks[0].indicators[0].id
     }
   } catch (error) {
-    console.error('Failed to load plan:', error)
+    logger.error('Failed to load plan:', error)
   } finally {
     loading.value = false
   }
@@ -267,9 +349,12 @@ const handleFillSubmitted = (_fill: IndicatorFill) => {
 // 获取里程碑状态样式
 const getMilestoneStatus = (status?: Milestone['status']) => {
   switch (status) {
-    case 'completed': return 'success'
-    case 'overdue': return 'danger'
-    default: return 'info'
+    case 'completed':
+      return 'success'
+    case 'overdue':
+      return 'danger'
+    default:
+      return 'info'
   }
 }
 
@@ -285,9 +370,12 @@ onMounted(() => {
 })
 
 // 监听 planId 变化
-watch(() => props.planId, () => {
-  loadPlan()
-})
+watch(
+  () => props.planId,
+  () => {
+    loadPlan()
+  }
+)
 </script>
 
 <template>
@@ -317,13 +405,7 @@ watch(() => props.planId, () => {
           <template #header>
             <div class="sidebar-header">
               <span class="sidebar-title">{{ plan.name }}</span>
-              <ElButton
-                type="primary"
-                :icon="Refresh"
-                size="small"
-                circle
-                @click="loadPlan"
-              />
+              <ElButton type="primary" :icon="Refresh" size="small" circle @click="loadPlan" />
             </div>
           </template>
 
@@ -378,7 +460,10 @@ watch(() => props.planId, () => {
             <div class="indicator-header">
               <div class="header-left">
                 <div class="indicator-type-tag">
-                  <ElTag :type="selectedTask?.type === 'qualitative' ? 'warning' : 'success'" effect="light">
+                  <ElTag
+                    :type="selectedTask?.type === 'qualitative' ? 'warning' : 'success'"
+                    effect="light"
+                  >
                     {{ selectedTask?.type === 'qualitative' ? '定性' : '定量' }}
                   </ElTag>
                   <ElTag type="info" effect="light">{{ selectedTask?.name }}</ElTag>
@@ -430,7 +515,13 @@ watch(() => props.planId, () => {
                               <CircleCheck v-if="milestone.status === 'completed'" />
                               <Clock v-else />
                             </el-icon>
-                            {{ milestone.status === 'completed' ? '已完成' : milestone.status === 'overdue' ? '已逾期' : '进行中' }}
+                            {{
+                              milestone.status === 'completed'
+                                ? '已完成'
+                                : milestone.status === 'overdue'
+                                  ? '已逾期'
+                                  : '进行中'
+                            }}
                           </ElTag>
                         </div>
                         <div class="milestone-details">
@@ -478,7 +569,11 @@ watch(() => props.planId, () => {
                 <IndicatorFillHistory
                   v-if="selectedIndicator"
                   :indicator-id="selectedIndicator.id"
-                  @select="(fill) => { /* 选择历史记录编辑 */ }"
+                  @select="
+                    fill => {
+                      /* 选择历史记录编辑 */
+                    }
+                  "
                 />
               </ElTabPane>
 

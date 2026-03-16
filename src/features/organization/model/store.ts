@@ -7,7 +7,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import type { Department } from '@/features/organization/api'
 
 export const useOrganizationStore = defineStore('organization', () => {
@@ -17,25 +17,27 @@ export const useOrganizationStore = defineStore('organization', () => {
   const loaded = ref(false)
 
   // ============ Getters ============
-  const strategicDept = computed(() => 
-    departments.value.find(d => d.type === 'strategic_dept')
-  )
+  const strategicDept = computed(() => departments.value.find(d => d.type === 'strategic_dept'))
 
-  const functionalDepartments = computed(() => 
-    departments.value.filter(d => d.type === 'functional_dept')
+  const functionalDepartments = computed(() =>
+    departments.value
+      .filter(d => d.type === 'functional_dept')
       .sort((a, b) => a.sortOrder - b.sortOrder)
   )
 
-  const colleges = computed(() => 
-    departments.value.filter(d => d.type === 'secondary_college')
+  const colleges = computed(() =>
+    departments.value
+      .filter(d => d.type === 'secondary_college')
       .sort((a, b) => a.sortOrder - b.sortOrder)
   )
 
-  const allDepartments = computed(() => 
+  const allDepartments = computed(() =>
     departments.value.sort((a, b) => {
       const typeOrder = { strategic_dept: 1, functional_dept: 2, secondary_college: 3 }
       const typeCompare = typeOrder[a.type] - typeOrder[b.type]
-      if (typeCompare !== 0) {return typeCompare}
+      if (typeCompare !== 0) {
+        return typeCompare
+      }
       return a.sortOrder - b.sortOrder
     })
   )

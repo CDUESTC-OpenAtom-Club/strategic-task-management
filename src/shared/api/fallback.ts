@@ -10,7 +10,7 @@
  */
 import type { AxiosError } from 'axios'
 import type { ApiResponse } from '@/types'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 降级配置
@@ -27,8 +27,8 @@ export interface FallbackConfig {
  */
 export function getFallbackConfig(): FallbackConfig {
   return {
-    enabled: false,  // 已禁用降级
-    forceMock: false  // 已禁用强制模拟
+    enabled: false, // 已禁用降级
+    forceMock: false // 已禁用强制模拟
   }
 }
 
@@ -100,7 +100,7 @@ export class FallbackService {
    * 判断是否应该降级
    */
   shouldFallback(_error?: AxiosError | null): boolean {
-    return false  // 降级已禁用
+    return false // 降级已禁用
   }
 
   /**
@@ -129,7 +129,7 @@ export class FallbackService {
    * 是否强制使用模拟数据
    */
   isForceMock(): boolean {
-    return false  // 始终返回 false
+    return false // 始终返回 false
   }
 }
 

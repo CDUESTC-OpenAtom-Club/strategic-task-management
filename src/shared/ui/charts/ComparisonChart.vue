@@ -3,10 +3,15 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  GraphicComponent
+} from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ComparisonItem } from '@/types'
-import { getProgressColor } from '@/utils/colors'
+import { getProgressColor } from '@/shared/lib/utils/colors'
 
 use([BarChart, GridComponent, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
@@ -28,9 +33,7 @@ const emit = defineEmits<{
 }>()
 
 // 已排序的数据（按进度从高到低）
-const sortedData = computed(() =>
-  [...props.data].sort((a, b) => b.progress - a.progress)
-)
+const sortedData = computed(() => [...props.data].sort((a, b) => b.progress - a.progress))
 
 // ECharts 配置
 const chartOption = computed(() => ({
@@ -50,9 +53,13 @@ const chartOption = computed(() => ({
     },
     formatter: (params: { dataIndex: number }[] | { dataIndex: number }) => {
       const paramsArray = Array.isArray(params) ? params : [params]
-      if (!paramsArray || !paramsArray[0]) {return ''}
+      if (!paramsArray || !paramsArray[0]) {
+        return ''
+      }
       const item = sortedData.value[paramsArray[0].dataIndex]
-      if (!item) {return ''}
+      if (!item) {
+        return ''
+      }
       return `
         <div style="padding: 8px;">
           <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">
@@ -112,32 +119,34 @@ const chartOption = computed(() => ({
       show: false
     }
   },
-  series: [{
-    type: 'bar',
-    data: sortedData.value.map(item => ({
-      value: item.progress,
-      itemStyle: {
-        color: getProgressColor(item.progress),
-        borderRadius: [0, 4, 4, 0]
-      }
-    })),
-    barMaxWidth: 30,
-    label: {
-      show: true,
-      position: 'right',
-      formatter: '{c}%',
-      fontSize: 12,
-      fontWeight: 'bold',
-      color: '#333'
-    },
-    emphasis: {
-      itemStyle: {
-        shadowBlur: 10,
-        shadowOffsetX: 0,
-        shadowColor: 'rgba(0, 0, 0, 0.3)'
+  series: [
+    {
+      type: 'bar',
+      data: sortedData.value.map(item => ({
+        value: item.progress,
+        itemStyle: {
+          color: getProgressColor(item.progress),
+          borderRadius: [0, 4, 4, 0]
+        }
+      })),
+      barMaxWidth: 30,
+      label: {
+        show: true,
+        position: 'right',
+        formatter: '{c}%',
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#333'
+      },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowOffsetX: 0,
+          shadowColor: 'rgba(0, 0, 0, 0.3)'
+        }
       }
     }
-  }]
+  ]
 }))
 
 // 处理图表点击事件
@@ -154,7 +163,10 @@ const handleChartClick = (params: { componentType: string; dataIndex: number }) 
     <v-chart
       :option="chartOption"
       autoresize
-      :style="{ height: Math.max(data.length * 50 + 100, 300) + 'px', cursor: clickable ? 'pointer' : 'default' }"
+      :style="{
+        height: Math.max(data.length * 50 + 100, 300) + 'px',
+        cursor: clickable ? 'pointer' : 'default'
+      }"
       @click="handleChartClick"
     />
   </div>

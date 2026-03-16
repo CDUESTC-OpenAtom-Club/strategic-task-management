@@ -41,7 +41,7 @@ export interface PaginationFilters {
   page?: number
   size?: number
   sort?: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 /**

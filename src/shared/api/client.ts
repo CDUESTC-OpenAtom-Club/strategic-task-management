@@ -16,9 +16,9 @@
 
 import axios, { AxiosError } from 'axios'
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
-import { tokenManager } from '@/utils/tokenManager'
-import { logger } from '@/utils/logger'
-import type { ApiErrorResponse } from '@/types/error'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
+import { logger } from '@/shared/lib/utils/logger'
+import type { ApiErrorResponse } from '@/shared/types/error'
 
 /**
  * 应用错误类型
@@ -177,11 +177,7 @@ export class ApiClient {
   /**
    * 文件上传请求
    */
-  async upload<T>(
-    url: string,
-    file: File,
-    additionalData?: Record<string, unknown>
-  ): Promise<T> {
+  async upload<T>(url: string, file: File, additionalData?: Record<string, unknown>): Promise<T> {
     const formData = new FormData()
     formData.append('file', file)
 

@@ -6,7 +6,13 @@
 
 import api from '@/shared/api'
 import type { ApiResponse, StrategicTask } from '@/types'
-import type { TaskCreateRequest, TaskUpdateRequest } from '../model/types'
+import type {
+  TaskCreateRequest,
+  TaskUpdateRequest,
+  IndicatorCreateRequest,
+  MilestoneCreateRequest,
+  UpdateMilestoneRequest
+} from '@/types'
 
 /**
  * Create new task
@@ -70,10 +76,7 @@ export async function submitTaskForApproval(
  * @param taskId - Task ID
  * @param comment - Approval comment
  */
-export async function approveTask(
-  taskId: number,
-  comment?: string
-): Promise<ApiResponse<void>> {
+export async function approveTask(taskId: number, comment?: string): Promise<ApiResponse<void>> {
   return api.post(`/strategic/${taskId}/approve`, { comment })
 }
 
@@ -85,10 +88,7 @@ export async function approveTask(
  * @param taskId - Task ID
  * @param reason - Rejection reason
  */
-export async function rejectTask(
-  taskId: number,
-  reason: string
-): Promise<ApiResponse<void>> {
+export async function rejectTask(taskId: number, reason: string): Promise<ApiResponse<void>> {
   return api.post(`/strategic/${taskId}/reject`, { reason })
 }
 
@@ -124,7 +124,7 @@ export async function deactivateTask(taskId: number): Promise<ApiResponse<void>>
  */
 export async function addIndicator(
   taskId: number,
-  indicator: any
+  indicator: IndicatorCreateRequest
 ): Promise<ApiResponse<void>> {
   return api.post(`/strategic/${taskId}/indicators`, indicator)
 }
@@ -154,7 +154,7 @@ export async function removeIndicator(
  */
 export async function addMilestone(
   taskId: number,
-  milestone: any
+  milestone: MilestoneCreateRequest
 ): Promise<ApiResponse<void>> {
   return api.post(`/strategic/${taskId}/milestones`, milestone)
 }
@@ -171,7 +171,7 @@ export async function addMilestone(
 export async function updateMilestone(
   taskId: number,
   milestoneId: number,
-  milestone: any
+  milestone: UpdateMilestoneRequest
 ): Promise<ApiResponse<void>> {
   return api.put(`/strategic/${taskId}/milestones/${milestoneId}`, milestone)
 }

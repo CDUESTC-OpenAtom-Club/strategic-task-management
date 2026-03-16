@@ -132,15 +132,16 @@ export class DashboardCalculationService {
         deptProgress.set(dept, [])
       }
 
-      deptProgress.get(dept)!.push(progress)
+      const progressList = deptProgress.get(dept)
+      if (progressList) {
+        progressList.push(progress)
+      }
     })
 
     // 计算每个部门的平均进度
     const avgProgress = new Map<string, number>()
     deptProgress.forEach((progressList, dept) => {
-      const avg = Math.round(
-        progressList.reduce((sum, p) => sum + p, 0) / progressList.length
-      )
+      const avg = Math.round(progressList.reduce((sum, p) => sum + p, 0) / progressList.length)
       avgProgress.set(dept, avg)
     })
 

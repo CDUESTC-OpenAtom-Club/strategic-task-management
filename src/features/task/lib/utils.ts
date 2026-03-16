@@ -10,9 +10,10 @@ import type { StrategicTask, TaskStatus } from '../model/types'
 export function calculateTaskProgress(task: StrategicTask): number {
   // 基于任务状态计算进度
   switch (task.status) {
-    case 'COMPLETED':
+    case 'COMPLETED': {
       return 100
-    case 'ACTIVE':
+    }
+    case 'ACTIVE': {
       // 基于时间进度计算
       const now = new Date()
       const start = new Date(task.startDate)
@@ -20,10 +21,16 @@ export function calculateTaskProgress(task: StrategicTask): number {
       const total = end.getTime() - start.getTime()
       const elapsed = now.getTime() - start.getTime()
       return Math.min(Math.max((elapsed / total) * 100, 0), 100)
-    case 'CANCELLED':
-    case 'DRAFT':
-    default:
+    }
+    case 'CANCELLED': {
       return 0
+    }
+    case 'DRAFT': {
+      return 0
+    }
+    default: {
+      return 0
+    }
   }
 }
 
@@ -31,7 +38,9 @@ export function calculateTaskProgress(task: StrategicTask): number {
  * 检查任务是否逾期
  */
 export function isTaskOverdue(task: StrategicTask): boolean {
-  if (task.status === 'COMPLETED') {return false}
+  if (task.status === 'COMPLETED') {
+    return false
+  }
   return new Date() > new Date(task.endDate)
 }
 
@@ -40,16 +49,21 @@ export function isTaskOverdue(task: StrategicTask): boolean {
  */
 export function getTaskStatusColor(status: TaskStatus): string {
   switch (status) {
-    case 'ACTIVE':
+    case 'ACTIVE': {
       return 'success'
-    case 'COMPLETED':
+    }
+    case 'COMPLETED': {
       return 'info'
-    case 'CANCELLED':
+    }
+    case 'CANCELLED': {
       return 'danger'
-    case 'DRAFT':
+    }
+    case 'DRAFT': {
       return 'warning'
-    default:
+    }
+    default: {
       return 'info'
+    }
   }
 }
 

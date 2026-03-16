@@ -1,6 +1,6 @@
 /**
  * Unified API Client
- * 
+ *
  * Production-ready HTTP client with:
  * - Request/response interceptors
  * - Authentication token handling
@@ -9,13 +9,13 @@
  * - Request retry logic
  * - Request cancellation
  * - Loading state management
- * 
+ *
  * **Validates: Requirements 2.1, 2.3, 2.6, 2.7**
  */
 
 import axios, { type AxiosInstance, type AxiosRequestConfig, type CancelTokenSource } from 'axios'
 import { setupRequestInterceptors, setupResponseInterceptors } from './interceptors'
-import { createRetryInterceptor } from './retry'
+import { createRetryInterceptor } from '@/shared/api/retry'
 
 /**
  * API Client configuration
@@ -80,7 +80,11 @@ export class ApiClient {
   /**
    * GET request
    */
-  async get<T>(url: string, params?: Record<string, unknown>, options?: RequestOptions): Promise<T> {
+  async get<T>(
+    url: string,
+    params?: Record<string, unknown>,
+    options?: RequestOptions
+  ): Promise<T> {
     const config = this.buildConfig(options, { params })
     const response = await this.client.get<T>(url, config)
     return response.data

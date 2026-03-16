@@ -7,6 +7,7 @@
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import type { AlertLevel, UserRole } from '@/types'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Configure dayjs
 dayjs.locale('zh-cn')
@@ -32,9 +33,13 @@ export const formatRelativeTime = (date: Date | string) => {
 }
 
 export const formatDateChinese = (date: Date | string | null | undefined): string => {
-  if (!date) {return '未设置'}
+  if (!date) {
+    return '未设置'
+  }
   const d = dayjs(date)
-  if (!d.isValid()) {return '日期格式错误'}
+  if (!d.isValid()) {
+    return '日期格式错误'
+  }
   return d.format('YYYY年MM月DD日')
 }
 
@@ -43,9 +48,13 @@ export const safeFormatDate = (
   format = 'YYYY-MM-DD',
   defaultValue = '未设置'
 ): string => {
-  if (!date) {return defaultValue}
+  if (!date) {
+    return defaultValue
+  }
   const d = dayjs(date)
-  if (!d.isValid()) {return defaultValue}
+  if (!d.isValid()) {
+    return defaultValue
+  }
   return d.format(format)
 }
 
@@ -56,7 +65,7 @@ export const safeFormatDate = (
 export const formatNumber = (num: number, decimals = 2) => {
   return new Intl.NumberFormat('zh-CN', {
     minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    maximumFractionDigits: decimals
   }).format(num)
 }
 
@@ -67,7 +76,7 @@ export const formatPercentage = (value: number, decimals = 1) => {
 export const formatCurrency = (amount: number, currency = 'CNY') => {
   return new Intl.NumberFormat('zh-CN', {
     style: 'currency',
-    currency: currency,
+    currency: currency
   }).format(amount)
 }
 
@@ -79,7 +88,7 @@ export const getAlertColor = (level: AlertLevel): string => {
   const colors = {
     severe: '#F56C6C',
     moderate: '#E6A23C',
-    normal: '#67C23A',
+    normal: '#67C23A'
   }
   return colors[level] || colors.normal
 }
@@ -88,7 +97,7 @@ export const getAlertLabel = (level: AlertLevel): string => {
   const labels = {
     severe: '严重',
     moderate: '一般',
-    normal: '正常',
+    normal: '正常'
   }
   return labels[level] || labels.normal
 }
@@ -97,7 +106,7 @@ export const getRoleLabel = (role: UserRole): string => {
   const labels = {
     strategic_dept: '战略发展部',
     functional_dept: '职能部门',
-    secondary_college: '二级学院',
+    secondary_college: '二级学院'
   }
   return labels[role] || role
 }
@@ -115,7 +124,7 @@ export const getStatusColor = (status: string): string => {
     warning: '#E6A23C',
     danger: '#F56C6C',
     success: '#67C23A',
-    exception: '#F56C6C',
+    exception: '#F56C6C'
   }
   return statusColors[status] || '#909399'
 }
@@ -133,7 +142,7 @@ export const getStatusLabel = (status: string): string => {
     warning: '预警',
     danger: '严重',
     success: '成功',
-    exception: '异常',
+    exception: '异常'
   }
   return statusLabels[status] || status
 }
@@ -142,25 +151,25 @@ export type StatusTagType = 'success' | 'warning' | 'danger' | 'info' | 'primary
 
 export const getStatusTagType = (status: string): StatusTagType => {
   const map: Record<string, StatusTagType> = {
-    'approved': 'success',
-    'completed': 'success',
-    'passed': 'success',
-    'pending': 'warning',
-    'processing': 'warning',
-    'in_progress': 'warning',
-    'rejected': 'danger',
-    'overdue': 'danger',
-    'failed': 'danger',
-    'draft': 'info',
-    'inactive': 'info',
-    'active': 'primary',
-    'create': 'success',
-    'update': 'warning',
-    'delete': 'danger',
-    'submit': 'primary',
-    'approve': 'success',
-    'reject': 'danger',
-    'withdraw': 'info'
+    approved: 'success',
+    completed: 'success',
+    passed: 'success',
+    pending: 'warning',
+    processing: 'warning',
+    in_progress: 'warning',
+    rejected: 'danger',
+    overdue: 'danger',
+    failed: 'danger',
+    draft: 'info',
+    inactive: 'info',
+    active: 'primary',
+    create: 'success',
+    update: 'warning',
+    delete: 'danger',
+    submit: 'primary',
+    approve: 'success',
+    reject: 'danger',
+    withdraw: 'info'
   }
   if (Object.hasOwn(map, status)) {
     return map[status] as StatusTagType
@@ -169,14 +178,22 @@ export const getStatusTagType = (status: string): StatusTagType => {
 }
 
 export const getProgressColor = (progress: number): string => {
-  if (progress >= 80) {return 'var(--color-success)'}
-  if (progress >= 50) {return 'var(--color-warning)'}
+  if (progress >= 80) {
+    return 'var(--color-success)'
+  }
+  if (progress >= 50) {
+    return 'var(--color-warning)'
+  }
   return 'var(--color-danger)'
 }
 
 export const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception' => {
-  if (progress >= 80) {return 'success'}
-  if (progress >= 50) {return 'warning'}
+  if (progress >= 80) {
+    return 'success'
+  }
+  if (progress >= 50) {
+    return 'warning'
+  }
   return 'exception'
 }
 
@@ -185,7 +202,9 @@ export const getProgressStatus = (progress: number): 'success' | 'warning' | 'ex
 // ============================================================================
 
 export const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) {return '0 B'}
+  if (bytes === 0) {
+    return '0 B'
+  }
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -193,7 +212,7 @@ export const formatFileSize = (bytes: number): string => {
 }
 
 export const getFileExtension = (filename: string): string => {
-  return filename.slice((filename.lastIndexOf('.') - 1 >>> 0) + 2)
+  return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2)
 }
 
 export const isImageFile = (filename: string): boolean => {
@@ -225,9 +244,15 @@ export const validatePercentage = (value: number): boolean => {
 }
 
 export const validateRequired = (value: unknown): boolean => {
-  if (value === null || value === undefined) {return false}
-  if (typeof value === 'string') {return value.trim().length > 0}
-  if (Array.isArray(value)) {return value.length > 0}
+  if (value === null || value === undefined) {
+    return false
+  }
+  if (typeof value === 'string') {
+    return value.trim().length > 0
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
   return true
 }
 
@@ -236,12 +261,16 @@ export const validateRequired = (value: unknown): boolean => {
 // ============================================================================
 
 export const truncateText = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) {return text}
+  if (text.length <= maxLength) {
+    return text
+  }
   return text.slice(0, maxLength) + '...'
 }
 
 export const highlightText = (text: string, highlight: string): string => {
-  if (!highlight) {return text}
+  if (!highlight) {
+    return text
+  }
   const regex = new RegExp(`(${highlight})`, 'gi')
   return text.replace(regex, '<mark>$1</mark>')
 }
@@ -251,14 +280,17 @@ export const highlightText = (text: string, highlight: string): string => {
 // ============================================================================
 
 export const groupBy = <T>(array: T[], key: keyof T): Record<string, T[]> => {
-  return array.reduce((groups, item) => {
-    const group = String(item[key])
-    if (!groups[group]) {
-      groups[group] = []
-    }
-    groups[group].push(item)
-    return groups
-  }, {} as Record<string, T[]>)
+  return array.reduce(
+    (groups, item) => {
+      const group = String(item[key])
+      if (!groups[group]) {
+        groups[group] = []
+      }
+      groups[group].push(item)
+      return groups
+    },
+    {} as Record<string, T[]>
+  )
 }
 
 export const sortBy = <T>(array: T[], key: keyof T, order: 'asc' | 'desc' = 'asc'): T[] => {
@@ -315,7 +347,7 @@ export const storage = {
     try {
       localStorage.setItem(key, JSON.stringify(value))
     } catch (error) {
-      console.error('Failed to set localStorage item:', error)
+      logger.error('Failed to set localStorage item:', error)
     }
   },
 
@@ -323,7 +355,7 @@ export const storage = {
     try {
       localStorage.removeItem(key)
     } catch (error) {
-      console.error('Failed to remove localStorage item:', error)
+      logger.error('Failed to remove localStorage item:', error)
     }
   },
 
@@ -331,9 +363,9 @@ export const storage = {
     try {
       localStorage.clear()
     } catch (error) {
-      console.error('Failed to clear localStorage:', error)
+      logger.error('Failed to clear localStorage:', error)
     }
-  },
+  }
 }
 
 // ============================================================================
@@ -343,7 +375,7 @@ export const storage = {
 export const debounce = <T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
-): (...args: Parameters<T>) => void => {
+): ((...args: Parameters<T>) => void) => {
   let timeout: NodeJS.Timeout | null = null
   return (...args: Parameters<T>) => {
     if (timeout) {
@@ -356,21 +388,27 @@ export const debounce = <T extends (...args: unknown[]) => unknown>(
 export const throttle = <T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number
-): (...args: Parameters<T>) => void => {
+): ((...args: Parameters<T>) => void) => {
   let inThrottle: boolean = false
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
       func(...args)
       inThrottle = true
-      setTimeout(() => inThrottle = false, limit)
+      setTimeout(() => (inThrottle = false), limit)
     }
   }
 }
 
 export const deepClone = <T>(obj: T): T => {
-  if (obj === null || typeof obj !== 'object') {return obj}
-  if (obj instanceof Date) {return new Date(obj.getTime()) as T}
-  if (obj instanceof Array) {return obj.map(item => deepClone(item)) as T}
+  if (obj === null || typeof obj !== 'object') {
+    return obj
+  }
+  if (obj instanceof Date) {
+    return new Date(obj.getTime()) as T
+  }
+  if (obj instanceof Array) {
+    return obj.map(item => deepClone(item)) as T
+  }
   if (typeof obj === 'object') {
     const clonedObj = {} as T
     for (const key in obj) {

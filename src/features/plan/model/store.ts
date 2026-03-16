@@ -1,21 +1,16 @@
 /**
  * Plan Feature Store
- * 
+ *
  * Migrated from stores/plan.ts
  * Plan management state (Plan -> Task -> Indicator -> IndicatorFill)
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type {
-  Plan,
-  PlanStatus,
-  PlanFill,
-  IndicatorFill
-} from '@/types'
+import type { Plan, PlanStatus, PlanFill, IndicatorFill } from '@/types'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import { ElMessage } from 'element-plus'
 
 export const usePlanStore = defineStore('plan', () => {
@@ -25,11 +20,11 @@ export const usePlanStore = defineStore('plan', () => {
   const planFills = ref<PlanFill[]>([])
   const currentPlanFill = ref<PlanFill | null>(null)
   const currentIndicatorFill = ref<IndicatorFill | null>(null)
-  
+
   const loading = ref(false)
   const submitting = ref(false)
   const error = ref<string | null>(null)
-  
+
   const filterStatus = ref<PlanStatus | 'all'>('all')
   const filterOrgId = ref<number | string | null>(null)
 
@@ -228,17 +223,59 @@ export const usePlanStore = defineStore('plan', () => {
     currentPlan.value = null
   }
 
+  // 审核计划填报
+  const auditPlanFill = async (
+    fillId: number | string,
+    form: {
+      action: 'approve' | 'reject' | 'return'
+      comment?: string
+      userId?: number
+    }
+  ) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Auditing plan fill ${fillId}...`, form)
+      const { planFillApi } = await import('@/api')
+      const response = await planFillApi.auditPlanFill(fillId, form)
+
+      if (response.success && response.data) {
+        // 更新本地状态
+        const index = planFills.value.findIndex(pf => pf.id === fillId)
+        if (index !== -1) {
+          planFills.value[index] = response.data
+        }
+        if (currentPlanFill.value?.id === fillId) {
+          currentPlanFill.value = response.data
+        }
+
+        ElMessage.success(form.action === 'approve' ? '审核通过' : '已驳回')
+        return response.data
+      } else {
+        throw new Error(response.message || '审核失败')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '审核失败'
+      logger.error('[Plan Store] Failed to audit plan fill:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
   // 监听年份变化
   const timeContext = useTimeContextStore()
   watch(
     () => timeContext.currentYear,
-    (newYear) => {
+    newYear => {
       logger.info(`[Plan Store] Year changed to ${newYear}, reloading plans...`)
       loadPlans()
     }
   )
 
-  // 初始�?
+  // 初始加载
   loadPlans()
 
   return {
@@ -266,6 +303,7 @@ export const usePlanStore = defineStore('plan', () => {
     createPlan,
     updatePlan,
     deletePlan,
+    auditPlanFill,
     setFilter,
     resetFilter,
     clearCurrentPlan

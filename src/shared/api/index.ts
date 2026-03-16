@@ -42,11 +42,7 @@ export const apiService = {
     return apiClient.patch<T>(url, data)
   },
 
-  async upload<T>(
-    url: string,
-    file: File,
-    additionalData?: Record<string, unknown>
-  ) {
+  async upload<T>(url: string, file: File, additionalData?: Record<string, unknown>) {
     const { apiClient } = await import('@/shared/api/client')
     return apiClient.upload<T>(url, file, additionalData)
   },
@@ -59,17 +55,22 @@ export const apiService = {
 
 // Re-export utility functions
 export { formatErrorMessage, isRetryableError, getErrorSeverity } from '@/shared/api/errorHandler'
-export type { ExtendedErrorInfo } from '@/types/error'
-export { refreshCache, refreshCachePattern, cacheManager, getFromCache } from '@/utils/cache'
+export type { ExtendedErrorInfo } from '@/shared/types/error'
+export {
+  refreshCache,
+  refreshCachePattern,
+  cacheManager,
+  getFromCache
+} from '@/shared/lib/utils/cache'
 
-// Re-export feature APIs for backward compatibility
-export { approvalApi } from '@/features/approval/api/approval'
-export { indicatorApi } from '@/features/strategic-indicator/api/indicator'
-export { milestoneApi } from '@/features/strategic-indicator/api/milestone'
-export { orgApi } from '@/features/organization/api/org'
-export { userApi } from '@/features/auth/api/user'
-export { planApi, indicatorFillApi, planFillApi } from '@/features/plan/api/planApi'
-export { strategicApi } from '@/features/task/api/strategicApi'
+// Re-export retry utilities
+export {
+  createRetryInterceptor,
+  withRetry,
+  withoutRetry,
+  forceRetry,
+  type RetryConfig
+} from '@/shared/api/retry'
 
 // Default export for backward compatibility (import api from '@/shared/api')
 export { apiClient as default } from '@/shared/api/client'

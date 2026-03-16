@@ -34,6 +34,7 @@ import {
 // 导入渲染器
 import { LabelLayout, UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
+import { logger } from '@/shared/lib/utils/logger'
 
 // 注册所有需要的组件
 echarts.use([
@@ -214,7 +215,7 @@ export function useECharts(options: UseEChartsOptions = {}): UseEChartsReturn {
    */
   const init = () => {
     if (!chartRef.value) {
-      console.warn('[useECharts] Chart ref is not ready')
+      logger.warn('[useECharts] Chart ref is not ready')
       return
     }
 
@@ -223,17 +224,14 @@ export function useECharts(options: UseEChartsOptions = {}): UseEChartsReturn {
     }
 
     try {
-      chartInstance.value = echarts.init(
-        chartRef.value,
-        resolvedOptions.theme
-      )
+      chartInstance.value = echarts.init(chartRef.value, resolvedOptions.theme)
       isInitialized.value = true
 
       if (resolvedOptions.autoResize) {
         window.addEventListener('resize', handleResize)
       }
     } catch (error) {
-      console.error('[useECharts] Failed to initialize chart:', error)
+      logger.error('[useECharts] Failed to initialize chart:', error)
     }
   }
 
@@ -242,7 +240,7 @@ export function useECharts(options: UseEChartsOptions = {}): UseEChartsReturn {
    */
   const setOption = (option: EChartsOption, notMerge = false) => {
     if (!chartInstance.value) {
-      console.warn('[useECharts] Chart instance not initialized')
+      logger.warn('[useECharts] Chart instance not initialized')
       return
     }
 
@@ -256,12 +254,14 @@ export function useECharts(options: UseEChartsOptions = {}): UseEChartsReturn {
    * 调整图表大小
    */
   const resize = () => {
-    if (!chartInstance.value) {return}
+    if (!chartInstance.value) {
+      return
+    }
 
     try {
       chartInstance.value.resize()
     } catch (error) {
-      console.error('[useECharts] Failed to resize chart:', error)
+      logger.error('[useECharts] Failed to resize chart:', error)
     }
   }
 
@@ -296,7 +296,7 @@ export function useECharts(options: UseEChartsOptions = {}): UseEChartsReturn {
         chartInstance.value = null
         isInitialized.value = false
       } catch (error) {
-        console.error('[useECharts] Failed to dispose chart:', error)
+        logger.error('[useECharts] Failed to dispose chart:', error)
       }
     }
   }

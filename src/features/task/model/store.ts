@@ -1,13 +1,13 @@
 /**
  * Task Feature Store
- * 
+ *
  * Migrated from stores/strategic.ts
  * Focused on strategic task management
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type { StrategicTask, TaskCreateRequest, TaskUpdateRequest, TaskFilters } from './types'
+import type { StrategicTask, TaskCreateRequest, TaskUpdateRequest } from './types'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/utils/logger'
 import { ElMessage } from 'element-plus'
@@ -20,15 +20,11 @@ export const useTaskStore = defineStore('task', () => {
   const dataSource = ref<'api' | 'fallback' | 'local'>('local')
 
   // ============ Getters ============
-  const activeTasks = computed(() => 
-    tasks.value.filter(t => t.status === 'ACTIVE')
-  )
+  const activeTasks = computed(() => tasks.value.filter(t => t.status === 'ACTIVE'))
 
-  const getTaskById = (id: string) => 
-    tasks.value.find(t => t.id.toString() === id)
+  const getTaskById = (id: string) => tasks.value.find(t => t.id.toString() === id)
 
-  const getTasksByYear = (year: number) =>
-    tasks.value.filter(t => t.year === year)
+  const getTasksByYear = (year: number) => tasks.value.filter(t => t.year === year)
 
   // 按当前年份过滤的任务
   const tasksByCurrentYear = computed(() => {
@@ -39,7 +35,7 @@ export const useTaskStore = defineStore('task', () => {
   // ============ Actions ============
 
   /**
-   * �?API 加载任务数据（带重试机制�?
+   * �?API 加载任务数据（带重试机制�?
    */
   const loadTasksFromApi = async (year: number, retryCount = 0): Promise<StrategicTask[]> => {
     const maxRetries = 2
@@ -48,11 +44,11 @@ export const useTaskStore = defineStore('task', () => {
       logger.info(
         `[Task Store] Loading tasks for year ${year} from API... (attempt ${retryCount + 1}/${maxRetries + 1})`
       )
-      
-      // 动态导�?API
+
+      // 动态导�?API
       const { default: strategicApi } = await import('@/api/strategic')
       const response = await strategicApi.getTasksByYear(year)
-      
+
       if (response.success && response.data) {
         const converted = response.data.map(vo => strategicApi.convertTaskVOToStrategicTask(vo))
         logger.info(`[Task Store] Loaded ${converted.length} tasks from API`)
@@ -68,11 +64,9 @@ export const useTaskStore = defineStore('task', () => {
     } catch (err: unknown) {
       const error = err as { message?: string; code?: string }
       const isTimeout = error.message?.includes('timeout') || error.code === 'ECONNABORTED'
-      
+
       if (isTimeout && retryCount < maxRetries) {
-        logger.warn(
-          `[Task Store] Request timeout, retrying... (${retryCount + 1}/${maxRetries})`
-        )
+        logger.warn(`[Task Store] Request timeout, retrying... (${retryCount + 1}/${maxRetries})`)
         await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
         return loadTasksFromApi(year, retryCount + 1)
       }
@@ -97,14 +91,14 @@ export const useTaskStore = defineStore('task', () => {
       logger.info(`[Task Store] Successfully loaded ${apiTasks.length} tasks from API`)
     } catch (err: unknown) {
       logger.error(`[Task Store] API failed:`, err)
-      
+
       let errorMsg = 'API 请求失败'
       const error = err as any
-      
+
       if (error.message?.includes('timeout') || error.code === 'ECONNABORTED') {
         errorMsg = '请求超时，服务器响应时间过长'
       } else if (error.code === 503 || error.code === 500 || error.code === 504) {
-        errorMsg = '服务器内部错误，请稍后重试或联系管理�?
+        errorMsg = '服务器内部错误，请稍后重试或联系管理员'
       } else {
         errorMsg = error.details?.message || error.message || 'API 请求失败'
       }
@@ -117,7 +111,7 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  // 监听年份变化，动态切换数�?
+  // 监听年份变化，动态切换数�?
   const timeContext = useTimeContextStore()
   watch(
     () => timeContext.currentYear,

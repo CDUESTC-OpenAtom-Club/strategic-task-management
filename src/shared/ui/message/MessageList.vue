@@ -8,19 +8,20 @@
       <div
         v-for="message in messages"
         :key="message.id"
-        :class="['message-item', { 'unread': !message.isRead }]"
+        :class="['message-item', { unread: !message.isRead }]"
         @click="handleMessageClick(message)"
       >
         <!-- 未读消息左侧彩色标记条 -->
-        <div v-if="!message.isRead" class="unread-indicator" :class="getIndicatorClass(message.type)"></div>
-        
+        <div
+          v-if="!message.isRead"
+          class="unread-indicator"
+          :class="getIndicatorClass(message.type)"
+        ></div>
+
         <div class="message-body">
           <div class="message-header">
             <div class="message-type">
-              <el-tag
-                :type="getMessageTypeTag(message.type)"
-                size="small"
-              >
+              <el-tag :type="getMessageTypeTag(message.type)" size="small">
                 {{ getMessageTypeLabel(message.type) }}
               </el-tag>
               <el-tag
@@ -57,12 +58,7 @@
             >
               标为已读
             </el-button>
-            <el-button
-              size="small"
-              @click.stop="viewDetails(message)"
-            >
-              查看详情
-            </el-button>
+            <el-button size="small" @click.stop="viewDetails(message)"> 查看详情 </el-button>
           </div>
         </div>
       </div>
@@ -72,7 +68,7 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
-import { formatDateTime } from '@/utils'
+import { formatDateTime } from '@/shared/lib/utils'
 import type { Message, MessageType, AlertLevel } from '@/types'
 
 interface Props {
@@ -141,11 +137,21 @@ const getRelativeTime = (date: Date): string => {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) {return '刚刚'}
-  if (minutes < 60) {return `${minutes}分钟前`}
-  if (hours < 24) {return `${hours}小时前`}
-  if (days < 7) {return `${days}天前`}
-  if (days < 30) {return `${Math.floor(days / 7)}周前`}
+  if (minutes < 1) {
+    return '刚刚'
+  }
+  if (minutes < 60) {
+    return `${minutes}分钟前`
+  }
+  if (hours < 24) {
+    return `${hours}小时前`
+  }
+  if (days < 7) {
+    return `${days}天前`
+  }
+  if (days < 30) {
+    return `${Math.floor(days / 7)}周前`
+  }
   return formatDateTime(date)
 }
 

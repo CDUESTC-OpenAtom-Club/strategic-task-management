@@ -58,14 +58,14 @@ export {
   type ApiError
 } from './errorHandler'
 
-// Export retry utilities
+// Export retry utilities from unified location
 export {
   createRetryInterceptor,
   withRetry as withRetryInterceptor,
   withoutRetry,
   forceRetry,
   type RetryConfig
-} from './retry'
+} from '@/shared/api/retry'
 
 // Export wrapper functions for explicit retry
 export { withRetry, withExponentialRetry } from './wrappers'

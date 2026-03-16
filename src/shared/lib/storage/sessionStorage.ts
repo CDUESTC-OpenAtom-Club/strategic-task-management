@@ -1,8 +1,9 @@
 /**
  * Session Storage Utilities
- * 
+ *
  * Type-safe sessionStorage wrapper
  */
+import { logger } from '../utils/logger'
 
 /**
  * Get item from sessionStorage
@@ -12,7 +13,7 @@ export function getItem<T>(key: string): T | null {
     const item = sessionStorage.getItem(key)
     return item ? JSON.parse(item) : null
   } catch (error) {
-    console.error(`Error reading from sessionStorage: ${key}`, error)
+    logger.error(`Error reading from sessionStorage: ${key}`, error)
     return null
   }
 }
@@ -24,7 +25,7 @@ export function setItem<T>(key: string, value: T): void {
   try {
     sessionStorage.setItem(key, JSON.stringify(value))
   } catch (error) {
-    console.error(`Error writing to sessionStorage: ${key}`, error)
+    logger.error(`Error writing to sessionStorage: ${key}`, error)
   }
 }
 
@@ -35,7 +36,7 @@ export function removeItem(key: string): void {
   try {
     sessionStorage.removeItem(key)
   } catch (error) {
-    console.error(`Error removing from sessionStorage: ${key}`, error)
+    logger.error(`Error removing from sessionStorage: ${key}`, error)
   }
 }
 
@@ -46,6 +47,6 @@ export function clear(): void {
   try {
     sessionStorage.clear()
   } catch (error) {
-    console.error('Error clearing sessionStorage', error)
+    logger.error('Error clearing sessionStorage', error)
   }
 }

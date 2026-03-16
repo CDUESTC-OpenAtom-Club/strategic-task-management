@@ -19,7 +19,14 @@ import {
   ElEmpty
 } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
-import { useIndicatorStore, STATUS_CONFIG, LEVEL_CONFIG, calculateCompletionRate, formatWeightAsPercentage } from '@/features/strategic-indicator'
+import {
+  useIndicatorStore,
+  STATUS_CONFIG,
+  LEVEL_CONFIG,
+  calculateCompletionRate,
+  formatWeightAsPercentage
+} from '@/features/strategic-indicator'
+import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()
 const route = useRoute()
@@ -31,7 +38,9 @@ const indicator = ref<Indicator | null>(null)
 const indicatorId = computed(() => Number(route.params.id))
 
 const statusConfig = computed(() =>
-  indicator.value ? STATUS_CONFIG[indicator.value.status] || STATUS_CONFIG.DRAFT : STATUS_CONFIG.DRAFT
+  indicator.value
+    ? STATUS_CONFIG[indicator.value.status] || STATUS_CONFIG.DRAFT
+    : STATUS_CONFIG.DRAFT
 )
 
 const levelConfig = computed(() =>
@@ -39,13 +48,13 @@ const levelConfig = computed(() =>
 )
 
 const completionRate = computed(() => {
-  if (!indicator.value) return 0
+  if (!indicator.value) {
+    return 0
+  }
   return calculateCompletionRate(indicator.value.targetValue, indicator.value.actualValue)
 })
 
-const weightDisplay = computed(() =>
-  formatWeightAsPercentage(indicator.value?.weight)
-)
+const weightDisplay = computed(() => formatWeightAsPercentage(indicator.value?.weight))
 
 onMounted(() => {
   fetchIndicatorDetail()
@@ -58,7 +67,7 @@ async function fetchIndicatorDetail() {
     indicator.value = data
   } catch (error) {
     ElMessage.error('加载指标详情失败')
-    console.error('Failed to fetch indicator detail:', error)
+    logger.error('Failed to fetch indicator detail:', error)
   } finally {
     loading.value = false
   }

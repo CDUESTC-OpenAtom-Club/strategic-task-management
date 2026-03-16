@@ -1,6 +1,6 @@
 /**
  * Auth Feature Store
- * 
+ *
  * Migrated from stores/auth.ts
  * Authentication and authorization state management
  */
@@ -27,23 +27,29 @@ export const useAuthStore = defineStore('auth', () => {
 
   // ============ Getters ============
   const isAuthenticated = computed(() => !!token.value && !!user.value)
-  
+
   const userRole = computed(() => {
-    if (!user.value) {return null}
+    if (!user.value) {
+      return null
+    }
     return user.value.role || null
   })
-  
+
   const userName = computed(() => {
-    if (!user.value) {return ''}
+    if (!user.value) {
+      return ''
+    }
     return user.value.name || (user.value as { realName?: string }).realName || ''
   })
-  
+
   const userDepartment = computed(() => {
-    if (!user.value) {return ''}
+    if (!user.value) {
+      return ''
+    }
     return user.value.department || (user.value as { orgName?: string }).orgName || ''
   })
 
-  // 当前有效角色（考虑视角切换�?
+  // 当前有效角色（考虑视角切换?
   const effectiveRole = computed(() => viewingAsRole.value || user.value?.role || null)
   const effectiveDepartment = computed(
     () => viewingAsDepartment.value || user.value?.department || ''
@@ -52,7 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
   // ============ Actions ============
   const login = async (credentials: { username: string; password: string }) => {
     loading.value = true
-    logger.debug('🔐 [Auth] 开始登�?', credentials.username)
+    logger.debug('🔐 [Auth] 开始登?', credentials.username)
 
     try {
       const response = await api.post('/auth/login', credentials)
@@ -63,23 +69,23 @@ export const useAuthStore = defineStore('auth', () => {
       if (parseResult.success && parseResult.data) {
         const { token: loginToken, user: userData } = parseResult.data
 
-        logger.debug('�?[Auth] 登录成功，Token:', loginToken.substring(0, 20) + '...')
+        logger.debug('?[Auth] 登录成功，Token:', loginToken.substring(0, 20) + '...')
         logger.debug('👤 [Auth] 用户数据:', userData)
 
         const mappedUser = mapBackendUser(userData)
-        logger.debug('�?[Auth] 映射后的用户:', mappedUser)
-        
+        logger.debug('?[Auth] 映射后的用户:', mappedUser)
+
         user.value = mappedUser
         token.value = loginToken
         tokenManager.setAccessToken(loginToken)
         localStorage.setItem('token', loginToken)
         localStorage.setItem('currentUser', JSON.stringify(mappedUser))
 
-        logger.debug('�?[Auth] 登录状态已保存')
+        logger.debug('?[Auth] 登录状态已保存')
 
-        // 等待响应式更新完�?
+        // 等待响应式更新完?
         await new Promise(resolve => setTimeout(resolve, 200))
-        
+
         logger.debug('✅[Auth] Token设置完成，准备加载数据')
 
         // 登录成功后，触发数据重新加载
@@ -105,7 +111,8 @@ export const useAuthStore = defineStore('auth', () => {
       logger.error('❌[Auth] 登录异常:', error)
       return {
         success: false,
-        error: (error as any).response?.data?.message || (error as any).message || '登录失败：网络错误'
+        error:
+          (error as any).response?.data?.message || (error as any).message || '登录失败：网络错误'
       }
     } finally {
       loading.value = false
@@ -129,7 +136,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const fetchUser = async () => {
-    if (!token.value) {return}
+    if (!token.value) {
+      return
+    }
 
     try {
       const response = await api.get('/auth/me')
@@ -147,7 +156,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const hasPermission = (resource: string, action: string) => {
-    if (!user.value) {return false}
+    if (!user.value) {
+      return false
+    }
 
     const permissions = {
       strategic_dept: [
@@ -171,11 +182,7 @@ export const useAuthStore = defineStore('auth', () => {
         'approvals:read',
         'approvals:approve'
       ],
-      secondary_college: [
-        'reports:create',
-        'reports:read',
-        'reports:update'
-      ]
+      secondary_college: ['reports:create', 'reports:read', 'reports:update']
     }
 
     const rolePermissions = permissions[user.value.role] || []
@@ -193,7 +200,7 @@ export const useAuthStore = defineStore('auth', () => {
         if (parsedUser && parsedUser.role) {
           user.value = parsedUser
           token.value = memoryToken
-          logger.debug('[Auth] 从内存恢复会�?', parsedUser.name, parsedUser.role)
+          logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
           return
         }
       } catch (e) {
@@ -208,7 +215,7 @@ export const useAuthStore = defineStore('auth', () => {
           tokenManager.setAccessToken(savedToken)
           user.value = parsedUser
           token.value = savedToken
-          logger.debug('[Auth] �?localStorage 恢复会话:', parsedUser.name, parsedUser.role)
+          logger.debug('[Auth] ?localStorage 恢复会话:', parsedUser.name, parsedUser.role)
           return
         }
       } catch (e) {
@@ -247,7 +254,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('auth_token')
   }
 
-  // 立即初始�?
+  // 立即初始?
   initializeAuth()
 
   // 切换视角

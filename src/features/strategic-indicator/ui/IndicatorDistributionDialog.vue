@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Indicator Distribution Dialog Component
- * 
+ *
  * Dialog for distributing indicators to target organizations.
  */
 
@@ -20,6 +20,7 @@ import {
 } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
 import { distributeRequestSchema } from '../model/schema'
+import { logger } from '@/shared/lib/utils/logger'
 
 interface Props {
   modelValue: boolean
@@ -47,7 +48,7 @@ const formData = ref({
 
 const dialogVisible = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: value => emit('update:modelValue', value)
 })
 
 const formRules = {
@@ -57,22 +58,24 @@ const formRules = {
 }
 
 async function handleConfirm() {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
-    
+
     // Validate with Zod schema
     const result = distributeRequestSchema.safeParse(formData.value)
-    
+
     if (!result.success) {
       ElMessage.error('请检查输入数据')
       return
     }
-    
+
     emit('confirm', formData.value)
   } catch (error) {
-    console.error('Form validation failed:', error)
+    logger.error('Form validation failed:', error)
   }
 }
 
@@ -119,8 +122,8 @@ function handleOpen() {
         :disabled="loading"
       >
         <ElFormItem label="目标组织" prop="targetOrgIds" required>
-          <ElSelect 
-            v-model="formData.targetOrgIds" 
+          <ElSelect
+            v-model="formData.targetOrgIds"
             multiple
             filterable
             placeholder="请选择目标组织"
@@ -132,8 +135,8 @@ function handleOpen() {
         </ElFormItem>
 
         <ElFormItem label="下发说明" prop="message">
-          <ElInput 
-            v-model="formData.message" 
+          <ElInput
+            v-model="formData.message"
             type="textarea"
             :rows="3"
             placeholder="请输入下发说明（可选）"
@@ -143,8 +146,8 @@ function handleOpen() {
         </ElFormItem>
 
         <ElFormItem label="截止日期" prop="deadline">
-          <ElDatePicker 
-            v-model="formData.deadline" 
+          <ElDatePicker
+            v-model="formData.deadline"
             type="date"
             placeholder="请选择截止日期（可选）"
             value-format="YYYY-MM-DD"
@@ -157,9 +160,7 @@ function handleOpen() {
     <template #footer>
       <ElSpace>
         <ElButton @click="handleCancel">取消</ElButton>
-        <ElButton type="primary" :loading="loading" @click="handleConfirm">
-          确认下发
-        </ElButton>
+        <ElButton type="primary" :loading="loading" @click="handleConfirm"> 确认下发 </ElButton>
       </ElSpace>
     </template>
   </ElDialog>

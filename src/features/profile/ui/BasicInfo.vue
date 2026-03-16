@@ -1,19 +1,9 @@
 <template>
   <div class="basic-info">
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="120px"
-      class="basic-info-form"
-    >
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="basic-info-form">
       <div class="avatar-section">
         <div class="avatar-upload">
-          <el-avatar
-            :size="100"
-            :src="form.avatar"
-            class="user-avatar"
-          >
+          <el-avatar :size="100" :src="form.avatar" class="user-avatar">
             {{ form.username?.charAt(0)?.toUpperCase() || 'U' }}
           </el-avatar>
           <el-upload
@@ -22,65 +12,38 @@
             :before-upload="beforeAvatarUpload"
             :http-request="uploadAvatar"
           >
-            <el-button size="small" type="primary">
-              更换头像
-            </el-button>
+            <el-button size="small" type="primary"> 更换头像 </el-button>
           </el-upload>
         </div>
       </div>
 
       <el-form-item label="用户名" prop="username">
-        <el-input
-          v-model="form.username"
-          disabled
-          placeholder="用户名不可修改"
-        />
+        <el-input v-model="form.username" disabled placeholder="用户名不可修改" />
       </el-form-item>
 
       <el-form-item label="姓名" prop="name">
-        <el-input
-          v-model="form.name"
-          placeholder="请输入姓名"
-        />
+        <el-input v-model="form.name" placeholder="请输入姓名" />
       </el-form-item>
 
       <el-form-item label="部门" prop="department">
-        <el-input
-          v-model="form.department"
-          disabled
-          placeholder="部门信息不可修改"
-        />
+        <el-input v-model="form.department" disabled placeholder="部门信息不可修改" />
       </el-form-item>
 
       <el-form-item label="角色" prop="role">
-        <el-input
-          :value="getRoleLabel(form.role)"
-          disabled
-          placeholder="角色信息不可修改"
-        />
+        <el-input :value="getRoleLabel(form.role)" disabled placeholder="角色信息不可修改" />
       </el-form-item>
 
       <el-form-item label="邮箱" prop="email">
-        <el-input
-          v-model="form.email"
-          placeholder="请输入邮箱地址"
-        />
+        <el-input v-model="form.email" placeholder="请输入邮箱地址" />
       </el-form-item>
 
       <el-form-item label="手机号" prop="phone">
-        <el-input
-          v-model="form.phone"
-          placeholder="请输入手机号"
-        />
+        <el-input v-model="form.phone" placeholder="请输入手机号" />
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" @click="handleSubmit">
-          保存修改
-        </el-button>
-        <el-button @click="handleReset">
-          重置
-        </el-button>
+        <el-button type="primary" @click="handleSubmit"> 保存修改 </el-button>
+        <el-button @click="handleReset"> 重置 </el-button>
       </el-form-item>
     </el-form>
   </div>
@@ -90,7 +53,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
-import { validateEmail, validatePhone, getRoleLabel } from '@/utils'
+import { validateEmail, validatePhone, getRoleLabel } from '@/shared/lib/utils'
 import type { User as _User, UserRole } from '@/types'
 
 const formRef = ref<FormInstance>()
@@ -113,22 +76,28 @@ const rules = {
   ],
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-      if (value && !validateEmail(value)) {
-        callback(new Error('请输入正确的邮箱地址'))
-      } else {
-        callback()
-      }
-    }, trigger: 'blur' }
+    {
+      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+        if (value && !validateEmail(value)) {
+          callback(new Error('请输入正确的邮箱地址'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ],
   phone: [
-    { validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-      if (value && !validatePhone(value)) {
-        callback(new Error('请输入正确的手机号'))
-      } else {
-        callback()
-      }
-    }, trigger: 'blur' }
+    {
+      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+        if (value && !validatePhone(value)) {
+          callback(new Error('请输入正确的手机号'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
@@ -151,7 +120,7 @@ const uploadAvatar = async (options: UploadRequestOptions) => {
   const { file } = options
   // TODO: Implement actual file upload
   const reader = new FileReader()
-  reader.onload = (e) => {
+  reader.onload = e => {
     form.avatar = e.target?.result as string
     ElMessage.success('头像上传成功')
   }
@@ -159,7 +128,9 @@ const uploadAvatar = async (options: UploadRequestOptions) => {
 }
 
 const handleSubmit = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
@@ -172,7 +143,9 @@ const handleSubmit = async () => {
 }
 
 const handleReset = () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
   formRef.value.resetFields()
   loadUserInfo()
 }

@@ -5,15 +5,19 @@
  */
 
 import type { ComparisonItem } from '@/types'
-import { getProgressStatus } from '@/utils/colors'
+import { getProgressStatus } from '@/shared/lib/utils/colors'
 import { ALERT_THRESHOLDS, COLLEGE_SUFFIXES } from '../model/constants'
 
 /**
  * Get alert level based on progress
  */
 export function getAlertLevel(progress: number): 'severe' | 'moderate' | 'normal' {
-  if (progress < ALERT_THRESHOLDS.SEVERE) return 'severe'
-  if (progress < ALERT_THRESHOLDS.MODERATE) return 'moderate'
+  if (progress < ALERT_THRESHOLDS.SEVERE) {
+    return 'severe'
+  }
+  if (progress < ALERT_THRESHOLDS.MODERATE) {
+    return 'moderate'
+  }
   return 'normal'
 }
 
@@ -21,14 +25,19 @@ export function getAlertLevel(progress: number): 'severe' | 'moderate' | 'normal
  * Check if department name is a secondary college
  */
 export function isSecondaryCollege(deptName?: string): boolean {
-  if (!deptName) return false
+  if (!deptName) {
+    return false
+  }
   return COLLEGE_SUFFIXES.some(suffix => deptName.endsWith(suffix))
 }
 
 /**
  * Get indicator progress at specific date
  */
-export function getIndicatorProgressAtDate(indicator: StrategicIndicator, targetDate: Date): number {
+export function getIndicatorProgressAtDate(
+  indicator: StrategicIndicator,
+  targetDate: Date
+): number {
   // If no audit records, return current progress
   if (!indicator.statusAudit || indicator.statusAudit.length === 0) {
     return indicator.progress
@@ -39,8 +48,8 @@ export function getIndicatorProgressAtDate(indicator: StrategicIndicator, target
   let latestProgress = 0 // Default to 0
 
   // Sort audit records by time
-  const sortedAudits = [...indicator.statusAudit].sort((a, b) =>
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  const sortedAudits = [...indicator.statusAudit].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   )
 
   // Find the last progress update before target time
@@ -66,17 +75,22 @@ export function aggregateByDepartment(
   indicators: StrategicIndicator[],
   groupField: keyof StrategicIndicator = 'responsibleDept'
 ): ComparisonItem[] {
-  const deptMap = new Map<string, {
-    totalProgress: number
-    totalWeight: number
-    count: number
-    completed: number
-    alerts: number
-  }>()
+  const deptMap = new Map<
+    string,
+    {
+      totalProgress: number
+      totalWeight: number
+      count: number
+      completed: number
+      alerts: number
+    }
+  >()
 
   indicators.forEach(indicator => {
     const deptName = indicator[groupField] as string
-    if (!deptName) return // Skip indicators without department
+    if (!deptName) {
+      return
+    } // Skip indicators without department
 
     if (!deptMap.has(deptName)) {
       deptMap.set(deptName, {
@@ -89,22 +103,24 @@ export function aggregateByDepartment(
     }
 
     const data = deptMap.get(deptName)
-    if (!data) return
+    if (!data) {
+      return
+    }
     data.totalProgress += indicator.progress * indicator.weight
     data.totalWeight += indicator.weight
     data.count += 1
-    if (indicator.progress >= 100) data.completed += 1
-    if (indicator.progress < 60) data.alerts += 1
+    if (indicator.progress >= 100) {
+      data.completed += 1
+    }
+    if (indicator.progress < 60) {
+      data.alerts += 1
+    }
   })
 
   const result: ComparisonItem[] = []
   deptMap.forEach((data, deptName) => {
-    const avgProgress = data.totalWeight > 0
-      ? Math.round(data.totalProgress / data.totalWeight)
-      : 0
-    const completionRate = data.count > 0
-      ? Math.round((data.completed / data.count) * 100)
-      : 0
+    const avgProgress = data.totalWeight > 0 ? Math.round(data.totalProgress / data.totalWeight) : 0
+    const completionRate = data.count > 0 ? Math.round((data.completed / data.count) * 100) : 0
 
     result.push({
       dept: deptName,
@@ -156,7 +172,9 @@ export function generateSankeyData(indicators: StrategicIndicator[]) {
     const source = indicator.ownerDept || '战略发展部'
     const target = indicator.responsibleDept
 
-    if (!source || !target) return // Skip indicators without complete department info
+    if (!source || !target) {
+      return
+    } // Skip indicators without complete department info
 
     nodes.add(source)
     nodes.add(target)
@@ -205,7 +223,9 @@ export function calculateTaskSourceDistribution(
 ): Array<{ name: string; value: number; percentage: number }> {
   const deptIndicators = indicators.filter(i => i.responsibleDept === userDepartment)
 
-  if (deptIndicators.length === 0) return []
+  if (deptIndicators.length === 0) {
+    return []
+  }
 
   const sourceMap = new Map<string, number>()
   deptIndicators.forEach(i => {

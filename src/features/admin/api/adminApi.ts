@@ -13,7 +13,7 @@
  */
 
 import { apiClient } from '@/shared/api/client'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * System statistics
@@ -146,10 +146,7 @@ export const adminApi = {
   }): Promise<{ logs: AuditLog[]; total: number }> {
     try {
       logger.debug('[adminApi] Fetching audit logs:', params)
-      return await apiClient.get<{ logs: AuditLog[]; total: number }>(
-        '/audit/logs',
-        params
-      )
+      return await apiClient.get<{ logs: AuditLog[]; total: number }>('/audit/logs', params)
     } catch (error) {
       logger.error('[adminApi] Failed to fetch audit logs:', error)
       throw error
@@ -168,9 +165,15 @@ export const adminApi = {
     try {
       logger.debug('[adminApi] Exporting audit logs:', params)
       const queryParams = new URLSearchParams()
-      if (params.startDate) {queryParams.append('startDate', params.startDate)}
-      if (params.endDate) {queryParams.append('endDate', params.endDate)}
-      if (params.format) {queryParams.append('format', params.format)}
+      if (params.startDate) {
+        queryParams.append('startDate', params.startDate)
+      }
+      if (params.endDate) {
+        queryParams.append('endDate', params.endDate)
+      }
+      if (params.format) {
+        queryParams.append('format', params.format)
+      }
 
       await apiClient.download(
         `/analytics/export/audit-logs?${queryParams.toString()}`,

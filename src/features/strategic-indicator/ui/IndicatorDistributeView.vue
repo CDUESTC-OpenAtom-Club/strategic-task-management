@@ -24,6 +24,7 @@ import {
 } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
 import { useIndicatorStore, STATUS_CONFIG, LEVEL_CONFIG } from '@/features/strategic-indicator'
+import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()
 const route = useRoute()
@@ -96,7 +97,7 @@ async function fetchIndicatorDetail() {
     indicator.value = data
   } catch (error) {
     ElMessage.error('加载指标信息失败')
-    console.error('Failed to fetch indicator:', error)
+    logger.error('Failed to fetch indicator:', error)
   } finally {
     loading.value = false
   }
@@ -124,7 +125,7 @@ async function handleSubmit() {
       router.back()
     } catch (error) {
       ElMessage.error('下发失败')
-      console.error('Failed to distribute indicator:', error)
+      logger.error('Failed to distribute indicator:', error)
     } finally {
       submitting.value = false
     }

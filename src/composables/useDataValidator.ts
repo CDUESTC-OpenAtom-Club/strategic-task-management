@@ -1,8 +1,8 @@
 /**
  * 数据验证组合式函数
- * 
+ *
  * 提供统一的数据验证能力，用于验证指标、里程碑、用户等实体数据的完整性和格式
- * 
+ *
  * @requirements 2.4 - Milestone data validation with complete fields
  * @requirements 3.4 - statusAudit audit log field validation
  * @requirements 9.4 - Null value handling with default values
@@ -25,6 +25,7 @@ import {
   type ArrayValidationRule,
   type EnumValidationRule
 } from '@/config/validationRules'
+import { logger } from '@/shared/lib/utils/logger'
 
 // ============================================================================
 // 类型定义
@@ -109,7 +110,6 @@ function isEmptyArray(value: unknown): boolean {
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
-
 
 // ============================================================================
 // 核心验证函数
@@ -430,44 +430,39 @@ function validateEntity(
   }
 }
 
-
 // ============================================================================
 // 主组合式函数
 // ============================================================================
 
 /**
  * 数据验证组合式函数
- * 
+ *
  * 提供统一的数据验证能力，用于验证指标、里程碑、用户等实体数据
- * 
+ *
  * @param options - 验证器选项
  * @returns 验证方法集合
- * 
+ *
  * @example
  * ```typescript
  * const { validateIndicator, validateMilestone, safeGet } = useDataValidator()
- * 
+ *
  * const result = validateIndicator(indicatorData)
  * if (!result.isValid) {
  *   console.error('验证失败:', result.errors)
  * }
- * 
+ *
  * const name = safeGet(data, 'user.name', '未知用户')
  * ```
  */
 export function useDataValidator(options: DataValidatorOptions = {}) {
-  const {
-    strict = false,
-    logErrors = false,
-    defaultValues = {}
-  } = options
+  const { strict = false, logErrors = false, defaultValues = {} } = options
 
   /**
    * 记录验证错误日志
    */
   function logValidationErrors(entityType: string, result: ValidationResult): void {
     if (logErrors && !result.isValid) {
-      console.warn(`[DataValidator] ${entityType} 验证失败:`, {
+      logger.warn(`[DataValidator] ${entityType} 验证失败:`, {
         errors: result.errors,
         warnings: result.warnings
       })
@@ -476,10 +471,10 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证指标数据完整性
-   * 
+   *
    * @param indicator - 待验证的指标数据
    * @returns 验证结果
-   * 
+   *
    * @requirement 2.4 - Milestone data validation
    */
   function validateIndicator(indicator: unknown): ValidationResult {
@@ -490,10 +485,10 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证里程碑数据
-   * 
+   *
    * @param milestone - 待验证的里程碑数据
    * @returns 验证结果
-   * 
+   *
    * @requirement 2.4 - Milestone data validation with complete fields
    */
   function validateMilestone(milestone: unknown): ValidationResult {
@@ -504,10 +499,10 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证用户数据
-   * 
+   *
    * @param user - 待验证的用户数据
    * @returns 验证结果
-   * 
+   *
    * @requirement 5.2 - User role enum validation
    */
   function validateUser(user: unknown): ValidationResult {
@@ -518,10 +513,10 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证状态审计日志条目
-   * 
+   *
    * @param entry - 待验证的审计日志条目
    * @returns 验证结果
-   * 
+   *
    * @requirement 3.4 - statusAudit audit log field validation
    */
   function validateStatusAuditEntry(entry: unknown): ValidationResult {
@@ -532,10 +527,10 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证日期格式
-   * 
+   *
    * @param date - 待验证的日期值
    * @returns 是否为有效日期
-   * 
+   *
    * @requirement 9.1 - Date format validation
    */
   function validateDateFormat(date: unknown): boolean {
@@ -560,10 +555,10 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证进度值范围
-   * 
+   *
    * @param progress - 待验证的进度值
    * @returns 是否在有效范围内 [0, 100]
-   * 
+   *
    * @requirement 9.2 - Progress value range validation (0-100)
    */
   function validateProgress(progress: unknown): boolean {
@@ -575,11 +570,11 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 验证枚举值
-   * 
+   *
    * @param value - 待验证的值
    * @param validValues - 有效的枚举值列表
    * @returns 是否为有效枚举值
-   * 
+   *
    * @requirement 2.6 - progressApprovalStatus enum validation
    */
   function validateEnum<T>(value: unknown, validValues: readonly T[]): boolean {
@@ -588,16 +583,16 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 安全获取字段值，提供默认值
-   * 
+   *
    * 支持点号分隔的路径访问嵌套属性
-   * 
+   *
    * @param obj - 源对象
    * @param path - 属性路径（支持点号分隔，如 'user.name'）
    * @param defaultValue - 默认值
    * @returns 获取到的值或默认值
-   * 
+   *
    * @requirement 9.4 - Null value handling with default values
-   * 
+   *
    * @example
    * ```typescript
    * const name = safeGet(data, 'user.name', '未知用户')
@@ -638,11 +633,11 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 批量验证数组数据
-   * 
+   *
    * @param items - 待验证的数据数组
    * @param validator - 单项验证函数
    * @returns 每个元素的验证结果数组
-   * 
+   *
    * @example
    * ```typescript
    * const results = validateArray(milestones, validateMilestone)
@@ -654,15 +649,19 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
     validator: (item: unknown) => ValidationResult
   ): ValidationResult[] {
     if (!Array.isArray(items)) {
-      return [{
-        isValid: false,
-        errors: [{
-          field: '_root',
-          message: '输入必须是数组',
-          value: items
-        }],
-        warnings: []
-      }]
+      return [
+        {
+          isValid: false,
+          errors: [
+            {
+              field: '_root',
+              message: '输入必须是数组',
+              value: items
+            }
+          ],
+          warnings: []
+        }
+      ]
     }
 
     return items.map((item, index) => {
@@ -684,11 +683,11 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
 
   /**
    * 使用默认值填充对象的空字段
-   * 
+   *
    * @param obj - 源对象
    * @param entityType - 实体类型 ('indicator' | 'milestone' | 'user' | 'statusAuditEntry')
    * @returns 填充后的对象
-   * 
+   *
    * @requirement 9.4 - Null value handling with default values
    */
   function fillDefaults<T extends Record<string, unknown>>(
@@ -756,18 +755,18 @@ export function useDataValidator(options: DataValidatorOptions = {}) {
     validateMilestone,
     validateUser,
     validateStatusAuditEntry,
-    
+
     // 字段验证方法
     validateDateFormat,
     validateProgress,
     validateEnum,
-    
+
     // 安全取值方法
     safeGet,
-    
+
     // 批量验证方法
     validateArray,
-    
+
     // 辅助方法
     fillDefaults,
     createEmptyResult,
@@ -788,4 +787,3 @@ export type {
   ArrayValidationRule,
   EnumValidationRule
 } from '@/config/validationRules'
-

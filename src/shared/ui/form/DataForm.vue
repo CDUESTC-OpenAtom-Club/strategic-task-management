@@ -10,6 +10,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick as _nextTick } from 'vue'
 import type { FormInstance, FormRules, FormItemProp } from 'element-plus'
+import { logger } from '@/shared/lib/utils/logger'
 
 /** 表单字段类型 */
 export type FieldType =
@@ -145,24 +146,32 @@ const formRef = ref<FormInstance>()
 const innerFields = ref<FormField[]>([...props.fields])
 
 /** 监听字段配置变化 */
-watch(() => props.fields, (newFields) => {
-  innerFields.value = [...newFields]
-}, { deep: true })
+watch(
+  () => props.fields,
+  newFields => {
+    innerFields.value = [...newFields]
+  },
+  { deep: true }
+)
 
 /** 监听表单数据变化 (处理联动) */
-watch(() => props.model, (newModel) => {
-  innerFields.value = innerFields.value.map(field => {
-    if (field.linkage) {
-      const { trigger, condition, result } = field.linkage
-      const triggerValue = newModel[trigger]
+watch(
+  () => props.model,
+  newModel => {
+    innerFields.value = innerFields.value.map(field => {
+      if (field.linkage) {
+        const { trigger, condition, result } = field.linkage
+        const triggerValue = newModel[trigger]
 
-      if (condition(triggerValue, newModel)) {
-        return { ...field, ...result }
+        if (condition(triggerValue, newModel)) {
+          return { ...field, ...result }
+        }
       }
-    }
-    return field
-  })
-}, { deep: true })
+      return field
+    })
+  },
+  { deep: true }
+)
 
 /** 计算每个字段的列宽 */
 const fieldSpan = computed(() => {
@@ -186,13 +195,15 @@ const handleFieldChange = (prop: string, value: unknown) => {
 
 /** 提交表单 */
 const submit = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
     emit('submit', props.model)
   } catch (error) {
-    console.warn('[DataForm] Validation failed:', error)
+    logger.warn('[DataForm] Validation failed:', error)
   }
 }
 
@@ -243,7 +254,7 @@ defineExpose({
         <el-col
           v-for="field in visibleFields"
           :key="field.prop"
-          :span="inline ? undefined : (field.span || fieldSpan)"
+          :span="inline ? undefined : field.span || fieldSpan"
         >
           <!-- 文本输入 -->
           <el-form-item

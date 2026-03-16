@@ -9,7 +9,7 @@
     <div class="drawer-content">
       <el-empty description="组件正在维护中" />
     </div>
-    
+
     <template #footer>
       <div class="drawer-footer">
         <el-button @click="handleClose">关闭</el-button>
@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
 
 // Props
 const props = defineProps<{
@@ -37,7 +37,7 @@ const emit = defineEmits<{
 // 控制抽屉显示
 const visible = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: value => emit('update:modelValue', value)
 })
 
 // 关闭抽屉

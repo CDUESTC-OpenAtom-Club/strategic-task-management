@@ -20,7 +20,7 @@
  * @composable
  */
 import { onUnmounted } from 'vue'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 export interface TimeoutManager {
   /**
@@ -60,7 +60,7 @@ export function useTimeoutManager(): TimeoutManager {
       try {
         handler()
       } catch (error) {
-        console.error('[useTimeoutManager] Error in timeout handler:', error)
+        logger.error('[useTimeoutManager] Error in timeout handler:', error)
       } finally {
         // 执行完成后自动清理
         timers.delete(timer)
@@ -73,10 +73,7 @@ export function useTimeoutManager(): TimeoutManager {
    * 添加一系列延迟执行的回调
    * 适用于动画场景的多次调整
    */
-  const addDelayedSequence = (
-    handler: () => void,
-    delays: number[]
-  ): void => {
+  const addDelayedSequence = (handler: () => void, delays: number[]): void => {
     delays.forEach(delay => {
       addTimeout(handler, delay)
     })

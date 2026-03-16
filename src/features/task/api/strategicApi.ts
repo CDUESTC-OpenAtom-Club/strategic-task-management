@@ -17,7 +17,11 @@ import type {
 } from '@/types'
 /* eslint-enable no-restricted-syntax */
 // 导入统一的 IndicatorVO 接口，避免重复定义
-import type { IndicatorVO, TaskVO as StrategicTaskVO, AssessmentCycleVO } from '@/types/backend-aligned'
+import type {
+  IndicatorVO,
+  TaskVO as StrategicTaskVO,
+  AssessmentCycleVO
+} from '@/shared/types/backend-aligned'
 
 /**
  * 将后端 VO 转换为前端 StrategicTask 类型
@@ -46,32 +50,41 @@ function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
 function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndicator {
   // 转换里程碑状态
   const convertMilestoneStatus = (status: string): 'pending' | 'completed' | 'overdue' => {
-    if (status === 'COMPLETED') {return 'completed'}
-    if (status === 'DELAYED' || status === 'CANCELED') {return 'overdue'}
+    if (status === 'COMPLETED') {
+      return 'completed'
+    }
+    if (status === 'DELAYED' || status === 'CANCELED') {
+      return 'overdue'
+    }
     return 'pending' // NOT_STARTED, IN_PROGRESS 都映射为 pending
   }
 
   // 转换里程碑
-  const milestones = vo.milestones?.map(m => ({
-    id: String(m.milestoneId),
-    name: m.milestoneName,
-    targetProgress: m.targetProgress ?? m.weightPercent,
-    deadline: m.dueDate,
-    status: convertMilestoneStatus(m.status),
-    isPaired: m.isPaired ?? false,
-    weightPercent: m.weightPercent,
-    sortOrder: m.sortOrder
-  })) || []
+  const milestones =
+    vo.milestones?.map(m => ({
+      id: String(m.milestoneId),
+      name: m.milestoneName,
+      targetProgress: m.targetProgress ?? m.weightPercent,
+      deadline: m.dueDate,
+      status: convertMilestoneStatus(m.status),
+      isPaired: m.isPaired ?? false,
+      weightPercent: m.weightPercent,
+      sortOrder: m.sortOrder
+    })) || []
 
   // 转换进度审批状态
-  const convertProgressApprovalStatus = (status?: string): 'none' | 'draft' | 'pending' | 'approved' | 'rejected' => {
-    if (!status) {return 'none'}
+  const convertProgressApprovalStatus = (
+    status?: string
+  ): 'none' | 'draft' | 'pending' | 'approved' | 'rejected' => {
+    if (!status) {
+      return 'none'
+    }
     const map: Record<string, 'none' | 'draft' | 'pending' | 'approved' | 'rejected'> = {
-      'NONE': 'none',
-      'DRAFT': 'draft',
-      'PENDING': 'pending',
-      'APPROVED': 'approved',
-      'REJECTED': 'rejected'
+      NONE: 'none',
+      DRAFT: 'draft',
+      PENDING: 'pending',
+      APPROVED: 'approved',
+      REJECTED: 'rejected'
     }
     return map[status] || 'none'
   }
@@ -102,12 +115,13 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     // 使用后端返回的新字段，提供默认值
     isQualitative: vo.isQualitative ?? false,
     type1: (vo.type1 as '定性' | '定量') ?? '定量',
-    type2: (vo.type2 as '发展性' | '基础性') ?? (vo.level === 'STRAT_TO_FUNC' ? '发展性' : '基础性'),
+    type2:
+      (vo.type2 as '发展性' | '基础性') ?? (vo.level === 'STRAT_TO_FUNC' ? '发展性' : '基础性'),
     progress: vo.progress ?? calculateProgress(milestones),
     createTime: new Date(vo.createdAt).toLocaleDateString('zh-CN'),
     weight: vo.weightPercent,
     remark: vo.remark || '',
-    canWithdraw: vo.canWithdraw ?? (vo.level === 'STRAT_TO_FUNC'),
+    canWithdraw: vo.canWithdraw ?? vo.level === 'STRAT_TO_FUNC',
     taskContent: vo.taskName,
     milestones,
     targetValue: vo.targetValue ?? 100,
@@ -116,7 +130,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     responsibleDept: vo.responsibleDept ?? vo.targetOrgName,
     responsiblePerson: vo.responsiblePerson ?? '',
     status: vo.status === 'ACTIVE' ? 'active' : 'archived',
-    isStrategic: vo.isStrategic ?? (vo.level === 'STRAT_TO_FUNC'),
+    isStrategic: vo.isStrategic ?? vo.level === 'STRAT_TO_FUNC',
     ownerDept: vo.ownerDept ?? vo.ownerOrgName,
     year: vo.year,
     parentIndicatorId: vo.parentIndicatorId ? String(vo.parentIndicatorId) : undefined,
@@ -132,7 +146,9 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
  * 根据里程碑计算进度
  */
 function calculateProgress(milestones: { status: string }[]): number {
-  if (milestones.length === 0) {return 0}
+  if (milestones.length === 0) {
+    return 0
+  }
   const completed = milestones.filter(m => m.status === 'completed').length
   return Math.round((completed / milestones.length) * 100)
 }
@@ -202,7 +218,12 @@ export const strategicApi = {
       }
       return response
     } catch {
-      return { success: false, data: [], message: 'Failed to get indicators', timestamp: new Date() }
+      return {
+        success: false,
+        data: [],
+        message: 'Failed to get indicators',
+        timestamp: new Date()
+      }
     }
   },
 
@@ -228,13 +249,13 @@ export const strategicApi = {
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async createTask(request: CreateStrategicTaskRequest): Promise<ApiResponse<StrategicTaskVO>> {
     logger.info('[API] Creating new strategic task', { request })
-    
+
     try {
-      const response = await withRetry(() => 
+      const response = await withRetry(() =>
         // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
         apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
       )
-      
+
       logger.info('[API] Successfully created task', { taskId: response.data?.taskId })
       return response
     } catch (error) {
@@ -247,15 +268,18 @@ export const strategicApi = {
    * 更新现有的战略任务
    */
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-  async updateTask(taskId: number, request: UpdateStrategicTaskRequest): Promise<ApiResponse<StrategicTaskVO>> {
+  async updateTask(
+    taskId: number,
+    request: UpdateStrategicTaskRequest
+  ): Promise<ApiResponse<StrategicTaskVO>> {
     logger.info('[API] Updating strategic task', { taskId, request })
-    
+
     try {
-      const response = await withRetry(() => 
+      const response = await withRetry(() =>
         // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
         apiClient.put<ApiResponse<StrategicTaskVO>>(`/tasks/${taskId}`, request)
       )
-      
+
       logger.info('[API] Successfully updated task', { taskId })
       return response
     } catch (error) {
@@ -269,12 +293,12 @@ export const strategicApi = {
    */
   async deleteTask(taskId: number): Promise<ApiResponse<void>> {
     logger.info('[API] Deleting strategic task', { taskId })
-    
+
     try {
-      const response = await withRetry(() => 
+      const response = await withRetry(() =>
         apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}`)
       )
-      
+
       logger.info('[API] Successfully deleted task', { taskId })
       return response
     } catch (error) {
@@ -297,25 +321,27 @@ export default strategicApi
  * ==========================================
  */
 
-
-
 /**
  * 审批通过
  * @param instanceId 审批实例ID
  * @param approverId 审批人ID
  * @param comment 审批意见（可选）
  */
-async function approvePlan(instanceId: number, approverId: number, comment?: string): Promise<ApiResponse<string>> {
+async function approvePlan(
+  instanceId: number,
+  approverId: number,
+  comment?: string
+): Promise<ApiResponse<string>> {
   logger.info('[API] Approving plan', { instanceId, approverId })
-  
+
   try {
-    const response = await withRetry(() => 
+    const response = await withRetry(() =>
       apiClient.post<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/approve`, {
         approverId,
         comment
       })
     )
-    
+
     logger.info('[API] Successfully approved plan', { instanceId })
     return response
   } catch (error) {
@@ -330,17 +356,21 @@ async function approvePlan(instanceId: number, approverId: number, comment?: str
  * @param approverId 审批人ID
  * @param comment 拒绝原因（必填）
  */
-async function rejectPlan(instanceId: number, approverId: number, comment: string): Promise<ApiResponse<string>> {
+async function rejectPlan(
+  instanceId: number,
+  approverId: number,
+  comment: string
+): Promise<ApiResponse<string>> {
   logger.info('[API] Rejecting plan', { instanceId, approverId })
-  
+
   try {
-    const response = await withRetry(() => 
+    const response = await withRetry(() =>
       apiClient.post<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/reject`, {
         approverId,
         comment
       })
     )
-    
+
     logger.info('[API] Successfully rejected plan', { instanceId })
     return response
   } catch (error) {
@@ -355,14 +385,14 @@ async function rejectPlan(instanceId: number, approverId: number, comment: strin
  */
 async function getPendingApprovals(userId: number): Promise<ApiResponse<PendingApproval[]>> {
   logger.info('[API] Getting pending approvals', { userId })
-  
+
   try {
-    const response = await withRetry(() => 
+    const response = await withRetry(() =>
       apiClient.get<ApiResponse<PendingApproval[]>>('/plans/approval/pending', {
         params: { userId }
       })
     )
-    
+
     logger.info('[API] Successfully got pending approvals', { count: response.data?.length || 0 })
     return response
   } catch (error) {
@@ -377,12 +407,12 @@ async function getPendingApprovals(userId: number): Promise<ApiResponse<PendingA
  */
 async function getPlanApprovalStatus(planId: number): Promise<ApiResponse<unknown>> {
   logger.info('[API] Getting plan approval status', { planId })
-  
+
   try {
-    const response = await withRetry(() => 
+    const response = await withRetry(() =>
       apiClient.get<ApiResponse<unknown>>(`/plans/approval/plans/${planId}/status`)
     )
-    
+
     logger.info('[API] Successfully got plan approval status', { planId })
     return response
   } catch (error) {
@@ -417,12 +447,12 @@ async function countPendingApprovals(userId: number): Promise<ApiResponse<number
  */
 async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> {
   logger.info('[API] Getting current step', { instanceId })
-  
+
   try {
-    const response = await withRetry(() => 
+    const response = await withRetry(() =>
       apiClient.get<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/current-step`)
     )
-    
+
     logger.info('[API] Successfully got current step', { instanceId })
     return response
   } catch (error) {

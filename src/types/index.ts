@@ -81,10 +81,7 @@ export {
 
 // 重新导出从 Schema 推断的类型
 /* eslint-disable no-restricted-syntax -- Backend-aligned types inferred from schemas */
-export type {
-  LoginCredentials,
-  StrategicIndicator
-} from './schemas'
+export type { LoginCredentials, StrategicIndicator } from './schemas'
 /* eslint-enable no-restricted-syntax */
 
 // ============================================================================
@@ -97,7 +94,6 @@ export type DrillDownLevel = 'organization' | 'department' | 'indicator'
 export type EntityType = 'task' | 'indicator' | 'approval'
 
 // User and Permission Types
-
 
 export interface Permission {
   resource: string
@@ -157,7 +153,6 @@ export interface DepartmentProgress {
 
 // 指标类型 (Enhanced)
 
-
 // 待审批项类型 (Enhanced)
 export interface PendingApproval {
   id: string
@@ -199,7 +194,6 @@ export interface ApprovalHistory {
 
 // Reporting Types
 // ProgressReport 已移至 entities.ts,请使用: import { ProgressReport } from '@/types'
-
 
 // Message Types
 export interface Message {
@@ -256,19 +250,18 @@ export interface PaginationParams {
   sortOrder?: 'asc' | 'desc'
 }
 
-
 // Form Types
 // 注意: 以下表单类型需要与后端 VO 对齐
 // eslint-disable-next-line no-restricted-syntax -- Comment references backend-aligned type names
 // 使用 CreateStrategicTaskRequest / UpdateStrategicTaskRequest 代替
 
 export interface PlanForm {
-  taskName: string        // 与后端对齐: taskName
+  taskName: string // 与后端对齐: taskName
   taskDesc: string | null // 与后端对齐: taskDesc
-  cycleId: number         // 与后端对齐: cycleId
-  taskType: TaskType      // 与后端对齐: taskType
+  cycleId: number // 与后端对齐: cycleId
+  taskType: TaskType // 与后端对齐: taskType
   responsibleDept: string // 与后端对齐
-  weight: number          // 与后端对齐
+  weight: number // 与后端对齐
   targetValue: number | null // 与后端对齐
 }
 
@@ -543,8 +536,6 @@ export interface Task {
   indicators: any[]
 }
 
-
-
 /**
  * IndicatorFill (指标填报历史 - 新增核心表)
  * 这张表格背后的"修改记录本"
@@ -629,9 +620,9 @@ export const PermissionCode = {
   // Task 相关
   TASK_CREATE: 'task.create',
   TASK_EDIT: 'task.edit',
-  TASK_DELETE: 'task.delete',
-} as const;
-export type PermissionCode = typeof PermissionCode[keyof typeof PermissionCode];
+  TASK_DELETE: 'task.delete'
+} as const
+export type PermissionCode = (typeof PermissionCode)[keyof typeof PermissionCode]
 
 /**
  * 填报记录表单
@@ -660,6 +651,7 @@ export interface AuditForm {
   fill_id?: string | number // 可以是 PlanFill 或 IndicatorFill 的 ID（前端使用）
   action: 'approve' | 'reject' | 'return' // 前端使用
   comment?: string
+  userId?: number // 用户ID（后端API需要）
   // 后端API格式字段
   reportId?: string | number
   approved?: boolean
@@ -667,6 +659,7 @@ export interface AuditForm {
   approvalNotes?: string
   rejectionReason?: string
   improvementSuggestions?: string
+  reason?: string // 驳回原因（后端reject接口使用）
 }
 
 // ============================================================

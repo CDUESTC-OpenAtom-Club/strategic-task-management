@@ -18,7 +18,7 @@ import {
 import { Delete as _Delete, UploadFilled, Paperclip } from '@element-plus/icons-vue'
 import type { Indicator, IndicatorFill, IndicatorFillForm, Milestone as _Milestone } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 指标填报表单组件
@@ -82,7 +82,9 @@ const currentMilestone = computed(() => {
   }
 
   // 找到第一个未完成的里程碑
-  return props.indicator.milestones.find(m => m.status !== 'completed') || props.indicator.milestones[0]
+  return (
+    props.indicator.milestones.find(m => m.status !== 'completed') || props.indicator.milestones[0]
+  )
 })
 
 // 初始化表单数据（编辑模式）
@@ -117,7 +119,9 @@ const initFormData = () => {
 
 // 保存草稿
 const handleSave = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
@@ -147,7 +151,9 @@ const handleSave = async () => {
 
 // 提交审核
 const handleSubmit = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
@@ -192,7 +198,7 @@ const handleFileRemove: UploadProps['onRemove'] = () => {
   // 文件移除时的处理
 }
 
-const beforeUpload: UploadProps['beforeUpload'] = (file) => {
+const beforeUpload: UploadProps['beforeUpload'] = file => {
   const isLt10M = file.size / 1024 / 1024 < 10
   if (!isLt10M) {
     ElMessage.error('附件大小不能超过 10MB')
@@ -206,9 +212,13 @@ const progressFormat = (val: number) => {
 }
 
 // 监听 props.fill 变化
-watch(() => props.fill, () => {
-  initFormData()
-}, { immediate: true })
+watch(
+  () => props.fill,
+  () => {
+    initFormData()
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -230,24 +240,18 @@ watch(() => props.fill, () => {
     </div>
 
     <!-- 表单 -->
-    <ElForm
-      ref="formRef"
-      :model="formData"
-      :rules="rules"
-      label-position="top"
-      class="fill-form"
-    >
+    <ElForm ref="formRef" :model="formData" :rules="rules" label-position="top" class="fill-form">
       <!-- 进度值 -->
       <ElFormItem label="当前进度" prop="progress">
         <div class="progress-input">
           <ElInputNumber
             v-model="formData.progress"
-          :min="0"
-          :max="100"
-          :disabled="readonly"
-          :precision="0"
-          class="progress-number"
-        />
+            :min="0"
+            :max="100"
+            :disabled="readonly"
+            :precision="0"
+            class="progress-number"
+          />
           <ElSlider
             v-model="formData.progress"
             :min="0"
@@ -317,20 +321,8 @@ watch(() => props.fill, () => {
     <!-- 操作按钮 -->
     <div v-if="!readonly" class="form-actions">
       <ElButton @click="handleCancel">取消</ElButton>
-      <ElButton
-        type="primary"
-        :loading="saving"
-        @click="handleSave"
-      >
-        保存草稿
-      </ElButton>
-      <ElButton
-        type="success"
-        :loading="submitting"
-        @click="handleSubmit"
-      >
-        提交审核
-      </ElButton>
+      <ElButton type="primary" :loading="saving" @click="handleSave"> 保存草稿 </ElButton>
+      <ElButton type="success" :loading="submitting" @click="handleSubmit"> 提交审核 </ElButton>
     </div>
   </div>
 </template>

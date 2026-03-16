@@ -8,7 +8,7 @@ import { Check, Close, Document, User, Timer, Right } from '@element-plus/icons-
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { useAuthStore } from '@/features/auth/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 const props = defineProps<{
   visible: boolean
@@ -25,7 +25,7 @@ const authStore = useAuthStore()
 // 计算 drawer 可见性
 const drawerVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val)
+  set: val => emit('update:visible', val)
 })
 
 // 待审批列表
@@ -38,7 +38,7 @@ const loadPendingApprovals = async () => {
   try {
     const userId = authStore.user?.id || 1
     const response = await approvalApi.getPendingApprovals(userId)
-    
+
     if (response.success && response.data) {
       pendingApprovals.value = response.data
       logger.info('[PlanApprovalDrawer] 加载待审批列表成功', { count: response.data.length })
@@ -66,19 +66,19 @@ const handleApprove = async (instance: { close: () => void }) => {
         inputType: 'textarea'
       }
     )
-    
+
     const loadingInstance = ElLoading.service({
       lock: true,
       text: '正在审批...',
       background: 'rgba(0, 0, 0, 0.7)'
     })
-    
+
     try {
       const userId = authStore.user?.id || 1
       const comment = (arguments[0] as { value: string }).value || '审批通过'
-      
+
       const response = await approvalApi.approvePlan(instance.instanceId, userId, comment)
-      
+
       if (response.success) {
         ElMessage.success('审批通过成功')
         await loadPendingApprovals()
@@ -105,7 +105,7 @@ const handleReject = async (instance: { close: () => void }) => {
         cancelButtonText: '取消',
         inputPlaceholder: '请输入拒绝原因（必填）',
         inputType: 'textarea',
-        inputValidator: (val) => {
+        inputValidator: val => {
           if (!val || !val.trim()) {
             return '请输入拒绝原因'
           }
@@ -113,17 +113,17 @@ const handleReject = async (instance: { close: () => void }) => {
         }
       }
     )
-    
+
     const loadingInstance = ElLoading.service({
       lock: true,
       text: '正在拒绝...',
       background: 'rgba(0, 0, 0, 0.7)'
     })
-    
+
     try {
       const userId = authStore.user?.id || 1
       const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
-      
+
       if (response.success) {
         ElMessage.success('已拒绝该计划')
         await loadPendingApprovals()
@@ -175,11 +175,14 @@ onMounted(() => {
 })
 
 // 监听 visible 变化
-watch(() => props.visible, (newVal) => {
-  if (newVal) {
-    loadPendingApprovals()
+watch(
+  () => props.visible,
+  newVal => {
+    if (newVal) {
+      loadPendingApprovals()
+    }
   }
-})
+)
 </script>
 
 <template>
@@ -197,9 +200,7 @@ watch(() => props.visible, (newVal) => {
           <el-icon><Check /></el-icon>
           <span>计划审批</span>
         </div>
-        <div class="header-subtitle">
-          待审批 {{ pendingApprovals.length }} 个计划
-        </div>
+        <div class="header-subtitle">待审批 {{ pendingApprovals.length }} 个计划</div>
       </div>
     </template>
 
@@ -213,11 +214,7 @@ watch(() => props.visible, (newVal) => {
 
       <!-- 待审批列表 -->
       <div v-else class="approval-list">
-        <div
-          v-for="instance in pendingApprovals"
-          :key="instance.instanceId"
-          class="approval-card"
-        >
+        <div v-for="instance in pendingApprovals" :key="instance.instanceId" class="approval-card">
           <!-- 卡片头部 -->
           <div class="card-header">
             <div class="plan-info">
@@ -251,20 +248,10 @@ watch(() => props.visible, (newVal) => {
 
           <!-- 操作按钮 -->
           <div class="card-actions">
-            <el-button
-              type="success"
-              size="default"
-              :icon="Check"
-              @click="handleApprove(instance)"
-            >
+            <el-button type="success" size="default" :icon="Check" @click="handleApprove(instance)">
               审批通过
             </el-button>
-            <el-button
-              type="danger"
-              size="default"
-              :icon="Close"
-              @click="handleReject(instance)"
-            >
+            <el-button type="danger" size="default" :icon="Close" @click="handleReject(instance)">
               审批拒绝
             </el-button>
           </div>

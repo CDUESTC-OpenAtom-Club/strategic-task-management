@@ -1,4 +1,4 @@
-import type { StrategicTask, TaskType } from '@/types/entities'
+import type { StrategicTask, TaskType } from '@/shared/types/entities'
 
 export const mockStrategicTasks: StrategicTask[] = [
   {

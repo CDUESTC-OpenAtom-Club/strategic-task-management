@@ -15,7 +15,7 @@ import {
   validateIndicator,
   validateMilestone,
   validateLoginCredentials
-} from '@/types/schemas'
+} from '@/shared/types/schemas'
 import { TEST_CREDENTIALS } from '../helpers/testCredentials'
 
 describe('Zod Schemas', () => {

@@ -10,7 +10,7 @@
  */
 
 import type { User, UserRole } from '@/types'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /** 登录响应数据接口 */
 export interface LoginResponseData {

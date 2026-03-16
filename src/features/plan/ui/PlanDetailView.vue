@@ -16,6 +16,7 @@ import { ArrowLeft, Edit, Upload, Document } from '@element-plus/icons-vue'
 import type { Plan, Task as _Task, Indicator as _Indicator } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 详情页
@@ -60,12 +61,17 @@ const getStatusConfig = (status: string) => {
 
 // 计算完成进度
 const getProgress = () => {
-  if (!plan.value) {return 0}
-  const totalIndicators = plan.value.tasks?.reduce((sum, task) => {
-    return sum + (task.indicators?.length || 0)
-  }, 0) || 0
-  if (totalIndicators === 0) {return 0}
-  return Math.round((plan.value.completedIndicators || 0) / totalIndicators * 100)
+  if (!plan.value) {
+    return 0
+  }
+  const totalIndicators =
+    plan.value.tasks?.reduce((sum, task) => {
+      return sum + (task.indicators?.length || 0)
+    }, 0) || 0
+  if (totalIndicators === 0) {
+    return 0
+  }
+  return Math.round(((plan.value.completedIndicators || 0) / totalIndicators) * 100)
 }
 
 // 操作方法
@@ -90,7 +96,7 @@ const loadPlan = async () => {
     await planStore.loadPlan(planId.value)
     plan.value = planStore.currentPlan
   } catch (error) {
-    console.error('Failed to load plan:', error)
+    logger.error('Failed to load plan:', error)
   } finally {
     loading.value = false
   }
@@ -111,9 +117,7 @@ onMounted(() => {
     <!-- 空状态 -->
     <div v-else-if="!plan" class="empty-container">
       <el-empty description="计划不存在">
-        <el-button type="primary" @click="handleBack">
-          返回列表
-        </el-button>
+        <el-button type="primary" @click="handleBack"> 返回列表 </el-button>
       </el-empty>
     </div>
 
@@ -134,15 +138,8 @@ onMounted(() => {
           </div>
         </div>
         <div class="header-actions">
-          <el-button v-if="canEdit" :icon="Edit" @click="handleEdit">
-            编辑
-          </el-button>
-          <el-button
-            v-if="canSubmit"
-            type="primary"
-            :icon="Upload"
-            @click="handleSubmit"
-          >
+          <el-button v-if="canEdit" :icon="Edit" @click="handleEdit"> 编辑 </el-button>
+          <el-button v-if="canSubmit" type="primary" :icon="Upload" @click="handleSubmit">
             提交审核
           </el-button>
         </div>
@@ -193,10 +190,18 @@ onMounted(() => {
               <div v-for="task in plan.tasks" :key="task.id" class="task-indicators">
                 <h4>{{ task.name }}</h4>
                 <div v-if="task.indicators && task.indicators.length > 0" class="indicator-items">
-                  <div v-for="indicator in task.indicators" :key="indicator.id" class="indicator-item">
+                  <div
+                    v-for="indicator in task.indicators"
+                    :key="indicator.id"
+                    class="indicator-item"
+                  >
                     <div class="indicator-name">{{ indicator.name }}</div>
                     <div class="indicator-progress">
-                      <el-progress :percentage="indicator.latest_progress || 0" :show-text="false" :stroke-width="6" />
+                      <el-progress
+                        :percentage="indicator.latest_progress || 0"
+                        :show-text="false"
+                        :stroke-width="6"
+                      />
                       <span class="progress-text">{{ indicator.latest_progress || 0 }}%</span>
                     </div>
                   </div>

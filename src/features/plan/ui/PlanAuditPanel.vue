@@ -25,7 +25,7 @@ import {
 import type { PlanFill, PlanFillStatus, IndicatorFill as _IndicatorFill } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 审核面板组件
@@ -79,7 +79,9 @@ const submittedFills = computed(() => {
 
 // 计算整体完成进度
 const overallProgress = computed(() => {
-  if (!currentFill.value || submittedFills.value.length === 0) {return 0}
+  if (!currentFill.value || submittedFills.value.length === 0) {
+    return 0
+  }
   const total = submittedFills.value.reduce((sum, f) => sum + f.progress, 0)
   return Math.round(total / submittedFills.value.length)
 })
@@ -119,18 +121,16 @@ const loadPlanFill = async (fillId: number | string) => {
 
 // 审核通过
 const handleApprove = async () => {
-  if (!currentFill.value) {return}
+  if (!currentFill.value) {
+    return
+  }
 
   try {
-    await ElMessageBox.confirm(
-      '确认通过该提交的审核？',
-      '审核确认',
-      {
-        confirmButtonText: '确认通过',
-        cancelButtonText: '取消',
-        type: 'success'
-      }
-    )
+    await ElMessageBox.confirm('确认通过该提交的审核？', '审核确认', {
+      confirmButtonText: '确认通过',
+      cancelButtonText: '取消',
+      type: 'success'
+    })
 
     approving.value = true
 
@@ -153,7 +153,9 @@ const handleApprove = async () => {
 
 // 驳回
 const handleReject = async () => {
-  if (!currentFill.value) {return}
+  if (!currentFill.value) {
+    return
+  }
 
   if (!auditComment.value.trim()) {
     ElMessage.warning('请填写驳回原因')
@@ -161,15 +163,11 @@ const handleReject = async () => {
   }
 
   try {
-    await ElMessageBox.confirm(
-      '确认驳回该提交？',
-      '驳回确认',
-      {
-        confirmButtonText: '确认驳回',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
+    await ElMessageBox.confirm('确认驳回该提交？', '驳回确认', {
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
 
     rejecting.value = true
 
@@ -203,11 +201,15 @@ const formatDateTime = (dateStr: string) => {
 }
 
 // ============ 监听 props 变化 ============
-watch(() => props.planFillId, (newId) => {
-  if (newId) {
-    loadPlanFill(newId)
-  }
-}, { immediate: true })
+watch(
+  () => props.planFillId,
+  newId => {
+    if (newId) {
+      loadPlanFill(newId)
+    }
+  },
+  { immediate: true }
+)
 
 // ============ 生命周期 ============
 onMounted(() => {
@@ -298,11 +300,7 @@ defineExpose({
         </template>
 
         <div class="fills-list">
-          <div
-            v-for="fill in submittedFills"
-            :key="fill.id"
-            class="fill-item"
-          >
+          <div v-for="fill in submittedFills" :key="fill.id" class="fill-item">
             <div class="fill-item-header">
               <div class="fill-indicator">
                 <el-icon><Document /></el-icon>
@@ -354,20 +352,10 @@ defineExpose({
             show-word-limit
           />
           <div class="audit-actions">
-            <ElButton
-              type="success"
-              :icon="Check"
-              :loading="approving"
-              @click="handleApprove"
-            >
+            <ElButton type="success" :icon="Check" :loading="approving" @click="handleApprove">
               审核通过
             </ElButton>
-            <ElButton
-              type="danger"
-              :icon="Close"
-              :loading="rejecting"
-              @click="handleReject"
-            >
+            <ElButton type="danger" :icon="Close" :loading="rejecting" @click="handleReject">
               驳回
             </ElButton>
           </div>

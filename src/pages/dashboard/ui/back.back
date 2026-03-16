@@ -18,7 +18,7 @@ import { ElMessage } from 'element-plus'
 import { isSecondaryCollege } from '@/utils/colors'
 import { useOrgStore } from '@/stores/org'
 // 加载状态管理 - Requirements 1.5, 1.6
-import { useLoadingState } from '@/composables/useLoadingState'
+import { useLoadingState } from '@/shared/lib/loading/useLoadingState'
 
 // 帮助提示内容
 const helpTexts = {

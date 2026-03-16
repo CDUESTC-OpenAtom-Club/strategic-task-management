@@ -9,7 +9,7 @@ import {
   useNavigation,
   useDepartmentSwitcher,
   useNotificationCenter
-} from '@/composables/layout'
+} from '@/shared/lib/layout'
 import { initApprovalNotifications } from '@/features/approval/lib/approvalNotifications'
 import { disconnectWebSocket } from '@/shared/api/websocket'
 

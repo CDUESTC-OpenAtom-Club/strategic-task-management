@@ -6,8 +6,8 @@
  */
 
 // import { apiClient } from './client' // Commented - not currently used
-import type { RetryConfig } from './retry'
-import { logger } from '@/utils/logger'
+import type { RetryConfig } from '@/shared/api/retry'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Execute an async function with retry logic
@@ -28,15 +28,8 @@ import { logger } from '@/utils/logger'
  * }, { maxRetries: 3 })
  * ```
  */
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  config: RetryConfig = {}
-): Promise<T> {
-  const {
-    maxRetries = 3,
-    baseDelay = 1000,
-    maxDelay = 10000
-  } = config
+export async function withRetry<T>(fn: () => Promise<T>, config: RetryConfig = {}): Promise<T> {
+  const { maxRetries = 3, baseDelay = 1000, maxDelay = 10000 } = config
 
   let lastError: Error
 
@@ -57,8 +50,8 @@ export async function withRetry<T>(
     }
   }
 
-  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError!)
-  throw lastError!
+  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError ?? new Error('Unknown error'))
+  throw lastError ?? new Error('Unknown error')
 }
 
 /**
@@ -74,11 +67,7 @@ export async function withExponentialRetry<T>(
   fn: () => Promise<T>,
   config: RetryConfig = {}
 ): Promise<T> {
-  const {
-    maxRetries = 3,
-    baseDelay = 1000,
-    maxDelay = 10000
-  } = config
+  const { maxRetries = 3, baseDelay = 1000, maxDelay = 10000 } = config
 
   let lastError: Error
 
@@ -99,8 +88,8 @@ export async function withExponentialRetry<T>(
     }
   }
 
-  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError!)
-  throw lastError!
+  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError ?? new Error('Unknown error'))
+  throw lastError ?? new Error('Unknown error')
 }
 
 /**

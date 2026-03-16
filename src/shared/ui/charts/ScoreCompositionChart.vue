@@ -5,19 +5,22 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getColorByIndex as _getColorByIndex, getGradientColor } from '@/utils/colors'
+import { getColorByIndex as _getColorByIndex, getGradientColor } from '@/shared/lib/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 
-const props = withDefaults(defineProps<{
-  basicScore: number
-  developmentScore: number
-  maxBasicScore?: number
-  maxDevelopmentScore?: number
-}>(), {
-  maxBasicScore: 100,
-  maxDevelopmentScore: 20
-})
+const props = withDefaults(
+  defineProps<{
+    basicScore: number
+    developmentScore: number
+    maxBasicScore?: number
+    maxDevelopmentScore?: number
+  }>(),
+  {
+    maxBasicScore: 100,
+    maxDevelopmentScore: 20
+  }
+)
 
 const totalScore = computed(() => props.basicScore + props.developmentScore)
 const _maxTotalScore = computed(() => props.maxBasicScore + props.maxDevelopmentScore)
@@ -64,22 +67,22 @@ const chartOption = computed(() => ({
         }
       },
       labelLine: { show: false },
-        data: [
-          { 
-            value: props.basicScore, 
-            name: '基础性指标', 
-            itemStyle: { 
-              color: getGradientColor('#409EFF', '#409EFFCC') 
-            } 
-          },
-          { 
-            value: props.developmentScore, 
-            name: '发展性指标', 
-            itemStyle: { 
-              color: getGradientColor('#67C23A', '#67C23ACC') 
-            } 
+      data: [
+        {
+          value: props.basicScore,
+          name: '基础性指标',
+          itemStyle: {
+            color: getGradientColor('#409EFF', '#409EFFCC')
           }
-        ]
+        },
+        {
+          value: props.developmentScore,
+          name: '发展性指标',
+          itemStyle: {
+            color: getGradientColor('#67C23A', '#67C23ACC')
+          }
+        }
+      ]
     }
   ],
   graphic: {
@@ -105,7 +108,7 @@ const chartOption = computed(() => ({
         style: {
           fill: '#303133',
           text: totalScore.value,
-            font: 'bold 24px "DIN Alternate", "Helvetica Neue", sans-serif'
+          font: 'bold 24px "DIN Alternate", "Helvetica Neue", sans-serif'
         }
       }
     ]

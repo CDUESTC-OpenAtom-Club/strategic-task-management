@@ -13,11 +13,11 @@
 
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import type { AxiosError } from 'axios'
-import { logger } from '@/utils/logger'
-import { recordApiLatency } from '@/utils/performance'
-import { cacheManager } from '@/utils/cache'
+import { logger } from '@/shared/lib/utils/logger'
+import { recordApiLatency } from '@/shared/lib/utils/performance'
+import { cacheManager } from '@/shared/lib/utils/cache'
 import { transformError, toExtendedError } from '@/shared/api/errorHandler'
-import type { ExtendedErrorInfo } from '@/types/error'
+import type { ExtendedErrorInfo } from '@/shared/types/error'
 import { MockApiHandler } from '@/mock/handler'
 
 // Mock 模式配置
@@ -160,7 +160,11 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     // MOCK MODE - 拦截错误并返回模拟数据
     // ========================================================================
     if (useMock && error.config) {
-      logger.debug('🎭 [Mock Mode] 拦截错误请求:', error.config.method?.toUpperCase(), error.config.url)
+      logger.debug(
+        '🎭 [Mock Mode] 拦截错误请求:',
+        error.config.method?.toUpperCase(),
+        error.config.url
+      )
 
       const mockResponse = await MockApiHandler.handleRequest(error.config)
       return {
@@ -207,7 +211,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       logger.error('   1. 后端服务是否运行在 http://localhost:8080')
       logger.error('   2. 数据库连接是否正常')
       logger.error('   3. 防火墙或代理设置是否阻止连接')
-      
+
       // 显示用户友好的错误提示
       const { ElMessage } = await import('element-plus')
       ElMessage.error({
@@ -223,7 +227,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     // 检查是否为超时错误
     if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
       logger.error('⏱️ [Network Timeout] 请求超时')
-      
+
       const { ElMessage } = await import('element-plus')
       ElMessage.warning({
         message: '请求超时，请检查网络连接或稍后重试',
@@ -237,65 +241,64 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     // ========================================================================
     if (error.response?.status === 401) {
       logger.warn('🔒 [API Auth] 401 未授权')
-      
+
       const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
       const isLoginRequest = originalRequest?.url?.includes('/auth/login')
       const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
-      
+
       // 登录和刷新请求失败，直接返回错误（不尝试刷新）
       if (isLoginRequest || isRefreshRequest) {
         logger.debug('🔒 [API Auth] 登录/刷新请求失败，不尝试刷新')
         return Promise.reject(error)
       }
-      
+
       // 防止重复刷新（如果已经尝试过刷新但仍然失败）
       if (originalRequest._retry) {
         logger.warn('🔒 [API Auth] Token 刷新后仍然失败，跳转登录')
-        
+
         const { useAuthStore } = await import('@/features/auth/model/store')
         const authStore = useAuthStore()
-        
+
         // logout() 会自动跳转到登录页，无需额外处理
         authStore.logout()
-        
+
         return Promise.reject(error)
       }
-      
+
       // 标记为已重试，防止无限循环
       originalRequest._retry = true
-      
+
       try {
         logger.debug('🔄 [API Auth] 尝试刷新 Token...')
-        
+
         // 刷新 Token
-        const { tokenManager } = await import('@/utils/tokenManager')
+        const { tokenManager } = await import('@/shared/lib/utils/tokenManager')
         const newToken = await tokenManager.refreshAccessToken()
-        
+
         logger.debug('✅ [API Auth] Token 刷新成功，重试原请求')
-        
+
         // 更新 auth store 中的 token
         const { useAuthStore } = await import('@/features/auth/model/store')
         const authStore = useAuthStore()
         authStore.token = newToken
-        
+
         // 同步到 localStorage（确保刷新后状态一致）
         localStorage.setItem('token', newToken)
-        
+
         // 更新原请求的 Authorization 头
         originalRequest.headers.Authorization = `Bearer ${newToken}`
-        
+
         // 重新发起原请求
         const axios = (await import('axios')).default
         return axios.request(originalRequest)
-        
       } catch (refreshError) {
         logger.error('❌ [API Auth] Token 刷新失败:', refreshError)
-        
+
         // 刷新失败，清除登录状态并跳转（logout() 会自动跳转）
         const { useAuthStore } = await import('@/features/auth/model/store')
         const authStore = useAuthStore()
         authStore.logout()
-        
+
         return Promise.reject(refreshError)
       }
     }
@@ -305,17 +308,18 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     // ========================================================================
     if (error.response?.status === 403) {
       logger.warn('🚫 [API Auth] 403 权限不足')
-      
+
       // 不要为健康检查请求显示错误通知（403是预期的）
-      const isHealthCheck = error.config?.url?.includes('/actuator/health') ||
-                           error.config?.url?.includes('/orgs') ||
-                           error.config?.url?.includes('/indicators') ||
-                           error.config?.url?.includes('/tasks') ||
-                           error.config?.url?.includes('/milestones')
-      
+      const isHealthCheck =
+        error.config?.url?.includes('/actuator/health') ||
+        error.config?.url?.includes('/orgs') ||
+        error.config?.url?.includes('/indicators') ||
+        error.config?.url?.includes('/tasks') ||
+        error.config?.url?.includes('/milestones')
+
       // 检查是否是健康检查发起的请求（通过请求头标记）
       const isHealthCheckRequest = error.config?.headers?.['X-Health-Check'] === 'true'
-      
+
       if (!isHealthCheck && !isHealthCheckRequest) {
         const { ElMessage } = await import('element-plus')
         ElMessage.error({
@@ -331,7 +335,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     // ========================================================================
     if (error.response?.status === 500) {
       logger.error('💥 [Server Error] 服务器内部错误')
-      
+
       const { ElMessage } = await import('element-plus')
       ElMessage.error({
         message: '服务器内部错误，请稍后重试或联系管理员',

@@ -1,6 +1,6 @@
 /**
  * Auth Feature
- * 
+ *
  * Authentication and authorization functionality
  * Follows FSD (Feature-Sliced Design) architecture
  */
@@ -20,4 +20,5 @@ export { authApi, userApi } from './api'
 
 // UI Components
 export { default as LoginForm } from './ui/LoginForm.vue'
+export { default as LoginView } from './ui/LoginView.vue'
 export { default as UserProfile } from './ui/UserProfile.vue'

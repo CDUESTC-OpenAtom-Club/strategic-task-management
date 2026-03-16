@@ -15,19 +15,15 @@
 
 import type { InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/features/auth/model/store'
-import { generateSignature } from '@/utils/security'
-import { logger } from '@/utils/logger'
+import { generateSignature } from '@/shared/lib/utils/security'
+import { logger } from '@/shared/lib/utils/logger'
 import { addRequestId } from '@/shared/api/errorHandler'
 import {
   generateIdempotencyKey,
   shouldAddIdempotencyKey,
   DEFAULT_IDEMPOTENCY_CONFIG
-} from '@/utils/idempotency'
-import {
-  generateCacheKey,
-  shouldCache,
-  getCacheValidationHeaders
-} from '@/utils/cache'
+} from '@/shared/lib/utils/idempotency'
+import { generateCacheKey, shouldCache, getCacheValidationHeaders } from '@/shared/lib/utils/cache'
 
 // 需要签名验证的敏感操作路径
 const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
@@ -47,10 +43,7 @@ export interface RequestInterceptorConfig {
  * 创建请求拦截器
  */
 export function createRequestInterceptor(config: RequestInterceptorConfig = {}) {
-  const {
-    useMock = USE_MOCK,
-    sensitivePaths = SENSITIVE_PATHS
-  } = config
+  const { useMock = USE_MOCK, sensitivePaths = SENSITIVE_PATHS } = config
 
   return async (axiosConfig: InternalAxiosRequestConfig): Promise<InternalAxiosRequestConfig> => {
     const config = axiosConfig as InternalAxiosRequestConfig & {
@@ -117,7 +110,7 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     const storeToken = authStore.token
     const localToken = localStorage.getItem('token')
     const token = storeToken || localToken
-    
+
     // Debug logging for token checks (development only)
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
@@ -129,14 +122,14 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
         tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
       })
     }
-    
+
     logger.debug('🔍 [API Auth] Token检查:', {
       hasStoreToken: !!storeToken,
       hasLocalToken: !!localToken,
       willUseToken: !!token,
       url: config.url
     })
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
       if (import.meta.env.DEV) {
@@ -149,7 +142,7 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
         url: config.url
       })
     } else {
-      console.warn('[RequestInterceptor] ⚠️ 无Token，未添加Authorization头:', config.url)
+      logger.warn('[RequestInterceptor] 无Token，未添加Authorization头:', config.url)
       logger.warn('⚠️ [API Auth] 无Token (authStore和localStorage都为空)', {
         url: config.url
       })

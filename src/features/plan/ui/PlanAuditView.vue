@@ -13,6 +13,7 @@ import {
 import { ArrowLeft, Check, Close } from '@element-plus/icons-vue'
 import type { PlanFill } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 审核页面
@@ -52,7 +53,9 @@ const handleBack = () => {
 }
 
 const handleApprove = async () => {
-  if (!fillId.value) {return}
+  if (!fillId.value) {
+    return
+  }
 
   submitting.value = true
   try {
@@ -69,7 +72,9 @@ const handleApprove = async () => {
 }
 
 const handleReject = async () => {
-  if (!fillId.value) {return}
+  if (!fillId.value) {
+    return
+  }
 
   if (!auditComment.value.trim()) {
     ElMessage.warning('请输入驳回原因')
@@ -97,7 +102,7 @@ const loadPlanFill = async () => {
     // TODO: 从 API 加载 PlanFill 详情
     // 目前使用模拟数据
   } catch (error) {
-    console.error('Failed to load plan fill:', error)
+    logger.error('Failed to load plan fill:', error)
   } finally {
     loading.value = false
   }
@@ -156,9 +161,11 @@ onMounted(() => {
             <span class="label">完成进度：</span>
             <div class="progress-value">
               <el-progress
-                :percentage="planFill.total_indicators > 0
-                  ? Math.round((planFill.completed_indicators / planFill.total_indicators) * 100)
-                  : 0"
+                :percentage="
+                  planFill.total_indicators > 0
+                    ? Math.round((planFill.completed_indicators / planFill.total_indicators) * 100)
+                    : 0
+                "
                 :stroke-width="8"
               />
               <span class="progress-text">
@@ -180,11 +187,7 @@ onMounted(() => {
         </div>
 
         <div v-else class="fills-list">
-          <div
-            v-for="fill in planFill.fills"
-            :key="fill.id"
-            class="fill-item"
-          >
+          <div v-for="fill in planFill.fills" :key="fill.id" class="fill-item">
             <div class="fill-header">
               <span class="fill-indicator">指标 ID: {{ fill.indicator_id }}</span>
               <el-tag size="small" type="info">{{ fill.progress }}%</el-tag>
@@ -214,20 +217,10 @@ onMounted(() => {
           />
 
           <div class="audit-actions">
-            <el-button
-              type="success"
-              :icon="Check"
-              :loading="submitting"
-              @click="handleApprove"
-            >
+            <el-button type="success" :icon="Check" :loading="submitting" @click="handleApprove">
               审核通过
             </el-button>
-            <el-button
-              type="danger"
-              :icon="Close"
-              :loading="submitting"
-              @click="handleReject"
-            >
+            <el-button type="danger" :icon="Close" :loading="submitting" @click="handleReject">
               驳回
             </el-button>
           </div>

@@ -35,6 +35,7 @@ import type { UserManagementItem, UserForm, Organization, UserRole } from '@/typ
 import api from '@/shared/api'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useAuditLogStore } from '@/features/admin/model/auditLog'
+import { logger } from '@/shared/lib/utils/logger'
 
 const authStore = useAuthStore()
 const auditLogStore = useAuditLogStore()
@@ -255,7 +256,7 @@ const loadUsers = async () => {
     const response = await api.get('/admin/users', { params })
 
     // 转换响应格式
-    // 注意：响应拦截器已将后端ApiResponse.data 包装为response.data.data 
+    // 注意：响应拦截器已将后端ApiResponse.data 包装为response.data.data
     const pageData = response.data.data
     if (!pageData || !pageData.content) {
       throw new Error('响应数据格式错误')
@@ -276,7 +277,7 @@ const loadUsers = async () => {
       updatedAt: user.updatedAt || ''
     }))
   } catch (error) {
-    console.error('加载用户列表失败:', error)
+    logger.error('加载用户列表失败:', error)
     ElMessage.error('加载用户列表失败')
   } finally {
     loading.value = false
@@ -420,7 +421,7 @@ const handleSave = async () => {
           }
         })
       } catch (logError) {
-        console.warn('记录审计日志失败:', logError)
+        logger.warn('记录审计日志失败:', logError)
       }
     } else {
       // 获取原始数据用于审计日志
@@ -442,14 +443,14 @@ const handleSave = async () => {
           dataAfter: userData
         })
       } catch (logError) {
-        console.warn('记录审计日志失败:', logError)
+        logger.warn('记录审计日志失败:', logError)
       }
     }
 
     showUserDialog.value = false
     await loadUsers()
   } catch (error: unknown) {
-    console.error('保存失败:', error)
+    logger.error('保存失败:', error)
     ElMessage.error(error.response.data.message || '操作失败，请重试')
   } finally {
     loading.value = false
@@ -497,13 +498,13 @@ const toggleUserStatus = async (user: UserManagementItem) => {
         dataAfter: { status: newStatus }
       })
     } catch (logError) {
-      console.warn('记录审计日志失败:', logError)
+      logger.warn('记录审计日志失败:', logError)
     }
 
     await loadUsers()
   } catch (error: unknown) {
     if (error !== 'cancel') {
-      console.error('状态更新失败:', error)
+      logger.error('状态更新失败:', error)
       ElMessage.error(error.response.data.message || '操作失败')
     }
   }
@@ -538,13 +539,13 @@ const handleDelete = async (user: UserManagementItem) => {
         dataAfter: { deleted: true, deletedAt: new Date().toISOString() }
       })
     } catch (logError) {
-      console.warn('记录审计日志失败:', logError)
+      logger.warn('记录审计日志失败:', logError)
     }
 
     await loadUsers()
   } catch (error: unknown) {
     if (error !== 'cancel') {
-      console.error('删除失败:', error)
+      logger.error('删除失败:', error)
       ElMessage.error(error.response.data.message || '删除失败')
     }
   }
@@ -598,11 +599,11 @@ const handleResetPassword = async () => {
           dataAfter: { action: '密码已重置', timestamp: new Date().toISOString() }
         })
       } catch (logError) {
-        console.warn('记录审计日志失败:', logError)
+        logger.warn('记录审计日志失败:', logError)
       }
     }
   } catch (error: unknown) {
-    console.error('重置密码失败:', error)
+    logger.error('重置密码失败:', error)
     ElMessage.error(error.response.data.message || error.message || '密码重置失败，请重试')
   } finally {
     loading.value = false

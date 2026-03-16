@@ -278,20 +278,20 @@ const mockPlanFills: PlanFillVO[] = [
 
 function convertStatus(status: string): PlanStatus {
   const map: Record<string, PlanStatus> = {
-    'DRAFT': 'draft',
-    'PENDING': 'pending',
-    'PUBLISHED': 'published',
-    'ARCHIVED': 'archived'
+    DRAFT: 'draft',
+    PENDING: 'pending',
+    PUBLISHED: 'published',
+    ARCHIVED: 'archived'
   }
   return map[status] || 'draft'
 }
 
 function convertFillStatus(status: string): PlanFillStatus {
   const map: Record<string, PlanFillStatus> = {
-    'SUBMITTED': 'submitted',
-    'APPROVED': 'approved',
-    'REJECTED': 'rejected',
-    'PENDING': 'submitted' // PENDING 映射为 SUBMITTED
+    SUBMITTED: 'submitted',
+    APPROVED: 'approved',
+    REJECTED: 'rejected',
+    PENDING: 'submitted' // PENDING 映射为 SUBMITTED
   }
   return map[status] || 'submitted'
 }
@@ -334,7 +334,9 @@ function convertTaskVOToTask(vo: TaskVO, indicators: Indicator[]): Task {
 function convertIndicatorVOToIndicator(vo: PlanIndicatorVO): Indicator {
   // 查找该指标的最新填报记录
   const fills = mockIndicatorFills.filter(f => f.indicatorId === vo.indicatorId)
-  const latestFill = fills.sort((a, b) => new Date(b.fillDate).getTime() - new Date(a.fillDate).getTime())[0]
+  const latestFill = fills.sort(
+    (a, b) => new Date(b.fillDate).getTime() - new Date(a.fillDate).getTime()
+  )[0]
 
   return {
     id: vo.indicatorId,
@@ -467,7 +469,12 @@ export const planApi = {
     if (this.useMockData) {
       const planVO = mockPlans.find(p => p.planId === Number(planId))
       if (!planVO) {
-        return { code: 1002, data: null, message: 'Plan not found', timestamp: new Date().toISOString().toISOString() }
+        return {
+          code: 1002,
+          data: null,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString().toISOString()
+        }
       }
 
       const tasks = mockTasks
@@ -542,7 +549,12 @@ export const planApi = {
           timestamp: new Date().toISOString()
         }
       }
-      return { code: 1002, data: null as never, message: 'Plan not found', timestamp: new Date().toISOString() }
+      return {
+        code: 1002,
+        data: null as never,
+        message: 'Plan not found',
+        timestamp: new Date().toISOString()
+      }
     }
 
     return withRetry(async () => {
@@ -558,9 +570,19 @@ export const planApi = {
       const index = mockPlans.findIndex(p => p.planId === Number(planId))
       if (index !== -1) {
         mockPlans.splice(index, 1)
-        return { success: true, data: undefined, message: '删除成功', timestamp: new Date().toISOString() }
+        return {
+          success: true,
+          data: undefined,
+          message: '删除成功',
+          timestamp: new Date().toISOString()
+        }
       }
-      return { code: 1002, data: undefined, message: 'Plan not found', timestamp: new Date().toISOString() }
+      return {
+        code: 1002,
+        data: undefined,
+        message: 'Plan not found',
+        timestamp: new Date().toISOString()
+      }
     }
 
     return withRetry(async () => {
@@ -626,7 +648,9 @@ export const indicatorFillApi = {
   /**
    * 获取指标的所有填报历史
    */
-  async getIndicatorFillHistory(indicatorId: number | string): Promise<ApiResponse<IndicatorFill[]>> {
+  async getIndicatorFillHistory(
+    indicatorId: number | string
+  ): Promise<ApiResponse<IndicatorFill[]>> {
     if (this.useMockData) {
       const fills = mockIndicatorFills
         .filter(f => f.indicatorId === Number(indicatorId))
@@ -651,7 +675,12 @@ export const indicatorFillApi = {
     if (this.useMockData) {
       const fillVO = mockIndicatorFills.find(f => f.fillId === Number(fillId))
       if (!fillVO) {
-        return { code: 1002, data: null, message: 'Fill not found', timestamp: new Date().toISOString() }
+        return {
+          code: 1002,
+          data: null,
+          message: 'Fill not found',
+          timestamp: new Date().toISOString()
+        }
       }
 
       return {
@@ -716,7 +745,10 @@ export const indicatorFillApi = {
   /**
    * 更新填报记录
    */
-  async updateFill(fillId: number | string, form: Partial<IndicatorFillForm>): Promise<ApiResponse<IndicatorFill>> {
+  async updateFill(
+    fillId: number | string,
+    form: Partial<IndicatorFillForm>
+  ): Promise<ApiResponse<IndicatorFill>> {
     if (this.useMockData) {
       const index = mockIndicatorFills.findIndex(f => f.fillId === Number(fillId))
       if (index !== -1) {
@@ -733,7 +765,12 @@ export const indicatorFillApi = {
           timestamp: new Date().toISOString()
         }
       }
-      return { code: 1002, data: null as never, message: 'Fill not found', timestamp: new Date().toISOString() }
+      return {
+        code: 1002,
+        data: null as never,
+        message: 'Fill not found',
+        timestamp: new Date().toISOString()
+      }
     }
 
     return withRetry(async () => {
@@ -749,9 +786,19 @@ export const indicatorFillApi = {
       const index = mockIndicatorFills.findIndex(f => f.fillId === Number(fillId))
       if (index !== -1) {
         mockIndicatorFills.splice(index, 1)
-        return { success: true, data: undefined, message: '删除成功', timestamp: new Date().toISOString() }
+        return {
+          success: true,
+          data: undefined,
+          message: '删除成功',
+          timestamp: new Date().toISOString()
+        }
       }
-      return { code: 1002, data: undefined, message: 'Fill not found', timestamp: new Date().toISOString() }
+      return {
+        code: 1002,
+        data: undefined,
+        message: 'Fill not found',
+        timestamp: new Date().toISOString()
+      }
     }
 
     return withRetry(async () => {
@@ -774,7 +821,12 @@ export const indicatorFillApi = {
           timestamp: new Date().toISOString()
         }
       }
-      return { code: 1002, data: null as never, message: 'Fill not found', timestamp: new Date().toISOString() }
+      return {
+        code: 1002,
+        data: null as never,
+        message: 'Fill not found',
+        timestamp: new Date().toISOString()
+      }
     }
 
     return withRetry(async () => {
@@ -839,7 +891,9 @@ export const planFillApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<PlanFill[]>>('/reports/pending-approval', { orgId: auditorOrgId })
+    return apiClient.get<ApiResponse<PlanFill[]>>('/reports/pending-approval', {
+      orgId: auditorOrgId
+    })
   },
 
   /**
@@ -872,24 +926,36 @@ export const planFillApi = {
           timestamp: new Date().toISOString()
         }
       }
-      return { code: 1002, data: null as never, message: 'Fill not found', timestamp: new Date().toISOString() }
+      return {
+        code: 1002,
+        data: null as never,
+        message: 'Fill not found',
+        timestamp: new Date().toISOString()
+      }
     }
 
     return withRetry(async () => {
-      // 使用正确的后端API路径：/api/v1/reports/approve
-      // 转换前端参数格式为后端API格式
-      const requestBody = {
-        reportId: fillId,
-        action: form.action?.toUpperCase() === 'APPROVE' ? 'APPROVE'
-              : form.action?.toUpperCase() === 'REJECT' ? 'REJECT'
-              : form.action?.toUpperCase() === 'RETURN' ? 'RETURN'
-              : 'APPROVE',
-        approved: form.action?.toLowerCase() === 'approve',
-        comment: form.comment,
-        approvalNotes: form.comment,
-        rejectionReason: form.action?.toLowerCase() === 'reject' ? form.comment : undefined
+      // 根据操作类型调用不同的后端API端点
+      // 后端API实现：
+      // - POST /api/v1/reports/{id}/approve?userId={userId} (使用 @RequestParam)
+      // - POST /api/v1/reports/{id}/reject (使用 @RequestBody RejectPlanReportRequest)
+
+      const userId = form.userId || 1 // TODO: 从当前用户上下文获取实际userId
+
+      if (form.action?.toLowerCase() === 'approve') {
+        // 审批通过：使用 /approve 端点 + @RequestParam
+        return apiClient.post<ApiResponse<PlanFill>>(
+          `/reports/${fillId}/approve?userId=${userId}`,
+          null // 不需要请求体
+        )
+      } else {
+        // 驳回：使用 /reject 端点 + @RequestBody
+        const requestBody = {
+          userId: userId,
+          reason: form.comment || ''
+        }
+        return apiClient.post<ApiResponse<PlanFill>>(`/reports/${fillId}/reject`, requestBody)
       }
-      return apiClient.post<ApiResponse<PlanFill>>(`/reports/approve`, requestBody)
     })
   }
 }

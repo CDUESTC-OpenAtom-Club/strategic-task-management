@@ -49,8 +49,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 /**
  * Check if role has specific permission
  */
-export function roleHasPermission(role: UserRole | null, resource: string, action: string): boolean {
-  if (!role) return false
+export function roleHasPermission(
+  role: UserRole | null,
+  resource: string,
+  action: string
+): boolean {
+  if (!role) {
+    return false
+  }
 
   const permissions = ROLE_PERMISSIONS[role] || []
   return permissions.some(p => p.resource === resource && p.action === action)
@@ -60,7 +66,9 @@ export function roleHasPermission(role: UserRole | null, resource: string, actio
  * Get all permissions for a role
  */
 export function getRolePermissions(role: UserRole | null): Permission[] {
-  if (!role) return []
+  if (!role) {
+    return []
+  }
   return ROLE_PERMISSIONS[role] || []
 }
 

@@ -4,7 +4,7 @@ import { ElTimeline, ElTimelineItem, ElTag, ElEmpty, ElCard, ElButton, ElIcon } 
 import { Check, Close, Clock, Document, Picture, Download } from '@element-plus/icons-vue'
 import type { IndicatorFill } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 指标填报历史组件
@@ -57,30 +57,42 @@ const sortedFills = computed(() => {
 // 获取状态图标
 const getStatusIcon = (status?: string) => {
   switch (status) {
-    case 'approved': return Check
-    case 'rejected': return Close
-    case 'submitted': return Clock
-    default: return Document
+    case 'approved':
+      return Check
+    case 'rejected':
+      return Close
+    case 'submitted':
+      return Clock
+    default:
+      return Document
   }
 }
 
 // 获取状态类型
 const getStatusType = (status?: string) => {
   switch (status) {
-    case 'approved': return 'success'
-    case 'rejected': return 'danger'
-    case 'submitted': return 'warning'
-    default: return 'info'
+    case 'approved':
+      return 'success'
+    case 'rejected':
+      return 'danger'
+    case 'submitted':
+      return 'warning'
+    default:
+      return 'info'
   }
 }
 
 // 获取状态标签
 const getStatusLabel = (status?: string) => {
   switch (status) {
-    case 'approved': return '已通过'
-    case 'rejected': return '已驳回'
-    case 'submitted': return '待审核'
-    default: return '草稿'
+    case 'approved':
+      return '已通过'
+    case 'rejected':
+      return '已驳回'
+    case 'submitted':
+      return '待审核'
+    default:
+      return '草稿'
   }
 }
 
@@ -107,9 +119,12 @@ onMounted(() => {
 })
 
 // 监听 indicatorId 变化
-watch(() => props.indicatorId, () => {
-  loadHistory()
-})
+watch(
+  () => props.indicatorId,
+  () => {
+    loadHistory()
+  }
+)
 </script>
 
 <template>
@@ -169,19 +184,10 @@ watch(() => props.indicatorId, () => {
               <span>附件 ({{ fill.attachments.length }})</span>
             </div>
             <div class="attachments-list">
-              <div
-                v-for="(attachment, idx) in fill.attachments"
-                :key="idx"
-                class="attachment-item"
-              >
+              <div v-for="(attachment, idx) in fill.attachments" :key="idx" class="attachment-item">
                 <el-icon class="attachment-icon"><Document /></el-icon>
                 <span class="attachment-name">{{ attachment.name }}</span>
-                <el-button
-                  type="primary"
-                  link
-                  size="small"
-                  @click.stop
-                >
+                <el-button type="primary" link size="small" @click.stop>
                   <el-icon><Download /></el-icon>
                 </el-button>
               </div>
@@ -191,7 +197,9 @@ watch(() => props.indicatorId, () => {
           <!-- 审核信息 -->
           <div v-if="fill.status && fill.status !== 'submitted'" class="fill-audit">
             <div class="audit-info">
-              <span class="audit-label">{{ fill.status === 'approved' ? '审核人' : '驳回人' }}:</span>
+              <span class="audit-label"
+                >{{ fill.status === 'approved' ? '审核人' : '驳回人' }}:</span
+              >
               <span class="audit-value">{{ fill.audited_by || '-' }}</span>
               <span class="audit-time">{{ formatDate(fill.audited_at || '') }}</span>
             </div>
@@ -336,9 +344,12 @@ import { watch } from 'vue'
 .fill-audit {
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: v-bind('fill.status === "approved" ? "var(--el-color-success-light-9)" : "var(--el-color-danger-light-9)"');
+  background: v-bind(
+    'fill.status === "approved" ? "var(--el-color-success-light-9)" : "var(--el-color-danger-light-9)"'
+  );
   border-radius: 6px;
-  border-left: 3px solid v-bind('fill.status === "approved" ? "var(--el-color-success)" : "var(--el-color-danger)"');
+  border-left: 3px solid
+    v-bind('fill.status === "approved" ? "var(--el-color-success)" : "var(--el-color-danger)"');
 }
 
 .audit-info {

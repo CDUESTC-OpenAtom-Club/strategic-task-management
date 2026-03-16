@@ -42,9 +42,7 @@
           </el-form-item>
 
           <el-form-item>
-            <el-button type="primary" :loading="loading" @click="handleQuery">
-              查询
-            </el-button>
+            <el-button type="primary" :loading="loading" @click="handleQuery"> 查询 </el-button>
           </el-form-item>
 
           <el-form-item>
@@ -66,11 +64,7 @@
           <el-card class="log-card" shadow="hover">
             <div class="log-header">
               <div class="log-action">
-                <el-tag
-                  :type="getActionType(log.action)"
-                  size="small"
-                  effect="plain"
-                >
+                <el-tag :type="getActionType(log.action)" size="small" effect="plain">
                   {{ getActionText(log.action) }}
                 </el-tag>
                 <span class="log-description">{{ log.description }}</span>
@@ -137,6 +131,7 @@ import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheck, CircleClose, Download } from '@element-plus/icons-vue'
 import { auditLogApi, type AuditLogItem } from '@/features/admin/api/auditLogApi'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Props
 const props = defineProps<{
@@ -172,12 +167,14 @@ const queryParams = reactive({
 // 控制抽屉显示
 const visible = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: value => emit('update:modelValue', value)
 })
 
 // 格式化日期时间
 const formatDateTime = (dateStr: string) => {
-  if (!dateStr) {return ''}
+  if (!dateStr) {
+    return ''
+  }
   const date = new Date(dateStr)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
@@ -248,7 +245,7 @@ const loadLogs = async () => {
     logs.value = response.items
     total.value = response.total
   } catch (error) {
-    console.error('加载审计日志失败:', error)
+    logger.error('加载审计日志失败:', error)
     ElMessage.error('加载审计日志失败')
   } finally {
     loading.value = false
@@ -295,7 +292,7 @@ const handleExport = async () => {
     window.URL.revokeObjectURL(url)
     ElMessage.success('导出成功')
   } catch (error) {
-    console.error('导出失败:', error)
+    logger.error('导出失败:', error)
     ElMessage.error('导出失败')
   } finally {
     exporting.value = false
@@ -308,16 +305,19 @@ const handleClose = () => {
 }
 
 // 监听抽屉打开
-watch(() => props.modelValue, (newVal) => {
-  if (newVal) {
-    // 抽屉打开时加载日志
-    loadLogs()
-  } else {
-    // 抽屉关闭时清空数据
-    logs.value = []
-    queryParams.page = 1
+watch(
+  () => props.modelValue,
+  newVal => {
+    if (newVal) {
+      // 抽屉打开时加载日志
+      loadLogs()
+    } else {
+      // 抽屉关闭时清空数据
+      logs.value = []
+      queryParams.page = 1
+    }
   }
-})
+)
 </script>
 
 <style scoped lang="scss">

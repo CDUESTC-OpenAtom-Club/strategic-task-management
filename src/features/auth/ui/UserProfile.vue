@@ -4,31 +4,21 @@
       <template #header>
         <div class="card-header">
           <span class="header-title">个人信息</span>
-          <el-button 
-            v-if="!isEditing" 
-            type="primary" 
-            size="small"
-            @click="startEdit"
-          >
+          <el-button v-if="!isEditing" type="primary" size="small" @click="startEdit">
             编辑
           </el-button>
           <div v-else class="header-actions">
             <el-button size="small" @click="cancelEdit">取消</el-button>
-            <el-button 
-              type="primary" 
-              size="small" 
-              :loading="loading"
-              @click="saveProfile"
-            >
+            <el-button type="primary" size="small" :loading="loading" @click="saveProfile">
               保存
             </el-button>
           </div>
         </div>
       </template>
 
-      <el-form 
+      <el-form
         ref="formRef"
-        :model="formData" 
+        :model="formData"
         :rules="rules"
         label-width="100px"
         class="profile-form"
@@ -48,27 +38,19 @@
 
         <!-- Basic Info -->
         <el-form-item label="用户名">
-          <el-input 
-            :value="user?.username" 
-            disabled
-            placeholder="用户名"
-          />
+          <el-input :value="user?.username" disabled placeholder="用户名" />
         </el-form-item>
 
         <el-form-item label="真实姓名" prop="realName">
-          <el-input 
-            v-model="formData.realName" 
+          <el-input
+            v-model="formData.realName"
             :disabled="!isEditing"
             placeholder="请输入真实姓名"
           />
         </el-form-item>
 
         <el-form-item label="所属部门">
-          <el-input 
-            :value="user?.department || user?.orgName" 
-            disabled
-            placeholder="所属部门"
-          />
+          <el-input :value="user?.department || user?.orgName" disabled placeholder="所属部门" />
         </el-form-item>
 
         <el-form-item label="角色">
@@ -76,11 +58,7 @@
         </el-form-item>
 
         <el-form-item label="邮箱" prop="email">
-          <el-input 
-            v-model="formData.email" 
-            :disabled="!isEditing"
-            placeholder="请输入邮箱"
-          >
+          <el-input v-model="formData.email" :disabled="!isEditing" placeholder="请输入邮箱">
             <template #prefix>
               <el-icon><Message /></el-icon>
             </template>
@@ -88,11 +66,7 @@
         </el-form-item>
 
         <el-form-item label="手机号" prop="phone">
-          <el-input 
-            v-model="formData.phone" 
-            :disabled="!isEditing"
-            placeholder="请输入手机号"
-          >
+          <el-input v-model="formData.phone" :disabled="!isEditing" placeholder="请输入手机号">
             <template #prefix>
               <el-icon><Phone /></el-icon>
             </template>
@@ -124,13 +98,7 @@
         <span class="header-title">修改密码</span>
       </template>
 
-      <el-button 
-        type="primary" 
-        plain
-        @click="showPasswordDialog = true"
-      >
-        修改密码
-      </el-button>
+      <el-button type="primary" plain @click="showPasswordDialog = true"> 修改密码 </el-button>
     </el-card>
 
     <!-- Password Change Dialog -->
@@ -176,11 +144,7 @@
 
       <template #footer>
         <el-button @click="showPasswordDialog = false">取消</el-button>
-        <el-button 
-          type="primary" 
-          :loading="passwordLoading"
-          @click="handlePasswordChange"
-        >
+        <el-button type="primary" :loading="passwordLoading" @click="handlePasswordChange">
           确定
         </el-button>
       </template>
@@ -196,6 +160,7 @@ import type { User as UserType } from '@/entities/user/model/types'
 import type { UserProfileFormState, PasswordChangeFormState } from '../model/types'
 import { ROLE_CONFIG, VALIDATION_RULES } from '../model/constants'
 import { userApi } from '../api'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Props
 interface Props {
@@ -239,12 +204,16 @@ const passwordForm = reactive<PasswordChangeFormState>({
 
 // Computed
 const roleLabel = computed(() => {
-  if (!props.user?.role) {return '未知'}
+  if (!props.user?.role) {
+    return '未知'
+  }
   return ROLE_CONFIG[props.user.role]?.label || props.user.role
 })
 
 const roleType = computed(() => {
-  if (!props.user?.role) {return 'info'}
+  if (!props.user?.role) {
+    return 'info'
+  }
   const config = ROLE_CONFIG[props.user.role]
   return config ? '' : 'info'
 })
@@ -253,27 +222,27 @@ const roleType = computed(() => {
 const rules: FormRules = {
   realName: [
     { required: true, message: '请输入真实姓名', trigger: 'blur' },
-    { max: VALIDATION_RULES.REALNAME_MAX_LENGTH, message: '姓名长度不能超过50个字符', trigger: 'blur' }
+    {
+      max: VALIDATION_RULES.REALNAME_MAX_LENGTH,
+      message: '姓名长度不能超过50个字符',
+      trigger: 'blur'
+    }
   ],
-  email: [
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
-  ],
+  email: [{ type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }],
   phone: [
     { pattern: VALIDATION_RULES.PHONE_PATTERN, message: '请输入有效的手机号', trigger: 'blur' }
   ]
 }
 
 const passwordRules: FormRules = {
-  oldPassword: [
-    { required: true, message: '请输入旧密码', trigger: 'blur' }
-  ],
+  oldPassword: [{ required: true, message: '请输入旧密码', trigger: 'blur' }],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { 
-      min: VALIDATION_RULES.PASSWORD_MIN_LENGTH, 
+    {
+      min: VALIDATION_RULES.PASSWORD_MIN_LENGTH,
       max: VALIDATION_RULES.PASSWORD_MAX_LENGTH,
-      message: `密码长度应在 ${VALIDATION_RULES.PASSWORD_MIN_LENGTH}-${VALIDATION_RULES.PASSWORD_MAX_LENGTH} 个字符之间`, 
-      trigger: 'blur' 
+      message: `密码长度应在 ${VALIDATION_RULES.PASSWORD_MIN_LENGTH}-${VALIDATION_RULES.PASSWORD_MAX_LENGTH} 个字符之间`,
+      trigger: 'blur'
     }
   ],
   confirmPassword: [
@@ -293,13 +262,17 @@ const passwordRules: FormRules = {
 
 // Methods
 const formatDate = (date?: string) => {
-  if (!date) {return '暂无'}
+  if (!date) {
+    return '暂无'
+  }
   return new Date(date).toLocaleString('zh-CN')
 }
 
 const startEdit = () => {
-  if (!props.user) {return}
-  
+  if (!props.user) {
+    return
+  }
+
   formData.realName = props.user.realName || props.user.name || ''
   formData.email = props.user.email || ''
   formData.phone = props.user.phone || ''
@@ -312,55 +285,60 @@ const cancelEdit = () => {
 }
 
 const saveProfile = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
-    
+
     loading.value = true
-    
+
     // Emit update event to parent
     emit('update', {
       realName: formData.realName,
       email: formData.email,
       phone: formData.phone
     })
-    
+
     ElMessage.success('个人信息更新成功')
     isEditing.value = false
   } catch (error) {
-    console.error('Profile update validation failed:', error)
+    logger.error('Profile update validation failed:', error)
   } finally {
     loading.value = false
   }
 }
 
 const handlePasswordChange = async () => {
-  if (!passwordFormRef.value) {return}
+  if (!passwordFormRef.value) {
+    return
+  }
 
   try {
     await passwordFormRef.value.validate()
-    
+
     passwordLoading.value = true
-    
+
     // Call API to change password
     await userApi.changePassword({
       oldPassword: passwordForm.oldPassword,
       newPassword: passwordForm.newPassword
     })
-    
+
     ElMessage.success('密码修改成功，请重新登录')
-    
+
     // Reset form
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
     passwordForm.confirmPassword = ''
     showPasswordDialog.value = false
-    
+
     // Emit password changed event
     emit('password-changed')
-  } catch (error: any) {
-    ElMessage.error(error.message || '密码修改失败')
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : '密码修改失败'
+    ElMessage.error(errorMessage || '密码修改失败')
   } finally {
     passwordLoading.value = false
   }

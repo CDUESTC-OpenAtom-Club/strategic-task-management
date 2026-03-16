@@ -66,6 +66,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
 import api from '@/shared/api'
+import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -193,7 +194,7 @@ const handleSubmit = async () => {
       }, 1000)
     }
   } catch (error: unknown) {
-    console.error('修改密码失败:', error)
+    logger.error('修改密码失败:', error)
     ElMessage.error(error.response?.data?.message || error.message || '修改密码失败，请重试')
   } finally {
     loading.value = false

@@ -11,12 +11,8 @@
  */
 
 import { apiClient } from '@/shared/api/client'
-import { logger } from '@/utils/logger'
-import type {
-  DashboardData,
-  DepartmentProgress,
-  AlertSummary
-} from '@/types'
+import { logger } from '@/shared/lib/utils/logger'
+import type { DashboardData, DepartmentProgress, AlertSummary } from '@/types'
 
 /**
  * API endpoints for dashboard functionality

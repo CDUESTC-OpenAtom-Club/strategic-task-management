@@ -10,6 +10,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElCard } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
 import { useIndicatorStore, IndicatorForm } from '@/features/strategic-indicator'
+import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()
 const route = useRoute()
@@ -23,9 +24,9 @@ const formData = ref<Partial<Indicator>>({
   status: 'DRAFT'
 })
 
-const indicatorId = computed(() => route.params.id ? Number(route.params.id) : null)
+const indicatorId = computed(() => (route.params.id ? Number(route.params.id) : null))
 const isEditMode = computed(() => indicatorId.value !== null)
-const pageTitle = computed(() => isEditMode.value ? '编辑指标' : '新建指标')
+const pageTitle = computed(() => (isEditMode.value ? '编辑指标' : '新建指标'))
 
 onMounted(() => {
   if (isEditMode.value) {
@@ -34,7 +35,9 @@ onMounted(() => {
 })
 
 async function fetchIndicatorDetail() {
-  if (!indicatorId.value) return
+  if (!indicatorId.value) {
+    return
+  }
 
   loading.value = true
   try {
@@ -42,7 +45,7 @@ async function fetchIndicatorDetail() {
     formData.value = { ...data }
   } catch (error) {
     ElMessage.error('加载指标信息失败')
-    console.error('Failed to fetch indicator:', error)
+    logger.error('Failed to fetch indicator:', error)
   } finally {
     loading.value = false
   }
@@ -62,7 +65,7 @@ async function handleSubmit(data: Partial<Indicator>) {
     router.push({ name: 'IndicatorList' })
   } catch (error) {
     ElMessage.error(isEditMode.value ? '更新失败' : '创建失败')
-    console.error('Failed to save indicator:', error)
+    logger.error('Failed to save indicator:', error)
   } finally {
     submitting.value = false
   }

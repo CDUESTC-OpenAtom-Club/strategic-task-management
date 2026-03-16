@@ -1,6 +1,6 @@
 /**
  * Approval Feature Store
- * 
+ *
  * Migrated from stores/approval.ts
  * Multi-level approval workflow state management
  */
@@ -9,31 +9,31 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ApprovalInstance, ApprovalHistory } from './types'
 import { useAuthStore } from '@/features/auth/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import { ElMessage } from 'element-plus'
 
 export const useApprovalStore = defineStore('approval', () => {
   // ============ State ============
-  
+
   // Pending approvals for current user
   const pendingApprovals = ref<ApprovalInstance[]>([])
-  
+
   // Current approval being viewed/edited
   const currentApproval = ref<ApprovalInstance | null>(null)
-  
+
   // Approval history
   const approvalHistory = ref<ApprovalHistory[]>([])
-  
+
   // Loading states
   const loading = ref(false)
   const submitting = ref(false)
   const error = ref<string | null>(null)
 
   // ============ Getters ============
-  
+
   // Count of pending approvals
   const pendingCount = computed(() => pendingApprovals.value.length)
-  
+
   // Pending count by status
   const pendingByStatus = computed(() => {
     const result = {
@@ -42,7 +42,7 @@ export const useApprovalStore = defineStore('approval', () => {
       rejected: 0,
       cancelled: 0
     }
-    
+
     pendingApprovals.value.forEach(approval => {
       switch (approval.status) {
         case 'PENDING':
@@ -59,19 +59,21 @@ export const useApprovalStore = defineStore('approval', () => {
           break
       }
     })
-    
+
     return result
   })
-  
+
   // Check if user has approvals pending
   const hasPendingForCurrentUser = computed(() => {
     const authStore = useAuthStore()
     const userId = authStore.user?.id
-    
-    if (!userId) {return false}
-    
-    return pendingApprovals.value.some(approval => 
-      approval.status === 'PENDING' && approval.applicant.id === userId
+
+    if (!userId) {
+      return false
+    }
+
+    return pendingApprovals.value.some(
+      approval => approval.status === 'PENDING' && approval.applicant.id === userId
     )
   })
 
@@ -83,7 +85,7 @@ export const useApprovalStore = defineStore('approval', () => {
   const loadPendingApprovals = async () => {
     const authStore = useAuthStore()
     const userId = authStore.user?.id
-    
+
     if (!userId) {
       logger.warn('[Approval Store] No user ID found')
       return
@@ -94,7 +96,7 @@ export const useApprovalStore = defineStore('approval', () => {
 
     try {
       logger.info('[Approval Store] Loading pending approvals for user:', userId)
-      
+
       // 动态导入 API
       const { default: approvalApi } = await import('@/api/approval')
       const response = await approvalApi.getPendingApprovals()
@@ -124,7 +126,7 @@ export const useApprovalStore = defineStore('approval', () => {
 
     try {
       logger.info('[Approval Store] Loading approval detail:', instanceId)
-      
+
       const { default: approvalApi } = await import('@/api/approval')
       const response = await approvalApi.getApprovalInstance(instanceId)
 
@@ -158,17 +160,17 @@ export const useApprovalStore = defineStore('approval', () => {
 
     try {
       logger.info('[Approval Store] Approving:', instanceId)
-      
+
       const { default: approvalApi } = await import('@/api/approval')
       const response = await approvalApi.approve(instanceId, { comment })
 
       if (response.success && response.data) {
         currentApproval.value = response.data
         ElMessage.success('审批通过')
-        
+
         // Remove from pending list
         pendingApprovals.value = pendingApprovals.value.filter(a => a.instanceId !== instanceId)
-        
+
         logger.info('[Approval Store] Approval successful')
         return response.data
       } else {
@@ -206,17 +208,17 @@ export const useApprovalStore = defineStore('approval', () => {
 
     try {
       logger.info('[Approval Store] Rejecting:', instanceId, 'reason:', reason)
-      
+
       const { default: approvalApi } = await import('@/api/approval')
       const response = await approvalApi.reject(instanceId, { comment: reason })
 
       if (response.success && response.data) {
         currentApproval.value = response.data
         ElMessage.success('已驳回')
-        
+
         // Remove from pending list
         pendingApprovals.value = pendingApprovals.value.filter(a => a.instanceId !== instanceId)
-        
+
         logger.info('[Approval Store] Rejection successful')
         return response.data
       } else {
@@ -241,7 +243,7 @@ export const useApprovalStore = defineStore('approval', () => {
 
     try {
       logger.info('[Approval Store] Loading history for:', instanceId)
-      
+
       const { default: approvalApi } = await import('@/api/approval')
       const response = await approvalApi.getApprovalHistory(instanceId)
 
@@ -272,9 +274,9 @@ export const useApprovalStore = defineStore('approval', () => {
   const getStepName = (stepName: string): string => {
     // 根据步骤名称返回显示名称
     const stepNames: Record<string, string> = {
-      'DEPT_REVIEW': '部门审核',
-      'SCHOOL_REVIEW': '校级审批',
-      'FINAL_REVIEW': '最终审批'
+      DEPT_REVIEW: '部门审核',
+      SCHOOL_REVIEW: '校级审批',
+      FINAL_REVIEW: '最终审批'
     }
     return stepNames[stepName] || stepName
   }

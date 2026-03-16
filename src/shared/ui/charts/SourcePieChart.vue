@@ -3,10 +3,15 @@ import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent, TitleComponent, GraphicComponent } from 'echarts/components'
+import {
+  TooltipComponent,
+  LegendComponent,
+  TitleComponent,
+  GraphicComponent
+} from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { SourcePieData } from '@/types'
-import { getColorByIndex, getGradientColor } from '@/utils/colors'
+import { getColorByIndex, getGradientColor } from '@/shared/lib/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, TitleComponent, GraphicComponent, CanvasRenderer])
 
@@ -26,9 +31,7 @@ const emit = defineEmits<{
 }>()
 
 // 计算总任务数
-const totalTasks = computed(() =>
-  props.data.reduce((sum, item) => sum + item.value, 0)
-)
+const totalTasks = computed(() => props.data.reduce((sum, item) => sum + item.value, 0))
 
 // ECharts 配置
 const chartOption = computed(() => ({
@@ -71,11 +74,12 @@ const chartOption = computed(() => ({
       return name
     }
   },
-  series: [{
-    type: 'pie',
-    radius: ['40%', '65%'],
-    center: ['40%', '50%'],
-    avoidLabelOverlap: false,
+  series: [
+    {
+      type: 'pie',
+      radius: ['40%', '65%'],
+      center: ['40%', '50%'],
+      avoidLabelOverlap: false,
       itemStyle: {
         borderRadius: 8,
         borderColor: '#fff',
@@ -98,20 +102,21 @@ const chartOption = computed(() => ({
         }
       },
 
-    labelLine: {
-      show: false
-    },
-    data: props.data.map((item, index) => {
-      const color = getColorByIndex(index)
-      return {
-        value: item.value,
-        name: item.name,
-        itemStyle: {
-          color: getGradientColor(color, `${color}CC`) // 使用渐变色提升质感
+      labelLine: {
+        show: false
+      },
+      data: props.data.map((item, index) => {
+        const color = getColorByIndex(index)
+        return {
+          value: item.value,
+          name: item.name,
+          itemStyle: {
+            color: getGradientColor(color, `${color}CC`) // 使用渐变色提升质感
+          }
         }
-      }
-    })
-  }],
+      })
+    }
+  ],
   graphic: {
     type: 'group',
     left: '40%',
@@ -135,7 +140,7 @@ const chartOption = computed(() => ({
         style: {
           fill: '#303133',
           text: totalTasks.value,
-            font: 'bold 24px "DIN Alternate", "Helvetica Neue", sans-serif'
+          font: 'bold 24px "DIN Alternate", "Helvetica Neue", sans-serif'
         }
       }
     ]
@@ -155,7 +160,7 @@ const handleChartClick = (params: { componentType: string; name: string }) => {
     <v-chart
       :option="chartOption"
       autoresize
-      style="height: 350px; cursor: pointer;"
+      style="height: 350px; cursor: pointer"
       @click="handleChartClick"
     />
   </div>

@@ -6,6 +6,7 @@
 import { apiClient } from '@/shared/api/client'
 import { alertApi, type WarningEvent, type AlertEvent } from '@/shared/api/monitoringApi'
 import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 消息类型
@@ -94,11 +95,11 @@ export const messagesApi = {
       }
 
       // 按时间倒序排序
-      return messages.sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      return messages.sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       )
     } catch (error) {
-      console.error('获取消息失败:', error)
+      logger.error('获取消息失败:', error)
       // 失败时至少返回通知消息
       try {
         const response = await this.getMessages()
@@ -144,11 +145,14 @@ export const messagesApi = {
   /**
    * 处理告警
    */
-  async processAlert(id: number, data: {
-    assigneeId?: number
-    status: string
-    actionLog: string
-  }) {
+  async processAlert(
+    id: number,
+    data: {
+      assigneeId?: number
+      status: string
+      actionLog: string
+    }
+  ) {
     return await alertApi.processAlert(id, data)
   },
 

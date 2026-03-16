@@ -6,8 +6,13 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import type { ApiResponse, Milestone, MilestonePairingStatus, MilestoneReportValidation } from '@/types'
-import { logger } from '@/utils/logger'
+import type {
+  ApiResponse,
+  Milestone,
+  MilestonePairingStatus,
+  MilestoneReportValidation
+} from '@/types'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 重试辅助函数 - 使用指数退避策略
@@ -41,11 +46,25 @@ async function _withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Prom
     }
   }
 
-  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError!)
-  throw lastError!
+  logger.error(`[Retry] All ${maxRetries} attempts failed`, lastError ?? new Error('Unknown error'))
+  throw lastError ?? new Error('Unknown error')
 }
 
 export const milestoneApi = {
+  /**
+   * 创建新里程碑
+   */
+  async createMilestone(request: {
+    indicatorId: number
+    milestoneName: string
+    targetProgress: number
+    dueDate: string
+    status: string
+    sortOrder: number
+  }): Promise<ApiResponse<Milestone>> {
+    return apiClient.post<ApiResponse<Milestone>>('/milestones', request)
+  },
+
   /**
    * 获取指标的所有里程碑
    */
@@ -58,7 +77,9 @@ export const milestoneApi = {
    * 返回最早的未配对里程碑
    */
   async getNextMilestoneToReport(indicatorId: string): Promise<ApiResponse<Milestone | null>> {
-    return apiClient.get<ApiResponse<Milestone | null>>(`/milestones/indicator/${indicatorId}/next-to-report`)
+    return apiClient.get<ApiResponse<Milestone | null>>(
+      `/milestones/indicator/${indicatorId}/next-to-report`
+    )
   },
 
   /**
@@ -71,7 +92,9 @@ export const milestoneApi = {
   /**
    * 检查里程碑是否已配对
    */
-  async isMilestonePaired(milestoneId: string): Promise<ApiResponse<{ milestoneId: string; isPaired: boolean; message: string }>> {
+  async isMilestonePaired(
+    milestoneId: string
+  ): Promise<ApiResponse<{ milestoneId: string; isPaired: boolean; message: string }>> {
     return apiClient.get(`/milestones/${milestoneId}/is-paired`)
   },
 
@@ -79,14 +102,21 @@ export const milestoneApi = {
    * 获取指标的配对状态摘要
    */
   async getPairingStatus(indicatorId: string): Promise<ApiResponse<MilestonePairingStatus>> {
-    return apiClient.get<ApiResponse<MilestonePairingStatus>>(`/milestones/indicator/${indicatorId}/pairing-status`)
+    return apiClient.get<ApiResponse<MilestonePairingStatus>>(
+      `/milestones/indicator/${indicatorId}/pairing-status`
+    )
   },
 
   /**
    * 检查是否可以填报指定里程碑（补录规则验证）
    */
-  async canReportOnMilestone(indicatorId: string, milestoneId: string): Promise<ApiResponse<MilestoneReportValidation>> {
-    return apiClient.get<ApiResponse<MilestoneReportValidation>>(`/milestones/indicator/${indicatorId}/can-report/${milestoneId}`)
+  async canReportOnMilestone(
+    indicatorId: string,
+    milestoneId: string
+  ): Promise<ApiResponse<MilestoneReportValidation>> {
+    return apiClient.get<ApiResponse<MilestoneReportValidation>>(
+      `/milestones/indicator/${indicatorId}/can-report/${milestoneId}`
+    )
   },
 
   /**
@@ -100,7 +130,11 @@ export const milestoneApi = {
    * @deprecated 权重系统已废弃，改用 targetProgress (0-100)
    * 此方法保留用于向后兼容，但后端不再验证权重总和
    */
-  async validateWeights(_indicatorId: string): Promise<ApiResponse<{ isValid: boolean; actualSum: number; expectedSum: number; message: string }>> {
+  async validateWeights(
+    _indicatorId: string
+  ): Promise<
+    ApiResponse<{ isValid: boolean; actualSum: number; expectedSum: number; message: string }>
+  > {
     // 返回模拟的成功响应，不再调用后端
     return Promise.resolve({
       success: true,
@@ -112,7 +146,7 @@ export const milestoneApi = {
       },
       message: '权重系统已废弃'
     })
-  },
+  }
 }
 
 export default milestoneApi

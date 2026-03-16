@@ -13,7 +13,8 @@
       "@utils/*": ["src/utils/*"],
       "@api/*": ["src/api/*"],
       "@/features/*": ["src/features/*"],
-      "@/shared/*": ["src/shared/*"]
+      "@/shared/*": ["src/shared/*"],
+      "@/app/*": ["src/app/*"]
     },
 
     /* Linting */

@@ -11,16 +11,17 @@
 export { ApiClient, apiClient } from './api/client'
 export type { ApiClientConfig, AppError } from './api/client'
 
-// Components (existing - from components/)
-export { default as BreadcrumbNav } from './components/BreadcrumbNav.vue'
-export { default as DashboardFilters } from './components/DashboardFilters.vue'
-export { default as DataForm } from './components/DataForm.vue'
-export { default as DataTable } from './components/DataTable.vue'
-export { default as EmptyState } from './components/EmptyState.vue'
-export { default as HelpTooltip } from './components/HelpTooltip.vue'
-export { default as SkeletonLoader } from './components/SkeletonLoader.vue'
-export { default as TransitionWrapper } from './components/TransitionWrapper.vue'
-export { default as YearSelector } from './components/YearSelector.vue'
+// Legacy components export (deprecated - use @/shared/ui instead)
+// Kept for backward compatibility during migration
+export { default as BreadcrumbNav } from './ui/layout/BreadcrumbNav.vue'
+export { default as DashboardFilters } from './ui/form/DashboardFilters.vue'
+export { default as DataForm } from './ui/form/DataForm.vue'
+export { default as DataTable } from './ui/table/DataTable.vue'
+export { default as EmptyState } from './ui/feedback/EmptyState.vue'
+export { default as HelpTooltip } from './ui/display/HelpTooltip.vue'
+export { default as SkeletonLoader } from './ui/feedback/SkeletonLoader.vue'
+export { default as TransitionWrapper } from './ui/layout/TransitionWrapper.vue'
+export { default as YearSelector } from './ui/form/YearSelector.vue'
 
 // FSD Architecture - New Structure
 // UI Components (organized by category)

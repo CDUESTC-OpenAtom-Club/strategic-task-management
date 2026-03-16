@@ -5,6 +5,7 @@
  */
 
 import { ref, computed } from 'vue'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Notification types matching backend
 export enum NotificationType {
@@ -74,20 +75,20 @@ function getUserId(): string {
 function handleMessage(event: MessageEvent): void {
   try {
     const message: NotificationMessage = JSON.parse(event.data)
-    
+
     // Add to notifications list
     notifications.value.unshift(message)
-    
+
     // Increment unread count
     unreadCount.value++
-    
+
     // Show browser notification if supported
     showBrowserNotification(message)
-    
+
     // Dispatch custom event for other components to listen
     window.dispatchEvent(new CustomEvent('approval-notification', { detail: message }))
   } catch (error) {
-    console.error('[WebSocket] Failed to parse message:', error)
+    logger.error('[WebSocket] Failed to parse message:', error)
   }
 }
 
@@ -98,7 +99,7 @@ function showBrowserNotification(message: NotificationMessage): void {
   if (!('Notification' in window)) {
     return
   }
-  
+
   if (Notification.permission === 'granted') {
     new Notification(message.title, {
       body: message.content,
@@ -134,19 +135,21 @@ function handleOpen(): void {
 function handleClose(): void {
   connectionState.value = 'disconnected'
   ws.value = null
-  
+
   // Attempt reconnection
   if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.log(`[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`)
+      console.log(
+        `[WebSocket] Reconnecting in ${RECONNECT_INTERVAL}ms (attempt ${reconnectAttempts + 1}/${MAX_RECONNECT_ATTEMPTS})`
+      )
     }
     reconnectTimer = setTimeout(() => {
       reconnectAttempts++
       connectWebSocket()
     }, RECONNECT_INTERVAL)
   } else {
-    console.error('[WebSocket] Max reconnection attempts reached')
+    logger.error('[WebSocket] Max reconnection attempts reached')
   }
 }
 
@@ -155,7 +158,7 @@ function handleClose(): void {
  */
 function handleError(error: Event): void {
   connectionState.value = 'error'
-  console.error('[WebSocket] Error:', error)
+  logger.error('[WebSocket] Error:', error)
 }
 
 /**
@@ -169,31 +172,31 @@ export function connectWebSocket(): void {
     }
     return
   }
-  
+
   const userId = getUserId()
   if (!userId) {
-    console.warn('[WebSocket] No user ID, skipping connection')
+    logger.warn('[WebSocket] No user ID, skipping connection')
     return
   }
-  
+
   connectionState.value = 'connecting'
-  
+
   try {
     const url = getWebSocketUrl()
     ws.value = new WebSocket(url)
-    
+
     ws.value.onopen = handleOpen
     ws.value.onmessage = handleMessage
     ws.value.onclose = handleClose
     ws.value.onerror = handleError
-    
+
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
       console.log('[WebSocket] Connecting to:', url)
     }
   } catch (error) {
     connectionState.value = 'error'
-    console.error('[WebSocket] Connection failed:', error)
+    logger.error('[WebSocket] Connection failed:', error)
   }
 }
 
@@ -205,12 +208,12 @@ export function disconnectWebSocket(): void {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
   }
-  
+
   if (ws.value) {
     ws.value.close()
     ws.value = null
   }
-  
+
   connectionState.value = 'disconnected'
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
@@ -265,7 +268,7 @@ export function useWebSocketNotifications() {
     notifications: computed(() => notifications.value),
     unreadCount: computed(() => unreadCount.value),
     isConnected: computed(() => connectionState.value === 'connected'),
-    
+
     // Actions
     connect: connectWebSocket,
     disconnect: disconnectWebSocket,

@@ -2,7 +2,7 @@
  * 统一的模拟指标数据 - 与后端实体类型对齐
  * 使用当前系统类型，基于 src/mock/fixtures/ 中的旧数据结构重新生成
  */
-import type { Indicator, DashboardData, DepartmentProgress } from '@/types/entities'
+import type { Indicator, DashboardData, DepartmentProgress } from '@/shared/types/entities'
 import {
   indicators2023,
   indicators2024,
@@ -62,7 +62,10 @@ export function getCurrentYearMockIndicators(): Indicator[] {
 /**
  * 获取指定年份和ID的指标
  */
-export function getMockIndicatorById(id: number | string, year: number = 2026): Indicator | undefined {
+export function getMockIndicatorById(
+  id: number | string,
+  year: number = 2026
+): Indicator | undefined {
   const indicators = getMockIndicatorsByYear(year)
   return indicators.find(ind =>
     typeof id === 'number' ? ind.indicatorId === id : ind.indicatorId === parseInt(id)
@@ -89,13 +92,69 @@ export const mockDashboardData: DashboardData = {
 // ============ 模拟部门进度数据 ============
 
 export const mockDepartmentProgress: DepartmentProgress[] = [
-  { dept: '教务处', progress: 85, score: 89.5, status: 'success', totalIndicators: 5, completedIndicators: 4, alertCount: 0 },
-  { dept: '科技处', progress: 72, score: 78.3, status: 'warning', totalIndicators: 4, completedIndicators: 2, alertCount: 1 },
-  { dept: '就业创业指导中心', progress: 65, score: 71.2, status: 'warning', totalIndicators: 6, completedIndicators: 3, alertCount: 1 },
-  { dept: '人力资源部', progress: 90, score: 94.1, status: 'success', totalIndicators: 3, completedIndicators: 3, alertCount: 0 },
-  { dept: '计算机学院', progress: 55, score: 62.8, status: 'exception', totalIndicators: 8, completedIndicators: 3, alertCount: 2 },
-  { dept: '商学院', progress: 68, score: 72.5, status: 'warning', totalIndicators: 6, completedIndicators: 3, alertCount: 1 },
-  { dept: '工学院', progress: 75, score: 80.2, status: 'success', totalIndicators: 5, completedIndicators: 4, alertCount: 0 }
+  {
+    dept: '教务处',
+    progress: 85,
+    score: 89.5,
+    status: 'success',
+    totalIndicators: 5,
+    completedIndicators: 4,
+    alertCount: 0
+  },
+  {
+    dept: '科技处',
+    progress: 72,
+    score: 78.3,
+    status: 'warning',
+    totalIndicators: 4,
+    completedIndicators: 2,
+    alertCount: 1
+  },
+  {
+    dept: '就业创业指导中心',
+    progress: 65,
+    score: 71.2,
+    status: 'warning',
+    totalIndicators: 6,
+    completedIndicators: 3,
+    alertCount: 1
+  },
+  {
+    dept: '人力资源部',
+    progress: 90,
+    score: 94.1,
+    status: 'success',
+    totalIndicators: 3,
+    completedIndicators: 3,
+    alertCount: 0
+  },
+  {
+    dept: '计算机学院',
+    progress: 55,
+    score: 62.8,
+    status: 'exception',
+    totalIndicators: 8,
+    completedIndicators: 3,
+    alertCount: 2
+  },
+  {
+    dept: '商学院',
+    progress: 68,
+    score: 72.5,
+    status: 'warning',
+    totalIndicators: 6,
+    completedIndicators: 3,
+    alertCount: 1
+  },
+  {
+    dept: '工学院',
+    progress: 75,
+    score: 80.2,
+    status: 'success',
+    totalIndicators: 5,
+    completedIndicators: 4,
+    alertCount: 0
+  }
 ]
 
 // ============ 模拟组织树数据 ============

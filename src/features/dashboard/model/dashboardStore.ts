@@ -20,10 +20,10 @@ import type {
 import { useStrategicStore } from './strategic'
 import { useAuthStore } from './auth'
 import { useTimeContextStore } from './timeContext'
-import { getProgressStatus, isSecondaryCollege } from '@/utils/colors'
+import { getProgressStatus, isSecondaryCollege } from '@/shared/lib/utils/colors'
 import { useOrgStore } from './org'
 import api from '@/shared/api'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitoringApi'
 
 export const useDashboardStore = defineStore('dashboard', () => {
@@ -54,9 +54,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   // 下钻和筛选状态
   const currentLevel = ref<DrillDownLevel>('organization')
-  const breadcrumbs = ref<BreadcrumbItem[]>([
-    { level: 'organization', label: '组织总览' }
-  ])
+  const breadcrumbs = ref<BreadcrumbItem[]>([{ level: 'organization', label: '组织总览' }])
   const filters = ref<FilterState>({})
   const selectedDepartment = ref<string | undefined>()
   const selectedIndicator = ref<string | undefined>()
@@ -70,20 +68,22 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const completionRate = computed(() => dashboardData.value?.completionRate || 0)
   const totalScore = computed(() => dashboardData.value?.totalScore || 0)
   const warningCount = computed(() => dashboardData.value?.warningCount || 0)
-  const alertStats = computed(() => dashboardData.value?.alertIndicators || { severe: 0, moderate: 0, normal: 0 })
+  const alertStats = computed(
+    () => dashboardData.value?.alertIndicators || { severe: 0, moderate: 0, normal: 0 }
+  )
 
   // 预警统计计算属性
   const totalAlerts = computed(() => alertStatsData.value?.totalOpen || 0)
   const criticalAlerts = computed(() => alertStatsData.value?.countBySeverity.CRITICAL || 0)
   const majorAlerts = computed(() => alertStatsData.value?.countBySeverity.MAJOR || 0)
   const minorAlerts = computed(() => alertStatsData.value?.countBySeverity.MINOR || 0)
-  
+
   // 筛选后的指标列表
   const filteredIndicators = computed<StrategicIndicator[]>(() => {
     const strategicStore = useStrategicStore()
     const timeContext = useTimeContextStore()
     let result = [...strategicStore.indicators]
-    
+
     // 按当前年份过滤
     // 没有 year 字段的指标默认为当前真实年份（2025）
     const currentYear = timeContext.currentYear
@@ -92,17 +92,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const indicatorYear = i.year || realYear
       return indicatorYear === currentYear
     })
-    
+
     // 按部门筛选
     if (filters.value.department) {
       result = result.filter(i => i.responsibleDept === filters.value.department)
     }
-    
+
     // 按指标类型筛选
     if (filters.value.indicatorType) {
       result = result.filter(i => i.type1 === filters.value.indicatorType)
     }
-    
+
     // 按预警级别筛选
     if (filters.value.alertLevel) {
       result = result.filter(i => {
@@ -110,21 +110,21 @@ export const useDashboardStore = defineStore('dashboard', () => {
         return level === filters.value.alertLevel
       })
     }
-    
+
     // 按当前下钻层级筛选
     if (currentLevel.value === 'department' && selectedDepartment.value) {
       result = result.filter(i => i.responsibleDept === selectedDepartment.value)
     }
-    
+
     return result
   })
-  
+
   // 部门汇总数据（支持历史数据）
   const departmentSummary = computed<DepartmentProgress[]>(() => {
     const authStore = useAuthStore()
     const orgStore = useOrgStore()
-    const role = authStore.effectiveRole  // 使用有效角色（考虑视角切换）
-    const userDept = authStore.effectiveDepartment  // 使用有效部门（考虑视角切换）
+    const role = authStore.effectiveRole // 使用有效角色（考虑视角切换）
+    const userDept = authStore.effectiveDepartment // 使用有效部门（考虑视角切换）
 
     // 使用带历史数据支持的指标
     const indicators = visibleIndicatorsWithHistory.value
@@ -161,12 +161,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
         targetIndicators = deptIndicators
       } else {
         // 二级学院只看自己
-        if (userDept) {targetDepartments.add(userDept)}
+        if (userDept) {
+          targetDepartments.add(userDept)
+        }
       }
     }
 
     // 初始化部门数据
-    const deptMap = new Map<string, { total: number; progress: number; count: number; alerts: number }>()
+    const deptMap = new Map<
+      string,
+      { total: number; progress: number; count: number; alerts: number }
+    >()
     targetDepartments.forEach(dept => {
       deptMap.set(dept, { total: 0, progress: 0, count: 0, alerts: 0 })
     })
@@ -174,13 +179,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 统计实际指标数据
     targetIndicators.forEach(indicator => {
       const dept = indicator.responsibleDept
-      if (!dept) {return} // Skip indicators without responsible department
-      
+      if (!dept) {
+        return
+      } // Skip indicators without responsible department
+
       // 战略发展部：只统计职能部门的指标，跳过学院
       if (role === 'strategic_dept' && !targetDepartments.has(dept)) {
         return
       }
-      
+
       if (!deptMap.has(dept)) {
         // 下钻模式下只统计目标部门，非下钻模式可以添加新部门
         if (currentOrgLevel.value !== 'functional') {
@@ -189,11 +196,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
           return
         }
       }
-      const data = deptMap.get(dept)!
+      const data = deptMap.get(dept)
+      if (!data) {
+        return
+      }
       data.total += indicator.weight
       data.progress += indicator.progress
       data.count += 1
-      if (indicator.progress < 60) {data.alerts += 1}
+      if (indicator.progress < 60) {
+        data.alerts += 1
+      }
     })
 
     // 生成结果列表
@@ -223,25 +235,28 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 按进度排序
     return result.sort((a, b) => b.progress - a.progress)
   })
-  
+
   // 预警分布
   const alertDistribution = computed<AlertSummary>(() => {
     const strategicStore = useStrategicStore()
-    const indicators = filteredIndicators.value.length > 0 
-      ? filteredIndicators.value 
-      : strategicStore.indicators
-    
+    const indicators =
+      filteredIndicators.value.length > 0 ? filteredIndicators.value : strategicStore.indicators
+
     const severe = indicators.filter(i => i.progress < 30).length
     const moderate = indicators.filter(i => i.progress >= 30 && i.progress < 60).length
     const normal = indicators.filter(i => i.progress >= 60).length
-    
+
     return { severe, moderate, normal, total: indicators.length }
   })
-  
+
   // 辅助函数：获取预警级别
   const getAlertLevel = (progress: number): 'severe' | 'moderate' | 'normal' => {
-    if (progress < 30) {return 'severe'}
-    if (progress < 60) {return 'moderate'}
+    if (progress < 30) {
+      return 'severe'
+    }
+    if (progress < 60) {
+      return 'moderate'
+    }
     return 'normal'
   }
 
@@ -270,9 +285,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 角色过滤
     if (role === 'functional_dept') {
       // 职能部门看本部门发布的指标或本部门负责的指标
-      indicators = indicators.filter(i =>
-        i.ownerDept === dept || i.responsibleDept === dept
-      )
+      indicators = indicators.filter(i => i.ownerDept === dept || i.responsibleDept === dept)
     } else if (role === 'secondary_college') {
       // 二级学院只看承接的指标
       indicators = indicators.filter(i => i.responsibleDept === dept)
@@ -281,9 +294,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 下钻层级过滤
     if (currentOrgLevel.value === 'functional' && selectedFunctionalDept.value) {
       // 查看某个职能部门的详情：该部门下发的指标
-      indicators = indicators.filter(i =>
-        i.ownerDept === selectedFunctionalDept.value ||
-        i.responsibleDept === selectedFunctionalDept.value
+      indicators = indicators.filter(
+        i =>
+          i.ownerDept === selectedFunctionalDept.value ||
+          i.responsibleDept === selectedFunctionalDept.value
       )
     } else if (currentOrgLevel.value === 'college' && selectedCollege.value) {
       // 查看某个学院的详情：该学院承接的指标
@@ -327,10 +341,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 找到目标时间之前最近的一次审批记录
     const targetTime = targetDate.getTime()
     let latestProgress = 0 // 默认初始进度为0
-    
+
     // 按时间排序审批记录
-    const sortedAudits = [...indicator.statusAudit].sort((a, b) => 
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    const sortedAudits = [...indicator.statusAudit].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     )
 
     // 找到目标时间之前的最后一次进度更新
@@ -353,7 +367,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const visibleIndicatorsWithHistory = computed<StrategicIndicator[]>(() => {
     const indicators = visibleIndicators.value
     const timeContext = useTimeContextStore()
-    
+
     // 如果是当前年份，直接返回当前数据
     if (timeContext.isCurrentYear) {
       return indicators
@@ -370,18 +384,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
   })
 
   // 辅助函数：按部门聚合数据
-  const aggregateByDepartment = (indicators: StrategicIndicator[], groupField: keyof StrategicIndicator = 'responsibleDept'): ComparisonItem[] => {
-    const deptMap = new Map<string, {
-      totalProgress: number
-      totalWeight: number
-      count: number
-      completed: number
-      alerts: number
-    }>()
+  const aggregateByDepartment = (
+    indicators: StrategicIndicator[],
+    groupField: keyof StrategicIndicator = 'responsibleDept'
+  ): ComparisonItem[] => {
+    const deptMap = new Map<
+      string,
+      {
+        totalProgress: number
+        totalWeight: number
+        count: number
+        completed: number
+        alerts: number
+      }
+    >()
 
     indicators.forEach(indicator => {
       const deptName = indicator[groupField] as string
-      if (!deptName) {return} // Skip indicators without department
+      if (!deptName) {
+        return
+      } // Skip indicators without department
       if (!deptMap.has(deptName)) {
         deptMap.set(deptName, {
           totalProgress: 0,
@@ -392,22 +414,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
         })
       }
 
-      const data = deptMap.get(deptName)!
+      const data = deptMap.get(deptName)
+      if (!data) {
+        return
+      }
       data.totalProgress += indicator.progress * indicator.weight
       data.totalWeight += indicator.weight
       data.count += 1
-      if (indicator.progress >= 100) {data.completed += 1}
-      if (indicator.progress < 60) {data.alerts += 1}
+      if (indicator.progress >= 100) {
+        data.completed += 1
+      }
+      if (indicator.progress < 60) {
+        data.alerts += 1
+      }
     })
 
     const result: ComparisonItem[] = []
     deptMap.forEach((data, deptName) => {
-      const avgProgress = data.totalWeight > 0
-        ? Math.round(data.totalProgress / data.totalWeight)
-        : 0
-      const completionRate = data.count > 0
-        ? Math.round((data.completed / data.count) * 100)
-        : 0
+      const avgProgress =
+        data.totalWeight > 0 ? Math.round(data.totalProgress / data.totalWeight) : 0
+      const completionRate = data.count > 0 ? Math.round((data.completed / data.count) * 100) : 0
 
       result.push({
         dept: deptName,
@@ -446,8 +472,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     } else if (role === 'functional_dept') {
       // 职能部门看二级学院排行
       const dept = authStore.user?.department
-      indicators = indicators.filter(i =>
-        isSecondaryCollege(i.responsibleDept) && i.ownerDept === dept
+      indicators = indicators.filter(
+        i => isSecondaryCollege(i.responsibleDept) && i.ownerDept === dept
       )
       return aggregateByDepartment(indicators, 'responsibleDept')
     } else {
@@ -466,7 +492,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const source = indicator.ownerDept || '战略发展部'
       const target = indicator.responsibleDept
 
-      if (!source || !target) {return} // Skip indicators without complete department info
+      if (!source || !target) {
+        return
+      } // Skip indicators without complete department info
 
       nodes.add(source)
       nodes.add(target)
@@ -617,8 +645,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     try {
       const response = await fetch(`/api/dashboard/export/${format}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+          Authorization: `Bearer ${localStorage.getItem('token')}`
+        }
       })
 
       if (response.ok) {
@@ -634,7 +662,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         document.body.removeChild(a)
       }
     } catch (err) {
-      console.error('Export error:', err)
+      logger.error('Export error:', err)
       throw new Error('Failed to export report')
     }
   }
@@ -675,11 +703,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
       unclosedAlerts.value = []
     }
   }
-  
+
   // 下钻操作
   const drillDown = (level: DrillDownLevel, value: string, label: string) => {
     currentLevel.value = level
-    
+
     if (level === 'department') {
       selectedDepartment.value = value
       selectedIndicator.value = undefined
@@ -691,24 +719,30 @@ export const useDashboardStore = defineStore('dashboard', () => {
       selectedIndicator.value = value
       breadcrumbs.value = [
         { level: 'organization', label: '组织总览' },
-        ...(selectedDepartment.value ? [{ 
-          level: 'department' as DrillDownLevel, 
-          label: selectedDepartment.value, 
-          value: selectedDepartment.value 
-        }] : []),
+        ...(selectedDepartment.value
+          ? [
+              {
+                level: 'department' as DrillDownLevel,
+                label: selectedDepartment.value,
+                value: selectedDepartment.value
+              }
+            ]
+          : []),
         { level: 'indicator', label, value }
       ]
     }
   }
-  
+
   // 面包屑导航
   const navigateToBreadcrumb = (index: number) => {
     const target = breadcrumbs.value[index]
-    if (!target) {return}
-    
+    if (!target) {
+      return
+    }
+
     currentLevel.value = target.level
     breadcrumbs.value = breadcrumbs.value.slice(0, index + 1)
-    
+
     if (target.level === 'organization') {
       selectedDepartment.value = undefined
       selectedIndicator.value = undefined
@@ -717,12 +751,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
       selectedIndicator.value = undefined
     }
   }
-  
+
   // 应用筛选
   const applyFilter = (filter: Partial<FilterState>) => {
     filters.value = { ...filters.value, ...filter }
   }
-  
+
   // 重置筛选和下钻状态
   const resetFilters = () => {
     filters.value = {}
@@ -754,11 +788,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
       currentLevel.value = 'indicator'
       breadcrumbs.value = [
         { level: 'organization', label: '组织总览' },
-        ...(selectedFunctionalDept.value ? [{
-          level: 'department' as DrillDownLevel,
-          label: selectedFunctionalDept.value,
-          value: selectedFunctionalDept.value
-        }] : []),
+        ...(selectedFunctionalDept.value
+          ? [
+              {
+                level: 'department' as DrillDownLevel,
+                label: selectedFunctionalDept.value,
+                value: selectedFunctionalDept.value
+              }
+            ]
+          : []),
         { level: 'indicator', label: deptName, value: deptName }
       ]
     }
@@ -793,7 +831,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // 增强面包屑导航（支持三级联动重置）
   const navigateToBreadcrumbEnhanced = (index: number) => {
     const target = breadcrumbs.value[index]
-    if (!target) {return}
+    if (!target) {
+      return
+    }
 
     currentLevel.value = target.level
     breadcrumbs.value = breadcrumbs.value.slice(0, index + 1)
@@ -873,6 +913,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 三级联动 Actions
     drillDownToDepartment,
     handleChartDrillDown,
-    navigateToBreadcrumbEnhanced,
+    navigateToBreadcrumbEnhanced
   }
 })

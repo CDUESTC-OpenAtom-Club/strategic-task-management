@@ -7,7 +7,14 @@
 
 // Dashboard Services
 export { DashboardDataService, useDashboardDataService } from './dashboard/DashboardDataService'
-export { DashboardCalculationService, useDashboardCalculationService } from './dashboard/DashboardCalculationService'
+export {
+  DashboardCalculationService,
+  useDashboardCalculationService
+} from './dashboard/DashboardCalculationService'
+
+// Data Validation Services
+export { PageDataChecker, pageDataChecker } from './pageDataChecker'
+export type { DataIssue, PageCheckResult, CheckReport } from './pageDataChecker'
 
 // Strategic Services (待添加)
 // export { StrategicDataService, useStrategicDataService } from './strategic/StrategicDataService'

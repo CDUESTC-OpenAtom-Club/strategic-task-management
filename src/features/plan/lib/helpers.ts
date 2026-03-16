@@ -10,7 +10,9 @@ import type { Plan, PlanStatus } from '@/types'
  * Check if plan can be edited
  */
 export function canEditPlan(plan: Plan | null): boolean {
-  if (!plan) return false
+  if (!plan) {
+    return false
+  }
   return ['DRAFT', 'REJECTED'].includes(plan.status)
 }
 
@@ -18,7 +20,9 @@ export function canEditPlan(plan: Plan | null): boolean {
  * Check if plan can be submitted
  */
 export function canSubmitPlan(plan: Plan | null): boolean {
-  if (!plan) return false
+  if (!plan) {
+    return false
+  }
   return plan.status === 'DRAFT'
 }
 
@@ -26,7 +30,9 @@ export function canSubmitPlan(plan: Plan | null): boolean {
  * Check if plan can be approved
  */
 export function canApprovePlan(plan: Plan | null): boolean {
-  if (!plan) return false
+  if (!plan) {
+    return false
+  }
   return plan.status === 'PENDING_APPROVAL'
 }
 
@@ -62,7 +68,9 @@ export function getPlanStatusColor(status: PlanStatus): string {
  * Filter plans by status
  */
 export function filterPlansByStatus(plans: Plan[], status: PlanStatus | 'all'): Plan[] {
-  if (status === 'all') return plans
+  if (status === 'all') {
+    return plans
+  }
   return plans.filter(p => p.status === status)
 }
 
@@ -70,7 +78,9 @@ export function filterPlansByStatus(plans: Plan[], status: PlanStatus | 'all'): 
  * Filter plans by organization
  */
 export function filterPlansByOrg(plans: Plan[], orgId: number | string | null): Plan[] {
-  if (!orgId) return plans
+  if (!orgId) {
+    return plans
+  }
   return plans.filter(p => p.org_id === orgId)
 }
 

@@ -16,32 +16,36 @@ const props = defineProps<Props>()
 // Emits
 const emit = defineEmits<{
   'update:modelValue': [value: FilterState]
-  'apply': []
+  apply: []
 }>()
 
 const authStore = useAuthStore()
 const strategicStore = useStrategicStore()
 const orgStore = useOrgStore()
 
-// 本地筛选状�?
+// 本地筛选状?
 const localFilters = ref<FilterState>({ ...props.modelValue })
 
 // 同步props变化
-watch(() => props.modelValue, (newValue) => {
-  localFilters.value = { ...newValue }
-}, { deep: true })
+watch(
+  () => props.modelValue,
+  newValue => {
+    localFilters.value = { ...newValue }
+  },
+  { deep: true }
+)
 
 // 职能部门选项 - 使用完整配置列表
 const functionalDepts = computed(() => {
-  // 使用完整的职能部门配�?
+  // 使用完整的职能部门配?
   const allDepts = orgStore.getAllFunctionalDepartmentNames()
 
-  // 战略发展部可以看所有职能部�?
+  // 战略发展部可以看所有职能部?
   if (authStore.user?.role === 'strategic_dept') {
     return allDepts
   }
 
-  // 职能部门用户只能看自�?
+  // 职能部门用户只能看自?
   if (authStore.user?.role === 'functional_dept') {
     const userDept = authStore.user?.department
     return allDepts.filter(dept => dept === userDept)
@@ -50,25 +54,27 @@ const functionalDepts = computed(() => {
   return allDepts
 })
 
-// 二级学院选项 - 使用完整配置列表，根据数据筛�?
+// 二级学院选项 - 使用完整配置列表，根据数据筛?
 const collegeOptions = computed(() => {
   const indicators = strategicStore.indicators
 
-  // 使用完整的学院配�?
+  // 使用完整的学院配?
   const allColleges = orgStore.getAllCollegeNames()
 
-  // 如果选中了职能部门，只显示该部门下发的学院（基于实际数据�?
+  // 如果选中了职能部门，只显示该部门下发的学院（基于实际数据?
   if (localFilters.value.department) {
     const relatedColleges = new Set<string>()
     indicators
-      .filter(i => i.ownerDept === localFilters.value.department && isSecondaryCollege(i.responsibleDept))
+      .filter(
+        i => i.ownerDept === localFilters.value.department && isSecondaryCollege(i.responsibleDept)
+      )
       .forEach(i => {
         if (i.responsibleDept) {
           relatedColleges.add(i.responsibleDept)
         }
       })
 
-    // 如果该部门有下发任务，只显示相关学院；否则显示所有学�?
+    // 如果该部门有下发任务，只显示相关学院；否则显示所有学?
     if (relatedColleges.size > 0) {
       return allColleges.filter(college => relatedColleges.has(college))
     }
@@ -86,35 +92,38 @@ const collegeOptions = computed(() => {
         }
       })
 
-    // 如果有下发任务，显示相关学院；否则显示所有学�?
+    // 如果有下发任务，显示相关学院；否则显示所有学?
     if (relatedColleges.size > 0) {
       return allColleges.filter(college => relatedColleges.has(college))
     }
   }
 
-  // 默认显示所有学�?
+  // 默认显示所有学?
   return allColleges
 })
 
 // 监听职能部门变化，清空学院选择
-watch(() => localFilters.value.department, () => {
-  localFilters.value.collegeFilter = undefined
-})
+watch(
+  () => localFilters.value.department,
+  () => {
+    localFilters.value.collegeFilter = undefined
+  }
+)
 
-// 应用筛�?
+// 应用筛?
 const handleApply = () => {
   emit('update:modelValue', localFilters.value)
   emit('apply')
 }
 
-// 重置筛�?
+// 重置筛?
 const handleReset = () => {
   localFilters.value = {}
   emit('update:modelValue', {})
   emit('apply')
 }
 
-// 判断是否有筛选条�?
+// 判断是否有筛选条?
 const hasFilters = computed(() => {
   return Object.values(localFilters.value).some(v => v !== undefined && v !== '')
 })
@@ -123,7 +132,7 @@ const hasFilters = computed(() => {
 <template>
   <div class="dashboard-filters">
     <el-form :model="localFilters" inline size="default">
-      <!-- 战略处显示职能部门下�?-->
+      <!-- 战略处显示职能部门下?-->
       <el-form-item v-if="authStore.user?.role === 'strategic_dept'" label="职能部门">
         <el-select
           v-model="localFilters.department"
@@ -132,27 +141,23 @@ const hasFilters = computed(() => {
           filterable
           style="width: 200px"
         >
-          <el-option
-            v-for="dept in functionalDepts"
-            :key="dept"
-            :label="dept"
-            :value="dept"
-          />
+          <el-option v-for="dept in functionalDepts" :key="dept" :label="dept" :value="dept" />
         </el-select>
       </el-form-item>
 
       <!-- 战略处和职能部门显示学院下拉 -->
-      <el-form-item
-        v-if="authStore.user?.role !== 'secondary_college'"
-        label="二级学院"
-      >
+      <el-form-item v-if="authStore.user?.role !== 'secondary_college'" label="二级学院">
         <el-select
           v-model="localFilters.collegeFilter"
           placeholder="全部学院"
           clearable
           filterable
           style="width: 200px"
-          :disabled="authStore.user?.role === 'strategic_dept' && !localFilters.department && collegeOptions.length === 0"
+          :disabled="
+            authStore.user?.role === 'strategic_dept' &&
+            !localFilters.department &&
+            collegeOptions.length === 0
+          "
         >
           <el-option
             v-for="college in collegeOptions"
@@ -163,7 +168,7 @@ const hasFilters = computed(() => {
         </el-select>
       </el-form-item>
 
-      <!-- 指标类型筛�?-->
+      <!-- 指标类型筛?-->
       <el-form-item label="指标类型">
         <el-select
           v-model="localFilters.indicatorType"
@@ -176,7 +181,7 @@ const hasFilters = computed(() => {
         </el-select>
       </el-form-item>
 
-      <!-- 预警级别筛�?-->
+      <!-- 预警级别筛?-->
       <el-form-item label="预警级别">
         <el-select
           v-model="localFilters.alertLevel"
@@ -185,13 +190,13 @@ const hasFilters = computed(() => {
           style="width: 130px"
         >
           <el-option label="严重 (<30%)" value="severe">
-            <span style="color: #F56C6C">�?严重</span>
+            <span style="color: #f56c6c">?严重</span>
           </el-option>
           <el-option label="中度 (30%-60%)" value="moderate">
-            <span style="color: #E6A23C">�?中度</span>
+            <span style="color: #e6a23c">?中度</span>
           </el-option>
-          <el-option label="正常 (�?0%)" value="normal">
-            <span style="color: #67C23A">�?正常</span>
+          <el-option label="正常 (?0%)" value="normal">
+            <span style="color: #67c23a">?正常</span>
           </el-option>
         </el-select>
       </el-form-item>
@@ -201,20 +206,21 @@ const hasFilters = computed(() => {
         <el-button type="primary" :icon="hasFilters ? 'Search' : undefined" @click="handleApply">
           {{ hasFilters ? '应用筛选' : '查询' }}
         </el-button>
-        <el-button :disabled="!hasFilters" @click="handleReset">
-          重置
-        </el-button>
+        <el-button :disabled="!hasFilters" @click="handleReset"> 重置 </el-button>
       </el-form-item>
     </el-form>
 
-    <!-- 当前筛选条件提�?-->
+    <!-- 当前筛选条件提?-->
     <div v-if="hasFilters" class="filter-tags">
       <el-tag
         v-if="localFilters.department"
         closable
         type="info"
         size="small"
-        @close="localFilters.department = undefined; handleApply()"
+        @close="
+          localFilters.department = undefined
+          handleApply()
+        "
       >
         职能部门: {{ localFilters.department }}
       </el-tag>
@@ -223,7 +229,10 @@ const hasFilters = computed(() => {
         closable
         type="info"
         size="small"
-        @close="localFilters.collegeFilter = undefined; handleApply()"
+        @close="
+          localFilters.collegeFilter = undefined
+          handleApply()
+        "
       >
         学院: {{ localFilters.collegeFilter }}
       </el-tag>
@@ -232,18 +241,37 @@ const hasFilters = computed(() => {
         closable
         type="info"
         size="small"
-        @close="localFilters.indicatorType = undefined; handleApply()"
+        @close="
+          localFilters.indicatorType = undefined
+          handleApply()
+        "
       >
         类型: {{ localFilters.indicatorType }}
       </el-tag>
       <el-tag
         v-if="localFilters.alertLevel"
         closable
-        :type="localFilters.alertLevel === 'severe' ? 'danger' : localFilters.alertLevel === 'moderate' ? 'warning' : 'success'"
+        :type="
+          localFilters.alertLevel === 'severe'
+            ? 'danger'
+            : localFilters.alertLevel === 'moderate'
+              ? 'warning'
+              : 'success'
+        "
         size="small"
-        @close="localFilters.alertLevel = undefined; handleApply()"
+        @close="
+          localFilters.alertLevel = undefined
+          handleApply()
+        "
       >
-        预警: {{ localFilters.alertLevel === 'severe' ? '严重' : localFilters.alertLevel === 'moderate' ? '中度' : '正常' }}
+        预警:
+        {{
+          localFilters.alertLevel === 'severe'
+            ? '严重'
+            : localFilters.alertLevel === 'moderate'
+              ? '中度'
+              : '正常'
+        }}
       </el-tag>
     </div>
   </div>

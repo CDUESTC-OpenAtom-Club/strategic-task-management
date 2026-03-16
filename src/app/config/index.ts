@@ -1,0 +1,67 @@
+/**
+ * Application Configuration
+ *
+ * Application-level configuration constants and settings
+ *
+ * **Validates: Requirements 3.1 - Application Layer**
+ */
+
+/**
+ * Application version
+ */
+export const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.1'
+
+/**
+ * Application name
+ */
+export const APP_NAME = '战略指标管理系统'
+
+/**
+ * Application subtitle
+ */
+export const APP_SUBTITLE = 'Strategic Indicator Management System'
+
+/**
+ * Environment configuration
+ */
+export const ENV = {
+  isDev: import.meta.env.DEV,
+  isProd: import.meta.env.PROD,
+  mode: import.meta.env.MODE
+}
+
+/**
+ * API configuration
+ */
+export const API_CONFIG = {
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 30000
+}
+
+/**
+ * Build information
+ */
+export const BUILD_INFO = {
+  version: APP_VERSION,
+  time: new Date().toISOString(),
+  mode: ENV.mode
+}
+
+/**
+ * Performance monitoring configuration
+ */
+export const PERFORMANCE_CONFIG = {
+  enabled: true,
+  consoleOutput: ENV.isDev,
+  reportInterval: 60000, // 1 minute
+  sampleRate: 1.0 // 100%
+}
+
+/**
+ * Health check configuration
+ */
+export const HEALTH_CHECK_CONFIG = {
+  enabled: true,
+  interval: 300000, // 5 minutes
+  endpoint: '/api/health'
+}

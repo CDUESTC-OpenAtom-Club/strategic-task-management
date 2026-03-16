@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
@@ -9,7 +8,7 @@ import { usePlanStore } from '@/features/plan/model/store'
 import IndicatorFillForm from '@/shared/ui/form/indicator/IndicatorFillForm.vue'
 import IndicatorFillHistory from '@/shared/ui/form/indicator/IndicatorFillHistory.vue'
 import { indicatorApi } from '@/features/strategic-indicator/api/indicator'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 指标填报页面
@@ -78,18 +77,19 @@ const loadIndicator = async () => {
         task_id: response.data.taskId,
         name: response.data.indicatorDesc,
         definition: response.data.indicatorDesc,
-        milestones: response.data.milestones?.map(m => ({
-          id: m.milestoneId.toString(),
-          indicator_id: m.indicatorId.toString(),
-          name: m.milestoneName,
-          description: m.milestoneDesc || '',
-          deadline: m.dueDate,
-          weight_percent: m.weightPercent,
-          status: m.status.toLowerCase(),
-          sort_order: m.sortOrder,
-          created_at: m.createdAt,
-          updated_at: m.updatedAt
-        })) || [],
+        milestones:
+          response.data.milestones?.map(m => ({
+            id: m.milestoneId.toString(),
+            indicator_id: m.indicatorId.toString(),
+            name: m.milestoneName,
+            description: m.milestoneDesc || '',
+            deadline: m.dueDate,
+            weight_percent: m.weightPercent,
+            status: m.status.toLowerCase(),
+            sort_order: m.sortOrder,
+            created_at: m.createdAt,
+            updated_at: m.updatedAt
+          })) || [],
         createdAt: response.data.createdAt,
         updatedAt: response.data.updatedAt
       }
@@ -118,9 +118,7 @@ onMounted(() => {
         <h1 class="page-title">指标填报</h1>
       </div>
       <div class="header-actions">
-        <el-button @click="toggleHistory">
-          {{ showHistory ? '隐藏' : '显示' }}历史记录
-        </el-button>
+        <el-button @click="toggleHistory"> {{ showHistory ? '隐藏' : '显示' }}历史记录 </el-button>
       </div>
     </div>
 
