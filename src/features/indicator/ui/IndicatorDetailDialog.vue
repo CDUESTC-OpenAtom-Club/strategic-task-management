@@ -2,10 +2,10 @@
 import { ref, computed, watch as _watch } from 'vue'
 import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-plus/icons-vue'
 import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/types'
-import { useStrategicStore } from '@/stores/strategic'
-import { useAuditLogStore } from '@/stores/auditLog'
-import MilestoneTimeline from './MilestoneTimeline.vue'
-import ApprovalHistory from '@/components/approval/ApprovalHistory.vue'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuditLogStore } from '@/features/admin/model/auditLog'
+import MilestoneTimeline from '@/shared/ui/form/indicator/MilestoneTimeline.vue'
+import ApprovalHistory from '@/features/approval/ui/ApprovalHistory.vue'
 
 const props = defineProps<{
   indicatorId: string
@@ -68,7 +68,7 @@ const getTypeTagType = (type: string) => {
 }
 
 const getType2TagType = (type: string) => {
-  return type === '基础性' ? 'info' : 'warning'
+  return type === '基础型' ? 'info' : 'warning'
 }
 
 const getProgressStatus = (progress: number) => {

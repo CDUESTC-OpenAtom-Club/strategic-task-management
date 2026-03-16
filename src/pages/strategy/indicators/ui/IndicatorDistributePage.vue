@@ -11,7 +11,7 @@
  */
 
 import { PageHeader } from '@/shared/ui/layout'
-import { IndicatorDistributeView } from '@/features/strategic-indicator'
+import { IndicatorDistributeView } from '@/features/indicator'
 </script>
 
 <template>

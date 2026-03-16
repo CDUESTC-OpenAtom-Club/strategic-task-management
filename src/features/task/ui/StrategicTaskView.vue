@@ -38,7 +38,7 @@ import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/features/task/ui/TaskApprovalDrawer.vue'
 import PlanApprovalDrawer from '@/features/approval/ui/PlanApprovalDrawer.vue'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
-import { indicatorApi } from '@/features/strategic-indicator/api/indicator'
+import { indicatorApi } from '@/features/indicator/api'
 
 // 使用共享 Store
 const strategicStore = useStrategicStore()
@@ -1204,6 +1204,12 @@ const handleSelectionChange = (selection: StrategicIndicator[]) => {
 }
 
 // 任务下发相关方法
+const handleCancelAssignment = () => {
+  showAssignmentDialog.value = false
+  assignmentTarget.value = ''
+  assignmentMethod.value = 'self'
+}
+
 const confirmAssignment = () => {
   if (!assignmentTarget.value) {
     ElMessage.warning('请选择下发目标')
@@ -3032,19 +3038,21 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
               <el-radio v-if="props.selectedRole === '战略发展部'" value="self"
                 >职能部门完成</el-radio
               >
-              <el-radio v-if="props.selectedRole === '战略发展部'" value="college"
-                >分解到职能部门</el-radio
-              >
+              <el-radio v-if="props.selectedRole === '战略发展部'" value="college">
+                分解到职能部门
+              </el-radio>
               <el-radio
                 v-else-if="props.selectedRole === '教务处' || props.selectedRole === '科研处'"
                 value="self"
-                >自己完成</el-radio
               >
+                自己完成
+              </el-radio>
               <el-radio
                 v-if="props.selectedRole === '教务处' || props.selectedRole === '科研处'"
                 value="college"
-                >下发给学院</el-radio
               >
+                下发给学院
+              </el-radio>
             </el-radio-group>
           </el-form-item>
 
@@ -3058,15 +3066,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       </div>
 
       <template #footer>
-        <el-button
-          @click="
-            showAssignmentDialog = false
-            assignmentTarget = ''
-            assignmentMethod = 'self'
-          "
-        >
-          取消
-        </el-button>
+        <el-button @click="handleCancelAssignment"> 取消 </el-button>
         <el-button
           type="primary"
           :disabled="assignmentMethod === 'college' && !assignmentTarget"

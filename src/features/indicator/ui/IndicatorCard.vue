@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Indicator Card Component
- * 
+ *
  * Displays indicator information in a card format.
  */
 
@@ -33,17 +33,13 @@ const emit = defineEmits<Emits>()
 const statusConfig = computed(() => STATUS_CONFIG[props.indicator.status] || STATUS_CONFIG.DRAFT)
 const levelConfig = computed(() => LEVEL_CONFIG[props.indicator.level] || LEVEL_CONFIG.FIRST)
 
-const completionRate = computed(() => 
+const completionRate = computed(() =>
   calculateCompletionRate(props.indicator.targetValue, props.indicator.actualValue)
 )
 
-const weightDisplay = computed(() => 
-  formatWeightAsPercentage(props.indicator.weight)
-)
+const weightDisplay = computed(() => formatWeightAsPercentage(props.indicator.weight))
 
-const availableActions = computed(() => 
-  getAvailableActions(props.indicator)
-)
+const availableActions = computed(() => getAvailableActions(props.indicator))
 
 function handleView() {
   emit('view', props.indicator)
@@ -112,8 +108,8 @@ function handleDistribute() {
           <span class="value">{{ indicator.actualValue || 0 }} {{ indicator.unit }}</span>
         </div>
 
-        <ElProgress 
-          :percentage="completionRate" 
+        <ElProgress
+          :percentage="completionRate"
           :status="completionRate >= 100 ? 'success' : undefined"
         />
       </div>
@@ -127,32 +123,28 @@ function handleDistribute() {
 
     <template v-if="showActions" #footer>
       <ElSpace>
-        <ElButton 
-          v-if="availableActions.includes('view')"
-          size="small" 
-          @click="handleView"
-        >
+        <ElButton v-if="availableActions.includes('view')" size="small" @click="handleView">
           查看
         </ElButton>
-        <ElButton 
+        <ElButton
           v-if="availableActions.includes('edit')"
-          size="small" 
+          size="small"
           type="primary"
           @click="handleEdit"
         >
           编辑
         </ElButton>
-        <ElButton 
+        <ElButton
           v-if="availableActions.includes('distribute')"
-          size="small" 
+          size="small"
           type="success"
           @click="handleDistribute"
         >
           下发
         </ElButton>
-        <ElButton 
+        <ElButton
           v-if="availableActions.includes('delete')"
-          size="small" 
+          size="small"
           type="danger"
           @click="handleDelete"
         >

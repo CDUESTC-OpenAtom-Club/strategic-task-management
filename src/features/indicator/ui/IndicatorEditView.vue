@@ -9,7 +9,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElCard } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
-import { useIndicatorStore, IndicatorForm } from '@/features/strategic-indicator'
+import { useIndicatorStore, IndicatorForm } from '@/features/indicator'
 import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()

@@ -95,7 +95,7 @@ const approval = await indicatorMutations.submitIndicatorForApproval(id, '请审
 #### 计算函数
 
 ```typescript
-import { 
+import {
   calculateCompletionRate,
   calculateWeightedCompletionRate,
   validateWeightSum,
@@ -175,22 +175,12 @@ const actions = getAvailableActions(indicator)
   >
     <!-- 插槽：任务选项 -->
     <template #task-options>
-      <el-option
-        v-for="task in tasks"
-        :key="task.id"
-        :label="task.name"
-        :value="task.id"
-      />
+      <el-option v-for="task in tasks" :key="task.id" :label="task.name" :value="task.id" />
     </template>
-    
+
     <!-- 插槽：组织选项 -->
     <template #owner-org-options>
-      <el-option
-        v-for="org in organizations"
-        :key="org.id"
-        :label="org.name"
-        :value="org.id"
-      />
+      <el-option v-for="org in organizations" :key="org.id" :label="org.name" :value="org.id" />
     </template>
   </IndicatorForm>
 </template>
@@ -263,7 +253,7 @@ if (result.success) {
 ## 常量配置
 
 ```typescript
-import { 
+import {
   STATUS_CONFIG,
   LEVEL_CONFIG,
   INDICATOR_TYPE_OPTIONS,
@@ -286,18 +276,18 @@ const levelConfig = LEVEL_CONFIG['FIRST']
 
 基于后端 API 文档 (`docs/API接口文档.md`)：
 
-| 功能 | API 端点 | 方法 |
-|------|---------|------|
-| 查询指标列表 | `/api/indicators` | GET |
-| 获取指标详情 | `/api/indicators/{id}` | GET |
-| 创建指标 | `/api/indicators` | POST |
-| 更新指标 | `/api/indicators/{id}` | PUT |
-| 删除指标 | `/api/indicators/{id}` | DELETE |
-| 下发指标 | `/api/indicators/{id}/distribute` | POST |
-| 撤回指标 | `/api/indicators/{id}/withdraw` | POST |
-| 提交审批 | `/api/indicators/{id}/submit-approval` | POST |
-| 按任务查询 | `/api/indicators/task/{taskId}` | GET |
-| 按组织查询 | `/api/indicators/owner-org/{orgId}` | GET |
+| 功能         | API 端点                               | 方法   |
+| ------------ | -------------------------------------- | ------ |
+| 查询指标列表 | `/api/indicators`                      | GET    |
+| 获取指标详情 | `/api/indicators/{id}`                 | GET    |
+| 创建指标     | `/api/indicators`                      | POST   |
+| 更新指标     | `/api/indicators/{id}`                 | PUT    |
+| 删除指标     | `/api/indicators/{id}`                 | DELETE |
+| 下发指标     | `/api/indicators/{id}/distribute`      | POST   |
+| 撤回指标     | `/api/indicators/{id}/withdraw`        | POST   |
+| 提交审批     | `/api/indicators/{id}/submit-approval` | POST   |
+| 按任务查询   | `/api/indicators/task/{taskId}`        | GET    |
+| 按组织查询   | `/api/indicators/owner-org/{orgId}`    | GET    |
 
 ## 依赖关系
 
@@ -316,7 +306,7 @@ features/strategic-indicator/
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { 
+import {
   useIndicatorStore,
   IndicatorList,
   IndicatorForm,
@@ -346,7 +336,7 @@ async function handleCreate(data: Partial<Indicator>) {
 
 async function handleDistribute(data: any) {
   if (!selectedIndicator.value) return
-  
+
   try {
     await indicatorStore.distributeIndicator(
       selectedIndicator.value.id,
@@ -369,9 +359,7 @@ function openDistribution(indicator: Indicator) {
 
 <template>
   <div class="indicator-page">
-    <el-button type="primary" @click="showForm = true">
-      创建指标
-    </el-button>
+    <el-button type="primary" @click="showForm = true"> 创建指标 </el-button>
 
     <IndicatorList
       :data="indicatorStore.indicators"
@@ -381,11 +369,7 @@ function openDistribution(indicator: Indicator) {
     />
 
     <el-dialog v-model="showForm" title="创建指标">
-      <IndicatorForm
-        :mode="'create'"
-        @submit="handleCreate"
-        @cancel="showForm = false"
-      />
+      <IndicatorForm :mode="'create'" @submit="handleCreate" @cancel="showForm = false" />
     </el-dialog>
 
     <IndicatorDistributionDialog

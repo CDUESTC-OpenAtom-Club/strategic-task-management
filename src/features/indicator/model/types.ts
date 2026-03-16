@@ -1,6 +1,6 @@
 /**
  * Strategic Indicator Feature - Business Types
- * 
+ *
  * Business-specific types for the strategic indicator feature.
  * These extend the entity types with feature-specific concerns.
  */

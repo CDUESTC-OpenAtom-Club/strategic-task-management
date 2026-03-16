@@ -2,7 +2,7 @@
  * @deprecated This file has been moved to @/entities/milestone/api/milestoneApi.ts
  *
  * Please update your imports:
- * OLD: import { milestoneApi } from '@/features/strategic-indicator/api/milestone'
+ * OLD: import { milestoneApi } from '@/features/indicator/api/milestone'
  * NEW: import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
  *
  * Or use the shared API export: import { milestoneApi } from '@/shared/api'

@@ -25,7 +25,7 @@ import {
   LEVEL_CONFIG,
   calculateCompletionRate,
   formatWeightAsPercentage
-} from '@/features/strategic-indicator'
+} from '@/features/indicator'
 import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()

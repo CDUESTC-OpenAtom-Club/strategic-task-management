@@ -1,6 +1,6 @@
 /**
  * Strategic Indicator Feature - API Types
- * 
+ *
  * API request/response types specific to indicator endpoints.
  */
 

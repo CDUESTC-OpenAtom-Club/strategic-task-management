@@ -13,10 +13,10 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { PageHeader } from '@/shared/ui/layout'
-import { IndicatorEditView } from '@/features/strategic-indicator'
+import { IndicatorEditView } from '@/features/indicator'
 
 const route = useRoute()
-const pageTitle = computed(() => route.params.id ? '编辑指标' : '新建指标')
+const pageTitle = computed(() => (route.params.id ? '编辑指标' : '新建指标'))
 </script>
 
 <template>

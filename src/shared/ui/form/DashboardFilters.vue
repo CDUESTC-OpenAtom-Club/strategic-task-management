@@ -116,11 +116,17 @@ const handleApply = () => {
   emit('apply')
 }
 
-// 重置筛?
+// 重置筛选
 const handleReset = () => {
   localFilters.value = {}
   emit('update:modelValue', {})
   emit('apply')
+}
+
+// 关闭筛选标签
+const handleCloseTag = (key: keyof typeof localFilters.value) => {
+  localFilters.value[key] = undefined
+  handleApply()
 }
 
 // 判断是否有筛选条?
@@ -210,17 +216,14 @@ const hasFilters = computed(() => {
       </el-form-item>
     </el-form>
 
-    <!-- 当前筛选条件提?-->
+    <!-- 当前筛选条件提示 -->
     <div v-if="hasFilters" class="filter-tags">
       <el-tag
         v-if="localFilters.department"
         closable
         type="info"
         size="small"
-        @close="
-          localFilters.department = undefined
-          handleApply()
-        "
+        @close="handleCloseTag('department')"
       >
         职能部门: {{ localFilters.department }}
       </el-tag>
@@ -229,10 +232,7 @@ const hasFilters = computed(() => {
         closable
         type="info"
         size="small"
-        @close="
-          localFilters.collegeFilter = undefined
-          handleApply()
-        "
+        @close="handleCloseTag('collegeFilter')"
       >
         学院: {{ localFilters.collegeFilter }}
       </el-tag>
@@ -241,10 +241,7 @@ const hasFilters = computed(() => {
         closable
         type="info"
         size="small"
-        @close="
-          localFilters.indicatorType = undefined
-          handleApply()
-        "
+        @close="handleCloseTag('indicatorType')"
       >
         类型: {{ localFilters.indicatorType }}
       </el-tag>
@@ -259,10 +256,7 @@ const hasFilters = computed(() => {
               : 'success'
         "
         size="small"
-        @close="
-          localFilters.alertLevel = undefined
-          handleApply()
-        "
+        @close="handleCloseTag('alertLevel')"
       >
         预警:
         {{

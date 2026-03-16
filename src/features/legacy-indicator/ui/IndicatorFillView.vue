@@ -7,8 +7,8 @@ import type { Indicator } from '@/types'
 import { usePlanStore } from '@/features/plan/model/store'
 import IndicatorFillForm from '@/shared/ui/form/indicator/IndicatorFillForm.vue'
 import IndicatorFillHistory from '@/shared/ui/form/indicator/IndicatorFillHistory.vue'
-import { indicatorApi } from '@/features/strategic-indicator/api/indicator'
-import { logger } from '@/shared/lib/utils/logger'
+import { indicatorApi } from '@/shared/api'
+import { logger } from '@/utils/logger'
 
 /**
  * 指标填报页面

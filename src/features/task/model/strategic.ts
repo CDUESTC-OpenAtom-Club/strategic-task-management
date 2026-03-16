@@ -8,7 +8,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { StrategicIndicator } from '@/types'
-import { indicatorApi } from '@/features/strategic-indicator/api/indicator'
+import { indicatorApi } from '@/features/indicator/api'
 import { logger } from '@/shared/lib/utils/logger'
 
 export const useStrategicStore = defineStore('strategic', () => {

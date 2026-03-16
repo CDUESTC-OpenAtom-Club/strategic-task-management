@@ -2,10 +2,10 @@
 import { ref, computed, watch as _watch } from 'vue'
 import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-plus/icons-vue'
 import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/types'
-import { useStrategicStore } from '@/features/task/model/strategic'
-import { useAuditLogStore } from '@/features/admin/model/auditLog'
-import MilestoneTimeline from '@/shared/ui/form/indicator/MilestoneTimeline.vue'
-import ApprovalHistory from '@/features/approval/ui/ApprovalHistory.vue'
+import { useStrategicStore } from '@/stores/strategic'
+import { useAuditLogStore } from '@/stores/auditLog'
+import MilestoneTimeline from './MilestoneTimeline.vue'
+import ApprovalHistory from '@/components/approval/ApprovalHistory.vue'
 
 const props = defineProps<{
   indicatorId: string
@@ -24,13 +24,15 @@ const auditLogStore = useAuditLogStore()
 
 const activeTab = ref('basic')
 
-const indicator = computed<StrategicIndicator | undefined>(() => 
+const indicator = computed<StrategicIndicator | undefined>(() =>
   strategicStore.getIndicatorById(props.indicatorId)
 )
 
 // 模拟审批历史数据
 const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
-  if (!indicator.value) {return []}
+  if (!indicator.value) {
+    return []
+  }
   return [
     {
       id: '1',
@@ -52,13 +54,13 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
 })
 
 // 获取操作日志
-const auditLogs = computed<AuditLogItem[]>(() => 
+const auditLogs = computed<AuditLogItem[]>(() =>
   auditLogStore.getEntityHistory('indicator', props.indicatorId)
 )
 
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val)
+  set: val => emit('update:visible', val)
 })
 
 const getTypeTagType = (type: string) => {
@@ -66,12 +68,16 @@ const getTypeTagType = (type: string) => {
 }
 
 const getType2TagType = (type: string) => {
-  return type === '基础型' ? 'info' : 'warning'
+  return type === '基础性' ? 'info' : 'warning'
 }
 
 const getProgressStatus = (progress: number) => {
-  if (progress >= 80) {return 'success'}
-  if (progress >= 50) {return ''}
+  if (progress >= 80) {
+    return 'success'
+  }
+  if (progress >= 50) {
+    return ''
+  }
   return 'exception'
 }
 
@@ -139,9 +145,7 @@ const getActionLabel = (action: string) => {
               <el-descriptions-item label="目标值">
                 {{ indicator.targetValue }} {{ indicator.unit }}
               </el-descriptions-item>
-              <el-descriptions-item label="权重">
-                {{ indicator.weight }}%
-              </el-descriptions-item>
+              <el-descriptions-item label="权重"> {{ indicator.weight }}% </el-descriptions-item>
               <el-descriptions-item label="责任部门">
                 {{ indicator.responsibleDept }}
               </el-descriptions-item>
@@ -155,11 +159,11 @@ const getActionLabel = (action: string) => {
                 {{ indicator.remark || '无' }}
               </el-descriptions-item>
             </el-descriptions>
-            
+
             <div class="progress-section">
               <h4>当前进度</h4>
-              <el-progress 
-                :percentage="indicator.progress" 
+              <el-progress
+                :percentage="indicator.progress"
                 :status="getProgressStatus(indicator.progress)"
                 :stroke-width="16"
                 :text-inside="true"
@@ -218,10 +222,10 @@ const getActionLabel = (action: string) => {
         <el-button @click="dialogVisible = false">关闭</el-button>
         <el-button type="primary" :icon="Edit" @click="handleEdit">编辑</el-button>
         <el-button type="success" :icon="Promotion" @click="handleDistribute">下发</el-button>
-        <el-button 
-          v-if="indicator?.canWithdraw" 
-          type="warning" 
-          :icon="RefreshLeft" 
+        <el-button
+          v-if="indicator?.canWithdraw"
+          type="warning"
+          :icon="RefreshLeft"
           @click="handleWithdraw"
         >
           撤回

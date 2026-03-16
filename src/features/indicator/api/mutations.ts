@@ -1,18 +1,18 @@
 /**
  * Strategic Indicator Feature - Mutation API
- * 
+ *
  * Write operations for indicators (create, update, delete, distribute).
  * Based on API documentation: POST/PUT/DELETE /api/indicators/*
  */
 
 import { apiClient } from '@/shared/lib/api/client'
-import type { 
-  Indicator, 
-  IndicatorCreateRequest, 
+import type {
+  Indicator,
+  IndicatorCreateRequest,
   IndicatorUpdateRequest,
-  DistributeRequest 
+  DistributeRequest
 } from '@/entities/indicator/model/types'
-import type { 
+import type {
   IndicatorDetailResponse,
   DistributionResponse,
   ApprovalSubmissionResponse,
@@ -22,27 +22,22 @@ import type {
 
 /**
  * Create indicator
- * 
+ *
  * API: POST /api/indicators
- * 
+ *
  * @param data - Indicator creation data
  * @returns Created indicator
  */
-export async function createIndicator(
-  data: IndicatorCreateRequest
-): Promise<Indicator> {
-  const response = await apiClient.post<IndicatorDetailResponse>(
-    '/indicators',
-    data
-  )
+export async function createIndicator(data: IndicatorCreateRequest): Promise<Indicator> {
+  const response = await apiClient.post<IndicatorDetailResponse>('/indicators', data)
   return response.data
 }
 
 /**
  * Update indicator
- * 
+ *
  * API: PUT /api/indicators/{id}
- * 
+ *
  * @param id - Indicator ID
  * @param data - Update data
  * @returns Updated indicator
@@ -51,18 +46,15 @@ export async function updateIndicator(
   id: number,
   data: IndicatorUpdateRequest
 ): Promise<Indicator> {
-  const response = await apiClient.put<IndicatorDetailResponse>(
-    `/indicators/${id}`,
-    data
-  )
+  const response = await apiClient.put<IndicatorDetailResponse>(`/indicators/${id}`, data)
   return response.data
 }
 
 /**
  * Delete indicator
- * 
+ *
  * API: DELETE /api/indicators/{id}
- * 
+ *
  * @param id - Indicator ID
  */
 export async function deleteIndicator(id: number): Promise<void> {
@@ -71,9 +63,9 @@ export async function deleteIndicator(id: number): Promise<void> {
 
 /**
  * Distribute indicator to target organizations
- * 
+ *
  * API: POST /api/indicators/{id}/distribute
- * 
+ *
  * @param id - Indicator ID
  * @param request - Distribution request
  * @returns Distribution result
@@ -91,9 +83,9 @@ export async function distributeIndicator(
 
 /**
  * Batch distribute indicators
- * 
+ *
  * API: POST /api/indicators/distribute/batch
- * 
+ *
  * @param indicatorIds - Indicator IDs
  * @param targetOrgIds - Target organization IDs
  * @param deadline - Deadline
@@ -104,37 +96,31 @@ export async function batchDistributeIndicators(
   targetOrgIds: number[],
   deadline?: string
 ): Promise<DistributionResult> {
-  const response = await apiClient.post<DistributionResponse>(
-    '/indicators/distribute/batch',
-    {
-      indicatorIds,
-      targetOrgIds,
-      deadline
-    }
-  )
+  const response = await apiClient.post<DistributionResponse>('/indicators/distribute/batch', {
+    indicatorIds,
+    targetOrgIds,
+    deadline
+  })
   return response.data
 }
 
 /**
  * Withdraw indicator
- * 
+ *
  * API: POST /api/indicators/{id}/withdraw
- * 
+ *
  * @param id - Indicator ID
  * @param reason - Withdrawal reason
  */
-export async function withdrawIndicator(
-  id: number,
-  reason?: string
-): Promise<void> {
+export async function withdrawIndicator(id: number, reason?: string): Promise<void> {
   await apiClient.post(`/indicators/${id}/withdraw`, { reason })
 }
 
 /**
  * Submit indicator for approval
- * 
+ *
  * API: POST /api/indicators/{id}/submit-approval
- * 
+ *
  * @param id - Indicator ID
  * @param comment - Submission comment
  * @returns Approval submission result
@@ -155,9 +141,9 @@ export async function submitIndicatorForApproval(
 
 /**
  * Submit indicator progress
- * 
+ *
  * API: POST /api/indicators/{id}/submit-progress (from workflow endpoints)
- * 
+ *
  * @param id - Indicator ID
  * @param value - Progress value
  * @param evidence - Evidence description
@@ -170,29 +156,23 @@ export async function submitIndicatorProgress(
   evidence?: string,
   attachments?: number[]
 ): Promise<{ reportId: number; status: string }> {
-  const response = await apiClient.post<any>(
-    `/workflow/indicator/${id}/submit-progress`,
-    {
-      value,
-      evidence,
-      attachments
-    }
-  )
+  const response = await apiClient.post<any>(`/workflow/indicator/${id}/submit-progress`, {
+    value,
+    evidence,
+    attachments
+  })
   return response.data
 }
 
 /**
  * Confirm indicator receipt
- * 
+ *
  * API: POST /workflow/indicator/{id}/confirm-receive
- * 
+ *
  * @param id - Indicator ID
  * @param comment - Confirmation comment
  */
-export async function confirmIndicatorReceipt(
-  id: number,
-  comment?: string
-): Promise<void> {
+export async function confirmIndicatorReceipt(id: number, comment?: string): Promise<void> {
   await apiClient.post(`/workflow/indicator/${id}/confirm-receive`, {
     comment
   })
@@ -200,9 +180,9 @@ export async function confirmIndicatorReceipt(
 
 /**
  * Decompose indicator into sub-indicators
- * 
+ *
  * API: POST /workflow/indicator/{id}/decompose
- * 
+ *
  * @param id - Parent indicator ID
  * @param decompositions - Sub-indicator data
  * @returns Created sub-indicators
@@ -216,9 +196,8 @@ export async function decomposeIndicator(
     weight: number
   }>
 ): Promise<{ parentId: number; createdCount: number; childIndicators: Indicator[] }> {
-  const response = await apiClient.post<any>(
-    `/workflow/indicator/${id}/decompose`,
-    { decompositions }
-  )
+  const response = await apiClient.post<any>(`/workflow/indicator/${id}/decompose`, {
+    decompositions
+  })
   return response.data
 }

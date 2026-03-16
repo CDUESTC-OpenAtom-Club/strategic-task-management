@@ -57,13 +57,13 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/indicators',
     name: 'Indicators',
-    component: () => import('@/features/strategic-indicator/ui/IndicatorListView.vue'),
+    component: () => import('@/features/indicator/ui/IndicatorListView.vue'),
     meta: { requiresAuth: true, title: '指标列表 - 战略指标管理系统' }
   },
   {
     path: '/distribution',
     name: 'Distribution',
-    component: () => import('@/features/strategic-indicator/ui/IndicatorEditView.vue'),
+    component: () => import('@/features/indicator/ui/IndicatorEditView.vue'),
     meta: { requiresAuth: true, roles: ['functional_dept'], title: '指标分配 - 战略指标管理系统' }
   },
   {
@@ -149,7 +149,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/fills/indicator/:indicatorId',
     name: 'indicator-fill',
-    component: () => import('@/features/strategic-indicator/ui/IndicatorFillView.vue'),
+    component: () => import('@/features/indicator/ui/IndicatorFillView.vue'),
     meta: { requiresAuth: true, title: '指标填报 - 战略指标管理系统' }
   },
 

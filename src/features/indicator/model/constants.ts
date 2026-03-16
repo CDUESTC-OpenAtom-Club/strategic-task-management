@@ -1,6 +1,6 @@
 /**
  * Strategic Indicator Feature - Constants
- * 
+ *
  * Business constants and configuration for the strategic indicator feature.
  */
 

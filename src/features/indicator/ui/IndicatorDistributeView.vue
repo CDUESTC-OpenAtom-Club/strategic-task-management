@@ -23,7 +23,7 @@ import {
   type FormInstance
 } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
-import { useIndicatorStore, STATUS_CONFIG, LEVEL_CONFIG } from '@/features/strategic-indicator'
+import { useIndicatorStore, STATUS_CONFIG, LEVEL_CONFIG } from '@/features/indicator'
 import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()

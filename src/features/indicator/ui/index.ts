@@ -1,6 +1,13 @@
 /**
- * Indicator Feature UI Components
+ * Strategic Indicator Feature - UI Components
+ *
+ * @module features/strategic-indicator/ui
  */
 
-// Re-export from shared/ui/form
-export { IndicatorFillForm, IndicatorFillHistory, MilestoneTimeline } from '@/shared/ui/form'
+export { default as IndicatorList } from './IndicatorList.vue'
+export { default as IndicatorDetailDialog } from './IndicatorDetailDialog.vue'
+export { default as IndicatorDistributionDialog } from './IndicatorDistributionDialog.vue'
+export { default as IndicatorFillView } from './IndicatorFillView.vue'
+export { default as IndicatorForm } from './IndicatorForm.vue'
+export { default as IndicatorCard } from './IndicatorCard.vue'
+export { default as IndicatorListView } from './IndicatorListView.vue'

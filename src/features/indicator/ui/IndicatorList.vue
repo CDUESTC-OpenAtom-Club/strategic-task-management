@@ -1,22 +1,27 @@
 <script setup lang="ts">
 /**
  * Indicator List Component
- * 
+ *
  * Displays indicators in a table with filtering and pagination.
  */
 
 import { ref } from 'vue'
-import { 
-  ElTable, 
-  ElTableColumn, 
-  ElTag, 
+import {
+  ElTable,
+  ElTableColumn,
+  ElTag,
   ElButton,
   ElSpace,
   ElPagination,
   ElEmpty
 } from 'element-plus'
 import type { Indicator } from '@/entities/indicator/model/types'
-import { STATUS_CONFIG, LEVEL_CONFIG, DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../model/constants'
+import {
+  STATUS_CONFIG,
+  LEVEL_CONFIG,
+  DEFAULT_PAGE_SIZE,
+  PAGE_SIZE_OPTIONS
+} from '../model/constants'
 import { formatWeightAsPercentage } from '../lib/calculations'
 import { getAvailableActions } from '../lib/validations'
 
@@ -65,7 +70,9 @@ function formatWeight(weight: number | undefined) {
 }
 
 function formatCompletionRate(indicator: Indicator) {
-  if (!indicator.targetValue) {return '-'}
+  if (!indicator.targetValue) {
+    return '-'
+  }
   const rate = indicator.completionRate || 0
   return `${rate.toFixed(1)}%`
 }
@@ -101,18 +108,13 @@ defineExpose({
 
 <template>
   <div class="indicator-list">
-    <ElTable
-      :data="data"
-      :loading="loading"
-      stripe
-      @selection-change="handleSelectionChange"
-    >
+    <ElTable :data="data" :loading="loading" stripe @selection-change="handleSelectionChange">
       <ElTableColumn type="selection" width="55" />
-      
+
       <ElTableColumn prop="code" label="编码" width="120" />
-      
+
       <ElTableColumn prop="name" label="指标名称" min-width="200" show-overflow-tooltip />
-      
+
       <ElTableColumn prop="level" label="层级" width="100">
         <template #default="{ row }">
           <ElTag :type="row.level === 'FIRST' ? 'primary' : 'success'" size="small">
@@ -120,19 +122,19 @@ defineExpose({
           </ElTag>
         </template>
       </ElTableColumn>
-      
+
       <ElTableColumn prop="type" label="类型" width="100">
         <template #default="{ row }">
           {{ row.type === 'QUANTITATIVE' ? '定量' : '定性' }}
         </template>
       </ElTableColumn>
-      
+
       <ElTableColumn prop="taskName" label="所属任务" width="150" show-overflow-tooltip />
-      
+
       <ElTableColumn prop="ownerOrg" label="责任组织" width="150" show-overflow-tooltip />
-      
+
       <ElTableColumn prop="targetOrg" label="目标组织" width="150" show-overflow-tooltip />
-      
+
       <ElTableColumn label="目标/当前" width="120">
         <template #default="{ row }">
           <span v-if="row.type === 'QUANTITATIVE'">
@@ -141,19 +143,19 @@ defineExpose({
           <span v-else>-</span>
         </template>
       </ElTableColumn>
-      
+
       <ElTableColumn label="完成率" width="100">
         <template #default="{ row }">
           {{ formatCompletionRate(row) }}
         </template>
       </ElTableColumn>
-      
+
       <ElTableColumn prop="weight" label="权重" width="80">
         <template #default="{ row }">
           {{ formatWeight(row.weight) }}
         </template>
       </ElTableColumn>
-      
+
       <ElTableColumn prop="status" label="状态" width="100">
         <template #default="{ row }">
           <ElTag :type="getStatusConfig(row.status).type" size="small">
@@ -161,38 +163,32 @@ defineExpose({
           </ElTag>
         </template>
       </ElTableColumn>
-      
+
       <ElTableColumn label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <ElSpace>
-            <ElButton 
-              size="small" 
-              link
-              @click="handleView(row)"
-            >
-              查看
-            </ElButton>
-            <ElButton 
+            <ElButton size="small" link @click="handleView(row)"> 查看 </ElButton>
+            <ElButton
               v-if="getAvailableActions(row).includes('edit')"
-              size="small" 
+              size="small"
               type="primary"
               link
               @click="handleEdit(row)"
             >
               编辑
             </ElButton>
-            <ElButton 
+            <ElButton
               v-if="getAvailableActions(row).includes('distribute')"
-              size="small" 
+              size="small"
               type="success"
               link
               @click="handleDistribute(row)"
             >
               下发
             </ElButton>
-            <ElButton 
+            <ElButton
               v-if="getAvailableActions(row).includes('delete')"
-              size="small" 
+              size="small"
               type="danger"
               link
               @click="handleDelete(row)"
