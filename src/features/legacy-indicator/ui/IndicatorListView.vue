@@ -27,7 +27,7 @@ import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
 import {
-  getProgressStatus,
+  getProgressStatus as _getProgressStatus,
   getProgressColor as _getProgressColor,
   getStatusTagType as _getStatusTagType
 } from '@/utils'
@@ -37,10 +37,17 @@ import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
 import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
-  MILESTONE_STATUS_VALUES,
+  MILESTONE_STATUS_VALUES as _MILESTONE_STATUS_VALUES,
   PROGRESS_APPROVAL_STATUS_VALUES,
   type ProgressApprovalStatusValue
 } from '@/config/validationRules'
+import {
+  calculateMilestoneStatus as _calculateMilestoneStatus,
+  getIndicatorProgressStatus as _getIndicatorProgressStatus,
+  getProgressStatusClass,
+  getMilestonesTooltip,
+  getMilestoneProgressText as _getMilestoneProgressText
+} from '@/shared/lib/milestone-intelligence'
 
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
@@ -110,7 +117,11 @@ const timeContext = useTimeContextStore()
 
 // 使用数据验证器 - 用于验证里程碑数据完整性
 // @requirement 2.4 - Milestone data validation with complete fields
-const { validateMilestone, safeGet, validateEnum } = useDataValidator({ logErrors: true })
+const {
+  validateMilestone: _validateMilestone,
+  safeGet,
+  validateEnum
+} = useDataValidator({ logErrors: true })
 
 // ============================================================================
 // 审批状态枚举值验证与容错处理
@@ -878,294 +889,8 @@ const saveNewRow = () => {
   cancelAdd()
 }
 
-// 里程碑状态计算
-// @requirement 2.4 - Milestone data validation with complete fields
-const _calculateMilestoneStatus = (
-  indicator: StrategicIndicator
-): 'success' | 'warning' | 'exception' => {
-  if (!indicator.milestones || indicator.milestones.length === 0) {
-    return getProgressStatus(indicator.progress)
-  }
-
-  const currentDate = new Date()
-
-  const hasOverdueMilestone = indicator.milestones.some(milestone => {
-    // 使用 safeGet 安全获取字段值，缺失时使用默认值
-    const deadline = safeGet(milestone, 'deadline', '')
-    const status = safeGet(milestone, 'status', 'pending')
-
-    if (!deadline) {
-      return false
-    } // 没有截止日期的里程碑不算逾期
-
-    const deadlineDate = new Date(deadline)
-    if (isNaN(deadlineDate.getTime())) {
-      return false
-    } // 无效日期不算逾期
-
-    return status === 'pending' && deadlineDate < currentDate
-  })
-
-  const hasUpcomingMilestone = indicator.milestones.some(milestone => {
-    const status = safeGet(milestone, 'status', 'pending')
-    const deadline = safeGet(milestone, 'deadline', '')
-
-    if (status === 'completed') {
-      return false
-    }
-    if (!deadline) {
-      return false
-    } // 没有截止日期的里程碑不算即将到期
-
-    const deadlineDate = new Date(deadline)
-    if (isNaN(deadlineDate.getTime())) {
-      return false
-    } // 无效日期不算即将到期
-
-    const daysUntilDeadline = Math.ceil(
-      (deadlineDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)
-    )
-    return daysUntilDeadline > 0 && daysUntilDeadline <= 30
-  })
-
-  if (hasOverdueMilestone) {
-    return 'exception'
-  } else if (hasUpcomingMilestone) {
-    return 'warning'
-  } else {
-    return 'success'
-  }
-}
-
-// 获取里程碑进度文本
-// @requirement 2.4 - Milestone data validation with complete fields
-const _getMilestoneProgressText = (indicator: StrategicIndicator): string => {
-  if (!indicator.milestones || indicator.milestones.length === 0) {
-    return `当前进度: ${indicator.progress}%`
-  }
-
-  // 使用 safeGet 安全获取状态字段
-  const pendingMilestones = indicator.milestones.filter(m => {
-    const status = safeGet(m, 'status', 'pending')
-    return status === 'pending'
-  }).length
-
-  const currentDate = new Date()
-  const overdueMilestonesCount = indicator.milestones.filter(m => {
-    const status = safeGet(m, 'status', 'pending')
-    const deadline = safeGet(m, 'deadline', '')
-
-    if (status !== 'pending') {
-      return false
-    }
-    if (!deadline) {
-      return false
-    } // 没有截止日期的里程碑不算逾期
-
-    const deadlineDate = new Date(deadline)
-    if (isNaN(deadlineDate.getTime())) {
-      return false
-    } // 无效日期不算逾期
-
-    return deadlineDate < currentDate
-  }).length
-
-  if (overdueMilestonesCount > 0) {
-    return `逾期: ${overdueMilestonesCount} 个里程碑`
-  } else if (pendingMilestones > 0) {
-    return `待完成: ${pendingMilestones} 个里程碑`
-  } else {
-    return '所有里程碑已完成'
-  }
-}
-
-// ============================================================
-// 进度状态颜色计算函数
-// 用于根据里程碑进度判断当前指标的完成状态
-//
-// 【可配置项】预警天数阈值，可根据需求修改
-// 位置：strategic-task-management/src/views/IndicatorListView.vue
-// ============================================================
-const PROGRESS_WARNING_DAYS = 5 // 预警天数阈值，距离里程碑截止日期多少天内显示预警
-
-type ProgressStatusType = 'delayed' | 'warning' | 'ahead' | 'normal'
-
-/**
- * 获取指标进度状态
- * @param indicator 指标对象
- * @returns 'delayed' | 'warning' | 'ahead' | 'normal'
- *
- * 逻辑说明：
- * 1. delayed（红色）：当前进度未达到已过期里程碑的目标进度
- * 2. warning（黄色）：距离最近里程碑还有 PROGRESS_WARNING_DAYS 天内且未达标
- * 3. ahead（绿色）：当前进度已达到或超过最近里程碑的目标进度
- * 4. normal（默认）：其他正常情况
- *
- * @requirement 2.4 - Milestone data validation with complete fields
- */
-const getIndicatorProgressStatus = (indicator: StrategicIndicator): ProgressStatusType => {
-  const milestones = indicator.milestones || []
-  if (milestones.length === 0) {
-    return 'normal'
-  }
-
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const currentProgress = indicator.progress || 0
-
-  // 过滤掉没有有效截止日期的里程碑，并使用 safeGet 安全获取字段
-  const validMilestones = milestones.filter(m => {
-    const deadline = safeGet(m, 'deadline', '')
-    if (!deadline) {
-      return false
-    }
-    const date = new Date(deadline)
-    return !isNaN(date.getTime())
-  })
-
-  if (validMilestones.length === 0) {
-    return 'normal'
-  }
-
-  // 按deadline排序里程碑，使用 safeGet 安全获取截止日期
-  const sortedMilestones = [...validMilestones].sort((a, b) => {
-    const deadlineA = safeGet(a, 'deadline', '')
-    const deadlineB = safeGet(b, 'deadline', '')
-    return new Date(deadlineA).getTime() - new Date(deadlineB).getTime()
-  })
-
-  // 1. 检查是否有已过期但未达标的里程碑（延期/红色）
-  for (const milestone of sortedMilestones) {
-    const deadline = safeGet(milestone, 'deadline', '')
-    const targetProgress = safeGet(milestone, 'targetProgress', 0)
-
-    const deadlineDate = new Date(deadline)
-    deadlineDate.setHours(23, 59, 59, 999)
-
-    if (deadlineDate < today && currentProgress < targetProgress) {
-      return 'delayed'
-    }
-  }
-
-  // 2. 找到离今天最近的未来里程碑（deadline >= 今天）
-  const nextMilestone = sortedMilestones.find(m => {
-    const deadline = safeGet(m, 'deadline', '')
-    const deadlineDate = new Date(deadline)
-    deadlineDate.setHours(23, 59, 59, 999)
-    return deadlineDate >= today
-  })
-
-  if (!nextMilestone) {
-    // 没有未来的里程碑，检查最后一个里程碑是否完成
-    const lastMilestone = sortedMilestones[sortedMilestones.length - 1]
-    const lastTargetProgress = safeGet(lastMilestone, 'targetProgress', 0)
-    if (lastMilestone && currentProgress >= lastTargetProgress) {
-      return 'ahead' // 全部完成
-    }
-    return 'normal'
-  }
-
-  // 3. 检查是否超前完成（绿色）
-  const nextTargetProgress = safeGet(nextMilestone, 'targetProgress', 0)
-  if (currentProgress >= nextTargetProgress) {
-    return 'ahead'
-  }
-
-  // 4. 检查是否预警（黄色）：距离deadline ≤ PROGRESS_WARNING_DAYS 天且未达标
-  const nextDeadline = new Date(safeGet(nextMilestone, 'deadline', ''))
-  nextDeadline.setHours(23, 59, 59, 999)
-  const daysUntilDeadline = Math.ceil(
-    (nextDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-  )
-
-  if (daysUntilDeadline <= PROGRESS_WARNING_DAYS && currentProgress < nextTargetProgress) {
-    return 'warning'
-  }
-
-  return 'normal'
-}
-
-/**
- * 获取进度状态对应的CSS类名
- */
-const getProgressStatusClass = (indicator: StrategicIndicator): string => {
-  const status = getIndicatorProgressStatus(indicator)
-  const classMap: Record<ProgressStatusType, string> = {
-    delayed: 'progress-delayed',
-    warning: 'progress-warning',
-    ahead: 'progress-ahead',
-    normal: ''
-  }
-  return classMap[status]
-}
-
-// 获取里程碑列表用于tooltip显示
-// @requirement 2.4 - Milestone data validation with complete fields
-interface MilestoneTooltipItem {
-  id: string | number
-  name: string
-  expectedDate: string
-  progress: number
-  status: string
-  isValid: boolean
-}
-
-/**
- * 验证并获取里程碑数据用于tooltip显示
- *
- * 对每个里程碑进行数据完整性验证，缺失字段时显示默认值
- *
- * @param indicator - 指标对象
- * @returns 验证后的里程碑列表，包含默认值填充
- *
- * @requirement 2.4 - Milestone data validation with complete fields
- */
-const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipItem[] => {
-  const milestones = indicator.milestones || []
-
-  return milestones.map((m, index) => {
-    // 验证里程碑数据完整性
-    const validationResult = validateMilestone(m)
-
-    // 使用 safeGet 安全获取字段值，缺失时使用默认值
-    const id = safeGet(m, 'id', `milestone-${index}`)
-    const name = safeGet(m, 'name', '未命名里程碑')
-    const deadline = safeGet(m, 'deadline', '')
-    const targetProgress = safeGet(m, 'targetProgress', 0)
-    const status = safeGet(m, 'status', 'pending')
-
-    // 验证状态是否为有效枚举值
-    const validStatus = MILESTONE_STATUS_VALUES.includes(
-      status as (typeof MILESTONE_STATUS_VALUES)[number]
-    )
-      ? status
-      : 'pending'
-
-    // 格式化日期显示
-    let expectedDate = ''
-    if (deadline) {
-      try {
-        const date = new Date(deadline)
-        if (!isNaN(date.getTime())) {
-          expectedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-        }
-      } catch {
-        expectedDate = '日期格式错误'
-      }
-    } else {
-      expectedDate = '未设置'
-    }
-
-    return {
-      id,
-      name,
-      expectedDate,
-      progress: typeof targetProgress === 'number' ? targetProgress : 0,
-      status: validStatus,
-      isValid: validationResult.isValid
-    }
-  })
-}
+// ==== LEGACY MILESTONE FUNCTIONS - REPLACED BY MILESTONE-INTELLIGENCE MODULE ====
+// 这些函数已被 @/shared/lib/milestone-intelligence 模块替代
 
 const _selectDepartment = (dept: string) => {
   selectedDepartment.value = dept
