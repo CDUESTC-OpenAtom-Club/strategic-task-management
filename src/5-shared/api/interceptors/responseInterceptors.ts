@@ -42,6 +42,10 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
     // ========================================================================
     if ((response.config as InternalAxiosRequestConfig & { _mockMode?: boolean })._mockMode) {
       logger.debug('🎭 [Mock Mode] 返回模拟响应')
+      if (response.data !== undefined) {
+        return response
+      }
+
       const mockResponse = await MockApiHandler.handleRequest(response.config)
 
       return {

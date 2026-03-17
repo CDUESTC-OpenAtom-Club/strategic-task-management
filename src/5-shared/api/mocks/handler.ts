@@ -18,6 +18,76 @@ import {
   createMockError
 } from './data'
 
+const mockAlertStats = {
+  totalOpen: 3,
+  countBySeverity: {
+    CRITICAL: 1,
+    MAJOR: 1,
+    MINOR: 1
+  }
+}
+
+const mockUnclosedAlerts = [
+  {
+    id: 1,
+    ruleId: 101,
+    ruleName: '进度严重滞后',
+    entityType: 'indicator',
+    entityId: 1001,
+    entityName: '教学质量指标',
+    severity: 'CRITICAL',
+    message: '指标进度低于预期，需立即处理',
+    status: 'OPEN',
+    triggeredAt: '2026-03-10T09:00:00Z'
+  },
+  {
+    id: 2,
+    ruleId: 102,
+    ruleName: '填报超期',
+    entityType: 'indicator',
+    entityId: 1002,
+    entityName: '科研成果指标',
+    severity: 'MAJOR',
+    message: '填报已超过截止日期',
+    status: 'IN_PROGRESS',
+    triggeredAt: '2026-03-11T10:30:00Z'
+  }
+]
+
+const mockPendingApprovals = [
+  {
+    instanceId: 9001,
+    planName: '2026 年重点任务计划',
+    year: 2026,
+    submitterName: '张三',
+    createdAt: '2026-03-15T10:00:00Z',
+    currentStepName: '战略发展部审批'
+  },
+  {
+    instanceId: 9002,
+    planName: '2026 年学院发展计划',
+    year: 2026,
+    submitterName: '李四',
+    createdAt: '2026-03-14T15:30:00Z',
+    currentStepName: '战略发展部审批'
+  }
+]
+
+const mockAdminUsers = mockUsers.map((user, index) => ({
+  id: user.userId,
+  username: user.username,
+  realName: user.name,
+  email: user.email || '',
+  phone: user.phone || '',
+  orgId: index + 1,
+  orgName: user.department || '',
+  roles: [{ roleCode: user.role }],
+  status: user.isActive ? 'active' : 'disabled',
+  lastLoginAt: '2026-03-15T10:00:00Z',
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt
+}))
+
 // 模拟延迟（ms）
 const MOCK_DELAY = 300
 
@@ -45,6 +115,26 @@ function parsePath(url: string): { path: string; query: Record<string, string> }
   return { path, query }
 }
 
+function normalizeMockPath(path: string): string {
+  if (path.startsWith('/api/v1/')) {
+    return path.replace('/api/v1', '/api')
+  }
+
+  if (path.startsWith('/auth/')) {
+    return path
+  }
+
+  if (path.startsWith('/api/')) {
+    return path
+  }
+
+  if (path.startsWith('/')) {
+    return `/api${path}`
+  }
+
+  return `/api/${path}`
+}
+
 /**
  * Mock API 路由处理器
  */
@@ -55,10 +145,12 @@ export class MockApiHandler {
   static async handleRequest(config: InternalAxiosRequestConfig): Promise<unknown> {
     const { method, url, data } = config
     const { path, query } = parsePath(url || '')
+    const normalizedPath = normalizeMockPath(path)
+    const normalizedMethod = method?.toUpperCase()
 
     logger.debug('🎭 [Mock API] 请求拦截:', {
-      method: method?.toUpperCase(),
-      path,
+      method: normalizedMethod,
+      path: normalizedPath,
       query,
       hasData: !!data
     })
@@ -72,103 +164,189 @@ export class MockApiHandler {
       // ============================================
       // 认证相关 API
       // ============================================
-      if (path === '/auth/login' && method === 'post') {
+      if (normalizedPath === '/auth/login' && normalizedMethod === 'POST') {
         response = await this.handleLogin(data)
-      } else if (path === '/auth/info' && method === 'get') {
+      } else if (normalizedPath === '/auth/info' && normalizedMethod === 'GET') {
         response = await this.handleAuthInfo()
-      } else if (path === '/auth/logout' && method === 'post') {
+      } else if (normalizedPath === '/auth/logout' && normalizedMethod === 'POST') {
         response = await this.handleLogout()
       }
       // ============================================
       // 评估周期 API
       // ============================================
-      else if (path === '/api/assessment-cycles' && method === 'GET') {
+      else if (normalizedPath === '/api/assessment-cycles' && normalizedMethod === 'GET') {
         response = await this.handleGetAssessmentCycles(query)
-      } else if (path.startsWith('/api/assessment-cycles/') && method === 'GET') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/assessment-cycles/') &&
+        normalizedMethod === 'GET'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleGetAssessmentCycle(id ?? '0')
       }
       // ============================================
       // 战略任务 API
       // ============================================
-      else if (path === '/api/strategic-tasks' && method === 'GET') {
+      else if (normalizedPath === '/api/strategic-tasks' && normalizedMethod === 'GET') {
         response = await this.handleGetStrategicTasks(query)
-      } else if (path.startsWith('/api/strategic-tasks/') && method === 'GET') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/strategic-tasks/') &&
+        normalizedMethod === 'GET'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleGetStrategicTask(id ?? '0')
-      } else if (path === '/api/strategic-tasks' && method === 'POST') {
+      } else if (normalizedPath === '/api/strategic-tasks' && normalizedMethod === 'POST') {
         response = await this.handleCreateStrategicTask(data)
-      } else if (path.startsWith('/api/strategic-tasks/') && method === 'PUT') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/strategic-tasks/') &&
+        normalizedMethod === 'PUT'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateStrategicTask(id ?? '0', data)
-      } else if (path.startsWith('/api/strategic-tasks/') && method === 'DELETE') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/strategic-tasks/') &&
+        normalizedMethod === 'DELETE'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleDeleteStrategicTask(id ?? '0')
       }
       // ============================================
       // 指标 API（与后端对齐）
       // ============================================
-      else if (path === '/api/indicators' && method === 'GET') {
+      else if (normalizedPath === '/api/indicators' && normalizedMethod === 'GET') {
         response = await this.handleGetIndicators(query)
-      } else if (path.startsWith('/api/indicators/') && method === 'GET') {
-        const id = path.split('/').pop()
+      } else if (normalizedPath.startsWith('/api/indicators/') && normalizedMethod === 'GET') {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleGetIndicator(id ?? '0')
-      } else if (path === '/api/indicators' && method === 'POST') {
+      } else if (normalizedPath === '/api/indicators' && normalizedMethod === 'POST') {
         response = await this.handleCreateIndicator(data)
-      } else if (path.startsWith('/api/indicators/') && method === 'PUT') {
-        const id = path.split('/').pop()
+      } else if (normalizedPath.startsWith('/api/indicators/') && normalizedMethod === 'PUT') {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateIndicator(id ?? '0', data)
-      } else if (path.startsWith('/api/indicators/') && method === 'DELETE') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/indicators/') &&
+        normalizedMethod === 'DELETE'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleDeleteIndicator(id ?? '0')
       }
       // ============================================
       // 里程碑 API
       // ============================================
-      else if (path === '/api/milestones' && method === 'GET') {
+      else if (normalizedPath === '/api/milestones' && normalizedMethod === 'GET') {
         response = await this.handleGetMilestones(query)
-      } else if (path.startsWith('/api/milestones/') && method === 'GET') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/milestones/') &&
+        normalizedMethod === 'GET'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleGetMilestone(id ?? '0')
-      } else if (path === '/api/milestones' && method === 'POST') {
+      } else if (normalizedPath === '/api/milestones' && normalizedMethod === 'POST') {
         response = await this.handleCreateMilestone(data)
-      } else if (path.startsWith('/api/milestones/') && method === 'PUT') {
-        const id = path.split('/').pop()
+      } else if (normalizedPath.startsWith('/api/milestones/') && normalizedMethod === 'PUT') {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateMilestone(id ?? '0', data)
-      } else if (path.startsWith('/api/milestones/') && method === 'DELETE') {
-        const id = path.split('/').pop()
+      } else if (
+        normalizedPath.startsWith('/api/milestones/') &&
+        normalizedMethod === 'DELETE'
+      ) {
+        const id = normalizedPath.split('/').pop()
         response = await this.handleDeleteMilestone(id ?? '0')
       }
       // ============================================
       // 组织架构 API
       // ============================================
-      else if (path === '/api/orgs' && method === 'GET') {
+      else if (normalizedPath === '/api/orgs' && normalizedMethod === 'GET') {
         response = await this.handleGetOrgs()
       }
       // ============================================
       // 系统公告 API
       // ============================================
-      else if (path === '/api/system/announcement' && method === 'GET') {
+      else if (normalizedPath === '/api/system/announcement' && normalizedMethod === 'GET') {
         response = await this.handleGetAnnouncements()
       }
       // ============================================
       // 仪表板 API
       // ============================================
-      else if (path === '/api/dashboard' && method === 'GET') {
+      else if (normalizedPath === '/api/dashboard' && normalizedMethod === 'GET') {
         response = await this.handleGetDashboard()
-      } else if (path === '/api/dashboard/overview' && method === 'GET') {
+      } else if (normalizedPath === '/api/dashboard/overview' && normalizedMethod === 'GET') {
         response = await this.handleGetDashboard()
-      } else if (path === '/api/dashboard/department-progress' && method === 'GET') {
+      } else if (
+        normalizedPath === '/api/dashboard/department-progress' &&
+        normalizedMethod === 'GET'
+      ) {
         response = await this.handleGetDepartmentProgress()
-      } else if (path === '/api/dashboard/recent-activities' && method === 'GET') {
+      } else if (
+        normalizedPath === '/api/dashboard/recent-activities' &&
+        normalizedMethod === 'GET'
+      ) {
         response = await this.handleGetRecentActivities()
+      } else if (normalizedPath === '/api/alerts/stats' && normalizedMethod === 'GET') {
+        response = createMockResponse(mockAlertStats, '获取告警统计成功')
+      } else if (
+        normalizedPath === '/api/alerts/events/unclosed' &&
+        normalizedMethod === 'GET'
+      ) {
+        response = createMockResponse(mockUnclosedAlerts, '获取未关闭告警成功')
+      } else if (normalizedPath === '/api/plans/approval/pending' && normalizedMethod === 'GET') {
+        response = createMockResponse(mockPendingApprovals, '获取待审批计划成功')
+      } else if (
+        normalizedPath === '/api/plans/approval/pending/count' &&
+        normalizedMethod === 'GET'
+      ) {
+        response = createMockResponse(mockPendingApprovals.length, '获取待审批数量成功')
+      } else if (
+        /^\/api\/plans\/approval\/instances\/\d+\/approve$/.test(normalizedPath) &&
+        normalizedMethod === 'POST'
+      ) {
+        response = createMockResponse('审批通过', '审批通过成功')
+      } else if (
+        /^\/api\/plans\/approval\/instances\/\d+\/reject$/.test(normalizedPath) &&
+        normalizedMethod === 'POST'
+      ) {
+        response = createMockResponse('审批驳回', '审批驳回成功')
+      } else if (normalizedPath === '/api/admin/users' && normalizedMethod === 'GET') {
+        response = createMockResponse(
+          {
+            content: mockAdminUsers,
+            pageNumber: 0,
+            pageSize: mockAdminUsers.length,
+            totalElements: mockAdminUsers.length,
+            totalPages: 1,
+            hasNext: false,
+            hasPrevious: false
+          },
+          '获取用户列表成功'
+        )
+      } else if (normalizedPath === '/api/admin/users' && normalizedMethod === 'POST') {
+        response = await this.handleCreateAdminUser(data)
+      } else if (/^\/api\/admin\/users\/\d+$/.test(normalizedPath) && normalizedMethod === 'PUT') {
+        const id = normalizedPath.split('/').pop()
+        response = await this.handleUpdateAdminUser(id ?? '0', data)
+      } else if (
+        /^\/api\/admin\/users\/\d+\/status$/.test(normalizedPath) &&
+        normalizedMethod === 'PATCH'
+      ) {
+        const id = normalizedPath.split('/')[4]
+        response = await this.handleUpdateAdminUserStatus(id ?? '0', query)
+      } else if (
+        /^\/api\/admin\/users\/\d+\/password$/.test(normalizedPath) &&
+        normalizedMethod === 'PUT'
+      ) {
+        response = createMockResponse({ updated: true }, '重置密码成功')
+      } else if (
+        /^\/api\/admin\/users\/\d+$/.test(normalizedPath) &&
+        normalizedMethod === 'DELETE'
+      ) {
+        const id = normalizedPath.split('/').pop()
+        response = await this.handleDeleteAdminUser(id ?? '0')
       }
       // ============================================
       // 未匹配的路由
       // ============================================
       else {
-        logger.warn(`🎭 [Mock API] 未实现的路由: ${method?.toUpperCase()} ${path}`)
-        response = createMockError('NOT_IMPLEMENTED', `Mock API 未实现: ${path}`)
+        logger.warn(`🎭 [Mock API] 未实现的路由: ${normalizedMethod} ${normalizedPath}`)
+        response = createMockError('NOT_IMPLEMENTED', `Mock API 未实现: ${normalizedPath}`)
       }
 
       logger.debug('🎭 [Mock API] 响应:', response)
@@ -530,5 +708,81 @@ export class MockApiHandler {
    */
   private static async handleGetRecentActivities() {
     return createMockResponse(mockDashboardData.recentActivities, '获取最近活动成功')
+  }
+
+  private static async handleCreateAdminUser(data: Record<string, unknown>) {
+    const orgMap = new Map<number, string>([
+      [1, '战略发展部'],
+      [2, '科研处'],
+      [3, '教务处'],
+      [4, '学生处'],
+      [5, '计算机学院']
+    ])
+
+    const newUser = {
+      id: Date.now(),
+      username: String(data.username || `user_${Date.now()}`),
+      realName: String(data.realName || '新用户'),
+      email: String(data.email || ''),
+      phone: String(data.phone || ''),
+      orgId: Number(data.orgId || 1),
+      orgName: orgMap.get(Number(data.orgId || 1)) || '战略发展部',
+      roles: Array.isArray(data.roleIds)
+        ? (data.roleIds as string[]).map(roleCode => ({ roleCode }))
+        : [{ roleCode: 'secondary_college' }],
+      status: data.status === 'disabled' ? 'disabled' : 'active',
+      lastLoginAt: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+
+    mockAdminUsers.unshift(newUser)
+    return createMockResponse(newUser, '创建用户成功')
+  }
+
+  private static async handleUpdateAdminUser(id: string, data: Record<string, unknown>) {
+    const userIndex = mockAdminUsers.findIndex(user => user.id === Number(id))
+    if (userIndex === -1) {
+      return createMockError('NOT_FOUND', `用户 ${id} 不存在`)
+    }
+
+    const existingUser = mockAdminUsers[userIndex]
+    const updatedUser = {
+      ...existingUser,
+      username: String(data.username || existingUser.username),
+      realName: String(data.realName || existingUser.realName),
+      email: String(data.email || existingUser.email),
+      phone: String(data.phone || existingUser.phone),
+      orgId: Number(data.orgId || existingUser.orgId),
+      roles: Array.isArray(data.roleIds)
+        ? (data.roleIds as string[]).map(roleCode => ({ roleCode }))
+        : existingUser.roles,
+      status: data.status === 'disabled' ? 'disabled' : existingUser.status,
+      updatedAt: new Date().toISOString()
+    }
+
+    mockAdminUsers[userIndex] = updatedUser
+    return createMockResponse(updatedUser, '更新用户成功')
+  }
+
+  private static async handleUpdateAdminUserStatus(id: string, query: Record<string, string>) {
+    const user = mockAdminUsers.find(item => item.id === Number(id))
+    if (!user) {
+      return createMockError('NOT_FOUND', `用户 ${id} 不存在`)
+    }
+
+    user.status = query.isActive === 'true' ? 'active' : 'disabled'
+    user.updatedAt = new Date().toISOString()
+
+    return createMockResponse(user, '更新用户状态成功')
+  }
+
+  private static async handleDeleteAdminUser(id: string) {
+    const userIndex = mockAdminUsers.findIndex(user => user.id === Number(id))
+    if (userIndex !== -1) {
+      mockAdminUsers.splice(userIndex, 1)
+    }
+
+    return createMockResponse({ deleted: true }, '删除用户成功')
   }
 }

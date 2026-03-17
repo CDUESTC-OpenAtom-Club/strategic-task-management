@@ -1466,9 +1466,30 @@ const _radarStats = computed(() => {
   }
 })
 
+const isChartContainerReady = (element: HTMLElement | null): element is HTMLElement => {
+  return !!element && element.isConnected && document.body.contains(element) && element.clientWidth > 0
+}
+
+const createChartInstance = async (
+  element: HTMLElement | null,
+  existing: echarts.ECharts | null
+): Promise<echarts.ECharts | null> => {
+  if (!isChartContainerReady(element)) {
+    existing?.dispose()
+    return null
+  }
+
+  const ec = await loadEcharts()
+  existing?.dispose()
+  ec.getInstanceByDom(element)?.dispose()
+  return ec.init(element)
+}
+
 // 初始化雷达图
 const initRadarChart = async () => {
-  if (!radarChartRef.value) {
+  if (!isChartContainerReady(radarChartRef.value)) {
+    radarChartInstance?.dispose()
+    radarChartInstance = null
     return
   }
 
@@ -1478,8 +1499,10 @@ const initRadarChart = async () => {
     return
   }
 
-  const ec = await loadEcharts()
-  radarChartInstance = ec.init(radarChartRef.value)
+  radarChartInstance = await createChartInstance(radarChartRef.value, radarChartInstance)
+  if (!radarChartInstance) {
+    return
+  }
 
   radarChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1552,12 +1575,10 @@ const initBenchmarkChart = async () => {
   // 设置容器高度（固定高度用于堆叠柱状图）
   benchmarkChartRef.value.style.height = `350px`
 
-  // 如果已有实例，先销毁再重新创建，确保完全刷新
-  if (benchmarkChartInstance) {
-    benchmarkChartInstance.dispose()
+  benchmarkChartInstance = await createChartInstance(benchmarkChartRef.value, benchmarkChartInstance)
+  if (!benchmarkChartInstance) {
+    return
   }
-  const ec = await loadEcharts()
-  benchmarkChartInstance = ec.init(benchmarkChartRef.value)
 
   benchmarkChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -1878,12 +1899,10 @@ const initCollegeChart = async () => {
 
   collegeChartRef.value.style.height = `350px`
 
-  // 如果已有实例，先销毁再重新创建，确保完全刷新
-  if (collegeChartInstance) {
-    collegeChartInstance.dispose()
+  collegeChartInstance = await createChartInstance(collegeChartRef.value, collegeChartInstance)
+  if (!collegeChartInstance) {
+    return
   }
-  const ec = await loadEcharts()
-  collegeChartInstance = ec.init(collegeChartRef.value)
 
   collegeChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -2096,12 +2115,13 @@ const initCollegeRankingChart = async () => {
   const chartHeight = Math.max(350, data.length * 35)
   collegeRankingChartRef.value.style.height = `${chartHeight}px`
 
-  // 如果已有实例，先销毁再重新创建，确保完全刷新
-  if (collegeRankingChartInstance) {
-    collegeRankingChartInstance.dispose()
+  collegeRankingChartInstance = await createChartInstance(
+    collegeRankingChartRef.value,
+    collegeRankingChartInstance
+  )
+  if (!collegeRankingChartInstance) {
+    return
   }
-  const ec = await loadEcharts()
-  collegeRankingChartInstance = ec.init(collegeRankingChartRef.value)
 
   collegeRankingChartInstance.setOption({
     backgroundColor: 'transparent',
@@ -2267,6 +2287,18 @@ watch(showCollegeMonthIndicatorCard, () => {
 
 // 生命周期
 onMounted(async () => {
+  try {
+    if (strategicStore.indicators.length === 0) {
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    }
+
+    if (dashboardStore.dashboardData.totalIndicators === 0) {
+      await dashboardStore.refreshDashboard()
+    }
+  } catch (err) {
+    logger.error('[Dashboard] Initial load failed:', err)
+  }
+
   await nextTick()
   await initRadarChart()
   await initBenchmarkChart()

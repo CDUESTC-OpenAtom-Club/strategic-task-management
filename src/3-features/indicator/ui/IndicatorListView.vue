@@ -171,10 +171,9 @@ function handleCloseDialog() {
 
     <!-- Distribution Dialog -->
     <IndicatorDistributionDialog
-      :visible="showDistributionDialog"
-      :indicators="selectedIndicator ? [selectedIndicator] : selectedIndicators"
-      @submit="handleDistributionSubmit"
-      @cancel="handleCloseDialog"
+      v-model="showDistributionDialog"
+      :indicator="selectedIndicator"
+      @confirm="handleDistributionSubmit"
     />
   </div>
 </template>

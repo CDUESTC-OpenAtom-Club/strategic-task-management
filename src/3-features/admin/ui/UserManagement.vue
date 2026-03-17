@@ -255,9 +255,11 @@ const loadUsers = async () => {
     }
     const response = await api.get('/admin/users', { params })
 
-    // 转换响应格式
-    // 注意：响应拦截器已将后端ApiResponse.data 包装为response.data.data
-    const pageData = response.data.data
+    const pageData = response?.data?.content
+      ? response.data
+      : response?.data?.data?.content
+        ? response.data.data
+        : null
     if (!pageData || !pageData.content) {
       throw new Error('响应数据格式错误')
     }

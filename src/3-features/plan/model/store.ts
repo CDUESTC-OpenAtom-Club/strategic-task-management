@@ -13,6 +13,14 @@ import { useTimeContextStore } from '@/5-shared/lib/timeContext'
 import { logger } from '@/5-shared/lib/utils/logger'
 import { ElMessage } from 'element-plus'
 
+function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
+  return (
+    (response.success ?? response.code === 200) &&
+    response.data !== undefined &&
+    response.data !== null
+  )
+}
+
 export const usePlanStore = defineStore('plan', () => {
   // ============ State ============
   const plans = ref<Plan[]>([])
@@ -62,6 +70,17 @@ export const usePlanStore = defineStore('plan', () => {
     return planFills.value.filter(pf => pf.status === 'submitted')
   })
 
+  const visiblePendingFills = computed(() => {
+    const authStore = useAuthStore()
+    const userId = authStore.user?.id
+
+    if (!userId || authStore.user?.role === 'strategic_dept') {
+      return pendingPlanFills.value
+    }
+
+    return pendingPlanFills.value.filter(fill => fill.submitted_by !== userId)
+  })
+
   // ============ Actions ============
   const loadPlans = async () => {
     loading.value = true
@@ -69,10 +88,10 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info('[Plan Store] Loading plans...')
-      const { planApi } = await import('@/5-shared/api')
+      const { planApi } = await import('@/3-features/plan/api/planApi')
       const response = await planApi.getAllPlans()
 
-      if (response.success && response.data) {
+      if (hasApiData(response)) {
         plans.value = response.data
         logger.info(`[Plan Store] Loaded ${response.data.length} plans`)
       } else {
@@ -94,10 +113,10 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Loading plan ${planId}...`)
-      const { planApi } = await import('@/5-shared/api')
+      const { planApi } = await import('@/3-features/plan/api/planApi')
       const response = await planApi.getPlanById(planId)
 
-      if (response.success && response.data) {
+      if (hasApiData(response)) {
         currentPlan.value = response.data
         const index = plans.value.findIndex(p => p.id === planId)
         if (index !== -1) {
@@ -124,10 +143,10 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info('[Plan Store] Creating plan...', data)
-      const { planApi } = await import('@/5-shared/api')
+      const { planApi } = await import('@/3-features/plan/api/planApi')
       const response = await planApi.createPlan(data)
 
-      if (response.success && response.data) {
+      if (hasApiData(response)) {
         plans.value.push(response.data)
         ElMessage.success('创建成功')
         return response.data
@@ -150,10 +169,10 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Updating plan ${planId}...`, data)
-      const { planApi } = await import('@/5-shared/api')
+      const { planApi } = await import('@/3-features/plan/api/planApi')
       const response = await planApi.updatePlan(planId, data)
 
-      if (response.success && response.data) {
+      if (hasApiData(response)) {
         const index = plans.value.findIndex(p => p.id === planId)
         if (index !== -1) {
           plans.value[index] = response.data
@@ -182,10 +201,10 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Deleting plan ${planId}...`)
-      const { planApi } = await import('@/5-shared/api')
+      const { planApi } = await import('@/3-features/plan/api/planApi')
       const response = await planApi.deletePlan(planId)
 
-      if (response.success) {
+      if (response.success ?? response.code === 200) {
         const index = plans.value.findIndex(p => p.id === planId)
         if (index !== -1) {
           plans.value.splice(index, 1)
@@ -223,6 +242,60 @@ export const usePlanStore = defineStore('plan', () => {
     currentPlan.value = null
   }
 
+  const submitPlan = async (form: { plan_id: number | string; comment?: string }) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info('[Plan Store] Submitting plan...', form)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.submitPlan(form)
+
+      if (hasApiData(response)) {
+        planFills.value.unshift(response.data)
+        await loadPlans()
+        ElMessage.success('提交成功')
+        return response.data
+      }
+
+      throw new Error(response.message || '提交失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '提交计划失败'
+      logger.error('[Plan Store] Failed to submit plan:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  const loadPendingFills = async () => {
+    loading.value = true
+    error.value = null
+
+    try {
+      logger.info('[Plan Store] Loading pending plan fills...')
+      const { planFillApi } = await import('@/3-features/plan/api/planApi')
+      const authStore = useAuthStore()
+      const response = await planFillApi.getPendingPlanFills(authStore.user?.orgId)
+
+      if (hasApiData(response)) {
+        planFills.value = response.data
+        logger.info(`[Plan Store] Loaded ${response.data.length} pending fills`)
+      } else {
+        planFills.value = []
+        logger.warn('[Plan Store] No pending fills loaded')
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载待审核列表失败'
+      planFills.value = []
+      logger.error('[Plan Store] Failed to load pending plan fills:', err)
+      ElMessage.error('加载待审核列表失败')
+    } finally {
+      loading.value = false
+    }
+  }
+
   // 审核计划填报
   const auditPlanFill = async (
     fillId: number | string,
@@ -237,10 +310,10 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Auditing plan fill ${fillId}...`, form)
-      const { planFillApi } = await import('@/5-shared/api')
+      const { planFillApi } = await import('@/3-features/plan/api/planApi')
       const response = await planFillApi.auditPlanFill(fillId, form)
 
-      if (response.success && response.data) {
+      if (hasApiData(response)) {
         // 更新本地状态
         const index = planFills.value.findIndex(pf => pf.id === fillId)
         if (index !== -1) {
@@ -296,13 +369,16 @@ export const usePlanStore = defineStore('plan', () => {
     visiblePlans,
     getPlanById,
     pendingPlanFills,
+    visiblePendingFills,
 
     // Actions
     loadPlans,
     loadPlan,
+    loadPendingFills,
     createPlan,
     updatePlan,
     deletePlan,
+    submitPlan,
     auditPlanFill,
     setFilter,
     resetFilter,

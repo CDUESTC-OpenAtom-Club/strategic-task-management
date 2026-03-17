@@ -55,6 +55,21 @@ export interface AlertStats {
   }
 }
 
+type ApiEnvelope<T> = {
+  code?: number
+  message?: string
+  data?: T
+  success?: boolean
+}
+
+function unwrapMockResponse<T>(response: T | ApiEnvelope<T>): T {
+  if (response && typeof response === 'object' && 'data' in response) {
+    return (response as ApiEnvelope<T>).data as T
+  }
+
+  return response as T
+}
+
 /**
  * 预警告警 API
  */
@@ -69,7 +84,7 @@ export const alertApi = {
       message: string
       data: AlertStats
     }>('/alerts/stats')
-    return response.data.data
+    return unwrapMockResponse(response)
   },
 
   /**
@@ -82,7 +97,7 @@ export const alertApi = {
       message: string
       data: AlertEvent[]
     }>('/alerts/events/unclosed')
-    return response.data.data
+    return unwrapMockResponse(response)
   },
 
   /**
@@ -103,7 +118,7 @@ export const alertApi = {
         total: number
       }
     }>('/warnings/events', { params })
-    return response.data.data
+    return unwrapMockResponse(response)
   },
 
   /**
@@ -116,7 +131,7 @@ export const alertApi = {
       message: string
       data: WarningEvent
     }>(`/warnings/events/${id}/acknowledge`)
-    return response.data.data
+    return unwrapMockResponse(response)
   },
 
   /**
@@ -133,7 +148,7 @@ export const alertApi = {
       message: string
       data: AlertEvent
     }>(`/alerts/events/${id}/process`, data)
-    return response.data.data
+    return unwrapMockResponse(response)
   }
 }
 

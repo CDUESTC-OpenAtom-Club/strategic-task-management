@@ -39,11 +39,13 @@ onUnmounted(() => {
   disconnectWebSocket()
 })
 
-// 切换视角时导航到第一个可用的标签页
-watch(viewingDept, () => {
-  if (tabs.value.length > 0) {
-    router.push(tabs.value[0].path)
+// 仅在用户主动切换视角后导航，避免初始化时覆盖当前路由
+watch(viewingDept, (newDept, oldDept) => {
+  if (!oldDept || newDept === oldDept || tabs.value.length === 0) {
+    return
   }
+
+  router.push(tabs.value[0].path)
 })
 
 // 处理下拉菜单命令

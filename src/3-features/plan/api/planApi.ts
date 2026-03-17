@@ -422,7 +422,7 @@ export const planApi = {
         code: 200,
         data: plans,
         message: '获取成功',
-        timestamp: new Date().toISOString().toISOString()
+        timestamp: new Date().toISOString()
       }
     }
 
@@ -473,7 +473,7 @@ export const planApi = {
           code: 1002,
           data: null,
           message: 'Plan not found',
-          timestamp: new Date().toISOString().toISOString()
+          timestamp: new Date().toISOString()
         }
       }
 

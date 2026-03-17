@@ -6,6 +6,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient, withRetry } from '@/5-shared/lib/api'
+import { logger } from '@/5-shared/lib/utils/logger'
 /* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type {
   ApiResponse,

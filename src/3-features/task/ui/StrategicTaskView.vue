@@ -972,7 +972,23 @@ const handleGlobalClick = (event: MouseEvent) => {
 }
 
 // 挂载和卸载全局点击监听
-onMounted(() => {
+onMounted(async () => {
+  if (strategicStore.indicators.length === 0) {
+    try {
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    } catch (error) {
+      logger.error('[StrategicTaskView] 初始加载指标失败:', error)
+    }
+  }
+
+  if (orgStore.departments.length === 0) {
+    try {
+      await orgStore.loadDepartments()
+    } catch (error) {
+      logger.error('[StrategicTaskView] 初始加载部门失败:', error)
+    }
+  }
+
   document.addEventListener('click', handleGlobalClick, true)
 })
 
@@ -3425,16 +3441,15 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 
     <!-- 审计日志抽屉 -->
     <AuditLogDrawer
-      v-model:visible="auditLogVisible"
-      :indicator="currentAuditIndicator"
+      v-model="auditLogVisible"
+      :indicator-id="currentAuditIndicator?.id"
       @close="auditLogVisible = false"
     />
 
     <!-- 任务审批抽屉 -->
     <TaskApprovalDrawer
-      v-model:visible="taskApprovalVisible"
-      :indicators="approvalIndicators"
-      :department-name="'战略发展部'"
+      v-model="taskApprovalVisible"
+      :indicator-id="approvalIndicators[0]?.id"
       :show-approval-section="true"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"

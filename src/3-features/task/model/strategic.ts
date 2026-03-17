@@ -7,7 +7,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator, StrategicTask } from '@/5-shared/types'
 import { indicatorApi } from '@/3-features/indicator/api'
 import { logger } from '@/5-shared/lib/utils/logger'
 
@@ -18,9 +18,11 @@ export const useStrategicStore = defineStore('strategic', () => {
   const loading = ref(false)
   const loadingState = ref({
     indicators: false,
-    tasks: false
+    tasks: false,
+    error: null as string | null
   })
   const error = ref<string | null>(null)
+  const dataSource = ref<'api' | 'fallback' | 'local'>('local')
 
   // ============ Getters ============
 
@@ -28,11 +30,44 @@ export const useStrategicStore = defineStore('strategic', () => {
 
   const strategicIndicators = computed(() => indicators.value.filter(i => i.isStrategic === true))
 
+  // Legacy compatibility: several pages still expect a task collection on this store.
+  const tasks = computed<StrategicTask[]>(() => {
+    const taskMap = new Map<string, StrategicTask>()
+
+    indicators.value.forEach(indicator => {
+      const taskKey = indicator.taskContent || indicator.id || indicator.name
+      if (!taskMap.has(taskKey)) {
+        taskMap.set(taskKey, {
+          id: taskKey,
+          title: indicator.taskContent || indicator.name || '未命名任务',
+          desc: indicator.remark || '',
+          createTime: indicator.createTime || new Date().toISOString(),
+          cycle: `${indicator.year || new Date().getFullYear()}年度`,
+          startDate: new Date(`${indicator.year || new Date().getFullYear()}-01-01`),
+          endDate: new Date(`${indicator.year || new Date().getFullYear()}-12-31`),
+          status: 'active',
+          createdBy: indicator.ownerDept || 'system',
+          indicators: [],
+          year: indicator.year || new Date().getFullYear(),
+          isRecurring: false
+        })
+      }
+
+      const task = taskMap.get(taskKey)
+      if (task) {
+        task.indicators.push(indicator)
+      }
+    })
+
+    return [...taskMap.values()]
+  })
+
   // ============ Actions ============
 
   async function loadIndicatorsByYear(year: number) {
     loading.value = true
     loadingState.value.indicators = true
+    loadingState.value.error = null
     error.value = null
 
     try {
@@ -41,12 +76,15 @@ export const useStrategicStore = defineStore('strategic', () => {
 
       if (response.success && response.data) {
         indicators.value = response.data
+        dataSource.value = 'api'
         logger.debug(`[Strategic Store] Loaded ${response.data.length} indicators`)
       } else {
         throw new Error(response.message || 'Failed to load indicators')
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error'
+      loadingState.value.error = error.value
+      dataSource.value = 'fallback'
       logger.error('[Strategic Store] Failed to load indicators:', err)
       throw err
     } finally {
@@ -103,13 +141,16 @@ export const useStrategicStore = defineStore('strategic', () => {
 
   function clearError() {
     error.value = null
+    loadingState.value.error = null
   }
 
   return {
     indicators,
+    tasks,
     loading,
     loadingState,
     error,
+    dataSource,
     activeIndicators,
     strategicIndicators,
     loadIndicatorsByYear,

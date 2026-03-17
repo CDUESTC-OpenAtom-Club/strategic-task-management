@@ -53,12 +53,14 @@ onUnmounted(() => {
 })
 
 /**
- * Navigate to first available tab when viewing department changes
+ * Only navigate after an actual user-triggered department switch.
  */
-watch(viewingDept, () => {
-  if (tabs.value.length > 0) {
-    router.push(tabs.value[0].path)
+watch(viewingDept, (newDept, oldDept) => {
+  if (!oldDept || newDept === oldDept || tabs.value.length === 0) {
+    return
   }
+
+  router.push(tabs.value[0].path)
 })
 
 /**

@@ -98,7 +98,7 @@ export const useApprovalStore = defineStore('approval', () => {
       logger.info('[Approval Store] Loading pending approvals for user:', userId)
 
       // 动态导入 API
-      const { default: approvalApi } = await import('@/api/approval')
+      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.getPendingApprovals()
 
       if (response.success && response.data) {
@@ -127,7 +127,7 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading approval detail:', instanceId)
 
-      const { default: approvalApi } = await import('@/api/approval')
+      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.getApprovalInstance(instanceId)
 
       if (response.success && response.data) {
@@ -161,7 +161,7 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Approving:', instanceId)
 
-      const { default: approvalApi } = await import('@/api/approval')
+      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.approve(instanceId, { comment })
 
       if (response.success && response.data) {
@@ -209,7 +209,7 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Rejecting:', instanceId, 'reason:', reason)
 
-      const { default: approvalApi } = await import('@/api/approval')
+      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.reject(instanceId, { comment: reason })
 
       if (response.success && response.data) {
@@ -244,7 +244,7 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading history for:', instanceId)
 
-      const { default: approvalApi } = await import('@/api/approval')
+      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.getApprovalHistory(instanceId)
 
       if (response.success && response.data) {

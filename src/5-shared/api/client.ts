@@ -162,7 +162,16 @@ export class ApiClient {
    * GET 请求
    */
   async get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
-    return this.client.get(url, { params })
+    // Backward compatibility: some legacy callers still pass Axios-style { params }.
+    const normalizedParams =
+      params &&
+      typeof params === 'object' &&
+      'params' in params &&
+      Object.keys(params).length === 1
+        ? (params as { params?: Record<string, unknown> }).params
+        : params
+
+    return this.client.get(url, { params: normalizedParams })
   }
 
   /**

@@ -46,7 +46,7 @@ export const useTaskStore = defineStore('task', () => {
       )
 
       // 动态导�?API
-      const { default: strategicApi } = await import('@/api/strategic')
+      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
       const response = await strategicApi.getTasksByYear(year)
 
       if (response.success && response.data) {
@@ -151,7 +151,7 @@ export const useTaskStore = defineStore('task', () => {
     logger.info('[Task Store] Creating new strategic task', { request })
 
     try {
-      const { default: strategicApi } = await import('@/api/strategic')
+      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
       const response = await strategicApi.createTask(request)
 
       if (response.success && response.data) {
@@ -179,7 +179,7 @@ export const useTaskStore = defineStore('task', () => {
     logger.info('[Task Store] Updating strategic task', { taskId, request })
 
     try {
-      const { default: strategicApi } = await import('@/api/strategic')
+      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
       const response = await strategicApi.updateTask(taskId, request)
 
       if (response.success && response.data) {
@@ -207,7 +207,7 @@ export const useTaskStore = defineStore('task', () => {
     logger.info('[Task Store] Deleting strategic task', { taskId })
 
     try {
-      const { default: strategicApi } = await import('@/api/strategic')
+      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
       const response = await strategicApi.deleteTask(taskId)
 
       if (response.success) {
