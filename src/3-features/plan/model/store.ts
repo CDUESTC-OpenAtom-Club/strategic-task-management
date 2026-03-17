@@ -277,7 +277,7 @@ export const usePlanStore = defineStore('plan', () => {
       logger.info('[Plan Store] Loading pending plan fills...')
       const { planFillApi } = await import('@/3-features/plan/api/planApi')
       const authStore = useAuthStore()
-      const response = await planFillApi.getPendingPlanFills(authStore.user?.orgId)
+      const response = await planFillApi.getPendingPlanFills(authStore.user?.id)
 
       if (hasApiData(response)) {
         planFills.value = response.data
@@ -311,7 +311,11 @@ export const usePlanStore = defineStore('plan', () => {
     try {
       logger.info(`[Plan Store] Auditing plan fill ${fillId}...`, form)
       const { planFillApi } = await import('@/3-features/plan/api/planApi')
-      const response = await planFillApi.auditPlanFill(fillId, form)
+      const authStore = useAuthStore()
+      const response = await planFillApi.auditPlanFill(fillId, {
+        ...form,
+        userId: form.userId ?? Number(authStore.user?.id ?? 0)
+      })
 
       if (hasApiData(response)) {
         // 更新本地状态
@@ -329,8 +333,14 @@ export const usePlanStore = defineStore('plan', () => {
         throw new Error(response.message || '审核失败')
       }
     } catch (err) {
-      error.value = err instanceof Error ? err.message : '审核失败'
-      logger.error('[Plan Store] Failed to audit plan fill:', err)
+      const errObj = err as { message?: string; code?: number; details?: unknown }
+      const errMessage = err instanceof Error ? err.message : errObj?.message || '审核失败'
+      error.value = errMessage
+      logger.error('[Plan Store] Failed to audit plan fill:', {
+        message: errMessage,
+        code: errObj?.code,
+        details: errObj?.details
+      })
       ElMessage.error(error.value)
       throw err
     } finally {

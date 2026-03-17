@@ -99,10 +99,10 @@ export const useApprovalStore = defineStore('approval', () => {
 
       // 动态导入 API
       const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.getPendingApprovals()
+      const response = await approvalApi.getPendingApprovals(userId)
 
       if (response.success && response.data) {
-        pendingApprovals.value = response.data.content || []
+        pendingApprovals.value = response.data as unknown as ApprovalInstance[]
         logger.info('[Approval Store] Loaded', pendingApprovals.value.length, 'pending approvals')
       } else {
         pendingApprovals.value = []
@@ -162,7 +162,7 @@ export const useApprovalStore = defineStore('approval', () => {
       logger.info('[Approval Store] Approving:', instanceId)
 
       const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.approve(instanceId, { comment })
+      const response = await approvalApi.approve(instanceId, { userId, comment })
 
       if (response.success && response.data) {
         currentApproval.value = response.data
@@ -210,7 +210,7 @@ export const useApprovalStore = defineStore('approval', () => {
       logger.info('[Approval Store] Rejecting:', instanceId, 'reason:', reason)
 
       const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.reject(instanceId, { comment: reason })
+      const response = await approvalApi.reject(instanceId, { userId, comment: reason, reason })
 
       if (response.success && response.data) {
         currentApproval.value = response.data

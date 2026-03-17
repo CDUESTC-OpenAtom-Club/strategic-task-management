@@ -47,19 +47,14 @@ type JwtPayload = {
  * 刷新 Token 响应结构
  */
 type RefreshTokenResponse = {
+  success?: boolean
   code: number
   message: string
-  data: {
-    token: string
+  data?: {
+    accessToken: string
+    refreshToken: string
     expiresIn: number
-    user: {
-      userId: number
-      username: string
-      realName: string
-      orgId: number
-      orgName: string
-      orgType: string
-    }
+    tokenType: string
   }
 }
 
@@ -300,28 +295,39 @@ function createTokenManager(): ExtendedTokenManager {
         
         // 调用后端刷新端点
         // 注意: withCredentials: true 确保发送 HttpOnly Cookie
+        const storedRefreshToken =
+          typeof localStorage !== 'undefined' ? localStorage.getItem('refreshToken') : null
+
+        if (!storedRefreshToken) {
+          throw new TokenRefreshError('缺少 refreshToken，无法刷新访问令牌', undefined, true)
+        }
+
         const response = await axios.post<RefreshTokenResponse>(
-          '/api/auth/refresh',
-          {},
+          '/api/v1/auth/refresh',
+          { refreshToken: storedRefreshToken },
           {
-            withCredentials: true,
             headers: {
-              'Content-Type': 'application/json',
-            },
+              'Content-Type': 'application/json'
+            }
           }
         )
         
         // 检查响应
-        if (response.data.code !== 0 || !response.data.data?.token) {
+        if (!response.data?.data?.accessToken) {
           throw new TokenRefreshError(
-            response.data.message || 'Token 刷新失败',
+            response.data?.message || 'Token 刷新失败',
             response.status,
             true
           )
         }
         
-        const newToken = response.data.data.token
+        const newToken = response.data.data.accessToken
+        const newRefreshToken = response.data.data.refreshToken
         setAccessToken(newToken)
+
+        if (newRefreshToken && typeof localStorage !== 'undefined') {
+          localStorage.setItem('refreshToken', newRefreshToken)
+        }
         
         logger.debug('[TokenManager] Access Token 刷新成功')
         return newToken

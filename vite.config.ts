@@ -80,7 +80,16 @@ export default defineConfig(({ mode }) => {
                 proxy.on('error', (err, _req, _res) => {
                   console.error('⚠️ [Proxy Error]', err.message)
                 })
-                proxy.on('proxyReq', (_proxyReq, req, _res) => {
+                proxy.on('proxyReq', (proxyReq, req, _res) => {
+                  // 防止后端将本地开发域名(如 127.0.0.1:3500)判定为非法 CORS Origin 导致 403。
+                  // 统一将 Origin 重写为后端目标域名，保证本地联调稳定。
+                  const targetOrigin = options.target
+                  if (targetOrigin) {
+                    proxyReq.setHeader('origin', targetOrigin)
+                  } else {
+                    proxyReq.removeHeader('origin')
+                  }
+
                   const targetUrl = options.target ? options.target + (req.url || '') : req.url
                   console.log('📤 [Proxy Request]', req.method, req.url, '→', targetUrl)
                 })

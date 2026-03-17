@@ -11,6 +11,116 @@ import type { StrategicIndicator, StrategicTask } from '@/5-shared/types'
 import { indicatorApi } from '@/3-features/indicator/api'
 import { logger } from '@/5-shared/lib/utils/logger'
 
+type BackendIndicatorListPayload =
+  | StrategicIndicator[]
+  | {
+      items?: Array<Record<string, unknown>>
+      totalPages?: number
+    }
+
+function getRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object') {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
+function getString(record: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = record[key]
+    if (value !== undefined && value !== null) {
+      const text = String(value).trim()
+      if (text) {
+        return text
+      }
+    }
+  }
+  return ''
+}
+
+function getNumber(record: Record<string, unknown>, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = record[key]
+    const num = Number(value)
+    if (Number.isFinite(num)) {
+      return num
+    }
+  }
+  return 0
+}
+
+function getBoolean(record: Record<string, unknown>, ...keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'boolean') {
+      return value
+    }
+    if (typeof value === 'string') {
+      if (value.toLowerCase() === 'true') {
+        return true
+      }
+      if (value.toLowerCase() === 'false') {
+        return false
+      }
+    }
+  }
+  return undefined
+}
+
+function toStrategicIndicator(raw: unknown): StrategicIndicator {
+  const item = getRecord(raw)
+  const id = getString(item, 'id', 'indicatorId')
+  const createdAt = getString(item, 'createdAt', 'createTime') || new Date().toISOString()
+  const parsedYear = Number(getString(item, 'year'))
+  const year = Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : new Date(createdAt).getFullYear()
+  const level = getString(item, 'level')
+  const status = getString(item, 'status').toUpperCase() || 'DRAFT'
+  const isStrategic = getBoolean(item, 'isStrategic')
+
+  return {
+    id: id || String(Date.now()),
+    name: getString(item, 'name', 'indicatorName', 'indicatorDesc') || `指标${id || ''}`,
+    isQualitative: getBoolean(item, 'isQualitative') ?? false,
+    type1: (getString(item, 'type1', 'indicatorType1') || '定量') as '定性' | '定量',
+    type2: (getString(item, 'type2', 'indicatorType2') || '基础性') as '发展性' | '基础性',
+    progress: getNumber(item, 'progress'),
+    createTime: createdAt,
+    weight: getNumber(item, 'weight', 'weightPercent'),
+    remark: getString(item, 'remark', 'indicatorDesc'),
+    canWithdraw: getBoolean(item, 'canWithdraw') ?? status === 'DISTRIBUTED',
+    taskContent: getString(item, 'taskContent', 'taskName', 'indicatorName', 'indicatorDesc'),
+    milestones: Array.isArray(item.milestones) ? item.milestones : [],
+    targetValue: getNumber(item, 'targetValue') || 100,
+    actualValue: getNumber(item, 'actualValue', 'progress'),
+    unit: getString(item, 'unit') || '%',
+    responsibleDept: getString(item, 'responsibleDept', 'departmentName', 'targetOrgName', 'targetOrgId'),
+    responsiblePerson: getString(item, 'responsiblePerson'),
+    status: status as StrategicIndicator['status'],
+    isStrategic: isStrategic ?? (level === 'FIRST' || level === 'STRAT_TO_FUNC'),
+    ownerDept: getString(item, 'ownerDept', 'ownerOrgName', 'ownerOrgId'),
+    year,
+    parentIndicatorId: getString(item, 'parentIndicatorId', 'parentId') || undefined,
+    progressApprovalStatus: getString(item, 'progressApprovalStatus').toUpperCase() || 'NONE',
+    pendingProgress: getNumber(item, 'pendingProgress') || undefined,
+    pendingRemark: getString(item, 'pendingRemark') || undefined,
+    pendingAttachments: Array.isArray(item.pendingAttachments) ? item.pendingAttachments : [],
+    statusAudit: Array.isArray(item.statusAudit) ? item.statusAudit : []
+  }
+}
+
+function normalizeIndicators(payload: BackendIndicatorListPayload | null | undefined): StrategicIndicator[] {
+  if (!payload) {
+    return []
+  }
+
+  if (Array.isArray(payload)) {
+    return payload.map(item => toStrategicIndicator(item))
+  }
+
+  const rawItems = Array.isArray(payload.items) ? payload.items : []
+  return rawItems.map(item => toStrategicIndicator(item))
+}
+
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
 
@@ -72,12 +182,12 @@ export const useStrategicStore = defineStore('strategic', () => {
 
     try {
       logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
-      const response = await indicatorApi.getAllIndicators(year)
+      const response = await indicatorApi.getAllIndicators(year, { page: 0, size: 1000 })
 
       if (response.success && response.data) {
-        indicators.value = response.data
+        indicators.value = normalizeIndicators(response.data as BackendIndicatorListPayload)
         dataSource.value = 'api'
-        logger.debug(`[Strategic Store] Loaded ${response.data.length} indicators`)
+        logger.debug(`[Strategic Store] Loaded ${indicators.value.length} indicators`)
       } else {
         throw new Error(response.message || 'Failed to load indicators')
       }

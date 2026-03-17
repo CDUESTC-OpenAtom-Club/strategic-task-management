@@ -17,6 +17,7 @@ import type { InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/3-features/auth/model/store'
 import { generateSignature } from '@/5-shared/lib/utils/security'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { adaptV1Path } from '@/5-shared/api/v1PathAdapter'
 import { addRequestId } from '@/5-shared/api/errorHandler'
 import {
   generateIdempotencyKey,
@@ -51,6 +52,23 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
       _startTime?: number
       _cacheKey?: string
       _useCache?: boolean
+    }
+
+    // ========================================================================
+    // V1 PATH ADAPTER - rewrite legacy frontend paths to OpenAPI v1 contract
+    // ========================================================================
+    if (config.url) {
+      const adapted = adaptV1Path(config.url)
+      if (adapted.changed) {
+        logger.debug(`[API PathAdapter] ${config.url} -> ${adapted.adaptedPath}`, {
+          reason: adapted.reason
+        })
+      } else if (adapted.unsupported) {
+        logger.warn(`[API PathAdapter] Unmapped contract path: ${config.url}`, {
+          reason: adapted.reason
+        })
+      }
+      config.url = adapted.adaptedPath
     }
 
     // ========================================================================

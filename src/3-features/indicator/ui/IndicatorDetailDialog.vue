@@ -149,9 +149,6 @@ const getActionLabel = (action: string) => {
               <el-descriptions-item label="责任部门">
                 {{ indicator.responsibleDept }}
               </el-descriptions-item>
-              <el-descriptions-item label="责任人">
-                {{ indicator.responsiblePerson }}
-              </el-descriptions-item>
               <el-descriptions-item label="创建时间" :span="2">
                 {{ formatDate(indicator.createTime) }}
               </el-descriptions-item>

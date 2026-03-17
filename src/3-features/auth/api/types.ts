@@ -48,7 +48,9 @@ export interface RefreshTokenRequest {
  */
 export interface RefreshTokenResponse {
   accessToken: string
+  refreshToken: string
   expiresIn: number
+  tokenType: string
 }
 
 /**

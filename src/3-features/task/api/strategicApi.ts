@@ -18,29 +18,44 @@ import type {
 } from '@/5-shared/types'
 /* eslint-enable no-restricted-syntax */
 // 导入统一的 IndicatorVO 接口，避免重复定义
-import type {
-  IndicatorVO,
-  TaskVO as StrategicTaskVO,
-  AssessmentCycleVO
-} from '@/5-shared/types/backend-aligned'
+import type { IndicatorVO, AssessmentCycle as AssessmentCycleVO } from '@/5-shared/types/backend-aligned'
+
+interface StrategicTaskVO {
+  taskId?: number
+  id?: number
+  taskName: string
+  taskDesc?: string | null
+  taskType?: string
+  createdAt: string
+  year?: number
+  cycleId?: number | null
+  createdByOrgName?: string
+  createdByOrgId?: number | null
+}
+
+interface CyclePageResponse<T> {
+  content: T[]
+}
 
 /**
  * 将后端 VO 转换为前端 StrategicTask 类型
  */
 // eslint-disable-next-line no-restricted-syntax -- Converter function for backend VO
 function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
+  const taskId = vo.taskId ?? vo.id ?? 0
+  const taskYear = vo.year ?? new Date().getFullYear()
   return {
-    id: String(vo.taskId),
+    id: String(taskId),
     title: vo.taskName,
     desc: vo.taskDesc || '',
     createTime: new Date(vo.createdAt).toLocaleDateString('zh-CN'),
-    cycle: `${vo.year}年度`,
-    startDate: new Date(`${vo.year}-01-01`),
-    endDate: new Date(`${vo.year}-12-31`),
+    cycle: `${taskYear}年度`,
+    startDate: new Date(`${taskYear}-01-01`),
+    endDate: new Date(`${taskYear}-12-31`),
     status: 'active',
-    createdBy: vo.createdByOrgName,
+    createdBy: vo.createdByOrgName || '',
     indicators: [],
-    year: vo.year,
+    year: taskYear,
     isRecurring: vo.taskType === 'BASIC' || vo.taskType === 'DEVELOPMENT'
   }
 }
@@ -159,7 +174,7 @@ export const strategicApi = {
    * 获取所有考核周期
    */
   async getAllCycles(): Promise<ApiResponse<AssessmentCycleVO[]>> {
-    return apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles')
+    return apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
   },
 
   /**
@@ -167,10 +182,12 @@ export const strategicApi = {
    */
   async getCycleByYear(year: number): Promise<ApiResponse<AssessmentCycleVO | null>> {
     try {
-      const response = await apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles')
+      const response = await apiClient.get<ApiResponse<CyclePageResponse<AssessmentCycleVO>>>('/cycles', {
+        params: { year, page: 0, size: 1 }
+      })
       if (response.success && response.data) {
-        const cycle = response.data.find(c => c.year === year)
-        return { ...response, data: cycle || null }
+        const cycle = response.data.content?.[0] || null
+        return { ...response, data: cycle }
       }
       return { ...response, data: null }
     } catch {
@@ -184,14 +201,30 @@ export const strategicApi = {
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
     try {
-      // 先获取所有任务，然后按年份过滤
-      // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-      const response = await apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
-      if (response.success && response.data) {
-        const filteredTasks = response.data.filter(t => t.year === year)
-        return { ...response, data: filteredTasks }
+      const cycleResponse = await this.getCycleByYear(year)
+      if (!cycleResponse.success || !cycleResponse.data) {
+        return {
+          success: false,
+          data: [],
+          message: cycleResponse.message || `No cycle found for year ${year}`,
+          timestamp: new Date()
+        }
       }
-      return response
+
+      const cycleId =
+        (cycleResponse.data as AssessmentCycleVO & { cycleId?: number; id?: number }).cycleId ||
+        (cycleResponse.data as AssessmentCycleVO & { id?: number }).id
+
+      if (!cycleId) {
+        return {
+          success: false,
+          data: [],
+          message: `Cycle ID missing for year ${year}`,
+          timestamp: new Date()
+        }
+      }
+
+      return apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-cycle/${cycleId}`)
     } catch {
       return { success: false, data: [], message: 'Failed to get tasks', timestamp: new Date() }
     }
@@ -337,10 +370,12 @@ async function approvePlan(
 
   try {
     const response = await withRetry(() =>
-      apiClient.post<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/approve`, {
-        approverId,
-        comment
-      })
+      apiClient.post<ApiResponse<string>>(
+        `/approval/instances/${instanceId}/approve?userId=${approverId}${
+          comment ? `&comment=${encodeURIComponent(comment)}` : ''
+        }`,
+        { comment }
+      )
     )
 
     logger.info('[API] Successfully approved plan', { instanceId })
@@ -366,10 +401,12 @@ async function rejectPlan(
 
   try {
     const response = await withRetry(() =>
-      apiClient.post<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/reject`, {
-        approverId,
-        comment
-      })
+      apiClient.post<ApiResponse<string>>(
+        `/approval/instances/${instanceId}/reject?userId=${approverId}&comment=${encodeURIComponent(
+          comment
+        )}`,
+        { comment }
+      )
     )
 
     logger.info('[API] Successfully rejected plan', { instanceId })
@@ -389,9 +426,7 @@ async function getPendingApprovals(userId: number): Promise<ApiResponse<PendingA
 
   try {
     const response = await withRetry(() =>
-      apiClient.get<ApiResponse<PendingApproval[]>>('/plans/approval/pending', {
-        params: { userId }
-      })
+      apiClient.get<ApiResponse<PendingApproval[]>>('/approval/instances/my-pending', { userId })
     )
 
     logger.info('[API] Successfully got pending approvals', { count: response.data?.length || 0 })
@@ -406,18 +441,18 @@ async function getPendingApprovals(userId: number): Promise<ApiResponse<PendingA
  * 获取计划审批状态
  * @param planId 计划ID
  */
-async function getPlanApprovalStatus(planId: number): Promise<ApiResponse<unknown>> {
-  logger.info('[API] Getting plan approval status', { planId })
+async function getPlanApprovalStatus(instanceId: number): Promise<ApiResponse<unknown>> {
+  logger.info('[API] Getting plan approval status', { instanceId })
 
   try {
     const response = await withRetry(() =>
-      apiClient.get<ApiResponse<unknown>>(`/plans/approval/plans/${planId}/status`)
+      apiClient.get<ApiResponse<unknown>>(`/approval/instances/${instanceId}`)
     )
 
-    logger.info('[API] Successfully got plan approval status', { planId })
+    logger.info('[API] Successfully got plan approval status', { instanceId })
     return response
   } catch (error) {
-    logger.error('[API] Failed to get plan approval status', { error, planId })
+    logger.error('[API] Failed to get plan approval status', { error, instanceId })
     throw error
   }
 }
@@ -431,11 +466,12 @@ async function countPendingApprovals(userId: number): Promise<ApiResponse<number
 
   try {
     const response = await withRetry(() =>
-      apiClient.get<ApiResponse<number>>('/plans/approval/pending/count', { userId })
+      apiClient.get<ApiResponse<PendingApproval[]>>('/approval/instances/my-pending', { userId })
     )
 
-    logger.info('[API] Successfully counted pending approvals', { count: response.data })
-    return response
+    const count = response.data?.length || 0
+    logger.info('[API] Successfully counted pending approvals', { count })
+    return { ...response, data: count }
   } catch (error) {
     logger.error('[API] Failed to count pending approvals', { error, userId })
     throw error
@@ -451,13 +487,85 @@ async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> 
 
   try {
     const response = await withRetry(() =>
-      apiClient.get<ApiResponse<string>>(`/plans/approval/instances/${instanceId}/current-step`)
+      apiClient.get<ApiResponse<{
+        currentStepIndex?: number
+        stepInstances?: Array<{ stepIndex?: number; stepName?: string }>
+        title?: string
+      }>>(`/approval/instances/${instanceId}`)
     )
 
-    logger.info('[API] Successfully got current step', { instanceId })
-    return response
+    const currentStepIndex = response.data?.currentStepIndex
+    const stepName =
+      response.data?.stepInstances?.find(step => step.stepIndex === currentStepIndex)?.stepName ||
+      response.data?.title ||
+      '未知步骤'
+
+    logger.info('[API] Successfully got current step', { instanceId, stepName })
+    return { ...response, data: stepName }
   } catch (error) {
     logger.error('[API] Failed to get current step', { error, instanceId })
+    throw error
+  }
+}
+
+/**
+ * 获取审批时间轴（基于审批实例详情）
+ */
+async function getApprovalTimeline(
+  instanceId: number
+): Promise<
+  ApiResponse<{
+    instanceId: number
+    currentStepIndex?: number
+    timeline: Array<{
+      stepIndex: number
+      stepName: string
+      status: string
+      approverName?: string
+      approvedAt?: string | null
+      comment?: string | null
+    }>
+  }>
+> {
+  logger.info('[API] Getting approval timeline', { instanceId })
+
+  try {
+    const response = await withRetry(() =>
+      apiClient.get<ApiResponse<{
+        currentStepIndex?: number
+        stepInstances?: Array<{
+          stepIndex?: number
+          stepName?: string
+          status?: string
+          approverName?: string
+          approvedAt?: string
+          comment?: string
+        }>
+      }>>(`/approval/instances/${instanceId}`)
+    )
+
+    const timeline =
+      response.data?.stepInstances
+        ?.map(step => ({
+          stepIndex: step.stepIndex ?? 0,
+          stepName: step.stepName || '未知步骤',
+          status: step.status || 'PENDING',
+          approverName: step.approverName,
+          approvedAt: step.approvedAt ?? null,
+          comment: step.comment ?? null
+        }))
+        .sort((a, b) => a.stepIndex - b.stepIndex) ?? []
+
+    return {
+      ...response,
+      data: {
+        instanceId,
+        currentStepIndex: response.data?.currentStepIndex,
+        timeline
+      }
+    }
+  } catch (error) {
+    logger.error('[API] Failed to get approval timeline', { error, instanceId })
     throw error
   }
 }
@@ -469,5 +577,6 @@ export const approvalApi = {
   getPendingApprovals,
   getPlanApprovalStatus,
   countPendingApprovals,
-  getCurrentStep
+  getCurrentStep,
+  getApprovalTimeline
 }

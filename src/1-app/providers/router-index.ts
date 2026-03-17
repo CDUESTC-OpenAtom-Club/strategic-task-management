@@ -53,7 +53,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/distribution',
     name: 'Distribution',
-    component: () => import('@/2-pages/strategy/indicators/ui/IndicatorEditPage.vue'),
+    component: () => import('@/2-pages/strategy/indicators/ui/IndicatorDistributePage.vue'),
     meta: { requiresAuth: true, roles: ['functional_dept'] }
   },
   {

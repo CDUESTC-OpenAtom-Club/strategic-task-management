@@ -63,7 +63,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/distribution',
     name: 'Distribution',
-    component: () => import('@/3-features/indicator/ui/IndicatorEditView.vue'),
+    component: () => import('@/3-features/indicator/ui/IndicatorDistributeView.vue'),
     meta: { requiresAuth: true, roles: ['functional_dept'], title: '指标分配 - 战略指标管理系统' }
   },
   {

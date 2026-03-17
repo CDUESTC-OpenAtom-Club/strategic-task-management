@@ -10,10 +10,12 @@ import {
   ElTag,
   ElProgress
 } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ArrowLeft, Check, Close } from '@element-plus/icons-vue'
 import type { PlanFill } from '@/5-shared/types'
 import { usePlanStore } from '@/3-features/plan/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { approvalApi } from '@/3-features/approval/api/approval'
 
 /**
  * Plan 审核页面
@@ -47,9 +49,39 @@ const getStatusConfig = (status?: string) => {
   return configs[status || ''] || { label: status || '', type: 'info' }
 }
 
+const toPlanFill = (detail: Record<string, unknown>): PlanFill => {
+  const statusMap: Record<string, 'submitted' | 'approved' | 'rejected'> = {
+    IN_REVIEW: 'submitted',
+    APPROVED: 'approved',
+    REJECTED: 'rejected'
+  }
+
+  return {
+    id: detail.id as string | number,
+    plan_id: (detail.entityId as string | number) ?? '',
+    submit_date: (detail.startedAt as string) || (detail.createdAt as string) || '',
+    status: statusMap[(detail.status as string) || ''] || 'submitted',
+    submitted_by: String(detail.requesterId ?? ''),
+    submitted_by_name:
+      (detail.requesterName as string) ||
+      (detail.title as string) ||
+      (detail.requesterId ? `申请人 #${detail.requesterId}` : '待确认提交人'),
+    fills: [],
+    audit_logs: [],
+    created_at: (detail.createdAt as string) || (detail.startedAt as string) || '',
+    updated_at:
+      (detail.updatedAt as string) ||
+      (detail.completedAt as string) ||
+      (detail.startedAt as string) ||
+      '',
+    total_indicators: 0,
+    completed_indicators: 0
+  }
+}
+
 // 操作方法
 const handleBack = () => {
-  router.push({ name: 'ApprovalList' })
+  router.push({ name: 'pending-audit' })
 }
 
 const handleApprove = async () => {
@@ -63,7 +95,7 @@ const handleApprove = async () => {
       action: 'approve',
       comment: auditComment.value
     })
-    router.push({ name: 'ApprovalList' })
+    router.push({ name: 'pending-audit' })
   } catch (error) {
     // Error handled in store
   } finally {
@@ -87,7 +119,7 @@ const handleReject = async () => {
       action: 'reject',
       comment: auditComment.value
     })
-    router.push({ name: 'ApprovalList' })
+    router.push({ name: 'pending-audit' })
   } catch (error) {
     // Error handled in store
   } finally {
@@ -99,10 +131,16 @@ const handleReject = async () => {
 const loadPlanFill = async () => {
   loading.value = true
   try {
-    // TODO: 从 API 加载 PlanFill 详情
-    // 目前使用模拟数据
+    const response = await approvalApi.getApprovalInstance(Number(fillId.value))
+    if (response.success && response.data) {
+      planFill.value = toPlanFill(response.data as unknown as Record<string, unknown>)
+    } else {
+      planFill.value = null
+    }
   } catch (error) {
     logger.error('Failed to load plan fill:', error)
+    ElMessage.error('加载审核详情失败')
+    planFill.value = null
   } finally {
     loading.value = false
   }

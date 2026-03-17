@@ -7,7 +7,7 @@
 
 import api from '@/5-shared/api'
 import type { LoginCredentials, LoginResponse } from '@/4-entities/user/model/types'
-import type { ApiResponse } from './types'
+import type { ApiResponse, LoginRequest } from './types'
 
 /**
  * Authentication API endpoints
@@ -20,7 +20,9 @@ export const authApi = {
    * @param credentials - Username and password
    * @returns Login response with token and user info
    */
-  async login(credentials: LoginCredentials & { captcha: string; captchaKey: string }): Promise<ApiResponse<LoginResponse>> {
+  async login(
+    credentials: LoginCredentials | LoginRequest
+  ): Promise<ApiResponse<LoginResponse>> {
     return api.post('/auth/login', credentials)
   },
 
@@ -36,23 +38,27 @@ export const authApi = {
 
   /**
    * Refresh access token
-   * POST /api/auth/refresh
+   * POST /api/v1/auth/refresh
    *
    * @param refreshToken - Refresh token
    * @returns New access token
    */
-  async refreshToken(refreshToken: string): Promise<ApiResponse<{ accessToken: string; expiresIn: number }>> {
+  async refreshToken(
+    refreshToken: string
+  ): Promise<
+    ApiResponse<{ accessToken: string; refreshToken: string; expiresIn: number; tokenType: string }>
+  > {
     return api.post('/auth/refresh', { refreshToken })
   },
 
   /**
    * Get current user info
-   * GET /api/auth/userinfo
+   * GET /api/v1/auth/me
    *
    * @returns Current user information
    */
   async getCurrentUser(): Promise<ApiResponse<any>> {
-    return api.get('/auth/userinfo')
+    return api.get('/auth/me')
   },
 
   /**

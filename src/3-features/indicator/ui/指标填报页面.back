@@ -4,27 +4,18 @@ import { Plus, View, Download, Delete as _Delete, ArrowDown as _ArrowDown, Promo
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
-import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/5-shared/types'
-import { IndicatorStatus } from '@/5-shared/types/entities'
+import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/types'
+import { IndicatorStatus } from '@/types/entities'
 /* eslint-enable no-restricted-syntax */
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import {
-  getProgressStatus,
-  getProgressColor as _getProgressColor,
-  getStatusTagType as _getStatusTagType
-} from '@/5-shared/lib/utils'
-import type { StatusAuditEntry as _StatusAuditEntry } from '@/5-shared/types'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import TaskApprovalDrawer from '@/3-features/task/ui/TaskApprovalDrawer.vue'
-import { useDataValidator } from '@/5-shared/lib/validation/dataValidator'
-import {
-  milestoneDefaultValues as _milestoneDefaultValues,
-  MILESTONE_STATUS_VALUES,
-  PROGRESS_APPROVAL_STATUS_VALUES,
-  type ProgressApprovalStatusValue
-} from '@/5-shared/config/validationRules'
+import { useStrategicStore } from '@/stores/strategic'
+import { useAuthStore } from '@/stores/auth'
+import { useTimeContextStore } from '@/stores/timeContext'
+import { getProgressStatus, getProgressColor as _getProgressColor, getStatusTagType as _getStatusTagType } from '@/utils'
+import type { StatusAuditEntry as _StatusAuditEntry } from '@/types'
+import { useOrgStore } from '@/stores/org'
+import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
+import { useDataValidator } from '@/composables/useDataValidator'
+import { milestoneDefaultValues as _milestoneDefaultValues, MILESTONE_STATUS_VALUES, PROGRESS_APPROVAL_STATUS_VALUES, type ProgressApprovalStatusValue } from '@/config/validationRules'
 
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
@@ -787,7 +778,7 @@ const saveNewRow = () => {
     targetValue: 100,
     unit: '%',
     responsibleDept: authStore.userDepartment || '未分配',
-    responsiblePerson: '',
+    responsiblePerson: authStore.userName || '未分配',
     status: 'active',
     isStrategic: true,
     taskContent: newRow.value.taskContent
@@ -2021,6 +2012,7 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
           <el-descriptions-item label="权重">{{ currentDetail.weight }}</el-descriptions-item>
           <el-descriptions-item label="当前进度">{{ currentDetail.progress || 0 }}%</el-descriptions-item>
           <el-descriptions-item label="责任部门">{{ currentDetail.responsibleDept || '未分配' }}</el-descriptions-item>
+          <el-descriptions-item label="责任人">{{ currentDetail.responsiblePerson || '未分配' }}</el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{ currentDetail.createTime }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{ currentDetail.remark || '暂无备注' }}</el-descriptions-item>
         </el-descriptions>

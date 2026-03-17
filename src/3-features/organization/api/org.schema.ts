@@ -16,6 +16,9 @@ import { z } from 'zod'
  * @see Requirements 2.2 - OrgType_Enum SHALL 定义所有有效的组织类型
  */
 export const orgTypeSchema = z.enum([
+  'admin',
+  'functional',
+  'academic',
   'STRATEGY_DEPT',
   'FUNCTIONAL_DEPT',
   'COLLEGE',
@@ -48,7 +51,10 @@ export const orgVOSchema = z.union([
     remark: z.string().nullable().optional(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
-    typeDisplay: z.string().optional()
+    typeDisplay: z.string().optional(),
+    id: z.number().optional(),
+    name: z.string().optional(),
+    type: orgTypeSchema.optional()
   }),
   // Format 2: simple (id, name, type) - transform to camelCase
   z.object({
@@ -62,11 +68,13 @@ export const orgVOSchema = z.union([
     remark: z.string().nullable().optional(),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
-    typeDisplay: z.string().optional()
+    typeDisplay: z.string().optional(),
+    orgCode: z.string().optional(),
+    orgType: orgTypeSchema.optional()
   }).transform((data) => ({
     orgId: data.id,
     orgName: data.name,
-    orgType: data.type,
+    orgType: data.orgType ?? data.type,
     parentOrgId: data.parentOrgId,
     parentOrgName: data.parentOrgName,
     isActive: data.isActive,

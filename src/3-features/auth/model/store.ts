@@ -55,6 +55,39 @@ export const useAuthStore = defineStore('auth', () => {
     () => viewingAsDepartment.value || user.value?.department || ''
   )
 
+  const enrichUserWithOrganization = async (
+    userData: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    const orgId = userData.orgId
+
+    if (!orgId) {
+      return userData
+    }
+
+    try {
+      const response = await api.get('/organizations')
+
+      if (response.success && Array.isArray(response.data)) {
+        const matchedOrg = response.data.find((org: Record<string, unknown>) => {
+          const candidateId = org.id ?? org.orgId
+          return String(candidateId) === String(orgId)
+        })
+
+        if (matchedOrg) {
+          return {
+            ...userData,
+            orgType: matchedOrg.orgType || matchedOrg.type || userData.orgType,
+            orgName: matchedOrg.orgName || matchedOrg.name || userData.orgName
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('⚠️ [Auth] 补全组织信息失败，将使用登录响应中的原始用户数据:', error)
+    }
+
+    return userData
+  }
+
   // ============ Actions ============
   const login = async (credentials: { username: string; password: string }) => {
     loading.value = true
@@ -67,19 +100,25 @@ export const useAuthStore = defineStore('auth', () => {
       const parseResult = parseLoginResponse(response)
 
       if (parseResult.success && parseResult.data) {
-        const { token: loginToken, user: userData } = parseResult.data
+        const { token: loginToken, user: userData, refreshToken } = parseResult.data
 
         logger.debug('?[Auth] 登录成功，Token:', loginToken.substring(0, 20) + '...')
         logger.debug('👤 [Auth] 用户数据:', userData)
 
-        const mappedUser = mapBackendUser(userData)
-        logger.debug('?[Auth] 映射后的用户:', mappedUser)
-
-        user.value = mappedUser
         token.value = loginToken
         tokenManager.setAccessToken(loginToken)
         localStorage.setItem('token', loginToken)
+        if (refreshToken) {
+          localStorage.setItem('refreshToken', refreshToken)
+        }
+
+        const enrichedUserData = await enrichUserWithOrganization(userData)
+        const mappedUser = mapBackendUser(enrichedUserData)
+        logger.debug('?[Auth] 映射后的用户:', mappedUser)
+
+        user.value = mappedUser
         localStorage.setItem('currentUser', JSON.stringify(mappedUser))
+        localStorage.setItem('user', JSON.stringify(mappedUser))
 
         logger.debug('?[Auth] 登录状态已保存')
 
@@ -125,8 +164,10 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     tokenManager.clearAccessToken()
     localStorage.removeItem('currentUser')
+    localStorage.removeItem('user')
     localStorage.removeItem('token')
     localStorage.removeItem('auth_token')
+    localStorage.removeItem('refreshToken')
 
     logger.debug('[Auth] 用户已登出，所有凭证已清除')
 
@@ -143,9 +184,12 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await api.get('/auth/me')
 
-      if (response.code === 0 && response.data) {
-        user.value = response.data
-        localStorage.setItem('currentUser', JSON.stringify(response.data))
+      if (response.success && response.data) {
+        const enrichedUserData = await enrichUserWithOrganization(response.data)
+        const mappedUser = mapBackendUser(enrichedUserData)
+        user.value = mappedUser
+        localStorage.setItem('currentUser', JSON.stringify(mappedUser))
+        localStorage.setItem('user', JSON.stringify(mappedUser))
       } else {
         logout()
       }
@@ -200,6 +244,7 @@ export const useAuthStore = defineStore('auth', () => {
         if (parsedUser && parsedUser.role) {
           user.value = parsedUser
           token.value = memoryToken
+          localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
           return
         }
@@ -215,6 +260,7 @@ export const useAuthStore = defineStore('auth', () => {
           tokenManager.setAccessToken(savedToken)
           user.value = parsedUser
           token.value = savedToken
+          localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] ?localStorage 恢复会话:', parsedUser.name, parsedUser.role)
           return
         }
@@ -234,6 +280,7 @@ export const useAuthStore = defineStore('auth', () => {
           user.value = parsedUser
           token.value = newToken
           localStorage.setItem('token', newToken)
+          localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
         } else {
           logger.warn('[Auth] 用户信息缺少 role，清除登录状态')

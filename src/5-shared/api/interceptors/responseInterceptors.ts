@@ -117,28 +117,50 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
     // ========================================================================
     const data = response.data
 
-    // 格式1: { code: 0, data: {...}, message: "..." }
-    if (data && typeof data === 'object' && 'code' in data) {
-      logger.debug('📦 [API Format] 检测到格式1: { code, data, message }')
-      if (data.code === 0) {
+    // 格式1: { success: true/false, code, data, message }
+    if (data && typeof data === 'object' && 'success' in data) {
+      logger.debug('📦 [API Format] 检测到格式1: { success, code, data, message }')
+
+      if (data.success) {
         return {
           ...response,
           data: {
             success: true,
+            code: data.code ?? response.status,
             data: data.data,
             message: data.message
           }
         }
-      } else {
-        logger.error('❌ [API Business Error] code:', data.code, 'message:', data.message)
-        throw new Error(data.message || 'Request failed')
       }
+
+      logger.error('❌ [API Business Error] success=false code:', data.code, 'message:', data.message)
+      throw new Error(data.message || 'Request failed')
     }
 
-    // 格式2: { success: true, data: {...} }
-    if (data && typeof data === 'object' && 'success' in data) {
-      logger.debug('📦 [API Format] 检测到格式2: { success, data }')
-      return response
+    // 格式2: { code, data, message }
+    if (data && typeof data === 'object' && 'code' in data) {
+      logger.debug('📦 [API Format] 检测到格式2: { code, data, message }')
+
+      const normalizedCode = typeof data.code === 'number' ? data.code : Number(data.code)
+      const isBusinessSuccess =
+        normalizedCode === 0 ||
+        normalizedCode === 200 ||
+        (Number.isFinite(normalizedCode) && normalizedCode >= 200 && normalizedCode < 300)
+
+      if (isBusinessSuccess) {
+        return {
+          ...response,
+          data: {
+            success: true,
+            code: normalizedCode,
+            data: data.data,
+            message: data.message
+          }
+        }
+      }
+
+      logger.error('❌ [API Business Error] code:', data.code, 'message:', data.message)
+      throw new Error(data.message || 'Request failed')
     }
 
     // 格式3: 直接返回数据

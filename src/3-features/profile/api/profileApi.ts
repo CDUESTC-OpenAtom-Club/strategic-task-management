@@ -10,9 +10,9 @@ import { apiClient } from '@/5-shared/api/client'
 export const profileApi = {
   /**
    * Get user profile
-   * 使用正确的后端API路径：/api/v1/auth/userinfo
+   * 使用正确的后端API路径：/api/v1/auth/me
    */
   async getProfile() {
-    return await apiClient.get('/auth/userinfo')
+    return await apiClient.get('/auth/me')
   }
 }

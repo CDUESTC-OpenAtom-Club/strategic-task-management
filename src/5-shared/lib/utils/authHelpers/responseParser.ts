@@ -15,6 +15,7 @@ import { logger } from '@/5-shared/lib/utils/logger'
 /** 登录响应数据接口 */
 export interface LoginResponseData {
   token: string
+  refreshToken?: string
   user: Record<string, unknown>
 }
 
@@ -31,6 +32,8 @@ export interface ParseResult {
 export function mapOrgTypeToRole(orgType: string): UserRole | null {
   const mapping: Record<string, UserRole> = {
     // 支持多种格式（后端可能用不同格式）
+    ADMIN: 'strategic_dept',
+    admin: 'strategic_dept',
     STRATEGY_DEPT: 'strategic_dept',
     strategic_dept: 'strategic_dept',
     FUNCTIONAL_DEPT: 'functional_dept',
@@ -82,14 +85,22 @@ export function parseLoginResponse(response: Record<string, unknown>): ParseResu
   // 拦截器返回 { code: 0, data: { token, user } }
 
   // 格式1: { success: true, data: { token, user } } (经过拦截器转换)
-  if (response.success && response.data?.token) {
+  if (response.success && (response.data?.token || response.data?.accessToken)) {
     logger.debug('✅ [Auth] 响应格式1: { success: true, data: { token, user } }')
-    loginData = response.data
+    loginData = {
+      token: response.data.token || response.data.accessToken,
+      refreshToken: response.data.refreshToken,
+      user: response.data.user
+    }
   }
   // 格式2: { code: 0, data: { token, user } } (原始后端格式)
-  else if (response.code === 0 && response.data?.token) {
+  else if (response.code === 0 && (response.data?.token || response.data?.accessToken)) {
     logger.debug('✅ [Auth] 响应格式2: { code: 0, data: {...} }')
-    loginData = response.data
+    loginData = {
+      token: response.data.token || response.data.accessToken,
+      refreshToken: response.data.refreshToken,
+      user: response.data.user
+    }
   }
   // 格式3: { token, user } (直接返回)
   else if (response.token && response.user) {
@@ -97,9 +108,13 @@ export function parseLoginResponse(response: Record<string, unknown>): ParseResu
     loginData = response
   }
   // 格式4: 嵌套的data.data (兼容某些特殊情况)
-  else if (response.data?.data?.token) {
+  else if (response.data?.data?.token || response.data?.data?.accessToken) {
     logger.debug('✅ [Auth] 响应格式4: { data: { token, user } }')
-    loginData = response.data.data
+    loginData = {
+      token: response.data.data.token || response.data.data.accessToken,
+      refreshToken: response.data.data.refreshToken,
+      user: response.data.data.user
+    }
   }
   // 格式5: 尝试直接提取
   else if (response) {
@@ -107,6 +122,7 @@ export function parseLoginResponse(response: Record<string, unknown>): ParseResu
     if (response.token || response.accessToken) {
       loginData = {
         token: response.token || response.accessToken,
+        refreshToken: response.refreshToken,
         user: response.user || response.userInfo || {}
       }
     }

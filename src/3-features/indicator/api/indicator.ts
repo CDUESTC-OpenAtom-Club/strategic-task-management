@@ -5,7 +5,11 @@ import type {
   IndicatorDistributionEligibility,
   BatchDistributionRequest
 } from '@/5-shared/types'
-import type { IndicatorVO, DistributionStatus } from '@/5-shared/api/types/backend-aligned'
+import type {
+  IndicatorVO,
+  DistributionStatus,
+  IndicatorCreateRequest
+} from '@/5-shared/types/backend-aligned'
 
 /**
  * 指标 API 服务
@@ -21,16 +25,28 @@ export type {
   MilestoneVO,
   DistributionStatus,
   IndicatorCreateRequest
-} from '@/5-shared/api/types/backend-aligned'
+} from '@/5-shared/types/backend-aligned'
 
 export const indicatorApi = {
   /**
    * 获取所有活跃指标
    * @param year 可选的年份过滤参数
    */
-  async getAllIndicators(year?: number): Promise<ApiResponse<IndicatorVO[]>> {
-    const params = year ? { year } : {}
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params })
+  async getAllIndicators(
+    year?: number,
+    pagination?: { page?: number; size?: number }
+  ): Promise<ApiResponse<IndicatorVO[]>> {
+    const params: Record<string, number> = {}
+    if (typeof year === 'number') {
+      params.year = year
+    }
+    if (typeof pagination?.page === 'number') {
+      params.page = pagination.page
+    }
+    if (typeof pagination?.size === 'number') {
+      params.size = pagination.size
+    }
+    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', params)
   },
 
   /**
@@ -255,7 +271,7 @@ export const indicatorApi = {
    */
   async submitIndicatorForReview(indicatorId: string): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/submit-review`)
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/submit`)
     })
   },
 
@@ -274,7 +290,7 @@ export const indicatorApi = {
    */
   async approveIndicatorReview(indicatorId: string): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/approve-review`)
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/approve`)
     })
   },
 
@@ -297,7 +313,7 @@ export const indicatorApi = {
     reason: string
   ): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/reject-review`, {
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/reject`, {
         reason
       })
     })

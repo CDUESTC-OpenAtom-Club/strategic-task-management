@@ -125,14 +125,14 @@ export async function queryIndicatorsByTask(taskId: number): Promise<Indicator[]
 /**
  * Query indicators by owner organization
  *
- * API: GET /api/indicators/owner-org/{orgId}
+ * API: GET /api/indicators/owner/{orgId}
  *
  * @param orgId - Organization ID
  * @returns Indicator list
  */
 export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicator[]> {
   const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    `/indicators/owner-org/${orgId}`
+    `/indicators/owner/${orgId}`
   )
   return normalizeIndicatorArray(unwrapData(response))
 }
@@ -140,14 +140,14 @@ export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicato
 /**
  * Query indicators by target organization
  *
- * API: GET /api/indicators/target-org/{orgId}
+ * API: GET /api/indicators/target/{orgId}
  *
  * @param orgId - Organization ID
  * @returns Indicator list
  */
 export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicator[]> {
   const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    `/indicators/target-org/${orgId}`
+    `/indicators/target/${orgId}`
   )
   return normalizeIndicatorArray(unwrapData(response))
 }

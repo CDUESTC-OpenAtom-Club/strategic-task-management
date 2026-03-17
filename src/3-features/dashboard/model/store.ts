@@ -492,9 +492,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const source = indicator.ownerDept || '战略发展部'
       const target = indicator.responsibleDept
 
-      if (!source || !target) {
+      if (!source || !target || source === target) {
         return
-      } // Skip indicators without complete department info
+      } // Skip incomplete or self-loop entries
 
       nodes.add(source)
       nodes.add(target)
@@ -503,34 +503,40 @@ export const useDashboardStore = defineStore('dashboard', () => {
       linkMap.set(key, (linkMap.get(key) || 0) + 1)
     })
 
+    // 为节点分配明确的层级（depth），确保职能部门和学院分层显示
+    const depthMap = new Map<string, number>()
+    nodes.forEach(name => {
+      if (name === '战略发展部') {
+        depthMap.set(name, 0)
+      } else if (isSecondaryCollege(name)) {
+        depthMap.set(name, 2)
+      } else {
+        depthMap.set(name, 1)
+      }
+    })
+
+    // 过滤链接：只保留从低层级流向高层级的链接（避免循环）
     const links: SankeyLink[] = []
     linkMap.forEach((count, key) => {
       const [source, target] = key.split('->')
-      links.push({ source, target, value: count })
-    })
-
-    // 为节点分配明确的层级（depth），确保职能部门和学院分层显示
-    const nodeList = Array.from(nodes).map(name => {
-      let depth: number | undefined
-
-      // 战略发展部在最左侧（第0层）
-      if (name === '战略发展部') {
-        depth = 0
-      }
-      // 二级学院在最右侧（第2层）
-      else if (isSecondaryCollege(name)) {
-        depth = 2
-      }
-      // 职能部门在中间（第1层）
-      else {
-        depth = 1
-      }
-
-      return {
-        name,
-        depth
+      const sourceDepth = depthMap.get(source) ?? 1
+      const targetDepth = depthMap.get(target) ?? 1
+      if (sourceDepth < targetDepth) {
+        links.push({ source, target, value: count })
       }
     })
+
+    // 只保留在链接中出现的节点
+    const usedNodes = new Set<string>()
+    links.forEach(link => {
+      usedNodes.add(link.source)
+      usedNodes.add(link.target)
+    })
+
+    const nodeList = Array.from(usedNodes).map(name => ({
+      name,
+      depth: depthMap.get(name) ?? 1
+    }))
 
     return {
       nodes: nodeList,

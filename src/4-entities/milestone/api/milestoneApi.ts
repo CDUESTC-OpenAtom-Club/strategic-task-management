@@ -94,8 +94,15 @@ export const milestoneApi = {
    */
   async isMilestonePaired(
     milestoneId: string
-  ): Promise<ApiResponse<{ milestoneId: string; isPaired: boolean; message: string }>> {
-    return apiClient.get(`/milestones/${milestoneId}/is-paired`)
+  ): Promise<
+    ApiResponse<{
+      milestoneId: string
+      isPaired: boolean
+      pairedIndicatorId?: number
+      pairedAt?: string
+    }>
+  > {
+    return apiClient.get(`/milestones/${milestoneId}/pairing-status`)
   },
 
   /**

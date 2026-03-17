@@ -34,12 +34,16 @@ export async function logout(): Promise<ApiResponse<void>> {
 /**
  * Refresh access token
  *
- * API: POST /api/auth/refresh
+ * API: POST /api/v1/auth/refresh
  *
  * @param refreshToken - Refresh token
  * @returns New access token
  */
-export async function refreshToken(refreshToken: string): Promise<ApiResponse<{ accessToken: string; expiresIn: number }>> {
+export async function refreshToken(
+  refreshToken: string
+): Promise<
+  ApiResponse<{ accessToken: string; refreshToken: string; expiresIn: number; tokenType: string }>
+> {
   return api.post('/auth/refresh', { refreshToken })
 }
 

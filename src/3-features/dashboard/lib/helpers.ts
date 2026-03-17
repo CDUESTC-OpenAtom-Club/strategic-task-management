@@ -172,9 +172,9 @@ export function generateSankeyData(indicators: StrategicIndicator[]) {
     const source = indicator.ownerDept || '战略发展部'
     const target = indicator.responsibleDept
 
-    if (!source || !target) {
+    if (!source || !target || source === target) {
       return
-    } // Skip indicators without complete department info
+    } // Skip incomplete or self-loop entries
 
     nodes.add(source)
     nodes.add(target)
@@ -183,30 +183,41 @@ export function generateSankeyData(indicators: StrategicIndicator[]) {
     linkMap.set(key, (linkMap.get(key) || 0) + 1)
   })
 
-  const links = Array.from(linkMap.entries()).map(([key, count]) => {
-    const [source, target] = key.split('->')
-    return { source, target, value: count }
-  })
-
-  // Assign explicit levels to nodes to ensure proper layering
-  const nodeList = Array.from(nodes).map(name => {
-    let depth: number | undefined
-
-    // Strategic Development at leftmost (level 0)
+  // Assign explicit levels to nodes
+  const depthMap = new Map<string, number>()
+  nodes.forEach(name => {
     if (name === '战略发展部') {
-      depth = 0
+      depthMap.set(name, 0)
+    } else if (isSecondaryCollege(name)) {
+      depthMap.set(name, 2)
+    } else {
+      depthMap.set(name, 1)
     }
-    // Secondary colleges at rightmost (level 2)
-    else if (isSecondaryCollege(name)) {
-      depth = 2
-    }
-    // Functional departments in middle (level 1)
-    else {
-      depth = 1
-    }
-
-    return { name, depth }
   })
+
+  // Filter links: only keep forward-flowing links (lower depth → higher depth) to avoid cycles
+  const links = Array.from(linkMap.entries())
+    .map(([key, count]) => {
+      const [source, target] = key.split('->')
+      return { source, target, value: count }
+    })
+    .filter(link => {
+      const sourceDepth = depthMap.get(link.source) ?? 1
+      const targetDepth = depthMap.get(link.target) ?? 1
+      return sourceDepth < targetDepth
+    })
+
+  // Only include nodes that appear in valid links
+  const usedNodes = new Set<string>()
+  links.forEach(link => {
+    usedNodes.add(link.source)
+    usedNodes.add(link.target)
+  })
+
+  const nodeList = Array.from(usedNodes).map(name => ({
+    name,
+    depth: depthMap.get(name) ?? 1
+  }))
 
   return {
     nodes: nodeList,

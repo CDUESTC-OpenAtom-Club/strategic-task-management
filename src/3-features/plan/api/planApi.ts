@@ -7,7 +7,8 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient, withRetry } from '@/5-shared/lib/api'
+import { apiClient } from '@/5-shared/lib/api'
+import { withRetry } from '@/5-shared/lib/api/wrappers'
 import type {
   ApiResponse,
   Plan,
@@ -22,6 +23,7 @@ import type {
   Attachment
 } from '@/5-shared/types'
 import type { PlanVO, TaskVO } from '@/5-shared/types'
+import { approvalApi, type ApprovalDetail } from '@/3-features/approval/api/approval'
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
@@ -70,6 +72,48 @@ export interface PlanFillVO {
   updatedAt: string
   totalIndicators: number
   completedIndicators: number
+}
+
+function normalizeApprovalStatus(status?: string): PlanFillStatus {
+  if (status === 'APPROVED') {
+    return 'approved'
+  }
+  if (status === 'REJECTED') {
+    return 'rejected'
+  }
+  return 'submitted'
+}
+
+function convertApprovalDetailToPlanFill(detail: ApprovalDetail & Record<string, unknown>): PlanFill {
+  return {
+    id: detail.id,
+    plan_id: detail.entityId,
+    submit_date:
+      (detail.startedAt as string) ||
+      (detail.initiatedAt as string) ||
+      (detail.createdAt as string) ||
+      '',
+    status: normalizeApprovalStatus(detail.status),
+    submitted_by: String(detail.requesterId ?? detail.initiatedBy ?? ''),
+    submitted_by_name:
+      (detail.requesterName as string) ||
+      (detail.title as string) ||
+      (detail.requesterId ? `申请人 #${detail.requesterId}` : '待确认提交人'),
+    fills: [],
+    audit_logs: [],
+    created_at:
+      (detail.createdAt as string) ||
+      (detail.startedAt as string) ||
+      (detail.initiatedAt as string) ||
+      '',
+    updated_at:
+      (detail.updatedAt as string) ||
+      (detail.completedAt as string) ||
+      (detail.startedAt as string) ||
+      '',
+    total_indicators: 0,
+    completed_indicators: 0
+  }
 }
 
 // ============================================================
@@ -427,11 +471,34 @@ export const planApi = {
     }
 
     // 真实 API 调用（后端就绪后启用）
-    return apiClient.get<ApiResponse<Plan[]>>('/plans')
+    const response = await apiClient.get<ApiResponse<Plan[] | { items?: Plan[] }>>('/plans')
+
+    if (Array.isArray(response.data)) {
+      return response as ApiResponse<Plan[]>
+    }
+
+    if (
+      response.data &&
+      typeof response.data === 'object' &&
+      'items' in response.data &&
+      Array.isArray(response.data.items)
+    ) {
+      return {
+        ...response,
+        data: response.data.items
+      }
+    }
+
+    return {
+      ...response,
+      data: []
+    }
   },
 
   /**
    * 根据 org_id 获取 Plan 列表
+   * 后端不支持 /plans/org/{orgId}，改为使用 /plans 配合过滤参数
+   * 注意：后端返回分页格式，需要转换
    */
   async getPlansByOrg(orgId: number | string): Promise<ApiResponse<Plan[]>> {
     if (this.useMockData) {
@@ -443,11 +510,14 @@ export const planApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<Plan[]>>(`/plans/org/${orgId}`)
+    // 后端使用 /plans 端点，不支持按 orgId 过滤
+    // 返回空数组或使用其他方式过滤
+    return apiClient.get<ApiResponse<Plan[]>>('/plans', { page: 0, size: 1000 })
   },
 
   /**
    * 根据 status 获取 Plan 列表
+   * 使用后端 /plans?status=xxx 接口
    */
   async getPlansByStatus(status: PlanStatus): Promise<ApiResponse<Plan[]>> {
     if (this.useMockData) {
@@ -459,7 +529,8 @@ export const planApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<Plan[]>>(`/plans/status/${status}`)
+    // 使用后端支持的状态过滤参数
+    return apiClient.get<ApiResponse<Plan[]>>('/plans', { status, page: 0, size: 1000 })
   },
 
   /**
@@ -891,9 +962,12 @@ export const planFillApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<PlanFill[]>>('/reports/pending-approval', {
-      orgId: auditorOrgId
-    })
+    const response = await approvalApi.getPendingApprovals(Number(auditorOrgId))
+
+    return {
+      ...response,
+      data: Array.isArray(response.data) ? response.data.map(convertApprovalDetailToPlanFill) : []
+    }
   },
 
   /**
@@ -935,27 +1009,24 @@ export const planFillApi = {
     }
 
     return withRetry(async () => {
-      // 根据操作类型调用不同的后端API端点
-      // 后端API实现：
-      // - POST /api/v1/reports/{id}/approve?userId={userId} (使用 @RequestParam)
-      // - POST /api/v1/reports/{id}/reject (使用 @RequestBody RejectPlanReportRequest)
-
       const userId = form.userId || 1 // TODO: 从当前用户上下文获取实际userId
 
-      if (form.action?.toLowerCase() === 'approve') {
-        // 审批通过：使用 /approve 端点 + @RequestParam
-        return apiClient.post<ApiResponse<PlanFill>>(
-          `/reports/${fillId}/approve?userId=${userId}`,
-          null // 不需要请求体
-        )
-      } else {
-        // 驳回：使用 /reject 端点 + @RequestBody
-        const requestBody = {
-          userId: userId,
-          reason: form.comment || ''
-        }
-        return apiClient.post<ApiResponse<PlanFill>>(`/reports/${fillId}/reject`, requestBody)
-      }
+      const response =
+        form.action?.toLowerCase() === 'approve'
+          ? await approvalApi.approve(Number(fillId), {
+              userId,
+              comment: form.comment || ''
+            })
+          : await approvalApi.reject(Number(fillId), {
+              userId,
+              comment: form.comment || '',
+              reason: form.comment || ''
+            })
+
+      return {
+        ...response,
+        data: response.data ? convertApprovalDetailToPlanFill(response.data) : null
+      } as ApiResponse<PlanFill>
     })
   }
 }

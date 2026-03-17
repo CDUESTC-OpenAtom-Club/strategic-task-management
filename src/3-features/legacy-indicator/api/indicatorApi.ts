@@ -11,7 +11,7 @@ import type {
   IndicatorVO,
   MilestoneVO,
   IndicatorCreateRequest
-} from '@/5-shared/api/types/backend-aligned'
+} from '@/5-shared/types/backend-aligned'
 
 /**
  * 重试辅助函数 - 使用指数退避策略

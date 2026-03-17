@@ -13,6 +13,7 @@ import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosErr
 import { ElMessage } from 'element-plus'
 import { handleApiError } from './errorHandler'
 import { logger } from '../utils/logger'
+import { adaptV1Path } from '@/5-shared/api/v1PathAdapter'
 
 /**
  * Interceptor configuration
@@ -79,6 +80,21 @@ export function setupRequestInterceptors(
       // Add request ID for tracking
       config._requestId = generateRequestId()
       config.headers['X-Request-ID'] = config._requestId
+
+      // Rewrite legacy endpoints to backend OpenAPI v1 endpoints.
+      if (config.url) {
+        const adapted = adaptV1Path(config.url)
+        if (adapted.changed) {
+          logger.debug(`[API PathAdapter] ${config.url} -> ${adapted.adaptedPath}`, {
+            reason: adapted.reason
+          })
+        } else if (adapted.unsupported) {
+          logger.warn(`[API PathAdapter] Unmapped contract path: ${config.url}`, {
+            reason: adapted.reason
+          })
+        }
+        config.url = adapted.adaptedPath
+      }
 
       // Add timestamp for performance monitoring
       config._startTime = Date.now()
@@ -299,12 +315,17 @@ async function handle401Error(
  */
 async function refreshAccessToken(): Promise<string> {
   try {
-    const response = await fetch('/api/auth/refresh', {
+    const refreshToken = localStorage.getItem('refreshToken')
+    if (!refreshToken) {
+      throw new Error('Missing refresh token')
+    }
+
+    const response = await fetch('/api/v1/auth/refresh', {
       method: 'POST',
-      credentials: 'include', // Include HttpOnly refresh token cookie
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify({ refreshToken })
     })
 
     if (!response.ok) {
@@ -312,7 +333,14 @@ async function refreshAccessToken(): Promise<string> {
     }
 
     const data = await response.json()
-    return data.data?.token || data.token
+    const newAccessToken = data?.data?.accessToken || data?.accessToken || data?.token
+    if (!newAccessToken) {
+      throw new Error('Token refresh failed')
+    }
+    if (data?.data?.refreshToken) {
+      localStorage.setItem('refreshToken', data.data.refreshToken)
+    }
+    return newAccessToken
   } catch (error) {
     throw new Error('Failed to refresh access token')
   }

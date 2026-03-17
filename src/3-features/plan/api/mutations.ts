@@ -49,7 +49,7 @@ export async function deletePlan(planId: number | string): Promise<ApiResponse<v
 /**
  * Submit plan for approval
  *
- * API: POST /api/plans/{id}/submit
+ * API: POST /api/plans/{id}/submit-approval
  *
  * @param planId - Plan ID
  * @param comment - Submission comment
@@ -58,37 +58,47 @@ export async function submitPlanForApproval(
   planId: number | string,
   comment?: string
 ): Promise<ApiResponse<void>> {
-  return api.post(`/plans/${planId}/submit`, { comment })
+  return api.post(`/plans/${planId}/submit-approval`, { comment })
 }
 
 /**
  * Approve plan
  *
- * API: POST /api/plans/{id}/approve
+ * API: POST /api/approval/instances/{instanceId}/approve?userId=...&comment=...
  *
- * @param planId - Plan ID
+ * @param instanceId - Approval instance ID
+ * @param userId - Approver user ID
  * @param comment - Approval comment
  */
 export async function approvePlan(
-  planId: number | string,
+  instanceId: number | string,
+  userId: number | string,
   comment?: string
 ): Promise<ApiResponse<void>> {
-  return api.post(`/plans/${planId}/approve`, { comment })
+  const encodedComment = comment ? `&comment=${encodeURIComponent(comment)}` : ''
+  return api.post(`/approval/instances/${instanceId}/approve?userId=${userId}${encodedComment}`, {
+    comment
+  })
 }
 
 /**
  * Reject plan
  *
- * API: POST /api/plans/{id}/reject
+ * API: POST /api/approval/instances/{instanceId}/reject?userId=...&comment=...
  *
- * @param planId - Plan ID
- * @param reason - Rejection reason
+ * @param instanceId - Approval instance ID
+ * @param userId - Approver user ID
+ * @param comment - Rejection reason (required)
  */
 export async function rejectPlan(
-  planId: number | string,
-  reason: string
+  instanceId: number | string,
+  userId: number | string,
+  comment: string
 ): Promise<ApiResponse<void>> {
-  return api.post(`/plans/${planId}/reject`, { reason })
+  return api.post(
+    `/approval/instances/${instanceId}/reject?userId=${userId}&comment=${encodeURIComponent(comment)}`,
+    { comment }
+  )
 }
 
 /**

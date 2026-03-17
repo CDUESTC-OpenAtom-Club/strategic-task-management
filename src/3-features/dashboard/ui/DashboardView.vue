@@ -977,7 +977,6 @@ const reloadData = async () => {
     startLoading()
     clearError()
     await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-    await dashboardStore.refreshDashboard()
   } catch (err) {
     setError(err instanceof Error ? err.message : '重新加载失败')
     logger.error('[Dashboard] Failed to reload data:', err)
@@ -2290,10 +2289,6 @@ onMounted(async () => {
   try {
     if (strategicStore.indicators.length === 0) {
       await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-    }
-
-    if (dashboardStore.dashboardData.totalIndicators === 0) {
-      await dashboardStore.refreshDashboard()
     }
   } catch (err) {
     logger.error('[Dashboard] Initial load failed:', err)

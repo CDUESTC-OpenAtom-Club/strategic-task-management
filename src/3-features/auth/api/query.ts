@@ -10,12 +10,12 @@ import type { ApiResponse } from './types'
 /**
  * Get current user info
  *
- * API: GET /api/auth/userinfo
+ * API: GET /api/v1/auth/me
  *
  * @returns Current user information
  */
 export async function getCurrentUser(): Promise<ApiResponse<any>> {
-  return api.get('/auth/userinfo')
+  return api.get('/auth/me')
 }
 
 /**

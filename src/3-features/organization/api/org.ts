@@ -28,25 +28,46 @@ export interface Department {
  * - STRATEGY_DEPT, SCHOOL → strategic_dept (战略发展部)
  * - FUNCTIONAL_DEPT, FUNCTION_DEPT → functional_dept (职能部门)
  * - COLLEGE, SECONDARY_COLLEGE, DIVISION, OTHER → secondary_college (二级学院)
+ * - admin/ADMIN → 按组织名称二次判定（兼容当前数据库全部 admin 的场景）
  *
  * @param orgType - 后端 OrgType 枚举值
+ * @param orgName - 组织名称（用于 admin 兜底判定）
  * @returns 前端 Department.type 值
  * @see Property 5 - OrgVO to Department Conversion Correctness
  */
 export function mapOrgTypeToFrontend(
-  orgType: string
+  orgType: string,
+  orgName?: string
 ): 'strategic_dept' | 'functional_dept' | 'secondary_college' {
+  const normalizedType = String(orgType || '').trim()
+  const normalizedName = String(orgName || '').trim()
+
+  // 兼容后端当前数据: 所有组织都标记为 admin，需要按名称区分
+  if (normalizedType === 'admin' || normalizedType === 'ADMIN') {
+    if (normalizedName === '战略发展部') {
+      return 'strategic_dept'
+    }
+    if (normalizedName.includes('学院')) {
+      return 'secondary_college'
+    }
+    return 'functional_dept'
+  }
+
   const mapping: Record<string, 'strategic_dept' | 'functional_dept' | 'secondary_college'> = {
     STRATEGY_DEPT: 'strategic_dept',
     SCHOOL: 'strategic_dept',
+    functional: 'functional_dept',
+    FUNCTIONAL: 'functional_dept',
     FUNCTIONAL_DEPT: 'functional_dept',
     FUNCTION_DEPT: 'functional_dept',
+    academic: 'secondary_college',
+    ACADEMIC: 'secondary_college',
     COLLEGE: 'secondary_college',
     SECONDARY_COLLEGE: 'secondary_college',
     DIVISION: 'secondary_college',
     OTHER: 'secondary_college'
   }
-  return mapping[orgType] || 'secondary_college'
+  return mapping[normalizedType] || 'secondary_college'
 }
 
 /**
@@ -69,7 +90,7 @@ export function convertOrgVOToDepartment(vo: OrgVO): Department {
   return {
     id: String(vo.orgId),
     name: vo.orgName,
-    type: mapOrgTypeToFrontend(vo.orgType),
+    type: mapOrgTypeToFrontend(vo.orgType, vo.orgName),
     sortOrder: vo.sortOrder ?? 0
   }
 }
@@ -89,7 +110,7 @@ export const orgApi = {
   async getAllOrgs(): Promise<OrgVO[]> {
     try {
       const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(
-        '/orgs'
+        '/organizations'
       )
 
       // Zod 运行时验证
@@ -125,7 +146,7 @@ export const orgApi = {
   async getAllDepartments(): Promise<Department[]> {
     try {
       const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(
-        '/orgs'
+        '/organizations'
       )
 
       // Direct transformation without Zod validation to avoid issues
@@ -138,7 +159,7 @@ export const orgApi = {
         return response.data.map((org: Record<string, unknown>) => {
           const id = org.id || org.orgId
           const name = org.name || org.orgName
-          const type = org.type || org.orgType
+          const type = org.orgType || org.type
 
           if (!id || !name || !type) {
             logger.warn('Invalid org data:', org)
@@ -147,7 +168,7 @@ export const orgApi = {
           return {
             id: String(id),
             name: name,
-            type: mapOrgTypeToFrontend(type),
+            type: mapOrgTypeToFrontend(String(type), String(name)),
             sortOrder: org.sortOrder ?? 0
           }
         })

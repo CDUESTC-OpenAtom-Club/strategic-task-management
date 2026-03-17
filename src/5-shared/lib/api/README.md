@@ -364,7 +364,7 @@ localStorage.setItem('token', 'your-jwt-token')
 Ensure refresh endpoint is configured:
 
 ```typescript
-// Refresh endpoint should be: /api/auth/refresh
+// Refresh endpoint should be: /api/v1/auth/refresh
 // Should accept HttpOnly cookie with refresh token
 // Should return: { data: { token: 'new-access-token' } }
 ```

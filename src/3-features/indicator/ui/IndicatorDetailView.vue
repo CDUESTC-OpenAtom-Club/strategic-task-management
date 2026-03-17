@@ -170,9 +170,6 @@ function handleDistribute() {
           <el-descriptions-item label="目标组织">
             {{ indicator.targetOrg || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="责任人">
-            {{ indicator.responsiblePerson || '-' }}
-          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 

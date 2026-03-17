@@ -58,8 +58,10 @@ export interface ApprovalHistory {
 
 export interface ApprovalStartRequest {
   submitterId: number
+  requesterOrgId?: number
   entityType: string
   entityId: number
+  workflowCode?: string
 }
 
 export interface ApprovalActionRequest {
@@ -75,50 +77,76 @@ export interface ApprovalActionRequest {
 export const approvalApi = {
   /**
    * Start a new approval flow
-   * FIXED: Backend path is /plans/approval/instances
+   * FIXED: Backend path is /approval/instances
    */
   async startApprovalFlow(request: ApprovalStartRequest): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.post<ApiResponse<ApprovalDetail>>('/plans/approval/instances', request)
+    if (!request.requesterOrgId) {
+      throw new Error('Missing requesterOrgId for approval instance start')
+    }
+    return apiClient.post<ApiResponse<ApprovalDetail>>(
+      `/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
+      {
+        entityType: request.entityType,
+        entityId: request.entityId,
+        workflowCode: request.workflowCode
+      }
+    )
   },
 
   /**
    * Get pending approvals for a user
-   * FIXED: Backend path is /plans/approval/instances/pending
+   * FIXED: Backend path is /approval/instances/my-pending
    */
   async getPendingApprovals(userId: number): Promise<ApiResponse<ApprovalDetail[]>> {
-    return apiClient.get<ApiResponse<ApprovalDetail[]>>('/plans/approval/instances/pending', { userId })
+    return apiClient.get<ApiResponse<ApprovalDetail[]>>('/approval/instances/my-pending', { userId })
   },
 
   /**
    * Get approval instance details
-   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
+   * FIXED: Backend uses instanceId parameter
    */
   async getApprovalInstance(instanceId: number): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.get<ApiResponse<ApprovalDetail>>(`/plans/approval/instances/${instanceId}`)
+    return apiClient.get<ApiResponse<ApprovalDetail>>(`/approval/instances/${instanceId}`)
   },
 
   /**
    * Approve an approval instance
-   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
+   * FIXED: Backend uses instanceId parameter
    */
   async approve(instanceId: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.post<ApiResponse<ApprovalDetail>>(`/plans/approval/instances/${instanceId}/approve`, request)
+    const instanceResponse = await approvalApi.getApprovalInstance(instanceId)
+    const instanceBody = instanceResponse?.data || { id: instanceId }
+
+    return apiClient.post<ApiResponse<ApprovalDetail>>(
+      `/approval/instances/${instanceId}/approve?userId=${request.userId}${
+        request.comment ? `&comment=${encodeURIComponent(request.comment)}` : ''
+      }`,
+      instanceBody
+    )
   },
 
   /**
    * Reject an approval instance
-   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
+   * FIXED: Backend uses instanceId parameter
    */
   async reject(instanceId: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
-    return apiClient.post<ApiResponse<ApprovalDetail>>(`/plans/approval/instances/${instanceId}/reject`, request)
+    const instanceResponse = await approvalApi.getApprovalInstance(instanceId)
+    const instanceBody = instanceResponse?.data || { id: instanceId }
+
+    return apiClient.post<ApiResponse<ApprovalDetail>>(
+      `/approval/instances/${instanceId}/reject?userId=${request.userId}${
+        request.comment ? `&comment=${encodeURIComponent(request.comment)}` : ''
+      }`,
+      instanceBody
+    )
   },
 
   /**
    * Get approval history for an instance
-   * FIXED: Backend uses instanceId parameter and /plans/approval prefix
+   * FIXED: Backend uses instanceId parameter
    */
   async getApprovalHistory(instanceId: number): Promise<ApiResponse<ApprovalHistory>> {
-    return apiClient.get<ApiResponse<ApprovalHistory>>(`/plans/approval/instances/${instanceId}/history`)
+    return apiClient.get<ApiResponse<ApprovalHistory>>(`/approval/instances/${instanceId}/history`)
   }
 }
 

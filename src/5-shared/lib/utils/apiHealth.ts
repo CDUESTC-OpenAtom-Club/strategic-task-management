@@ -44,10 +44,9 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       timestamp: new Date()
     }
   } catch (error: unknown) {
-    logger.error('❌ [Health Check] 后端服务异常:', error)
-
     // 处理超时错误
     if (error.code === 'ECONNABORTED' && error.message?.includes('timeout')) {
+      logger.error('❌ [Health Check] 后端服务响应超时:', error)
       return {
         service: 'Backend API',
         status: 'error',
@@ -58,6 +57,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     }
 
     if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+      logger.error('❌ [Health Check] 无法连接到后端服务:', error)
       return {
         service: 'Backend API',
         status: 'error',
@@ -68,6 +68,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     }
 
     if (error.response?.status === 404) {
+      logger.warn('⚠️ [Health Check] 健康检查端点不存在，尝试降级验证服务可用性')
       // 如果 actuator/health 不存在，尝试其他端点来验证服务可用性
       try {
         await healthApi.get('/auth/login', { timeout: 3000 })
@@ -91,6 +92,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
 
     // 403 表示端点存在但需要认证，这实际上意味着服务是正常的
     if (error.response?.status === 403) {
+      logger.debug('✅ [Health Check] 健康检查端点需要认证，后端服务可达')
       return {
         service: 'Backend API',
         status: 'success',
@@ -103,6 +105,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     // 提取后端返回的详细错误信息
     const responseData = error.response?.data
     const detailedMessage = responseData?.message || error.message
+    logger.error('❌ [Health Check] 后端服务异常:', error)
 
     return {
       service: 'Backend API',
@@ -184,10 +187,17 @@ export async function checkAuthFlow(credentials?: {
 }): Promise<HealthCheckResult> {
   logger.debug('🔐 [Health Check] 测试认证流程...')
 
-  const testCredentials = credentials || {
-    username: 'admin',
-    password: '123456'
+  if (!credentials) {
+    return {
+      service: 'Authentication',
+      status: 'success',
+      message: '未提供认证测试凭据，已跳过登录探测以避免干扰真实联调',
+      details: { skipped: true },
+      timestamp: new Date()
+    }
   }
+
+  const testCredentials = credentials
 
   try {
     const response = await healthApi.post('/auth/login', testCredentials)
@@ -274,7 +284,7 @@ export async function runFullHealthCheck(): Promise<HealthCheckResult[]> {
   // 检查后端服务
   results.push(await checkBackendHealth())
 
-  // 如果后端服务正常，检查认证流程
+  // 仅在显式提供测试凭据时才做认证探测，避免开发态使用错误默认密码污染日志
   if (results[0].status !== 'error') {
     results.push(await checkAuthFlow())
   }

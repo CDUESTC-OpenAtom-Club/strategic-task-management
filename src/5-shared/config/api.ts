@@ -23,7 +23,7 @@ export const API_ENDPOINTS = {
     login: '/auth/login',
     logout: '/auth/logout',
     refresh: '/auth/refresh',
-    userInfo: '/auth/userinfo',
+    userInfo: '/auth/me',
     register: '/auth/register'
   },
 
@@ -102,7 +102,8 @@ export const API_ENDPOINTS = {
     instanceDetail: (id: string) => `/approval/instances/${id}`,
     myPending: '/approval/instances/my-pending',
     approve: (id: string) => `/approval/instances/${id}/approve`,
-    reject: (id: string) => `/approval/instances/${id}/reject`
+    reject: (id: string) => `/approval/instances/${id}/reject`,
+    cancel: (id: string) => `/approval/instances/${id}/cancel`
   },
 
   // Analytics

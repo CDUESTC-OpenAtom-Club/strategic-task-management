@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+﻿﻿﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
   Plus,
@@ -29,6 +29,7 @@ import { useTimeContextStore } from '@/5-shared/lib/timeContext'
 import { useOrgStore } from '@/3-features/organization/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
 import { approvalApi } from '@/3-features/task/api/strategicApi'
+import { milestoneApi } from '@/4-entities/milestone/api/milestoneApi'
 import {
   getStatusText as _getStatusText,
   getStatusType as _getStatusType,
@@ -138,6 +139,157 @@ watch(
   { immediate: true }
 )
 
+const departmentIdNameMap = computed(() => {
+  const map = new Map<string, string>()
+  orgStore.departments.forEach(dept => {
+    map.set(String(dept.id), dept.name)
+  })
+  return map
+})
+
+const normalizeDepartmentName = (value?: string | null): string => {
+  if (!value) {
+    return ''
+  }
+
+  const trimmed = String(value).trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  return departmentIdNameMap.value.get(trimmed) || trimmed
+}
+
+const milestoneMap = ref<Record<string, Array<Record<string, unknown>>>>({})
+const loadedMilestoneIds = ref(new Set<string>())
+const loadingMilestoneIds = ref(new Set<string>())
+
+const toMilestoneStatus = (status?: string): 'pending' | 'completed' | 'overdue' => {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'COMPLETED') {
+    return 'completed'
+  }
+  if (normalized === 'DELAYED' || normalized === 'CANCELED' || normalized === 'OVERDUE') {
+    return 'overdue'
+  }
+  return 'pending'
+}
+
+const normalizeMilestone = (raw: Record<string, unknown>, index: number) => ({
+  id: String(raw.id ?? raw.milestoneId ?? `milestone-${index}`),
+  name: String(raw.name ?? raw.milestoneName ?? `里程碑${index + 1}`),
+  targetProgress: Number(raw.targetProgress ?? raw.weightPercent ?? 0),
+  deadline: String(raw.deadline ?? raw.dueDate ?? ''),
+  status: toMilestoneStatus(String(raw.status ?? '')),
+  isPaired: Boolean(raw.isPaired ?? false),
+  weightPercent: Number(raw.weightPercent ?? 0),
+  sortOrder: Number(raw.sortOrder ?? index)
+})
+
+const extractMilestones = (payload: unknown): Array<Record<string, unknown>> => {
+  if (Array.isArray(payload)) {
+    return payload as Array<Record<string, unknown>>
+  }
+  if (payload && typeof payload === 'object') {
+    const record = payload as Record<string, unknown>
+    if (Array.isArray(record.items)) {
+      return record.items as Array<Record<string, unknown>>
+    }
+  }
+  return []
+}
+
+const normalizedIndicators = computed(() =>
+  strategicStore.indicators.map(i => {
+    const indicatorId = String(i.id)
+    const mappedMilestones = milestoneMap.value[indicatorId]
+    return {
+      ...i,
+      ownerDept: normalizeDepartmentName(i.ownerDept),
+      responsibleDept: normalizeDepartmentName(i.responsibleDept),
+      milestones: mappedMilestones ?? i.milestones ?? []
+    }
+  })
+)
+
+const getCurrentScopeIndicatorsForMilestones = () => {
+  let list = strategicStore.indicators.filter(i => !i.year || i.year === timeContext.currentYear)
+  const normalized = list.map(i => ({
+    ...i,
+    ownerDept: normalizeDepartmentName(i.ownerDept),
+    responsibleDept: normalizeDepartmentName(i.responsibleDept)
+  }))
+
+  if (selectedDepartment.value) {
+    return normalized.filter(
+      i =>
+        i.ownerDept === '战略发展部' &&
+        i.responsibleDept === selectedDepartment.value &&
+        i.isStrategic === true
+    )
+  }
+
+  return normalized.filter(i => i.ownerDept === '战略发展部' && i.isStrategic === true)
+}
+
+const loadMilestonesForCurrentScope = async () => {
+  const indicatorsToLoad = getCurrentScopeIndicatorsForMilestones()
+  const ids = indicatorsToLoad
+    .map(i => String(i.id))
+    .filter(id => id && !loadedMilestoneIds.value.has(id) && !loadingMilestoneIds.value.has(id))
+
+  if (ids.length === 0) {
+    return
+  }
+
+  await Promise.all(
+    ids.map(async indicatorId => {
+      loadingMilestoneIds.value.add(indicatorId)
+      try {
+        const response = await milestoneApi.getMilestonesByIndicator(indicatorId)
+        if (response.success) {
+          const rawMilestones = extractMilestones(response.data)
+          milestoneMap.value[indicatorId] = rawMilestones.map((m, idx) => normalizeMilestone(m, idx))
+        } else {
+          milestoneMap.value[indicatorId] = []
+        }
+      } catch (error) {
+        logger.warn(`[StrategicTaskView] 加载指标 ${indicatorId} 里程碑失败`, error)
+        milestoneMap.value[indicatorId] = []
+      } finally {
+        loadingMilestoneIds.value.delete(indicatorId)
+        loadedMilestoneIds.value.add(indicatorId)
+      }
+    })
+  )
+}
+
+const isMilestoneLoading = (indicatorId: string | number): boolean =>
+  loadingMilestoneIds.value.has(String(indicatorId))
+
+watch(
+  [
+    selectedDepartment,
+    () => strategicStore.indicators.length,
+    () => orgStore.departments.length,
+    () => timeContext.currentYear
+  ],
+  () => {
+    void loadMilestonesForCurrentScope()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => timeContext.currentYear,
+  () => {
+    milestoneMap.value = {}
+    loadedMilestoneIds.value = new Set<string>()
+    loadingMilestoneIds.value = new Set<string>()
+    void loadMilestonesForCurrentScope()
+  }
+)
+
 // 计算当前选中部门的所有指标权重之和（用于下发验证）
 // 只计算战略指标（isStrategic=true）且 responsibleDept 匹配的指标
 const departmentTotalWeight = computed(() => {
@@ -145,7 +297,7 @@ const departmentTotalWeight = computed(() => {
     return 0
   }
 
-  const deptIndicators = strategicStore.indicators.filter(
+  const deptIndicators = normalizedIndicators.value.filter(
     i =>
       (!i.year || i.year === timeContext.currentYear) &&
       i.isStrategic === true && // 只计算战略指标（一级指标）
@@ -190,20 +342,20 @@ const overallStatus = computed(() => {
   if (allDraft) {
     return { label: '草稿', type: 'info' }
   }
-  if (hasDistributed) {
-    return { label: '部分下发', type: 'warning' }
-  }
+  // 业务要求: 页面状态仅保留四种（暂无指标/草稿/待审核/已下发），不显示“部分”状态。
+  // 若出现混合状态（历史数据或中间态），按优先级收敛展示:
+  // 待审核 > 草稿 > 已下发
   if (hasPendingReview) {
-    return { label: '部分待审核', type: 'warning' }
+    return { label: '待审核', type: 'warning' }
   }
-
-  // 如果所有指标都是 ACTIVE 状态（旧数据），视为已下发
-  const allActive = list.every(i => i.status === 'ACTIVE')
-  if (allActive) {
+  if (allDraft || list.some(i => !i.status || i.status === IndicatorStatus.DRAFT)) {
+    return { label: '草稿', type: 'info' }
+  }
+  if (hasDistributed) {
     return { label: '已下发', type: 'success' }
   }
 
-  // Defensive fallback: 默认为草稿状态
+  // Defensive fallback
   return { label: '草稿', type: 'info' }
 })
 
@@ -337,7 +489,7 @@ const _currentTask = computed(
 // 从 Store 获取指标列表（带里程碑），按年份和部门过滤，按任务类型和战略任务分组排序
 const indicators = computed(() => {
   // 过滤当前年份的指标
-  let list = strategicStore.indicators.filter(i => !i.year || i.year === timeContext.currentYear)
+  let list = normalizedIndicators.value.filter(i => !i.year || i.year === timeContext.currentYear)
 
   // 根据选中的部门筛选指标
   if (selectedDepartment.value) {
@@ -1273,7 +1425,7 @@ const approvalIndicators = computed(() => {
   if (!selectedDepartment.value) {
     return []
   }
-  return strategicStore.indicators
+  return normalizedIndicators.value
     .filter(i => !i.year || i.year === timeContext.currentYear)
     .filter(i => i.responsibleDept === selectedDepartment.value) // 只显示当前选中部门的指标
     .filter(i => i.isStrategic === true) // 只显示战略指标（一级指标）
@@ -1452,64 +1604,6 @@ const handleViewDetail = (row: StrategicIndicator) => {
 const isStrategicDept = computed(() => {
   return authStore.userRole === 'strategic_dept' || props.selectedRole === 'strategic_dept'
 })
-
-// 计算指标权重总和（用于提交审核验证）
-const getIndicatorWeightSum = (indicator: StrategicIndicator): number => {
-  // 如果指标有子指标，计算子指标权重总和
-  // 否则返回指标自身权重
-  return indicator.weight || 0
-}
-
-// 提交指标进行定义审核
-const submitIndicatorForReview = async (indicatorId: string) => {
-  try {
-    const indicator = indicators.value.find(i => i.id.toString() === indicatorId)
-    if (!indicator) {
-      ElMessage.error('找不到指标')
-      return
-    }
-
-    // 验证权重总和是否为100
-    const weightSum = getIndicatorWeightSum(indicator)
-    if (weightSum !== 100) {
-      ElMessage.warning(`权重总和必须为100，当前为${weightSum}`)
-      return
-    }
-
-    ElMessageBox.confirm(`确认提交指标 "${indicator.name}" 进行审核？`, '提交审核', {
-      confirmButtonText: '确认提交',
-      cancelButtonText: '取消',
-      type: 'info'
-    })
-      .then(async () => {
-        const loading = ElLoading.service({
-          lock: true,
-          text: '正在提交审核...',
-          background: 'rgba(0, 0, 0, 0.7)'
-        })
-
-        try {
-          await indicatorApi.submitIndicatorForReview(indicatorId)
-          ElMessage.success('已提交审核')
-
-          // 重新加载指标数据
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-          updateEditTime()
-        } catch (error) {
-          logger.error('提交审核失败:', error)
-          ElMessage.error('提交审核失败，请重试')
-        } finally {
-          loading.close()
-        }
-      })
-      .catch(() => {
-        // 用户取消操作
-      })
-  } catch (error) {
-    logger.error('提交审核失败:', error)
-    ElMessage.error('提交审核失败')
-  }
-}
 
 // 审核通过指标定义
 const approveIndicatorReview = async (indicatorId: string) => {
@@ -2513,7 +2607,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                   placement="left"
                   :width="320"
                   trigger="hover"
-                  :disabled="!row.milestones?.length"
+                  :disabled="isMilestoneLoading(row.id) || !row.milestones?.length"
                 >
                   <template #reference>
                     <div
@@ -2523,7 +2617,11 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                     >
                       <span class="milestone-count">
                         {{
-                          row.milestones?.length ? `${row.milestones.length} 个里程碑` : '未设置'
+                          isMilestoneLoading(row.id)
+                            ? '加载中...'
+                            : row.milestones?.length
+                              ? `${row.milestones.length} 个里程碑`
+                              : '未设置'
                         }}
                       </span>
                     </div>
@@ -2576,17 +2674,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             <el-table-column label="操作" width="180" align="center">
               <template #default="{ row }">
                 <div class="action-buttons-inline">
-                  <!-- 提交审核按钮 - 草稿状态 -->
-                  <el-button
-                    v-if="row.status === IndicatorStatus.DRAFT"
-                    link
-                    type="primary"
-                    size="small"
-                    @click="submitIndicatorForReview(row.id.toString())"
-                  >
-                    提交审核
-                  </el-button>
-
                   <!-- 审核通过按钮 - 待审核状态且是战略发展部 -->
                   <el-button
                     v-if="row.status === IndicatorStatus.PENDING_REVIEW && isStrategicDept"
