@@ -38,9 +38,11 @@ jobs:
         run: |
           # Stop memory-intensive services during build
           sudo systemctl stop n8n || true
+          sudo systemctl stop sism-backend || true
           # Clear page cache to free memory
           sync && sudo sysctl -w vm.drop_caches=3 2>/dev/null || true
           echo "Memory freed for build"
+          free -h
 
       - name: Install dependencies
         run: npm ci
@@ -55,6 +57,7 @@ jobs:
 
       - name: Restart services
         run: |
+          sudo systemctl start sism-backend || true
           sudo systemctl start n8n || true
           echo "Services restarted"
 
