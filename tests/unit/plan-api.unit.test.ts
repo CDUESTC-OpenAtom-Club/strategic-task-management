@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cacheManager } from '@/5-shared/lib/utils/cache'
 
 const apiGetMock = vi.fn()
 
@@ -15,6 +16,8 @@ vi.mock('@/3-features/approval/api/approval', () => ({
 describe('planApi.getAllPlans', () => {
   beforeEach(() => {
     apiGetMock.mockReset()
+    cacheManager.clear()
+    cacheManager.resetStats()
   })
 
   it('unwraps paged items payloads returned by backend', async () => {
@@ -32,7 +35,8 @@ describe('planApi.getAllPlans', () => {
     const result = await planApi.getAllPlans()
 
     expect(apiGetMock).toHaveBeenCalledWith('/plans')
-    expect(result.data).toEqual([plan])
+    expect(result.data).toHaveLength(1)
+    expect(result.data?.[0]).toMatchObject(plan)
   })
 
   it('unwraps content payloads returned by backend page objects', async () => {
@@ -49,6 +53,7 @@ describe('planApi.getAllPlans', () => {
     const { planApi } = await import('@/3-features/plan/api/planApi')
     const result = await planApi.getAllPlans()
 
-    expect(result.data).toEqual([plan])
+    expect(result.data).toHaveLength(1)
+    expect(result.data?.[0]).toMatchObject(plan)
   })
 })

@@ -176,7 +176,7 @@ const handleSubmit = async () => {
     loading.value = true
 
     // 调用API修改密码
-    const response = await api.put('/api/user/password', {
+    const response = await api.post('/profile/password', {
       oldPassword: form.oldPassword,
       newPassword: form.newPassword
     })

@@ -7,11 +7,7 @@ import type {
 } from '@/5-shared/types'
 import { logger } from '@/5-shared/lib/utils/logger'
 // 导入统一的 IndicatorVO 和 MilestoneVO 接口，避免重复定义
-import type {
-  IndicatorVO,
-  MilestoneVO,
-  IndicatorCreateRequest
-} from '@/5-shared/types/backend-aligned'
+import type { IndicatorVO, IndicatorCreateRequest } from '@/5-shared/types/backend-aligned'
 
 /**
  * 重试辅助函数 - 使用指数退避策略
@@ -54,21 +50,6 @@ async function withRetry<T>(fn: () => Promise<T>, maxRetries: number = 3): Promi
  * 包含指标下发相关的接口
  */
 
-export interface MilestoneVO {
-  milestoneId: number
-  indicatorId: number
-  indicatorDesc: string
-  milestoneName: string
-  milestoneDesc?: string
-  dueDate: string
-  weightPercent: number
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'DELAYED' | 'CANCELED'
-  sortOrder: number
-  inheritedFromId?: number
-  createdAt: string
-  updatedAt: string
-}
-
 export const indicatorApi = {
   /**
    * 获取所有活跃指标
@@ -97,21 +78,40 @@ export const indicatorApi = {
    * 获取任务的根指标
    */
   async getRootIndicatorsByTask(taskId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/task/${taskId}/root`)
+    const response = await apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/task/${taskId}`)
+    const payload = Array.isArray(response?.data) ? response.data : []
+    return {
+      ...response,
+      data: payload.filter(item => !('parentIndicatorId' in (item as Record<string, unknown>)))
+    }
   },
 
   /**
    * 按发布方组织获取指标
    */
   async getIndicatorsByOwnerOrg(ownerOrgId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/owner/${ownerOrgId}`)
+    const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+    const payload = Array.isArray(response?.data) ? response.data : []
+    return {
+      ...response,
+      data: payload.filter(
+        item => String((item as Record<string, unknown>).ownerOrgId ?? '') === ownerOrgId
+      )
+    }
   },
 
   /**
    * 按责任方组织获取指标
    */
   async getIndicatorsByTargetOrg(targetOrgId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/target/${targetOrgId}`)
+    const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+    const payload = Array.isArray(response?.data) ? response.data : []
+    return {
+      ...response,
+      data: payload.filter(
+        item => String((item as Record<string, unknown>).targetOrgId ?? '') === targetOrgId
+      )
+    }
   },
 
   /**
@@ -129,9 +129,17 @@ export const indicatorApi = {
   async checkDistributionEligibility(
     indicatorId: string
   ): Promise<ApiResponse<IndicatorDistributionEligibility>> {
-    return apiClient.get<ApiResponse<IndicatorDistributionEligibility>>(
-      `/indicators/${indicatorId}/distribution-eligibility`
+    const response = await apiClient.get<ApiResponse<Record<string, unknown>>>(
+      `/indicators/${indicatorId}/distribution-status`
     )
+    const currentStatus = String(response?.data ?? '').toUpperCase()
+    return {
+      ...response,
+      data: {
+        eligible: currentStatus !== 'DISTRIBUTED',
+        reason: currentStatus === 'DISTRIBUTED' ? '指标已下发' : undefined
+      } as IndicatorDistributionEligibility
+    }
   },
 
   /**
@@ -177,12 +185,25 @@ export const indicatorApi = {
     request: BatchDistributionRequest
   ): Promise<ApiResponse<IndicatorVO[]>> {
     return withRetry(async () => {
-      const params = request.actorUserId ? `?actorUserId=${request.actorUserId}` : ''
+      const results = await Promise.all(
+        request.targetOrgIds.map(targetOrgId => {
+          const params = new URLSearchParams()
+          params.append('targetOrgId', targetOrgId)
+          if (request.actorUserId) {
+            params.append('actorUserId', request.actorUserId)
+          }
 
-      return apiClient.post<ApiResponse<IndicatorVO[]>>(
-        `/indicators/${request.parentIndicatorId}/distribute/batch${params}`,
-        request.targetOrgIds.map(id => parseInt(id, 10))
+          return apiClient.post<ApiResponse<IndicatorVO>>(
+            `/indicators/${request.parentIndicatorId}/distribute?${params.toString()}`
+          )
+        })
       )
+
+      return {
+        success: true,
+        data: results.flatMap(result => (result?.data ? [result.data] : [])),
+        message: '批量下发成功'
+      } as ApiResponse<IndicatorVO[]>
     })
   },
 
@@ -190,7 +211,14 @@ export const indicatorApi = {
    * 获取已下发的子指标列表
    */
   async getDistributedIndicators(parentIndicatorId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/${parentIndicatorId}/distributed`)
+    const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+    const payload = Array.isArray(response?.data) ? response.data : []
+    return {
+      ...response,
+      data: payload.filter(
+        item => String((item as Record<string, unknown>).parentIndicatorId ?? '') === parentIndicatorId
+      )
+    }
   },
 
   /**
@@ -209,7 +237,7 @@ export const indicatorApi = {
     updates: Partial<IndicatorVO>
   ): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
-      return apiClient.put<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`, updates)
+      return apiClient.post<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}/breakdown`, updates)
     })
   },
 
@@ -241,7 +269,7 @@ export const indicatorApi = {
    */
   async deleteIndicator(indicatorId: string): Promise<ApiResponse<void>> {
     return withRetry(async () => {
-      return apiClient.delete<ApiResponse<void>>(`/indicators/${indicatorId}`)
+      return apiClient.post<ApiResponse<void>>(`/indicators/${indicatorId}/terminate`)
     })
   }
 }

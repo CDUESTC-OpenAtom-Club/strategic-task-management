@@ -13,7 +13,7 @@ export const userApi = {
     oldPassword: string
     newPassword: string
   }): Promise<ApiResponse<void>> {
-    return api.put('/user/password', data)
+    return api.post('/profile/password', data)
   },
 
   /**
@@ -25,14 +25,18 @@ export const userApi = {
     userId: string | number,
     newPassword: string
   ): Promise<ApiResponse<void>> {
-    return api.put(`/admin/users/${userId}/password`, { newPassword })
+    void userId
+    void newPassword
+    return Promise.reject(
+      new Error('当前 OpenAPI 未提供管理员重置密码接口，请通过用户自行修改密码处理')
+    )
   },
 
   /**
    * 获取所有用户列表 (管理员)
    */
   async getAllUsers(): Promise<ApiResponse<User[]>> {
-    return api.get('/admin/users')
+    return api.get('/auth/users')
   }
 }
 

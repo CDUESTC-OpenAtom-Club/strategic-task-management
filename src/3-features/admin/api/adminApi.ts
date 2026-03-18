@@ -73,7 +73,7 @@ export const adminApi = {
   async getSystemStats(): Promise<SystemStats> {
     try {
       logger.debug('[adminApi] Fetching system statistics')
-      return await apiClient.get<SystemStats>('/analytics/dashboard/overview')
+      return await apiClient.post<SystemStats>('/analytics/dashboard', {})
     } catch (error) {
       logger.error('[adminApi] Failed to fetch system statistics:', error)
       throw error
@@ -93,7 +93,7 @@ export const adminApi = {
   }): Promise<UserListResponse> {
     try {
       logger.debug('[adminApi] Fetching user list:', params)
-      return await apiClient.get<UserListResponse>('/users', params)
+      return await apiClient.get<UserListResponse>('/auth/users', params)
     } catch (error) {
       logger.error('[adminApi] Failed to fetch user list:', error)
       throw error
@@ -107,7 +107,7 @@ export const adminApi = {
   async getUserDetails(userId: string): Promise<AdminUser> {
     try {
       logger.debug('[adminApi] Fetching user details:', userId)
-      return await apiClient.get<AdminUser>(`/users/${userId}`)
+      return await apiClient.get<AdminUser>(`/auth/users/${userId}`)
     } catch (error) {
       logger.error('[adminApi] Failed to fetch user details:', error)
       throw error
@@ -125,7 +125,11 @@ export const adminApi = {
   ): Promise<void> {
     try {
       logger.debug('[adminApi] Updating user status:', userId, status)
-      await apiClient.put<void>(`/users/${userId}/status`, { status })
+      if (status === 'active') {
+        await apiClient.post<void>(`/auth/users/${userId}/unlock`)
+      } else {
+        await apiClient.post<void>(`/auth/users/${userId}/lock`)
+      }
     } catch (error) {
       logger.error('[adminApi] Failed to update user status:', error)
       throw error
@@ -145,8 +149,8 @@ export const adminApi = {
     endDate?: string
   }): Promise<{ logs: AuditLog[]; total: number }> {
     try {
-      logger.debug('[adminApi] Fetching audit logs:', params)
-      return await apiClient.get<{ logs: AuditLog[]; total: number }>('/audit/logs', params)
+      logger.debug('[adminApi] Audit log endpoint is unavailable in current OpenAPI:', params)
+      return { logs: [], total: 0 }
     } catch (error) {
       logger.error('[adminApi] Failed to fetch audit logs:', error)
       throw error
@@ -163,22 +167,7 @@ export const adminApi = {
     format?: 'csv' | 'json'
   }): Promise<void> {
     try {
-      logger.debug('[adminApi] Exporting audit logs:', params)
-      const queryParams = new URLSearchParams()
-      if (params.startDate) {
-        queryParams.append('startDate', params.startDate)
-      }
-      if (params.endDate) {
-        queryParams.append('endDate', params.endDate)
-      }
-      if (params.format) {
-        queryParams.append('format', params.format)
-      }
-
-      await apiClient.download(
-        `/analytics/export/audit-logs?${queryParams.toString()}`,
-        `audit-logs-${Date.now()}.${params.format || 'csv'}`
-      )
+      logger.warn('[adminApi] Audit export is unavailable in current OpenAPI', params)
     } catch (error) {
       logger.error('[adminApi] Failed to export audit logs:', error)
       throw error

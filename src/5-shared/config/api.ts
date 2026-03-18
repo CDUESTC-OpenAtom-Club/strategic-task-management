@@ -4,13 +4,46 @@
  * API endpoints and configuration
  */
 
+function readStringEnv(key: keyof ImportMetaEnv): string | undefined {
+  const value = import.meta.env[key]
+  if (typeof value !== 'string') {
+    return undefined
+  }
+
+  const trimmedValue = value.trim()
+  return trimmedValue ? trimmedValue : undefined
+}
+
 /**
  * API base URL
  */
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+export const API_BASE_URL = readStringEnv('VITE_API_BASE_URL') || '/api/v1'
+
+/**
+ * Mock mode flag
+ */
+export const USE_MOCK = readStringEnv('VITE_USE_MOCK') === 'true'
+
+function deriveApiTarget(): string {
+  const explicitApiTarget = readStringEnv('VITE_API_TARGET')
+  if (explicitApiTarget) {
+    return explicitApiTarget.replace(/\/$/, '')
+  }
+
+  if (typeof window !== 'undefined') {
+    return window.location.origin
+  }
+
+  return ''
+}
+
+/**
+ * Backend target URL for diagnostics and proxy-aware config
+ */
+export const API_TARGET = deriveApiTarget()
 
 function deriveWebSocketBaseUrl(): string {
-  const explicitWsBaseUrl = import.meta.env.VITE_WS_BASE_URL?.trim()
+  const explicitWsBaseUrl = readStringEnv('VITE_WS_BASE_URL')
   if (explicitWsBaseUrl) {
     return explicitWsBaseUrl.replace(/\/$/, '')
   }
@@ -20,14 +53,19 @@ function deriveWebSocketBaseUrl(): string {
     return `${protocol}//${window.location.host}`
   }
 
-  const apiTarget = import.meta.env.VITE_API_TARGET?.trim()
-  if (apiTarget) {
-    return apiTarget
+  if (API_TARGET) {
+    return API_TARGET
       .replace(/^http:/, 'ws:')
       .replace(/^https:/, 'wss:')
       .replace(/\/$/, '')
   }
-  return 'ws://localhost:8080'
+
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}`
+  }
+
+  return ''
 }
 
 /**
@@ -38,7 +76,7 @@ export const WS_BASE_URL = deriveWebSocketBaseUrl()
 /**
  * API timeout (ms)
  */
-export const API_TIMEOUT = 30000
+export const API_TIMEOUT = Number(readStringEnv('VITE_REQUEST_TIMEOUT') || 30000)
 
 /**
  * API endpoints
@@ -48,18 +86,21 @@ export const API_ENDPOINTS = {
   auth: {
     login: '/auth/login',
     logout: '/auth/logout',
-    refresh: '/auth/refresh',
     userInfo: '/auth/me',
-    register: '/auth/register'
+    validate: '/auth/validate',
+    register: '/auth/register',
+    refresh: '/auth/refresh'
   },
 
   // Users
   users: {
-    list: '/users',
-    detail: (id: string) => `/users/${id}`,
-    create: '/users',
-    update: (id: string) => `/users/${id}`,
-    delete: (id: string) => `/users/${id}`
+    list: '/auth/users',
+    detail: (id: string) => `/auth/users/${id}`,
+    create: '/auth/users',
+    update: (id: string) => `/auth/users/${id}`,
+    delete: (id: string) => `/auth/users/${id}`,
+    byUsername: (username: string) => `/auth/users/username/${username}`,
+    byOrg: (orgId: string) => `/auth/users/org/${orgId}`
   },
 
   // Organizations
@@ -74,27 +115,29 @@ export const API_ENDPOINTS = {
     list: '/indicators',
     detail: (id: string) => `/indicators/${id}`,
     create: '/indicators',
-    update: (id: string) => `/indicators/${id}`,
-    delete: (id: string) => `/indicators/${id}`,
     distribute: (id: string) => `/indicators/${id}/distribute`,
-    distributeBatch: (id: string) => `/indicators/${id}/distribute/batch`,
-    distributionEligibility: (id: string) => `/indicators/${id}/distribution-eligibility`,
-    distributed: (id: string) => `/indicators/${id}/distributed`,
+    breakdown: (id: string) => `/indicators/${id}/breakdown`,
+    distributionStatus: (id: string) => `/indicators/${id}/distribution-status`,
+    submit: (id: string) => `/indicators/${id}/submit`,
+    approve: (id: string) => `/indicators/${id}/approve`,
+    reject: (id: string) => `/indicators/${id}/reject`,
+    withdraw: (id: string) => `/indicators/${id}/withdraw`,
+    terminate: (id: string) => `/indicators/${id}/terminate`,
     search: '/indicators/search',
-    byTask: (taskId: string) => `/indicators/task/${taskId}`,
-    rootByTask: (taskId: string) => `/indicators/task/${taskId}/root`,
-    byOwnerOrg: (orgId: string) => `/indicators/owner/${orgId}`,
-    byTargetOrg: (orgId: string) => `/indicators/target/${orgId}`
+    byTask: (taskId: string) => `/indicators/task/${taskId}`
   },
 
   // Plans
   plans: {
     list: '/plans',
     detail: (id: string) => `/plans/${id}`,
+    details: (id: string) => `/plans/${id}/details`,
     create: '/plans',
     update: (id: string) => `/plans/${id}`,
     delete: (id: string) => `/plans/${id}`,
-    submitApproval: (id: string) => `/plans/${id}/submit-approval`
+    publish: (id: string) => `/plans/${id}/publish`,
+    archive: (id: string) => `/plans/${id}/archive`,
+    byCycle: (cycleId: string) => `/plans/cycle/${cycleId}`
   },
 
   // Tasks
@@ -134,13 +177,17 @@ export const API_ENDPOINTS = {
 
   // Analytics
   analytics: {
-    dashboard: '/analytics/dashboard',
-    performanceReport: '/analytics/performance-report'
+    dashboard: '/analytics/dashboard'
   },
 
-  // File upload
-  files: {
-    upload: '/files/upload',
-    download: (id: string) => `/files/${id}/download`
+  notifications: {
+    list: '/notifications',
+    detail: (id: string) => `/notifications/${id}`,
+    status: (id: string, newStatus: string) =>
+      `/notifications/${id}/status?newStatus=${encodeURIComponent(newStatus)}`,
+    handle: (id: string, handledByUserId: string | number, handledNote?: string) =>
+      `/notifications/${id}/handle?handledByUserId=${encodeURIComponent(String(handledByUserId))}${
+        handledNote ? `&handledNote=${encodeURIComponent(handledNote)}` : ''
+      }`
   }
 } as const

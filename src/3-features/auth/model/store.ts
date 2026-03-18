@@ -8,11 +8,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User, UserRole } from '@/5-shared/types'
-import api from '@/5-shared/api'
 import { logger } from '@/5-shared/lib/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/5-shared/lib/utils/tokenManager'
 import { parseLoginResponse, mapBackendUser } from '@/5-shared/lib/utils/authHelpers'
 import { useTimeContextStore } from '@/5-shared/lib/timeContext'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
+import { orgApi } from '@/3-features/organization/api'
 
 export const useAuthStore = defineStore('auth', () => {
   // ============ State ============
@@ -24,6 +25,24 @@ export const useAuthStore = defineStore('auth', () => {
   // 视角切换状态（用于战略发展部查看其他部门视角）
   const viewingAsRole = ref<UserRole | null>(null)
   const viewingAsDepartment = ref<string | null>(null)
+
+  const persistUser = (value: User | null) => {
+    if (value) {
+      localStorage.setItem('currentUser', JSON.stringify(value))
+      localStorage.setItem('user', JSON.stringify(value))
+      return
+    }
+
+    localStorage.removeItem('currentUser')
+    localStorage.removeItem('user')
+  }
+
+  const clearLegacyAccessTokenStorage = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('auth_token')
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('accessToken')
+  }
 
   // ============ Getters ============
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -60,15 +79,20 @@ export const useAuthStore = defineStore('auth', () => {
   ): Promise<Record<string, unknown>> => {
     const orgId = userData.orgId
 
-    if (!orgId) {
+    const hasOrgMetadata = Boolean(
+      String(userData.orgName ?? userData.department ?? '').trim() &&
+      String(userData.orgType ?? userData.role ?? '').trim()
+    )
+
+    if (hasOrgMetadata || !orgId) {
       return userData
     }
 
     try {
-      const response = await api.get('/organizations')
+      const organizations = await orgApi.getAllOrgs()
 
-      if (response.success && Array.isArray(response.data)) {
-        const matchedOrg = response.data.find((org: Record<string, unknown>) => {
+      if (Array.isArray(organizations) && organizations.length > 0) {
+        const matchedOrg = organizations.find((org: Record<string, unknown>) => {
           const candidateId = org.id ?? org.orgId
           return String(candidateId) === String(orgId)
         })
@@ -82,7 +106,12 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
     } catch (error) {
-      logger.warn('⚠️ [Auth] 补全组织信息失败，将使用登录响应中的原始用户数据:', error)
+      const errorCode = (error as { code?: number }).code
+      if (errorCode === 403) {
+        logger.info('ℹ️ [Auth] 当前账号无组织列表权限，直接使用登录响应中的组织信息')
+      } else {
+        logger.warn('⚠️ [Auth] 补全组织信息失败，将使用登录响应中的原始用户数据:', error)
+      }
     }
 
     return userData
@@ -107,7 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
 
         token.value = loginToken
         tokenManager.setAccessToken(loginToken)
-        localStorage.setItem('token', loginToken)
+        clearLegacyAccessTokenStorage()
         if (refreshToken) {
           localStorage.setItem('refreshToken', refreshToken)
         }
@@ -117,8 +146,8 @@ export const useAuthStore = defineStore('auth', () => {
         logger.debug('?[Auth] 映射后的用户:', mappedUser)
 
         user.value = mappedUser
-        localStorage.setItem('currentUser', JSON.stringify(mappedUser))
-        localStorage.setItem('user', JSON.stringify(mappedUser))
+        persistUser(mappedUser)
+        invalidateQueries(['auth.user'])
 
         logger.debug('?[Auth] 登录状态已保存')
 
@@ -163,11 +192,10 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     token.value = null
     tokenManager.clearAccessToken()
-    localStorage.removeItem('currentUser')
-    localStorage.removeItem('user')
-    localStorage.removeItem('token')
-    localStorage.removeItem('auth_token')
+    persistUser(null)
+    clearLegacyAccessTokenStorage()
     localStorage.removeItem('refreshToken')
+    invalidateQueries(['auth.user'])
 
     logger.debug('[Auth] 用户已登出，所有凭证已清除')
 
@@ -182,14 +210,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      const response = await api.get('/auth/me')
+      const response = await fetchWithCache({
+        key: buildQueryKey('auth', 'user'),
+        policy: {
+          ttlMs: 10 * 60 * 1000,
+          scope: 'session',
+          persist: true,
+          dedupeWindowMs: 1000,
+          tags: ['auth.user']
+        },
+        fetcher: () => api.get('/auth/me'),
+        force: true
+      })
 
       if (response.success && response.data) {
         const enrichedUserData = await enrichUserWithOrganization(response.data)
         const mappedUser = mapBackendUser(enrichedUserData)
         user.value = mappedUser
-        localStorage.setItem('currentUser', JSON.stringify(mappedUser))
-        localStorage.setItem('user', JSON.stringify(mappedUser))
+        persistUser(mappedUser)
       } else {
         logout()
       }
@@ -235,8 +273,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   const initializeAuth = async () => {
     const savedUser = localStorage.getItem('currentUser')
-    const savedToken = localStorage.getItem('token')
     const memoryToken = tokenManager.getAccessToken()
+    clearLegacyAccessTokenStorage()
 
     if (memoryToken && savedUser) {
       try {
@@ -246,22 +284,6 @@ export const useAuthStore = defineStore('auth', () => {
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
-          return
-        }
-      } catch (e) {
-        logger.error('[Auth] 解析用户信息失败:', e)
-      }
-    }
-
-    if (savedToken && savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser)
-        if (parsedUser && parsedUser.role) {
-          tokenManager.setAccessToken(savedToken)
-          user.value = parsedUser
-          token.value = savedToken
-          localStorage.setItem('user', JSON.stringify(parsedUser))
-          logger.debug('[Auth] ?localStorage 恢复会话:', parsedUser.name, parsedUser.role)
           return
         }
       } catch (e) {
@@ -279,8 +301,7 @@ export const useAuthStore = defineStore('auth', () => {
         if (parsedUser && parsedUser.role) {
           user.value = parsedUser
           token.value = newToken
-          localStorage.setItem('token', newToken)
-          localStorage.setItem('user', JSON.stringify(parsedUser))
+          persistUser(parsedUser)
           logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
         } else {
           logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
@@ -298,7 +319,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
     }
 
-    localStorage.removeItem('auth_token')
+    clearLegacyAccessTokenStorage()
   }
 
   // 立即初始?

@@ -433,7 +433,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取告警统计成功',
           timestamp: Date.now()
         })
-      } else if (normalizedPath === '/api/alerts/events/unclosed' && method === 'GET') {
+      } else if (normalizedPath === '/api/alerts/unresolved' && method === 'GET') {
         sendJson(res, 200, {
           code: 200,
           success: true,
@@ -473,7 +473,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '审批驳回成功',
           timestamp: Date.now()
         })
-      } else if (normalizedPath === '/api/admin/users' && method === 'GET') {
+      } else if (normalizedPath === '/api/auth/users' && method === 'GET') {
         sendJson(res, 200, {
           code: 200,
           success: true,
@@ -489,7 +489,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取用户列表成功',
           timestamp: Date.now()
         })
-      } else if (normalizedPath === '/api/admin/users' && method === 'POST') {
+      } else if (normalizedPath === '/api/auth/users' && method === 'POST') {
         const body = await parseBody(req)
         const orgId = Number(body.orgId || 1)
         const newUser = {
@@ -500,8 +500,8 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           phone: String(body.phone || ''),
           orgId,
           orgName: mockOrgs.find(org => org.orgId === orgId)?.orgName || '战略发展部',
-          roles: Array.isArray(body.roleIds)
-            ? body.roleIds.map((roleCode: string) => ({ roleCode }))
+          roles: Array.isArray(body.roles)
+            ? body.roles.map((roleCode: string) => ({ roleCode }))
             : [{ roleCode: 'secondary_college' }],
           status: body.status === 'disabled' ? 'disabled' : 'active',
           lastLoginAt: '',
@@ -518,7 +518,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '创建用户成功',
           timestamp: Date.now()
         })
-      } else if (/^\/api\/admin\/users\/\d+$/.test(normalizedPath) && method === 'PUT') {
+      } else if (/^\/api\/auth\/users\/\d+$/.test(normalizedPath) && method === 'PUT') {
         const body = await parseBody(req)
         const userId = Number(normalizedPath.split('/').pop())
         const userIndex = mockAdminUsers.findIndex(user => user.id === userId)
@@ -544,8 +544,8 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           phone: String(body.phone || existingUser.phone),
           orgId,
           orgName: mockOrgs.find(org => org.orgId === orgId)?.orgName || existingUser.orgName,
-          roles: Array.isArray(body.roleIds)
-            ? body.roleIds.map((roleCode: string) => ({ roleCode }))
+          roles: Array.isArray(body.roles)
+            ? body.roles.map((roleCode: string) => ({ roleCode }))
             : existingUser.roles,
           status: body.status === 'disabled' ? 'disabled' : existingUser.status,
           updatedAt: new Date().toISOString()
@@ -560,7 +560,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '更新用户成功',
           timestamp: Date.now()
         })
-      } else if (/^\/api\/admin\/users\/\d+\/status$/.test(normalizedPath) && method === 'PATCH') {
+      } else if (/^\/api\/auth\/users\/\d+\/lock$/.test(normalizedPath) && method === 'POST') {
         const userId = Number(normalizedPath.split('/')[4])
         const user = mockAdminUsers.find(item => item.id === userId)
 
@@ -575,7 +575,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           return
         }
 
-        user.status = query.get('isActive') === 'true' ? 'active' : 'disabled'
+        user.status = 'disabled'
         user.updatedAt = new Date().toISOString()
 
         sendJson(res, 200, {
@@ -585,15 +585,32 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '更新用户状态成功',
           timestamp: Date.now()
         })
-      } else if (/^\/api\/admin\/users\/\d+\/password$/.test(normalizedPath) && method === 'PUT') {
+      } else if (/^\/api\/auth\/users\/\d+\/unlock$/.test(normalizedPath) && method === 'POST') {
+        const userId = Number(normalizedPath.split('/')[4])
+        const user = mockAdminUsers.find(item => item.id === userId)
+
+        if (!user) {
+          sendJson(res, 404, {
+            code: 404,
+            success: false,
+            data: null,
+            message: '用户不存在',
+            timestamp: Date.now()
+          })
+          return
+        }
+
+        user.status = 'active'
+        user.updatedAt = new Date().toISOString()
+
         sendJson(res, 200, {
           code: 200,
           success: true,
-          data: { updated: true },
-          message: '重置密码成功',
+          data: user,
+          message: '更新用户状态成功',
           timestamp: Date.now()
         })
-      } else if (/^\/api\/admin\/users\/\d+$/.test(normalizedPath) && method === 'DELETE') {
+      } else if (/^\/api\/auth\/users\/\d+$/.test(normalizedPath) && method === 'DELETE') {
         const userId = Number(normalizedPath.split('/').pop())
         const userIndex = mockAdminUsers.findIndex(user => user.id === userId)
 

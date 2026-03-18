@@ -16,6 +16,7 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type CancelTokenSource } from 'axios'
 import { setupRequestInterceptors, setupResponseInterceptors } from './interceptors'
 import { createRetryInterceptor } from '@/5-shared/api/retry'
+import { API_BASE_URL, API_TIMEOUT } from '@/5-shared/config/api'
 
 /**
  * API Client configuration
@@ -50,8 +51,8 @@ export class ApiClient {
 
   constructor(config: ApiClientConfig = {}) {
     const {
-      baseURL = '/api/v1',
-      timeout = 30000,
+      baseURL = API_BASE_URL,
+      timeout = API_TIMEOUT,
       enableRetry = true,
       maxRetries = 3,
       enableLogging = import.meta.env.DEV
@@ -247,8 +248,8 @@ export function createApiClient(config?: ApiClientConfig): ApiClient {
  * Default API client instance
  */
 export const apiClient = createApiClient({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000,
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT,
   enableRetry: true,
   maxRetries: 3,
   enableLogging: import.meta.env.DEV

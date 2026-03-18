@@ -57,11 +57,11 @@ export async function getPlansByStatus(status: string): Promise<ApiResponse<Plan
 /**
  * Search plans
  *
- * API: GET /api/plans/search
+ * API: GET /api/plans?keyword={keyword}
  *
  * @param keyword - Search keyword
  * @returns Matching plans
  */
 export async function searchPlans(keyword: string): Promise<ApiResponse<Plan[]>> {
-  return api.get('/plans/search', { keyword })
+  return api.get('/plans', { keyword })
 }

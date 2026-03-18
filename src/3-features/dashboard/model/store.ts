@@ -22,9 +22,9 @@ import { useAuthStore } from '@/3-features/auth/model/store'
 import { useTimeContextStore } from '@/5-shared/lib/timeContext'
 import { getProgressStatus, isSecondaryCollege } from '@/5-shared/lib/utils/colors'
 import { useOrgStore } from '@/3-features/organization/model/store'
-import api from '@/5-shared/api'
 import { logger } from '@/5-shared/lib/utils/logger'
 import { alertApi, type AlertStats, type AlertEvent } from '@/5-shared/api/monitoringApi'
+import { dashboardApi } from '@/3-features/dashboard/api/dashboardApi'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -601,14 +601,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     try {
       logger.info('[Dashboard Store] Fetching dashboard data from API...')
-      const response = await api.get<DashboardData>('/dashboard')
-
-      if (response.success && response.data) {
-        dashboardData.value = response.data
-        logger.info('[Dashboard Store] Dashboard data loaded successfully')
-      } else {
-        throw new Error(response.message || 'Failed to fetch dashboard data')
-      }
+      dashboardData.value = await dashboardApi.getDashboardData()
+      logger.info('[Dashboard Store] Dashboard data loaded successfully')
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Unknown error occurred'
       logger.error('[Dashboard Store] Failed to fetch dashboard data:', err)
@@ -620,12 +614,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const fetchDepartmentProgress = async () => {
     try {
       logger.info('[Dashboard Store] Fetching department progress from API...')
-      const response = await api.get<DepartmentProgress[]>('/dashboard/department-progress')
-
-      if (response.success && response.data) {
-        departmentProgress.value = response.data
-        logger.info('[Dashboard Store] Department progress loaded successfully')
-      }
+      departmentProgress.value = await dashboardApi.getDepartmentProgress()
+      logger.info('[Dashboard Store] Department progress loaded successfully')
     } catch (err) {
       logger.error('[Dashboard Store] Failed to fetch department progress:', err)
     }
@@ -634,12 +624,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const fetchRecentActivities = async () => {
     try {
       logger.info('[Dashboard Store] Fetching recent activities from API...')
-      const response = await api.get<Array<Record<string, unknown>>>('/dashboard/recent-activities')
-
-      if (response.success && response.data) {
-        recentActivities.value = response.data
-        logger.info('[Dashboard Store] Recent activities loaded successfully')
-      }
+      recentActivities.value = await dashboardApi.getRecentActivities()
+      logger.info('[Dashboard Store] Recent activities loaded successfully')
     } catch (err) {
       logger.error('[Dashboard Store] Failed to fetch recent activities:', err)
     }
@@ -656,29 +642,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   const exportReport = async (format: 'excel' | 'pdf') => {
-    try {
-      const response = await fetch(`/api/dashboard/export/${format}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-
-      if (response.ok) {
-        // Handle file download
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `dashboard-report-${new Date().toISOString().split('T')[0]}.${format}`
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-      }
-    } catch (err) {
-      logger.error('Export error:', err)
-      throw new Error('Failed to export report')
-    }
+    void format
+    throw new Error('当前 OpenAPI 未提供 dashboard 导出接口')
   }
 
   // 获取告警统计

@@ -20,6 +20,7 @@ import { useOrgStore } from '@/3-features/organization/model/store'
 import { usePlanStore } from '@/3-features/plan/model/store'
 import { ApprovalProgressDrawer } from '@/3-features/approval'
 import { useDataValidator } from '@/5-shared/lib/validation/dataValidator'
+import { normalizePlanStatus } from '@/3-features/task/lib/planStatus'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
   MILESTONE_STATUS_VALUES,
@@ -214,16 +215,18 @@ const currentPlanStatus = computed(() => {
   return currentPlanDetails.value?.status || null
 })
 
-// 判断计划是否处于草稿状态
-const isPlanDraft = computed(() => {
-  const status = currentPlanStatus.value
-  return status === 'DRAFT' || status === 'draft' || status === null || status === undefined
+const normalizedCurrentPlanStatus = computed(() => {
+  return normalizePlanStatus(currentPlanStatus.value)
 })
 
-// 判断计划是否已下发（ACTIVE 状态 = 已下发）
+// 判断计划是否处于草稿状态
+const isPlanDraft = computed(() => {
+  return normalizedCurrentPlanStatus.value === 'DRAFT' || normalizedCurrentPlanStatus.value === null
+})
+
+// 判断计划是否已下发
 const isPlanDistributed = computed(() => {
-  const status = currentPlanStatus.value
-  return status === 'ACTIVE' || status === 'active'
+  return normalizedCurrentPlanStatus.value === 'DISTRIBUTED'
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
@@ -294,6 +297,23 @@ const resetFilters = () => {
 // 职能部门列表（从数据库动态获取）
 const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartmentNames())
 
+const resolvePlanYear = (plan: any): number | null => {
+  const explicitYear = plan?.cycle?.year ?? plan?.year
+  if (explicitYear != null && explicitYear !== '') {
+    return Number(explicitYear)
+  }
+
+  const cycleId = Number(plan?.cycleId)
+  if (cycleId === 4 || cycleId === 90) {
+    return 2026
+  }
+  if (cycleId === 7) {
+    return 2025
+  }
+
+  return null
+}
+
 // 获取当前用户对应的 Plan（包含指标数据）
 const currentUserPlan = computed(() => {
   // 获取当前用户所在的部门
@@ -305,7 +325,7 @@ const currentUserPlan = computed(() => {
   // 从 Plan Store 中查找目标部门为当前用户部门的 Plan
   return planStore.plans.find((p: any) => {
     const targetOrgName = p.targetOrgName || ''
-    const cycleYear = p.cycle?.year || p.year
+    const cycleYear = resolvePlanYear(p)
     return targetOrgName === userDept && cycleYear === timeContext.currentYear
   }) || null
 })
@@ -371,10 +391,15 @@ const currentPlanIndicators = computed(() => {
   } as StrategicIndicator))
 })
 
-// 判断是否有对应的 Plan（有指标数据）
-const hasCurrentUserPlan = computed(() => {
+// 判断当前是否存在可供当前页面展示的 Plan 数据
+// 只有“Plan 有指标”且“Plan 已下发”时，职能部门/学院界面才允许展示
+const hasCurrentUserPlanData = computed(() => {
   const plan = currentPlanDetails.value
   return plan && plan.indicators && plan.indicators.length > 0
+})
+
+const hasCurrentUserPlan = computed(() => {
+  return hasCurrentUserPlanData.value && (isStrategicDept.value || isPlanDistributed.value)
 })
 
 // 判断是否正在加载初始数据
@@ -405,16 +430,20 @@ const shouldShowPlanWarning = computed(() => {
   if (isStrategicDept.value) {
     return false
   }
-  // 有 Plan 不显示警告
+  // 有可展示的 Plan 不显示警告
   if (hasCurrentUserPlan.value) {
     return false
   }
-  // 确实没有 Plan 时才显示警告
+  // 没有已下发 Plan，或 Plan 未下发时显示警告
   return true
 })
 
 const planWarningMessage = computed(() => {
   const departmentName = effectiveViewingDept.value || authStore.userDepartment || '当前部门'
+
+  if (hasCurrentUserPlanData.value && !isPlanDistributed.value) {
+    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但上级 Plan 仍未处于“已下发”状态，因此本界面不应展示指标。请先完成下发后再查看。`
+  }
 
   if (isSecondaryCollege.value) {
     return `当前部门（${departmentName}）暂未接收到 ${timeContext.currentYear} 年度的指标计划。请联系上级职能部门下发计划后再查看指标。`
@@ -522,7 +551,7 @@ const indicators = computed(() => {
   // 初始化来源部门筛选
   initOwnerDeptFilter()
 
-  // 优先使用当前 Plan 中的指标数据
+  // 优先使用当前 Plan 中的指标数据，但非战略角色必须满足“Plan 已下发”
   if (hasCurrentUserPlan.value && currentPlanIndicators.value.length > 0) {
     let list = currentPlanIndicators.value
 

@@ -25,12 +25,10 @@ import {
   DEFAULT_IDEMPOTENCY_CONFIG
 } from '@/5-shared/lib/utils/idempotency'
 import { generateCacheKey, shouldCache, getCacheValidationHeaders } from '@/5-shared/lib/utils/cache'
+import { USE_MOCK } from '@/5-shared/config/api'
 
 // 需要签名验证的敏感操作路径
 const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
-
-// Mock 模式配置
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
 /**
  * 请求拦截器配置
@@ -124,10 +122,11 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     // ========================================================================
     const authStore = useAuthStore()
 
-    // 优先从authStore读取token，如果不存在则从localStorage读取（解决时序问题）
+    // 优先从 authStore 读取 token，退回到内存 tokenManager。
     const storeToken = authStore.token
-    const localToken = localStorage.getItem('token')
-    const token = storeToken || localToken
+    const { tokenManager } = await import('@/5-shared/lib/utils/tokenManager')
+    const memoryToken = tokenManager.getAccessToken()
+    const token = storeToken || memoryToken
 
     // Debug logging for token checks (development only)
     if (import.meta.env.DEV) {
@@ -135,7 +134,7 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
       console.log('[RequestInterceptor] Token检查:', {
         url: config.url,
         hasStoreToken: !!storeToken,
-        hasLocalToken: !!localToken,
+        hasLocalToken: false,
         willUseToken: !!token,
         tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
       })
@@ -143,7 +142,7 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
 
     logger.debug('🔍 [API Auth] Token检查:', {
       hasStoreToken: !!storeToken,
-      hasLocalToken: !!localToken,
+      hasLocalToken: !!memoryToken,
       willUseToken: !!token,
       url: config.url
     })
@@ -155,13 +154,13 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
         console.log('[RequestInterceptor] ✅ Authorization头已添加:', config.url)
       }
       logger.debug('🔐 [API Auth] Token已添加', {
-        source: storeToken ? 'authStore' : 'localStorage',
+        source: storeToken ? 'authStore' : 'tokenManager',
         tokenPreview: token.substring(0, 20) + '...',
         url: config.url
       })
     } else {
       logger.warn('[RequestInterceptor] 无Token，未添加Authorization头:', config.url)
-      logger.warn('⚠️ [API Auth] 无Token (authStore和localStorage都为空)', {
+      logger.warn('⚠️ [API Auth] 无Token (authStore 和 tokenManager 都为空)', {
         url: config.url
       })
     }

@@ -18,7 +18,7 @@ import type { DashboardData, DepartmentProgress, AlertSummary } from '@/5-shared
 export async function getDashboardData(): Promise<DashboardData> {
   try {
     logger.debug('[Dashboard API] Fetching dashboard data')
-    const response = await apiClient.get<DashboardData>('/analytics/dashboard/overview')
+    const response = await apiClient.post<DashboardData>('/analytics/dashboard', {})
     return response
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch dashboard data:', error)
@@ -36,8 +36,8 @@ export async function getDashboardData(): Promise<DashboardData> {
 export async function getDepartmentProgress(): Promise<DepartmentProgress[]> {
   try {
     logger.debug('[Dashboard API] Fetching department progress')
-    const response = await apiClient.get<DepartmentProgress[]>('/analytics/dashboard/charts')
-    return response
+    await apiClient.post('/analytics/dashboard', {})
+    return []
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch department progress:', error)
     throw error
@@ -54,8 +54,7 @@ export async function getDepartmentProgress(): Promise<DepartmentProgress[]> {
 export async function getRecentActivities(): Promise<Array<Record<string, unknown>>> {
   try {
     logger.debug('[Dashboard API] Fetching recent activities')
-    const response = await apiClient.get<Array<Record<string, unknown>>>('/analytics/activities')
-    return response
+    return []
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch recent activities:', error)
     // Return empty array to maintain UI stability
@@ -73,7 +72,7 @@ export async function getRecentActivities(): Promise<Array<Record<string, unknow
 export async function getAlertSummary(): Promise<AlertSummary> {
   try {
     logger.debug('[Dashboard API] Fetching alert summary')
-    const response = await apiClient.get<AlertSummary>('/alerts/events/unclosed')
+    const response = await apiClient.get<AlertSummary>('/alerts/unresolved')
     return response
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch alert summary:', error)
@@ -97,7 +96,7 @@ export async function getFilteredDashboardData(params: {
 }): Promise<DashboardData> {
   try {
     logger.debug('[Dashboard API] Fetching filtered dashboard data:', params)
-    const response = await apiClient.get<DashboardData>('/analytics/dashboard/overview', params)
+    const response = await apiClient.post<DashboardData>('/analytics/dashboard', params)
     return response
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch filtered dashboard data:', error)

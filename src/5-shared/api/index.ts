@@ -57,6 +57,11 @@ export const apiService = {
 export { formatErrorMessage, isRetryableError, getErrorSeverity } from '@/5-shared/api/errorHandler'
 export type { ExtendedErrorInfo } from '@/5-shared/types/error'
 export {
+  buildQueryKey,
+  serializeQueryKey,
+  fetchWithCache,
+  invalidateQueries,
+  queryCache,
   refreshCache,
   refreshCachePattern,
   cacheManager,

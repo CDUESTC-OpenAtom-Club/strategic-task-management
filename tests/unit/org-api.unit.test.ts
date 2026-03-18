@@ -484,7 +484,7 @@ describe('Zod Validation Error Handling', () => {
 
     it('should return success: false for wrong field types', () => {
       const invalidData = {
-        orgId: 'not-a-number', // Should be number
+        orgId: 'not-a-number',
         orgName: '测试部门',
         orgType: 'FUNCTIONAL_DEPT',
         parentOrgId: null,
@@ -504,7 +504,7 @@ describe('Zod Validation Error Handling', () => {
       const invalidData = {
         orgId: 1,
         orgName: '测试部门',
-        orgType: 'INVALID_TYPE', // Invalid enum value
+        orgType: 'INVALID_TYPE',
         parentOrgId: null,
         isActive: true,
         sortOrder: 0,
@@ -531,7 +531,6 @@ describe('Zod Validation Error Handling', () => {
     it('should provide path information for missing fields', () => {
       const invalidData = {
         orgName: '测试部门'
-        // Missing orgId
       }
       
       const result = orgVOSchema.safeParse(invalidData)
@@ -599,21 +598,20 @@ describe('Zod Validation Error Handling', () => {
     it('should list all validation errors', () => {
       const invalidData = {
         orgId: 'not-a-number',
-        orgName: 123, // Should be string
+        orgName: 123,
         orgType: 'INVALID',
-        parentOrgId: 'not-a-number', // Should be number or null
-        isActive: 'yes', // Should be boolean
-        sortOrder: 'zero', // Should be number
-        remark: 123, // Should be string or null
-        createdAt: 123, // Should be string
-        updatedAt: 123 // Should be string
+        parentOrgId: 'not-a-number',
+        isActive: 'yes',
+        sortOrder: 'zero',
+        remark: 123,
+        createdAt: 123,
+        updatedAt: 123
       }
       
       const result = orgVOSchema.safeParse(invalidData)
       
       expect(result.success).toBe(false)
       if (!result.success) {
-        // Should have multiple errors
         expect(result.error.issues.length).toBeGreaterThan(1)
       }
     })

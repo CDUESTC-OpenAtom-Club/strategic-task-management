@@ -1,22 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElTimeline, ElTimelineItem, ElTag, ElEmpty, ElCard, ElButton, ElIcon } from 'element-plus'
-import { Check, Close, Clock, Document, Picture, Download } from '@element-plus/icons-vue'
+import { computed, ref } from 'vue'
 import type { IndicatorFill } from '@/5-shared/types'
 import { usePlanStore } from '@/3-features/plan/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
-
-/**
- * 指标填报历史组件
- *
- * 展示某个指标的所有填报记录，包括：
- * - 填报日期
- * - 进度值
- * - 填报说明/批注
- * - 附件列表
- * - 审核状态
- * - 审核意见
- */
 
 const props = defineProps<{
   indicatorId: number | string
@@ -28,47 +14,30 @@ const emit = defineEmits<{
 }>()
 
 const planStore = usePlanStore()
-
-// 状态
 const loading = ref(false)
 const fills = ref<IndicatorFill[]>([])
 
-// 获取填报历史
+const sortedFills = computed(() =>
+  [...fills.value].sort(
+    (a, b) => new Date(b.fill_date).getTime() - new Date(a.fill_date).getTime()
+  )
+)
+
 const loadHistory = async () => {
   loading.value = true
+
   try {
     logger.info(`[IndicatorFillHistory] Loading history for indicator ${props.indicatorId}`)
     const history = await planStore.loadIndicatorFillHistory(props.indicatorId)
-    fills.value = history
-  } catch (err) {
-    logger.error('[IndicatorFillHistory] Failed to load history:', err)
+    fills.value = Array.isArray(history) ? history.filter(Boolean) : []
+  } catch (error) {
+    fills.value = []
+    logger.error('[IndicatorFillHistory] Failed to load history:', error)
   } finally {
     loading.value = false
   }
 }
 
-// 排序后的历史记录（最新的在前）
-const sortedFills = computed(() => {
-  return [...fills.value].sort((a, b) => {
-    return new Date(b.fill_date).getTime() - new Date(a.fill_date).getTime()
-  })
-})
-
-// 获取状态图标
-const getStatusIcon = (status?: string) => {
-  switch (status) {
-    case 'approved':
-      return Check
-    case 'rejected':
-      return Close
-    case 'submitted':
-      return Clock
-    default:
-      return Document
-  }
-}
-
-// 获取状态类型
 const getStatusType = (status?: string) => {
   switch (status) {
     case 'approved':
@@ -78,11 +47,10 @@ const getStatusType = (status?: string) => {
     case 'submitted':
       return 'warning'
     default:
-      return 'info'
+      return 'draft'
   }
 }
 
-// 获取状态标签
 const getStatusLabel = (status?: string) => {
   switch (status) {
     case 'approved':
@@ -96,319 +64,230 @@ const getStatusLabel = (status?: string) => {
   }
 }
 
-// 格式化日期
-const formatDate = (dateStr: string) => {
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) {
+    return '-'
+  }
+
   const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  if (Number.isNaN(d.getTime())) {
+    return dateStr
+  }
+
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`
 }
 
-// 格式化时间
-const formatDateTime = (dateStr: string) => {
+const formatDateTime = (dateStr?: string) => {
+  if (!dateStr) {
+    return '-'
+  }
+
   const d = new Date(dateStr)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  if (Number.isNaN(d.getTime())) {
+    return dateStr
+  }
+
+  return `${formatDate(dateStr)} ${String(d.getHours()).padStart(2, '0')}:${String(
+    d.getMinutes()
+  ).padStart(2, '0')}`
 }
 
-// 选择某条填报记录
 const selectFill = (fill: IndicatorFill) => {
   emit('select', fill)
 }
 
-// 初始化
-onMounted(() => {
-  loadHistory()
-})
-
-// 监听 indicatorId 变化
-watch(
-  () => props.indicatorId,
-  () => {
-    loadHistory()
-  }
-)
+void loadHistory()
 </script>
 
 <template>
   <div class="indicator-fill-history">
-    <div v-if="loading" class="loading-container">
-      <el-skeleton :rows="3" animated />
+    <div v-if="loading" class="state-card">
+      <p class="state-text">正在加载填报历史...</p>
     </div>
 
-    <div v-else-if="sortedFills.length === 0" class="empty-container">
-      <el-empty description="暂无填报记录" :image-size="80">
-        <template #description>
-          <p class="empty-text">该指标还没有填报记录</p>
-        </template>
-      </el-empty>
+    <div v-else-if="sortedFills.length === 0" class="state-card">
+      <p class="state-text">该指标还没有填报记录</p>
     </div>
 
-    <el-timeline v-else>
-      <el-timeline-item
+    <div v-else class="history-list">
+      <button
         v-for="fill in sortedFills"
         :key="fill.id"
-        :type="getStatusType(fill.status)"
-        :icon="getStatusIcon(fill.status)"
-        :timestamp="formatDateTime(fill.created_at)"
-        placement="top"
+        type="button"
+        class="history-card"
+        @click="selectFill(fill)"
       >
-        <el-card class="fill-card" shadow="hover" @click="selectFill(fill)">
-          <div class="fill-header">
-            <div class="fill-progress">
-              <span class="progress-label">进度</span>
-              <span class="progress-value">{{ fill.progress }}%</span>
-            </div>
-            <el-tag
-              v-if="fill.status"
-              :type="getStatusType(fill.status)"
-              size="small"
-              effect="light"
-            >
-              {{ getStatusLabel(fill.status) }}
-            </el-tag>
+        <div class="history-top">
+          <div class="progress-block">
+            <span class="muted-label">进度</span>
+            <span class="progress-value">{{ fill.progress }}%</span>
           </div>
+          <span class="status-tag" :data-status="getStatusType(fill.status)">
+            {{ getStatusLabel(fill.status) }}
+          </span>
+        </div>
 
-          <div v-if="fill.content" class="fill-content">
-            <p class="content-text">{{ fill.content }}</p>
-          </div>
+        <div class="history-meta">
+          <span>{{ formatDateTime(fill.created_at) }}</span>
+          <span>填报人: {{ fill.filled_by_name || '-' }}</span>
+        </div>
 
-          <!-- 关联的里程碑 -->
-          <div v-if="fill.milestone_name" class="fill-milestone">
-            <el-tag size="small" type="info" effect="plain">
-              里程碑: {{ fill.milestone_name }}
-            </el-tag>
-          </div>
+        <p v-if="fill.content" class="history-content">{{ fill.content }}</p>
 
-          <!-- 附件列表 -->
-          <div v-if="fill.attachments && fill.attachments.length > 0" class="fill-attachments">
-            <div class="attachments-label">
-              <el-icon><Picture /></el-icon>
-              <span>附件 ({{ fill.attachments.length }})</span>
-            </div>
-            <div class="attachments-list">
-              <div v-for="(attachment, idx) in fill.attachments" :key="idx" class="attachment-item">
-                <el-icon class="attachment-icon"><Document /></el-icon>
-                <span class="attachment-name">{{ attachment.name }}</span>
-                <el-button type="primary" link size="small" @click.stop>
-                  <el-icon><Download /></el-icon>
-                </el-button>
-              </div>
-            </div>
-          </div>
+        <div v-if="fill.milestone_name" class="history-extra">
+          <span class="pill">里程碑: {{ fill.milestone_name }}</span>
+        </div>
 
-          <!-- 审核信息 -->
-          <div v-if="fill.status && fill.status !== 'submitted'" class="fill-audit">
-            <div class="audit-info">
-              <span class="audit-label"
-                >{{ fill.status === 'approved' ? '审核人' : '驳回人' }}:</span
-              >
-              <span class="audit-value">{{ fill.audited_by || '-' }}</span>
-              <span class="audit-time">{{ formatDate(fill.audited_at || '') }}</span>
-            </div>
-            <div v-if="fill.audit_comment" class="audit-comment">
-              <span class="comment-label">审核意见:</span>
-              <p class="comment-text">{{ fill.audit_comment }}</p>
-            </div>
-          </div>
+        <div v-if="fill.audit_comment" class="history-extra">
+          <span class="muted-label">审核意见</span>
+          <p class="history-comment">{{ fill.audit_comment }}</p>
+        </div>
 
-          <!-- 填报人信息 -->
-          <div class="fill-footer">
-            <span class="fill-author">填报人: {{ fill.filled_by_name }}</span>
-            <span class="fill-date">{{ formatDate(fill.fill_date) }}</span>
-          </div>
-        </el-card>
-      </el-timeline-item>
-    </el-timeline>
+        <div class="history-footer">
+          <span>填报日期 {{ formatDate(fill.fill_date) }}</span>
+          <span>更新于 {{ formatDateTime(fill.updated_at) }}</span>
+        </div>
+      </button>
+    </div>
   </div>
 </template>
 
-<script lang="ts">
-import { watch } from 'vue'
-</script>
-
 <style scoped>
 .indicator-fill-history {
-  padding: 16px 0;
-  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
 }
 
-.loading-container {
-  padding: 20px;
+.state-card {
+  padding: 24px;
+  border: 1px dashed #d0d7de;
+  border-radius: 12px;
+  background: #fafbfc;
+  text-align: center;
 }
 
-.empty-container {
-  padding: 40px 20px;
+.state-text {
+  margin: 0;
+  color: #6b7280;
 }
 
-.empty-text {
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-  margin-top: 8px;
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.fill-card {
+.history-card {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #fff;
+  text-align: left;
   cursor: pointer;
-  transition: all 0.2s;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
-.fill-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--el-box-shadow-light);
+.history-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
-.fill-header {
+.history-top,
+.history-meta,
+.history-footer {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.fill-progress {
+.progress-block {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
 }
 
-.progress-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+.muted-label {
+  color: #6b7280;
+  font-size: 13px;
 }
 
 .progress-value {
+  color: #111827;
   font-size: 20px;
+  font-weight: 700;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--el-color-primary);
 }
 
-.fill-content {
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--el-fill-color-light);
-  border-radius: 6px;
+.status-tag[data-status='success'] {
+  background: #dcfce7;
+  color: #166534;
 }
 
-.content-text {
-  margin: 0;
-  font-size: 14px;
+.status-tag[data-status='warning'] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-tag[data-status='danger'] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.history-meta,
+.history-footer {
+  margin-top: 12px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.history-content,
+.history-comment {
+  margin: 12px 0 0;
+  color: #1f2937;
   line-height: 1.6;
-  color: var(--el-text-color-regular);
   white-space: pre-wrap;
-  word-break: break-word;
 }
 
-.fill-milestone {
-  margin-bottom: 12px;
+.history-extra {
+  margin-top: 12px;
 }
 
-.fill-attachments {
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: var(--el-fill-color-lighter);
-  border-radius: 6px;
-}
-
-.attachments-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.pill {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 8px;
 }
 
-.attachments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
+@media (max-width: 640px) {
+  .history-card {
+    padding: 14px;
+  }
 
-.attachment-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.attachment-icon {
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-}
-
-.attachment-name {
-  flex: 1;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.fill-audit {
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  background: v-bind(
-    'fill.status === "approved" ? "var(--el-color-success-light-9)" : "var(--el-color-danger-light-9)"'
-  );
-  border-radius: 6px;
-  border-left: 3px solid
-    v-bind('fill.status === "approved" ? "var(--el-color-success)" : "var(--el-color-danger)"');
-}
-
-.audit-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.audit-label {
-  color: var(--el-text-color-secondary);
-}
-
-.audit-value {
-  font-weight: 500;
-  color: var(--el-text-color-regular);
-}
-
-.audit-time {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.audit-comment {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.comment-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.comment-text {
-  margin: 0;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  line-height: 1.5;
-}
-
-.fill-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid var(--el-border-color-light);
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-:deep(.el-timeline-item__timestamp) {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-:deep(.el-timeline-item__icon) {
-  background: var(--el-bg-color);
+  .progress-value {
+    font-size: 18px;
+  }
 }
 </style>

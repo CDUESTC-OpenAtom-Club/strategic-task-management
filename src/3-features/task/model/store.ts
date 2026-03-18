@@ -79,7 +79,15 @@ export const useTaskStore = defineStore('task', () => {
   /**
    * 根据年份加载任务数据
    */
-  const loadTasksByYear = async (year: number) => {
+  const loadTasksByYear = async (
+    year: number,
+    options: { force?: boolean; background?: boolean } = {}
+  ) => {
+    if (!options.force && tasks.value.length > 0 && tasks.value.every(task => task.year === year)) {
+      dataSource.value = 'api'
+      return tasks.value
+    }
+
     loading.value = true
     error.value = null
 
@@ -89,6 +97,7 @@ export const useTaskStore = defineStore('task', () => {
       tasks.value = apiTasks
       dataSource.value = 'api'
       logger.info(`[Task Store] Successfully loaded ${apiTasks.length} tasks from API`)
+      return apiTasks
     } catch (err: unknown) {
       logger.error(`[Task Store] API failed:`, err)
 
@@ -106,6 +115,7 @@ export const useTaskStore = defineStore('task', () => {
       error.value = errorMsg
       dataSource.value = 'fallback'
       tasks.value = []
+      return []
     } finally {
       loading.value = false
     }
@@ -117,12 +127,9 @@ export const useTaskStore = defineStore('task', () => {
     () => timeContext.currentYear,
     newYear => {
       logger.info(`[Task Store] Year changed to ${newYear}, reloading tasks...`)
-      loadTasksByYear(newYear)
+      void loadTasksByYear(newYear, { force: true })
     }
   )
-
-  // 初始化：根据当前年份加载对应数据
-  loadTasksByYear(timeContext.currentYear)
 
   // ============ CRUD Actions ============
 

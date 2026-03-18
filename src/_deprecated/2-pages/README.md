@@ -1,5 +1,11 @@
 # Pages Layer
 
+> Soft-delete note:
+> `src/_deprecated/2-pages` is a soft-deleted backup of the former `src/2-pages` layer.
+> The active application router uses `src/3-features/**` views directly.
+> This directory is retained as a backup wrapper layer and recovery path during UI consolidation.
+> Do not add new primary user flows here.
+
 ## 概述
 
 Pages 层是 FSD 架构中的最顶层，代表应用的路由级页面。每个页面对应一个路由，负责组合 features 和 widgets 来构建完整的用户界面。

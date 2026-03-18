@@ -33,60 +33,10 @@ const ensureAuthRestored = () => {
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/',
-    redirect: '/dashboard'
-  },
-  {
     path: '/login',
     name: 'Login',
     component: () => import('@/3-features/auth/ui/LoginView.vue'),
     meta: { requiresAuth: false, title: '登录 - 战略指标管理系统' }
-  },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/3-features/dashboard/ui/DashboardView.vue'),
-    meta: { requiresAuth: true, title: '仪表盘 - 战略指标管理系统' }
-  },
-  {
-    path: '/strategic-tasks',
-    name: 'StrategicTasks',
-    component: () => import('@/3-features/task/ui/StrategicTaskView.vue'),
-    meta: { requiresAuth: true, roles: ['strategic_dept'], title: '战略任务 - 战略指标管理系统' }
-  },
-  {
-    path: '/indicators',
-    name: 'Indicators',
-    component: () => import('@/3-features/indicator/ui/IndicatorListView.vue'),
-    meta: { requiresAuth: true, title: '指标列表 - 战略指标管理系统' }
-  },
-  {
-    path: '/distribution',
-    name: 'Distribution',
-    component: () => import('@/3-features/indicator/ui/IndicatorDistributeView.vue'),
-    meta: { requiresAuth: true, roles: ['functional_dept'], title: '指标分配 - 战略指标管理系统' }
-  },
-  {
-    path: '/messages',
-    name: 'Messages',
-    component: () => import('@/3-features/messages/ui/MessageCenterView.vue'),
-    meta: { requiresAuth: true, title: '消息中心 - 战略指标管理系统' }
-  },
-  {
-    path: '/profile',
-    name: 'Profile',
-    component: () => import('@/3-features/profile/ui/ProfileView.vue'),
-    meta: { requiresAuth: true, title: '个人资料 - 战略指标管理系统' }
-  },
-  {
-    path: '/admin/console',
-    name: 'AdminConsole',
-    component: () => import('@/3-features/admin/ui/AdminConsoleView.vue'),
-    meta: {
-      requiresAuth: true,
-      roles: ['strategic_dept'],
-      title: '管理控制台 - 战略指标管理系统'
-    }
   },
   {
     path: '/403',
@@ -94,92 +44,151 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/5-shared/ui/error/ForbiddenView.vue'),
     meta: { requiresAuth: false, title: '禁止访问 - 战略指标管理系统' }
   },
-
-  // ============================================================
-  // 新数据结构路由 (Plan -> Task -> Indicator -> IndicatorFill)
-  // ============================================================
-
-  /**
-   * Plan 列表页
-   * 展示所有 Plan，支持筛选、创建、提交
-   */
   {
-    path: '/plans',
-    name: 'PlanList',
-    component: () => import('@/3-features/plan/ui/PlanListView.vue'),
-    meta: { requiresAuth: true, title: '计划列表 - 战略指标管理系统' }
-  },
+    path: '/',
+    component: () => import('@/1-app/layouts/AppLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: '',
+        redirect: '/dashboard'
+      },
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('@/3-features/dashboard/ui/DashboardView.vue'),
+        meta: { title: '仪表盘 - 战略指标管理系统' }
+      },
+      {
+        path: 'strategic-tasks',
+        name: 'StrategicTasks',
+        component: () => import('@/3-features/task/ui/StrategicTaskView.vue'),
+        meta: { roles: ['strategic_dept'], title: '战略任务 - 战略指标管理系统' }
+      },
+      {
+        path: 'indicators',
+        name: 'Indicators',
+        component: () => import('@/3-features/indicator/ui/IndicatorListView.vue'),
+        meta: { title: '指标列表 - 战略指标管理系统' }
+      },
+      {
+        path: 'distribution',
+        name: 'Distribution',
+        component: () => import('@/3-features/indicator/ui/IndicatorDistributeView.vue'),
+        meta: { roles: ['functional_dept'], title: '指标分配 - 战略指标管理系统' }
+      },
+      {
+        path: 'messages',
+        name: 'Messages',
+        component: () => import('@/3-features/messages/ui/MessageCenterView.vue'),
+        meta: { title: '消息中心 - 战略指标管理系统' }
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/3-features/profile/ui/ProfileView.vue'),
+        meta: { title: '个人资料 - 战略指标管理系统' }
+      },
+      {
+        path: 'admin/console',
+        name: 'AdminConsole',
+        component: () => import('@/3-features/admin/ui/AdminConsoleView.vue'),
+        meta: {
+          roles: ['strategic_dept'],
+          title: '管理控制台 - 战略指标管理系统'
+        }
+      },
 
-  /**
-   * Plan 详情页
-   * 查看 Plan 详情，包含 Task 和 Indicator 列表
-   */
-  {
-    path: '/plans/:id',
-    name: 'plan-detail',
-    component: () => import('@/3-features/plan/ui/PlanDetailView.vue'),
-    meta: { requiresAuth: true, title: '计划详情 - 战略指标管理系统' }
-  },
+      // ============================================================
+      // 新数据结构路由 (Plan -> Task -> Indicator -> IndicatorFill)
+      // ============================================================
 
-  /**
-   * Plan 编辑页
-   * 创建或编辑 Plan
-   */
-  {
-    path: '/plans/:id/edit',
-    name: 'plan-edit',
-    component: () => import('@/3-features/plan/ui/PlanEditView.vue'),
-    meta: { requiresAuth: true, roles: ['strategic_dept'], title: '编辑计划 - 战略指标管理系统' }
-  },
+      /**
+       * @deprecated As a formal entry point.
+       * Plan management is being consolidated into `/strategic-tasks`.
+       * This route is retained temporarily for compatibility and backup access.
+       */
+      {
+        path: 'plans',
+        name: 'PlanList',
+        component: () => import('@/3-features/plan/ui/PlanListView.vue'),
+        meta: { title: '计划列表 - 战略指标管理系统' }
+      },
 
-  /**
-   * Plan 创建页
-   */
-  {
-    path: '/plans/create',
-    name: 'plan-create',
-    component: () => import('@/3-features/plan/ui/PlanEditView.vue'),
-    meta: { requiresAuth: true, roles: ['strategic_dept'], title: '创建计划 - 战略指标管理系统' }
-  },
+      /**
+       * @deprecated As a formal entry point.
+       * Retained temporarily while the strategic workbench absorbs plan detail flows.
+       */
+      {
+        path: 'plans/:id',
+        name: 'plan-detail',
+        component: () => import('@/3-features/plan/ui/PlanDetailView.vue'),
+        meta: { title: '计划详情 - 战略指标管理系统' }
+      },
 
-  /**
-   * 填报页面
-   * 填报指标进度
-   */
-  {
-    path: '/fills/indicator/:indicatorId',
-    name: 'indicator-fill',
-    component: () => import('@/3-features/indicator/ui/IndicatorFillView.vue'),
-    meta: { requiresAuth: true, title: '指标填报 - 战略指标管理系统' }
-  },
+      /**
+       * @deprecated As a formal entry point.
+       * Retained temporarily while the strategic workbench absorbs plan editing flows.
+       */
+      {
+        path: 'plans/:id/edit',
+        name: 'plan-edit',
+        component: () => import('@/3-features/plan/ui/PlanEditView.vue'),
+        meta: { roles: ['strategic_dept'], title: '编辑计划 - 战略指标管理系统' }
+      },
 
-  /**
-   * 审核页面
-   * 审核 Plan 提交
-   */
-  {
-    path: '/audit/plan/:fillId',
-    name: 'plan-audit',
-    component: () => import('@/3-features/plan/ui/PlanAuditView.vue'),
-    meta: {
-      requiresAuth: true,
-      roles: ['strategic_dept', 'functional_dept'],
-      title: '计划审核 - 战略指标管理系统'
-    }
-  },
+      /**
+       * @deprecated As a formal entry point.
+       * Retained temporarily while the strategic workbench absorbs plan creation flows.
+       */
+      {
+        path: 'plans/create',
+        name: 'plan-create',
+        component: () => import('@/3-features/plan/ui/PlanEditView.vue'),
+        meta: { roles: ['strategic_dept'], title: '创建计划 - 战略指标管理系统' }
+      },
 
-  /**
-   * 待审核列表
-   */
-  {
-    path: '/audit/pending',
-    name: 'pending-audit',
-    component: () => import('@/3-features/approval/ui/PendingAuditView.vue'),
-    meta: {
-      requiresAuth: true,
-      roles: ['strategic_dept', 'functional_dept'],
-      title: '待审核列表 - 战略指标管理系统'
-    }
+      /**
+       * 历史错误入口兼容
+       * 指标编辑应统一在 /strategic-tasks 内完成
+       */
+      {
+        path: 'indicators/:indicatorId/progress',
+        redirect: '/strategic-tasks'
+      },
+      {
+        path: 'fills/indicator/:indicatorId',
+        redirect: '/strategic-tasks'
+      },
+
+      /**
+       * @deprecated As a formal entry point.
+       * Approval flows should converge into the main workbenches after feature parity is complete.
+       */
+      {
+        path: 'audit/plan/:fillId',
+        name: 'plan-audit',
+        component: () => import('@/3-features/plan/ui/PlanAuditView.vue'),
+        meta: {
+          roles: ['strategic_dept', 'functional_dept'],
+          title: '计划审核 - 战略指标管理系统'
+        }
+      },
+
+      /**
+       * @deprecated As a formal entry point.
+       * Approval flows should converge into the main workbenches after feature parity is complete.
+       */
+      {
+        path: 'audit/pending',
+        name: 'pending-audit',
+        component: () => import('@/3-features/approval/ui/PendingAuditView.vue'),
+        meta: {
+          roles: ['strategic_dept', 'functional_dept'],
+          title: '待审核列表 - 战略指标管理系统'
+        }
+      }
+    ]
   },
 
   {

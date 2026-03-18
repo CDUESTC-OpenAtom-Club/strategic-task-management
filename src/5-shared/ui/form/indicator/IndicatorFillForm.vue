@@ -143,7 +143,9 @@ const handleSave = async () => {
     }
   } catch (err) {
     logger.error('[IndicatorFillForm] Failed to save fill:', err)
-    ElMessage.error('保存失败，请重试')
+    if (!(err instanceof Error) || !err.message) {
+      ElMessage.error('保存失败，请重试')
+    }
   } finally {
     saving.value = false
   }
@@ -167,18 +169,19 @@ const handleSubmit = async () => {
   try {
     logger.info('[IndicatorFillForm] Submitting fill...', formData.value)
 
-    // 先保存
-    const response = await planStore.saveIndicatorFill(formData.value)
+    // 先保存，再提交到待审核队列
+    const savedFill = await planStore.saveIndicatorFill(formData.value)
 
-    if (response) {
-      // 再提交
-      // TODO: 调用提交API
+    if (savedFill?.id != null) {
+      const response = await planStore.submitIndicatorFill(savedFill.id)
       ElMessage.success('提交成功')
       emit('submitted', response)
     }
   } catch (err) {
     logger.error('[IndicatorFillForm] Failed to submit fill:', err)
-    ElMessage.error('提交失败，请重试')
+    if (!(err instanceof Error) || !err.message) {
+      ElMessage.error('提交失败，请重试')
+    }
   } finally {
     submitting.value = false
   }

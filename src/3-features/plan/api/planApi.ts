@@ -9,6 +9,8 @@
  */
 import { apiClient } from '@/5-shared/lib/api'
 import { withRetry } from '@/5-shared/lib/api/wrappers'
+import { USE_MOCK } from '@/5-shared/config/api'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
 import type {
   ApiResponse,
   Plan,
@@ -75,6 +77,20 @@ export interface PlanFillVO {
   completedIndicators: number
 }
 
+function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
+  return response.success === true || response.code === 200
+}
+
+function invalidatePlanCaches(planId?: number | string): void {
+  const targets: Array<string | readonly [string, string, Record<string, string>]> = ['plan.list', 'dashboard.overview']
+  if (planId !== undefined) {
+    targets.push('plan.detail', `plan.detail.${planId}`)
+    targets.push(buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'basic' }))
+    targets.push(buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'full' }))
+  }
+  invalidateQueries(targets)
+}
+
 function normalizeApprovalStatus(status?: string): PlanFillStatus {
   if (status === 'APPROVED') {
     return 'approved'
@@ -105,6 +121,50 @@ function unwrapPlanCollection(
   }
 
   return []
+}
+
+function inferYearFromCycleId(cycleId: unknown): number | null {
+  const numericCycleId = Number(cycleId)
+  if (!Number.isFinite(numericCycleId)) {
+    return null
+  }
+
+  if (numericCycleId === 4 || numericCycleId === 90) {
+    return 2026
+  }
+
+  if (numericCycleId === 7) {
+    return 2025
+  }
+
+  return null
+}
+
+function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
+  const inferredYear = raw.year ?? inferYearFromCycleId(raw.cycleId)
+  const cycleLabel = raw.year ?? inferredYear ?? raw.cycle ?? ''
+
+  return {
+    id: raw.id ?? raw.planId,
+    name: raw.planName ?? raw.name ?? '',
+    cycle: String(cycleLabel),
+    org_id: raw.targetOrgId ?? raw.orgId ?? raw.org_id ?? '',
+    status: planApi.convertStatusFromBackend(raw.status),
+    tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
+    createdAt: raw.createTime ?? raw.createdAt,
+    updatedAt: raw.updatedAt,
+    createdBy: raw.createdByOrgId != null ? String(raw.createdByOrgId) : raw.createdBy,
+    description: raw.description,
+    totalIndicators: raw.indicatorCount,
+    completedIndicators: raw.completionPercentage,
+    // Preserve backend fields used by existing views during the migration period.
+    ...(('targetOrgId' in raw || 'orgId' in raw) ? { targetOrgId: raw.targetOrgId ?? raw.orgId } : {}),
+    ...('targetOrgName' in raw ? { targetOrgName: raw.targetOrgName } : {}),
+    ...('orgName' in raw ? { orgName: raw.orgName } : {}),
+    ...('cycleId' in raw ? { cycleId: raw.cycleId } : {}),
+    ...(inferredYear != null ? { year: inferredYear } : {}),
+    ...('planLevel' in raw ? { planLevel: raw.planLevel } : {})
+  } as Plan
 }
 
 function convertApprovalDetailToPlanFill(detail: ApprovalDetail & Record<string, unknown>): PlanFill {
@@ -347,6 +407,10 @@ function convertStatus(status: string): PlanStatus {
   const map: Record<string, PlanStatus> = {
     DRAFT: 'draft',
     PENDING: 'pending',
+    IN_REVIEW: 'pending',
+    DISTRIBUTED: 'published',
+    APPROVED: 'published',
+    ACTIVE: 'published',
     PUBLISHED: 'published',
     ARCHIVED: 'archived'
   }
@@ -373,16 +437,8 @@ function parseAttachments(attachmentsStr: string): Attachment[] {
 
 function convertPlanVOToPlan(vo: PlanVO, tasks: Task[]): Plan {
   return {
-    id: vo.planId,
-    name: vo.planName,
-    cycle: vo.cycle,
-    org_id: vo.orgId,
-    status: convertStatus(vo.status),
-    tasks,
-    createdAt: vo.createdAt,
-    updatedAt: vo.updatedAt,
-    createdBy: vo.createdBy,
-    description: vo.description
+    ...convertBackendPlanToPlan(vo as unknown as Record<string, any>),
+    tasks
   }
 }
 
@@ -442,6 +498,202 @@ function convertIndicatorFillVOToIndicatorFill(vo: IndicatorFillVO): IndicatorFi
   }
 }
 
+interface PlanReportSimpleResponse {
+  id: number
+  planId?: number
+  reportMonth?: string
+  reportOrgId?: number
+  reportOrgType?: 'FUNC_DEPT' | 'COLLEGE'
+  title?: string | null
+  content?: string | null
+  summary?: string | null
+  progress?: number | null
+  issues?: string | null
+  nextPlan?: string | null
+  status?: string | null
+  submittedBy?: number | null
+  submittedAt?: string | null
+  approvedBy?: number | null
+  approvedAt?: string | null
+  rejectionReason?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+interface IndicatorReportContext {
+  indicatorId: number
+  taskId: number
+  planId: number
+  reportOrgId: number
+  reportOrgType: 'FUNC_DEPT' | 'COLLEGE'
+  reportMonth: string
+  indicatorName: string
+}
+
+function convertReportStatusToFillStatus(status?: string | null): PlanFillStatus | undefined {
+  const normalized = String(status || '').toUpperCase()
+  const map: Record<string, PlanFillStatus> = {
+    SUBMITTED: 'submitted',
+    IN_REVIEW: 'submitted',
+    APPROVED: 'approved',
+    REJECTED: 'rejected'
+  }
+  return map[normalized]
+}
+
+function mapPlanReportToIndicatorFill(
+  report: PlanReportSimpleResponse,
+  context: Pick<IndicatorReportContext, 'indicatorId' | 'indicatorName'>
+): IndicatorFill {
+  const normalizedProgress = Number(report.progress ?? 0)
+  const fillDate =
+    report.reportMonth && /^\d{6}$/.test(report.reportMonth)
+      ? `${report.reportMonth.slice(0, 4)}-${report.reportMonth.slice(4, 6)}-01`
+      : report.reportMonth && /^\d{4}-\d{2}$/.test(report.reportMonth)
+        ? `${report.reportMonth}-01`
+      : report.updatedAt || report.createdAt || new Date().toISOString()
+
+  return {
+    id: report.id,
+    indicator_id: context.indicatorId,
+    plan_fill_id: report.planId ?? 0,
+    fill_date: fillDate,
+    progress: Number.isFinite(normalizedProgress) ? normalizedProgress : 0,
+    content:
+      report.content ||
+      report.summary ||
+      report.title ||
+      `${context.indicatorName} ${report.reportMonth || ''} 填报记录`.trim(),
+    attachments: [],
+    filled_by: report.submittedBy != null ? String(report.submittedBy) : '',
+    filled_by_name: report.submittedBy != null ? `用户${report.submittedBy}` : '当前部门',
+    created_at: report.createdAt || fillDate,
+    updated_at: report.updatedAt || report.createdAt || fillDate,
+    status: convertReportStatusToFillStatus(report.status),
+    audit_comment: report.rejectionReason || undefined,
+    audited_by: report.approvedBy != null ? String(report.approvedBy) : undefined,
+    audited_at: report.approvedAt || undefined
+  }
+}
+
+function mapRoleToReportOrgType(
+  role?: string | null,
+  departmentName?: string | null
+): 'FUNC_DEPT' | 'COLLEGE' {
+  switch (role) {
+    case 'secondary_college':
+      return 'COLLEGE'
+    default:
+      return String(departmentName || '').includes('学院') ? 'COLLEGE' : 'FUNC_DEPT'
+  }
+}
+
+function getCurrentReportMonth(): string {
+  return new Date().toISOString().slice(0, 7).replace('-', '')
+}
+
+function getNormalizedReportStatus(status?: string | null): string {
+  return String(status || '').trim().toUpperCase()
+}
+
+function isLockedPlanReportStatus(status?: string | null): boolean {
+  return ['SUBMITTED', 'IN_REVIEW', 'APPROVED'].includes(getNormalizedReportStatus(status))
+}
+
+async function resolveIndicatorReportContext(
+  indicatorId: number | string
+): Promise<IndicatorReportContext> {
+  const { indicatorApi } = await import('@/3-features/indicator/api')
+  const { useAuthStore } = await import('@/3-features/auth/model/store')
+  const { useOrgStore } = await import('@/3-features/organization/model/store')
+
+  const indicatorResponse = await indicatorApi.getIndicatorById(String(indicatorId))
+  if (!hasApiData(indicatorResponse) || !indicatorResponse.data) {
+    throw new Error('加载指标详情失败，无法建立填报上下文')
+  }
+
+  const indicatorData = indicatorResponse.data as Record<string, unknown>
+  const numericIndicatorId = Number(indicatorData.id ?? indicatorData.indicatorId ?? indicatorId)
+  const taskId = Number(indicatorData.taskId ?? indicatorData.task_id)
+
+  if (!Number.isFinite(taskId)) {
+    throw new Error('指标缺少 taskId，无法保存填报')
+  }
+
+  const taskResponse = await apiClient.get<ApiResponse<Record<string, unknown>>>(`/tasks/${taskId}`)
+  if (!hasApiData(taskResponse) || !taskResponse.data) {
+    throw new Error('加载任务详情失败，无法定位关联计划')
+  }
+
+  const planId = Number(
+    (taskResponse.data as Record<string, unknown>).planId ??
+      (taskResponse.data as Record<string, unknown>).plan_id
+  )
+
+  if (!Number.isFinite(planId)) {
+    throw new Error('任务缺少 planId，无法保存填报')
+  }
+
+  const authStore = useAuthStore()
+  const orgStore = useOrgStore()
+  if (!orgStore.loaded || orgStore.departments.length === 0) {
+    await orgStore.loadDepartments()
+  }
+
+  const targetDepartmentName = String(
+    indicatorData.targetOrgName ?? authStore.effectiveDepartment ?? authStore.userDepartment ?? ''
+  )
+  const matchedDepartment = orgStore.getDepartmentByName(targetDepartmentName)
+  const fallbackOrgId = Number(indicatorData.targetOrgId ?? matchedDepartment?.id ?? indicatorData.ownerOrgId)
+  const reportOrgId = Number(indicatorData.targetOrgId ?? matchedDepartment?.id ?? fallbackOrgId)
+
+  if (!Number.isFinite(reportOrgId)) {
+    throw new Error('无法识别当前部门组织ID，无法保存填报')
+  }
+
+  const inferredRole =
+    matchedDepartment?.type === 'secondary_college'
+      ? 'secondary_college'
+      : matchedDepartment?.type === 'functional_dept'
+        ? 'functional_dept'
+        : authStore.effectiveRole
+
+  return {
+    indicatorId: Number.isFinite(numericIndicatorId) ? numericIndicatorId : Number(indicatorId),
+    taskId,
+    planId,
+    reportOrgId,
+    reportOrgType: mapRoleToReportOrgType(inferredRole, targetDepartmentName),
+    reportMonth: getCurrentReportMonth(),
+    indicatorName: String(
+      indicatorData.indicatorName ?? indicatorData.name ?? indicatorData.indicatorDesc ?? '指标填报'
+    )
+  }
+}
+
+async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
+  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(`/reports/plan/${planId}`)
+  if (!hasApiData(response)) {
+    throw new Error(response.message || '加载计划报告失败')
+  }
+
+  return Array.isArray(response.data) ? response.data : []
+}
+
+async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
+  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse>>(`/reports/${reportId}`)
+  if (!hasApiData(response) || !response.data) {
+    throw new Error(response.message || '加载报告详情失败')
+  }
+  return response.data
+}
+
+function normalizePlanCollection(
+  data: Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] } | null | undefined
+): Plan[] {
+  return unwrapPlanCollection(data).map(item => convertBackendPlanToPlan(item as Record<string, any>))
+}
+
 function convertPlanFillVOToPlanFill(vo: PlanFillVO, fills: IndicatorFill[]): PlanFill {
   return {
     id: vo.fillId,
@@ -465,7 +717,7 @@ function convertPlanFillVOToPlanFill(vo: PlanFillVO, fills: IndicatorFill[]): Pl
 
 export const planApi = {
   // 使用模拟数据标志（后端就绪后设为 false）
-  useMockData: import.meta.env.VITE_USE_MOCK === 'true',
+  useMockData: USE_MOCK,
 
   /**
    * 获取所有 Plan
@@ -494,13 +746,24 @@ export const planApi = {
     }
 
     // 真实 API 调用（后端就绪后启用）
-    const response = await apiClient.get<
-      ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
-    >('/plans')
-    return {
-      ...response,
-      data: unwrapPlanCollection(response.data)
-    }
+    return fetchWithCache({
+      key: buildQueryKey('plan', 'list'),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['plan.list']
+      },
+      fetcher: async () => {
+        const response = await apiClient.get<
+          ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
+        >('/plans')
+        return {
+          ...response,
+          data: normalizePlanCollection(response.data)
+        }
+      }
+    })
   },
 
   /**
@@ -520,7 +783,13 @@ export const planApi = {
 
     // 后端使用 /plans 端点，不支持按 orgId 过滤
     // 返回空数组或使用其他方式过滤
-    return apiClient.get<ApiResponse<Plan[]>>('/plans', { page: 0, size: 1000 })
+    const response = await apiClient.get<
+      ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
+    >('/plans', { page: 0, size: 1000 })
+    return {
+      ...response,
+      data: normalizePlanCollection(response.data).filter(p => String(p.org_id) === String(orgId))
+    }
   },
 
   /**
@@ -538,7 +807,13 @@ export const planApi = {
     }
 
     // 使用后端支持的状态过滤参数
-    return apiClient.get<ApiResponse<Plan[]>>('/plans', { status, page: 0, size: 1000 })
+    const response = await apiClient.get<
+      ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
+    >('/plans', { status, page: 0, size: 1000 })
+    return {
+      ...response,
+      data: normalizePlanCollection(response.data)
+    }
   },
 
   /**
@@ -573,7 +848,26 @@ export const planApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<Plan>>(`/plans/${planId}`)
+    return fetchWithCache({
+      key: buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'basic' }),
+      policy: {
+        ttlMs: 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['plan.detail', `plan.detail.${planId}`]
+      },
+      fetcher: async () => {
+        const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}`)
+        if (hasApiData(response) && response.data) {
+          return {
+            ...response,
+            data: convertBackendPlanToPlan(response.data as Record<string, any>)
+          }
+        }
+
+        return response
+      }
+    })
   },
 
   /**
@@ -587,62 +881,63 @@ export const planApi = {
     }
 
     // 调用后端的 Plan 详情接口
-    const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}/details`)
+    return fetchWithCache({
+      key: buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'full' }),
+      policy: {
+        ttlMs: 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['plan.detail', `plan.detail.${planId}`]
+      },
+      fetcher: async () => {
+        const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}/details`)
 
-    // 转换后端返回的数据格式到前端 Plan 类型
-    if (hasApiData(response) && response.data) {
-      const backendData = response.data as any
+        if (hasApiData(response) && response.data) {
+          const backendData = response.data as any
+          const tasks: Task[] = []
+          const indicators = backendData.indicators || []
 
-      // 将后端的指标列表转换为前端的 Task 结构
-      const tasks: Task[] = []
-      const indicators = backendData.indicators || []
+          if (indicators.length > 0) {
+            tasks.push({
+              id: planId,
+              plan_id: planId,
+              name: backendData.planName || '指标任务',
+              type: 'quantitative',
+              description: backendData.description,
+              sortOrder: 0,
+              indicators: indicators.map((ind: any) => ({
+                id: ind.id,
+                task_id: planId,
+                name: ind.indicatorName || ind.name || '',
+                definition: ind.indicatorDesc || ind.description || '',
+                milestones: [],
+                createdAt: ind.createdAt,
+                updatedAt: ind.updatedAt,
+                latest_progress: ind.progress,
+                latest_fill_date: undefined,
+                latest_fill_id: undefined,
+                fill_count: 0
+              }))
+            })
+          }
 
-      // 如果有指标数据，创建一个包含所有指标的 Task
-      if (indicators.length > 0) {
-        tasks.push({
-          id: planId,
-          plan_id: planId,
-          name: backendData.planName || '指标任务',
-          type: 'quantitative',
-          description: backendData.description,
-          sortOrder: 0,
-          indicators: indicators.map((ind: any) => ({
-            id: ind.id,
-            task_id: planId,
-            name: ind.indicatorName || ind.name || '',
-            definition: ind.indicatorDesc || ind.description || '',
-            milestones: [],
-            createdAt: ind.createdAt,
-            updatedAt: ind.updatedAt,
-            latest_progress: ind.progress,
-            latest_fill_date: undefined,
-            latest_fill_id: undefined,
-            fill_count: 0
-          }))
-        })
+          const plan: Plan = {
+            ...convertBackendPlanToPlan(backendData),
+            tasks
+          }
+
+          return {
+            ...response,
+            data: {
+              ...plan,
+              indicators
+            } as Plan
+          }
+        }
+
+        return response
       }
-
-      // 构造符合前端类型的 Plan 对象
-      const plan: Plan = {
-        id: backendData.id,
-        name: backendData.planName || '',
-        cycle: backendData.year || '',
-        org_id: backendData.targetOrgId || backendData.orgId || '',
-        status: this.convertStatusFromBackend(backendData.status),
-        tasks,
-        createdAt: backendData.createTime || backendData.createdAt,
-        updatedAt: backendData.updatedAt,
-        createdBy: backendData.createdByOrgId?.toString(),
-        description: backendData.description
-      }
-
-      return {
-        ...response,
-        data: plan
-      }
-    }
-
-    return response
+    })
   },
 
   /**
@@ -652,8 +947,10 @@ export const planApi = {
     const map: Record<string, PlanStatus> = {
       'DRAFT': 'draft',
       'PENDING': 'pending',
+      'IN_REVIEW': 'pending',
       'PENDING_APPROVAL': 'pending',
       'APPROVED': 'published',
+      'DISTRIBUTED': 'published',
       'ACTIVE': 'published',
       'PUBLISHED': 'published',
       'ARCHIVED': 'archived'
@@ -694,7 +991,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>('/plans', data)
+      const response = await apiClient.post<ApiResponse<Plan>>('/plans', data)
+      invalidatePlanCaches(response.data?.id ?? response.data?.plan_id)
+      return response
     })
   },
 
@@ -722,7 +1021,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.put<ApiResponse<Plan>>(`/plans/${planId}`, data)
+      const response = await apiClient.put<ApiResponse<Plan>>(`/plans/${planId}`, data)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -750,7 +1051,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.delete<ApiResponse<void>>(`/plans/${planId}`)
+      const response = await apiClient.delete<ApiResponse<void>>(`/plans/${planId}`)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -795,9 +1098,13 @@ export const planApi = {
       }
     }
 
-    return withRetry(async () => {
-      return apiClient.post<ApiResponse<PlanFill>>(`/plans/${form.plan_id}/submit`, form)
-    })
+    void form
+    return {
+      code: 501,
+      data: null as never,
+      message: '当前 OpenAPI 未提供计划填报提交流程',
+      timestamp: new Date().toISOString()
+    }
   },
 
   /**
@@ -825,7 +1132,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/submit`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/publish`)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -854,7 +1163,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/approve`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/publish`)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -882,8 +1193,11 @@ export const planApi = {
       }
     }
 
+    void reason
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/reject`, { reason })
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/archive`)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -912,7 +1226,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/withdraw`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/archive`)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -926,8 +1242,11 @@ export const planApi = {
       return this.getPlanById(taskId)
     }
 
-    return withRetry(async () => {
-      return apiClient.get<ApiResponse<Plan | null>>(`/plans/task/${taskId}`)
+    return Promise.resolve({
+      code: 501,
+      data: null,
+      message: '当前 OpenAPI 未提供按 taskId 反查计划的接口',
+      timestamp: new Date().toISOString()
     })
   },
 
@@ -956,7 +1275,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/publish`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/publish`)
+      invalidatePlanCaches(planId)
+      return response
     })
   },
 
@@ -985,7 +1306,9 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/archive`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/archive`)
+      invalidatePlanCaches(planId)
+      return response
     })
   }
 }
@@ -996,7 +1319,7 @@ export const planApi = {
 
 export const indicatorFillApi = {
   // 使用模拟数据标志（后端就绪后设为 false）
-  useMockData: import.meta.env.VITE_USE_MOCK === 'true',
+  useMockData: USE_MOCK,
 
   /**
    * 获取指标的所有填报历史
@@ -1018,7 +1341,47 @@ export const indicatorFillApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<IndicatorFill[]>>(`/indicators/${indicatorId}/fills`)
+    try {
+      const context = await resolveIndicatorReportContext(indicatorId)
+      const reports = await loadPlanReportsByPlanId(context.planId)
+      const scopedReports = reports
+        .filter(report => Number(report.reportOrgId) === context.reportOrgId)
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt || b.createdAt || 0).getTime() -
+            new Date(a.updatedAt || a.createdAt || 0).getTime()
+        )
+
+      const detailedReports = await Promise.all(
+        scopedReports.map(async report => {
+          try {
+            return await loadPlanReportById(report.id)
+          } catch {
+            return report
+          }
+        })
+      )
+
+      return {
+        code: 200,
+        data: detailedReports.map(report =>
+          mapPlanReportToIndicatorFill(report, {
+            indicatorId: context.indicatorId,
+            indicatorName: context.indicatorName
+          })
+        ),
+        message: '获取成功',
+        timestamp: new Date().toISOString()
+      }
+    } catch (error) {
+      logger.warn('[indicatorFillApi] Failed to load real indicator fill history:', error)
+      return {
+        code: 200,
+        data: [],
+        message: error instanceof Error ? error.message : '加载指标填报历史失败',
+        timestamp: new Date().toISOString()
+      }
+    }
   },
 
   /**
@@ -1044,7 +1407,13 @@ export const indicatorFillApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<IndicatorFill>>(`/fills/${fillId}`)
+    void fillId
+    return {
+      code: 200,
+      data: null,
+      message: '当前 OpenAPI 未提供单条填报详情接口',
+      timestamp: new Date().toISOString()
+    }
   },
 
   /**
@@ -1090,9 +1459,95 @@ export const indicatorFillApi = {
       }
     }
 
-    return withRetry(async () => {
-      return apiClient.post<ApiResponse<IndicatorFill>>('/fills', form)
-    })
+    const context = await resolveIndicatorReportContext(form.indicator_id)
+    const reports = await loadPlanReportsByPlanId(context.planId)
+    const currentMonthReports = reports
+      .filter(
+        report =>
+          Number(report.reportOrgId) === context.reportOrgId &&
+          report.reportMonth === context.reportMonth
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt || 0).getTime() -
+          new Date(a.updatedAt || a.createdAt || 0).getTime()
+      )
+
+    const latestCurrentMonthReport = currentMonthReports[0]
+    const editableExistingReport = currentMonthReports.find(
+      report => !isLockedPlanReportStatus(report.status)
+    )
+
+    if (latestCurrentMonthReport && !editableExistingReport) {
+      const lockedStatus = getNormalizedReportStatus(latestCurrentMonthReport.status)
+      if (lockedStatus === 'APPROVED') {
+        throw new Error('本月填报已审核通过，如需修改请联系管理员处理')
+      }
+
+      throw new Error('本月填报已提交审核，暂时不能重复保存或提交')
+    }
+
+    const upsertPayload = {
+      title: context.indicatorName,
+      content: form.content,
+      summary: form.content,
+      progress: form.progress,
+      issues: form.content,
+      nextPlan: form.content
+    }
+
+    const savedReport = editableExistingReport
+      ? await apiClient
+          .put<ApiResponse<PlanReportSimpleResponse>>(
+            `/reports/${editableExistingReport.id}`,
+            upsertPayload
+          )
+          .then(response => {
+            if (!hasApiData(response) || !response.data) {
+              throw new Error(response.message || '保存指标填报失败')
+            }
+            return response.data
+          })
+      : await apiClient
+          .post<ApiResponse<PlanReportSimpleResponse>>('/reports', {
+            reportMonth: context.reportMonth,
+            reportOrgId: context.reportOrgId,
+            reportOrgType: context.reportOrgType,
+            planId: context.planId
+          })
+          .then(async createResponse => {
+            if (!hasApiData(createResponse) || !createResponse.data) {
+              throw new Error(createResponse.message || '创建填报草稿失败')
+            }
+
+            const updateResponse = await apiClient.put<ApiResponse<PlanReportSimpleResponse>>(
+              `/reports/${createResponse.data.id}`,
+              upsertPayload
+            )
+            if (!hasApiData(updateResponse) || !updateResponse.data) {
+              throw new Error(updateResponse.message || '保存指标填报失败')
+            }
+            return updateResponse.data
+          })
+
+    return {
+      code: 200,
+      data: mapPlanReportToIndicatorFill(
+        {
+          ...savedReport,
+          progress: form.progress,
+          content: form.content,
+          summary: form.content,
+          title: context.indicatorName
+        },
+        {
+          indicatorId: context.indicatorId,
+          indicatorName: context.indicatorName
+        }
+      ),
+      message: '保存成功',
+      timestamp: new Date().toISOString()
+    }
   },
 
   /**
@@ -1126,9 +1581,14 @@ export const indicatorFillApi = {
       }
     }
 
-    return withRetry(async () => {
-      return apiClient.put<ApiResponse<IndicatorFill>>(`/fills/${fillId}`, form)
-    })
+    void fillId
+    void form
+    return {
+      code: 501,
+      data: null as never,
+      message: '当前 OpenAPI 未提供填报更新接口',
+      timestamp: new Date().toISOString()
+    }
   },
 
   /**
@@ -1154,9 +1614,13 @@ export const indicatorFillApi = {
       }
     }
 
-    return withRetry(async () => {
-      return apiClient.delete<ApiResponse<void>>(`/fills/${fillId}`)
-    })
+    void fillId
+    return {
+      code: 501,
+      data: undefined,
+      message: '当前 OpenAPI 未提供填报删除接口',
+      timestamp: new Date().toISOString()
+    }
   },
 
   /**
@@ -1182,9 +1646,36 @@ export const indicatorFillApi = {
       }
     }
 
-    return withRetry(async () => {
-      return apiClient.post<ApiResponse<IndicatorFill>>(`/fills/${fillId}/submit`, {})
-    })
+    const { useAuthStore } = await import('@/3-features/auth/model/store')
+    const authStore = useAuthStore()
+    const userId = Number(authStore.user?.id)
+
+    if (!Number.isFinite(userId)) {
+      throw new Error('当前登录用户缺少 userId，无法提交填报')
+    }
+
+    const response = await apiClient.post<ApiResponse<PlanReportSimpleResponse>>(
+      `/reports/${fillId}/submit?userId=${userId}`
+    )
+
+    if (!hasApiData(response) || !response.data) {
+      throw new Error(response.message || '提交指标填报失败')
+    }
+
+    const reportDetail = await loadPlanReportById(response.data.id).catch(() => response.data)
+
+    return {
+      code: 200,
+      data: mapPlanReportToIndicatorFill(
+        reportDetail,
+        {
+          indicatorId: Number((reportDetail as Record<string, unknown>).indicatorId ?? 0),
+          indicatorName: String(reportDetail.title || '指标填报')
+        }
+      ),
+      message: '提交成功',
+      timestamp: new Date().toISOString()
+    }
   }
 }
 
@@ -1194,7 +1685,7 @@ export const indicatorFillApi = {
 
 export const planFillApi = {
   // 使用模拟数据标志（后端就绪后设为 false）
-  useMockData: import.meta.env.VITE_USE_MOCK === 'true',
+  useMockData: USE_MOCK,
 
   /**
    * 获取 Plan 的所有提交记录
@@ -1219,7 +1710,13 @@ export const planFillApi = {
       }
     }
 
-    return apiClient.get<ApiResponse<PlanFill[]>>(`/plans/${planId}/fills`)
+    void planId
+    return {
+      code: 200,
+      data: [],
+      message: '当前 OpenAPI 未提供计划填报记录接口，返回空列表',
+      timestamp: new Date().toISOString()
+    }
   },
 
   /**

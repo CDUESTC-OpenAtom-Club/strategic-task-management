@@ -36,6 +36,7 @@ import api from '@/5-shared/api'
 import { useAuthStore } from '@/3-features/auth/model/store'
 import { useAuditLogStore } from '@/3-features/admin/model/auditLog'
 import { logger } from '@/5-shared/lib/utils/logger'
+import orgApi from '@/3-features/organization/api/org'
 
 const authStore = useAuthStore()
 const auditLogStore = useAuditLogStore()
@@ -253,7 +254,7 @@ const loadUsers = async () => {
       sortBy: 'id',
       sortOrder: 'asc'
     }
-    const response = await api.get('/admin/users', { params })
+    const response = await api.get('/auth/users', { params })
 
     const pageData = response?.data?.content
       ? response.data
@@ -290,40 +291,13 @@ const loadUsers = async () => {
 const loadOrganizations = async () => {
   organizationLoading.value = true
   try {
-    // TODO: 调用实际API
-    organizationTree.value = [
-      {
-        id: 'org-001',
-        name: '战略发展部',
-        type: 'strategic_dept',
-        children: []
-      },
-      {
-        id: 'org-002',
-        name: '职能部门',
-        type: 'functional_dept',
-        children: [
-          { id: 'org-002-01', name: '教务处', type: 'functional_dept', parentId: 'org-002' },
-          { id: 'org-002-02', name: '人事处', type: 'functional_dept', parentId: 'org-002' },
-          { id: 'org-002-03', name: '财务处', type: 'functional_dept', parentId: 'org-002' }
-        ]
-      },
-      {
-        id: 'org-003',
-        name: '二级学院',
-        type: 'secondary_college',
-        children: [
-          {
-            id: 'org-101',
-            name: '计算机科学与技术学院',
-            type: 'secondary_college',
-            parentId: 'org-003'
-          },
-          { id: 'org-102', name: '外国语学院', type: 'secondary_college', parentId: 'org-003' },
-          { id: 'org-103', name: '经济管理学院', type: 'secondary_college', parentId: 'org-003' }
-        ]
-      }
-    ]
+    const departments = await orgApi.getAllDepartments()
+    organizationTree.value = departments.map(dept => ({
+      id: dept.id,
+      name: dept.name,
+      type: dept.type,
+      children: []
+    }))
   } catch (error) {
     ElMessage.error('加载组织结构失败')
   } finally {
@@ -396,13 +370,13 @@ const handleSave = async () => {
       email: userForm.value.email,
       phone: userForm.value.phone,
       orgId: Number(userForm.value.orgId),
-      roleIds: userForm.value.roles
+      roles: userForm.value.roles
     }
 
     let result
     if (dialogMode.value === 'create') {
       userData.password = userForm.value.password
-      result = await api.post('/admin/users', userData)
+      result = await api.post('/auth/users', userData)
       ElMessage.success('用户创建成功')
 
       // 记录审计日志
@@ -419,7 +393,7 @@ const handleSave = async () => {
             realName: userData.realName,
             email: userData.email,
             orgId: userData.orgId,
-            roles: userData.roleIds
+            roles: userData.roles
           }
         })
       } catch (logError) {
@@ -429,7 +403,7 @@ const handleSave = async () => {
       // 获取原始数据用于审计日志
       const originalUser = users.value.find(u => u.id === editingUserId.value)
 
-      result = await api.put(`/admin/users/${editingUserId.value}`, userData)
+      result = await api.put(`/auth/users/${editingUserId.value}`, userData)
       ElMessage.success('用户信息更新成功')
 
       // 记录审计日志
@@ -481,9 +455,11 @@ const toggleUserStatus = async (user: UserManagementItem) => {
       }
     )
 
-    await api.patch(`/admin/users/${user.id}/status`, null, {
-      params: { isActive: newStatus === 'active' }
-    })
+    if (newStatus === 'active') {
+      await api.post(`/auth/users/${user.id}/unlock`)
+    } else {
+      await api.post(`/auth/users/${user.id}/lock`)
+    }
 
     ElMessage.success(`${actionText}成功`)
 
@@ -525,7 +501,7 @@ const handleDelete = async (user: UserManagementItem) => {
       }
     )
 
-    await api.delete(`/admin/users/${user.id}`)
+    await api.delete(`/auth/users/${user.id}`)
     ElMessage.success('删除成功')
 
     // 记录审计日志
@@ -579,31 +555,9 @@ const handleResetPassword = async () => {
   loading.value = true
 
   try {
-    // 调用管理员重置密码API
-    // 注意：api.put() 已经包含 /api 前缀，所以这里不需要再加
-    const response = await api.put(`/admin/users/${passwordForm.value.userId}/password`, {
-      newPassword: passwordForm.value.newPassword
-    })
-
-    if (response.success) {
-      ElMessage.success('密码重置成功，用户下次登录需使用新密码')
-      showPasswordDialog.value = false
-
-      // 记录审计日志
-      try {
-        auditLogStore.logAction({
-          entityType: 'user',
-          entityId: String(passwordForm.value.userId),
-          entityName: `用户ID: ${passwordForm.value.userId}`,
-          action: 'reset_password',
-          operator: authStore.user.id || '',
-          operatorName: authStore.user.name || '',
-          dataAfter: { action: '密码已重置', timestamp: new Date().toISOString() }
-        })
-      } catch (logError) {
-        logger.warn('记录审计日志失败:', logError)
-      }
-    }
+    void passwordForm.value.newPassword
+    ElMessage.warning('当前接口文档未提供管理员重置密码能力，已停止发送无效请求')
+    showPasswordDialog.value = false
   } catch (error: unknown) {
     logger.error('重置密码失败:', error)
     ElMessage.error(error.response.data.message || error.message || '密码重置失败，请重试')

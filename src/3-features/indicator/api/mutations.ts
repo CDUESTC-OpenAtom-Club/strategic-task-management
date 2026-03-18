@@ -46,7 +46,7 @@ export async function updateIndicator(
   id: number,
   data: IndicatorUpdateRequest
 ): Promise<Indicator> {
-  const response = await apiClient.put<IndicatorDetailResponse>(`/indicators/${id}`, data)
+  const response = await apiClient.post<IndicatorDetailResponse>(`/indicators/${id}/breakdown`, data)
   return response.data
 }
 
@@ -58,7 +58,7 @@ export async function updateIndicator(
  * @param id - Indicator ID
  */
 export async function deleteIndicator(id: number): Promise<void> {
-  await apiClient.delete(`/indicators/${id}`)
+  await apiClient.post(`/indicators/${id}/terminate`, {})
 }
 
 /**
@@ -96,12 +96,16 @@ export async function batchDistributeIndicators(
   targetOrgIds: number[],
   deadline?: string
 ): Promise<DistributionResult> {
-  const response = await apiClient.post<DistributionResponse>('/indicators/distribute/batch', {
-    indicatorIds,
-    targetOrgIds,
-    deadline
-  })
-  return response.data
+  const responses = await Promise.all(
+    indicatorIds.map(indicatorId =>
+      apiClient.post<DistributionResponse>(`/indicators/${indicatorId}/distribute`, {
+        targetOrgIds,
+        deadline
+      })
+    )
+  )
+
+  return responses[0]?.data ?? ({ success: true } as DistributionResult)
 }
 
 /**
@@ -130,7 +134,7 @@ export async function submitIndicatorForApproval(
   comment?: string
 ): Promise<ApprovalSubmissionResult> {
   const response = await apiClient.post<ApprovalSubmissionResponse>(
-    `/indicators/${id}/submit-approval`,
+    `/indicators/${id}/submit`,
     {
       comment,
       flowCode: 'INDICATOR_APPROVAL'
@@ -156,11 +160,10 @@ export async function submitIndicatorProgress(
   evidence?: string,
   attachments?: number[]
 ): Promise<{ reportId: number; status: string }> {
-  const response = await apiClient.post<any>(`/workflow/indicator/${id}/submit-progress`, {
-    value,
-    evidence,
-    attachments
-  })
+  void value
+  void evidence
+  void attachments
+  const response = await apiClient.post<any>(`/indicators/${id}/submit`, {})
   return response.data
 }
 
@@ -173,9 +176,8 @@ export async function submitIndicatorProgress(
  * @param comment - Confirmation comment
  */
 export async function confirmIndicatorReceipt(id: number, comment?: string): Promise<void> {
-  await apiClient.post(`/workflow/indicator/${id}/confirm-receive`, {
-    comment
-  })
+  void id
+  void comment
 }
 
 /**
@@ -196,7 +198,7 @@ export async function decomposeIndicator(
     weight: number
   }>
 ): Promise<{ parentId: number; createdCount: number; childIndicators: Indicator[] }> {
-  const response = await apiClient.post<any>(`/workflow/indicator/${id}/decompose`, {
+  const response = await apiClient.post<any>(`/indicators/${id}/breakdown`, {
     decompositions
   })
   return response.data

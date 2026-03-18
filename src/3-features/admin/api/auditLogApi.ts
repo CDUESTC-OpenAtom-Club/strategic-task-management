@@ -53,23 +53,21 @@ export const auditLogApi = {
    * 查询审计日志列表
    */
   list: async (params: AuditLogQueryParams = {}) => {
-    const response = await apiClient.get<{
-      code: number
-      message: string
-      data: AuditLogResponse
-    }>('/audit/logs', { params })
-    return response.data.data
+    void params
+    return {
+      items: [],
+      total: 0,
+      page: 0,
+      size: 0
+    }
   },
 
   /**
    * 导出审计日志
    */
   export: async (params: AuditLogQueryParams = {}) => {
-    const response = await apiClient.get('/audit/logs/export', {
-      params,
-      responseType: 'blob'
-    })
-    return response.data
+    void params
+    return null
   }
 }
 

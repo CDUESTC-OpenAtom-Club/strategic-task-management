@@ -8,6 +8,7 @@
  */
 import { apiClient } from '@/5-shared/api/client'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { buildQueryKey, fetchWithCache } from '@/5-shared/lib/utils/cache'
 import { orgListResponseSchema, type OrgVO, type OrgType } from './org.schema'
 
 // 重新导出 OrgVO 类型供其他模块使用
@@ -96,6 +97,30 @@ export function convertOrgVOToDepartment(vo: OrgVO): Department {
 }
 
 export const orgApi = {
+  async requestOrgList(): Promise<{ data: OrgVO[]; success: boolean; message?: string } | null> {
+    const endpoints = ['/organizations', '/orgs']
+
+    for (const endpoint of endpoints) {
+      try {
+        return await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(endpoint)
+      } catch (error) {
+        const status = Number((error as { code?: number; response?: { status?: number } }).code ??
+          (error as { response?: { status?: number } }).response?.status ??
+          NaN)
+        const shouldFallback = endpoint === '/organizations' && (status === 403 || status === 404)
+
+        if (shouldFallback) {
+          logger.info(`[orgApi] ${endpoint} returned ${status}, falling back to /orgs`)
+          continue
+        }
+
+        throw error
+      }
+    }
+
+    return null
+  },
+
   /**
    * 获取所有组织机构
    *
@@ -109,9 +134,20 @@ export const orgApi = {
    */
   async getAllOrgs(): Promise<OrgVO[]> {
     try {
-      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(
-        '/organizations'
-      )
+      const response = await fetchWithCache({
+        key: buildQueryKey('org', 'departments'),
+        policy: {
+          ttlMs: 10 * 60 * 1000,
+          scope: 'memory',
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['org.list']
+        },
+        fetcher: async () => {
+          const result = await this.requestOrgList()
+          return result ?? { data: [], success: false, message: '组织接口不可用' }
+        }
+      })
 
       // Zod 运行时验证
       const result = orgListResponseSchema.safeParse(response)
@@ -145,9 +181,20 @@ export const orgApi = {
    */
   async getAllDepartments(): Promise<Department[]> {
     try {
-      const response = await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(
-        '/organizations'
-      )
+      const response = await fetchWithCache({
+        key: buildQueryKey('org', 'departments'),
+        policy: {
+          ttlMs: 10 * 60 * 1000,
+          scope: 'memory',
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['org.list']
+        },
+        fetcher: async () => {
+          const result = await this.requestOrgList()
+          return result ?? { data: [], success: false, message: '组织接口不可用' }
+        }
+      })
 
       // Direct transformation without Zod validation to avoid issues
       if (

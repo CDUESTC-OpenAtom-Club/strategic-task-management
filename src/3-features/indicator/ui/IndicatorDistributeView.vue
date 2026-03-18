@@ -104,14 +104,18 @@ const pendingApprovalCount = computed(() => {
   return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'PENDING').length
 })
 
+const refreshDistributionData = async () => {
+  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+}
+
 // 打开任务审批抽屉
 const handleOpenApproval = () => {
   taskApprovalVisible.value = true
 }
 
 // 审批后刷新
-const handleApprovalRefresh = () => {
-  // 刷新数据
+const handleApprovalRefresh = async () => {
+  await refreshDistributionData()
 }
 
 // ================== 数据获取 ==================
@@ -708,6 +712,7 @@ const handleGlobalMousedown = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleGlobalMousedown, true)
+  void refreshDistributionData()
 })
 
 onBeforeUnmount(() => {
@@ -1532,7 +1537,7 @@ const saveMilestones = async () => {
       logger.info(`[IndicatorDistributionView] Reloading indicators after milestone update...`)
       
       // 重新加载指标数据以获取后端更新后的里程碑
-      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+      await refreshDistributionData()
       
       // 验证重新加载后的里程碑数量
       const reloadedIndicator = strategicStore.indicators.find(i => i.id === indicator.id)

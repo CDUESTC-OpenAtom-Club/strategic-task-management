@@ -8,10 +8,7 @@ import api from '@/5-shared/api'
 import type { ApiResponse, StrategicTask } from '@/5-shared/types'
 import type {
   TaskCreateRequest,
-  TaskUpdateRequest,
-  IndicatorCreateRequest,
-  MilestoneCreateRequest,
-  UpdateMilestoneRequest
+  TaskUpdateRequest
 } from '@/5-shared/types'
 
 /**
@@ -142,81 +139,4 @@ export async function activateTask(taskId: number): Promise<ApiResponse<void>> {
  */
 export async function deactivateTask(taskId: number): Promise<ApiResponse<void>> {
   return api.post(`/tasks/${taskId}/cancel`)
-}
-
-/**
- * Add indicator to task
- *
- * API: POST /api/v1/tasks/{id}/indicators (not in V1 OpenAPI)
- *
- * @param taskId - Task ID
- * @param indicator - Indicator data
- */
-export async function addIndicator(
-  taskId: number,
-  indicator: IndicatorCreateRequest
-): Promise<ApiResponse<void>> {
-  return api.post(`/tasks/${taskId}/indicators`, indicator)
-}
-
-/**
- * Remove indicator from task
- *
- * API: DELETE /api/v1/tasks/{taskId}/indicators/{indicatorId} (not in V1 OpenAPI)
- *
- * @param taskId - Task ID
- * @param indicatorId - Indicator ID
- */
-export async function removeIndicator(
-  taskId: number,
-  indicatorId: number
-): Promise<ApiResponse<void>> {
-  return api.delete(`/tasks/${taskId}/indicators/${indicatorId}`)
-}
-
-/**
- * Add milestone to task
- *
- * API: POST /api/v1/tasks/{id}/milestones (not in V1 OpenAPI)
- *
- * @param taskId - Task ID
- * @param milestone - Milestone data
- */
-export async function addMilestone(
-  taskId: number,
-  milestone: MilestoneCreateRequest
-): Promise<ApiResponse<void>> {
-  return api.post(`/tasks/${taskId}/milestones`, milestone)
-}
-
-/**
- * Update milestone
- *
- * API: PUT /api/v1/tasks/{taskId}/milestones/{milestoneId} (not in V1 OpenAPI)
- *
- * @param taskId - Task ID
- * @param milestoneId - Milestone ID
- * @param milestone - Milestone data
- */
-export async function updateMilestone(
-  taskId: number,
-  milestoneId: number,
-  milestone: UpdateMilestoneRequest
-): Promise<ApiResponse<void>> {
-  return api.put(`/tasks/${taskId}/milestones/${milestoneId}`, milestone)
-}
-
-/**
- * Delete milestone
- *
- * API: DELETE /api/v1/tasks/{taskId}/milestones/{milestoneId} (not in V1 OpenAPI)
- *
- * @param taskId - Task ID
- * @param milestoneId - Milestone ID
- */
-export async function deleteMilestone(
-  taskId: number,
-  milestoneId: number
-): Promise<ApiResponse<void>> {
-  return api.delete(`/tasks/${taskId}/milestones/${milestoneId}`)
 }

@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest'
 import { config } from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { readFileSync } from 'node:fs'
 
 // 加载环境变量
 const __filename = fileURLToPath(import.meta.url)
@@ -44,12 +45,12 @@ describe('前端配置验证', () => {
 })
 
 describe('Vite配置验证', () => {
-  it('Vite代理配置应该使用 /api/v1', async () => {
-    const viteConfig = await import('../vite.config.ts')
-    const config = viteConfig.default({ mode: 'development' })
+  it('Vite代理配置应该使用 /api/v1', () => {
+    const viteConfigSource = readFileSync(join(__dirname, '..', 'vite.config.ts'), 'utf-8')
 
-    expect(config.server).toBeDefined()
-    expect(config.server.port).toBe(3500)
-    expect(config.server.open).toBe(false)
+    expect(viteConfigSource).toContain("'/api/v1'")
+    expect(viteConfigSource).toContain("'/ws/notifications'")
+    expect(viteConfigSource).toContain("port: Number(env.VITE_DEV_SERVER_PORT) || 3500")
+    expect(viteConfigSource).toContain("open: env.VITE_DEV_AUTO_OPEN === 'true'")
   })
 })

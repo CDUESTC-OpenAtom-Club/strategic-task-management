@@ -40,7 +40,7 @@ export interface UserListResponse {
  * @returns User list with pagination
  */
 export async function getUserList(params: UserListParams = {}): Promise<UserListResponse> {
-  const response = await api.get('/users', { params })
+  const response = await api.get('/auth/users', { params })
   return response.data
 }
 
@@ -53,7 +53,7 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
  * @returns User detail
  */
 export async function getUserById(userId: string | number): Promise<User> {
-  const response = await api.get(`/users/${userId}`)
+  const response = await api.get(`/auth/users/${userId}`)
   return response.data
 }
 
@@ -65,7 +65,7 @@ export async function getUserById(userId: string | number): Promise<User> {
  * @returns Current user profile
  */
 export async function getCurrentUserProfile(): Promise<User> {
-  const response = await api.get('/users/me')
+  const response = await api.get('/auth/me')
   return response.data
 }
 
@@ -78,8 +78,13 @@ export async function getCurrentUserProfile(): Promise<User> {
  * @returns Matching users
  */
 export async function searchUsers(keyword: string): Promise<User[]> {
-  const response = await api.get('/users/search', {
-    params: { keyword }
-  })
-  return response.data
+  try {
+    const response = await api.get(`/auth/users/username/${encodeURIComponent(keyword)}`)
+    return response?.data ? [response.data] : []
+  } catch {
+    const fallback = await getUserList()
+    return fallback.list.filter(
+      user => user.username?.includes(keyword) || user.realName?.includes(keyword)
+    )
+  }
 }

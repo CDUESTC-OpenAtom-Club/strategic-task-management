@@ -82,11 +82,6 @@ export function useNavigation(viewingRole: computed<UserRole | null>) {
       return 'plans'
     }
 
-    // /fills/indicator/:indicatorId -> indicators (指标填报详情属于指标填报)
-    if (currentPath.startsWith('/fills/')) {
-      return 'indicators'
-    }
-
     // /audit/plan/:fillId -> pending-audit (审核详情属于待审核列表)
     if (currentPath.startsWith('/audit/')) {
       return 'pending-audit'

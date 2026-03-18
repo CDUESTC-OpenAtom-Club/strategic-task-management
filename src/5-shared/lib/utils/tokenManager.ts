@@ -13,6 +13,8 @@
 import axios from 'axios'
 import { logger } from './logger'
 
+const SESSION_TOKEN_KEY = 'sism_session_access_token'
+
 /**
  * Token 管理器接口
  */
@@ -166,7 +168,8 @@ export interface ExtendedTokenManager extends TokenManager {
 function createTokenManager(): ExtendedTokenManager {
   // Access Token 存储在闭包中 (内存存储)
   // 重要: 不要将此变量暴露到全局作用域或 localStorage
-  let accessToken: string | null = null
+  let accessToken: string | null =
+    typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SESSION_TOKEN_KEY) : null
   
   // 刷新锁，防止并发刷新
   let isRefreshing = false
@@ -185,14 +188,18 @@ function createTokenManager(): ExtendedTokenManager {
   /**
    * 设置 Access Token
    * 
-   * 注意: 此方法只将 Token 存储在内存中，
-   * 不会持久化到 localStorage 或其他存储。
+   * 注意: Token 会保存在内存中，并同步到 sessionStorage，
+   * 以支持同一浏览器标签页内的页面刷新恢复。
    * 
    * @param token Access Token 字符串
    */
   const setAccessToken = (token: string): void => {
     accessToken = token
-    logger.debug('[TokenManager] Access Token 已设置 (内存存储)')
+    logger.debug('[TokenManager] Access Token 已设置 (内存 + sessionStorage)')
+
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(SESSION_TOKEN_KEY, token)
+    }
     
     // 安全检查: 确保不会意外存储到 localStorage
     // 这是一个防御性检查，正常情况下不应该触发
@@ -214,6 +221,9 @@ function createTokenManager(): ExtendedTokenManager {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('access_token')
       localStorage.removeItem('accessToken')
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY)
     }
   }
 
@@ -388,6 +398,9 @@ function createTokenManager(): ExtendedTokenManager {
     isRefreshing = false
     refreshPromise = null
     customRefreshHandler = null
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY)
+    }
   }
 
   return {

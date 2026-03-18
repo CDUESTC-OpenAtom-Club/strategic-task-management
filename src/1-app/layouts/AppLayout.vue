@@ -28,7 +28,7 @@ const router = useRouter()
 const isDev = import.meta.env.DEV
 
 // 使用 Layout Composables
-const { isLoggedIn, currentUser, isStrategicDept, strategicDeptName, handleLogout } = useAppLayout()
+const { currentUser, isStrategicDept, strategicDeptName, handleLogout } = useAppLayout()
 
 const { viewingDept, viewingRole, viewingDeptName, deptOptions } = useDepartmentSwitcher()
 
@@ -40,9 +40,7 @@ const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
  * Initialize approval notifications on mount
  */
 onMounted(() => {
-  if (isLoggedIn.value) {
-    initApprovalNotifications()
-  }
+  initApprovalNotifications()
 })
 
 /**
@@ -93,11 +91,7 @@ const handleDropdownCommand = async (command: string) => {
 </script>
 
 <template>
-  <!-- Public routes: no authentication required -->
-  <router-view v-if="!isLoggedIn" />
-
-  <!-- Main application interface -->
-  <div v-else class="app-container">
+  <div class="app-container">
     <!-- Header navigation -->
     <header class="app-header">
       <div class="header-content">

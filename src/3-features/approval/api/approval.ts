@@ -9,6 +9,7 @@
 
 import axios from 'axios'
 import { apiClient } from '@/5-shared/api/client'
+import { API_BASE_URL } from '@/5-shared/config/api'
 import { tokenManager } from '@/5-shared/lib/utils/tokenManager'
 import type { ApiResponse } from '@/5-shared/types'
 
@@ -115,10 +116,9 @@ export const approvalApi = {
       throw new Error('Missing requesterOrgId for approval instance start')
     }
     const token = tokenManager.getAccessToken()
-    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
     const response = await axios.post<ApiResponse<ApprovalDetail>>(
-      `${baseURL}/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
+      `${API_BASE_URL}/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
       {
         entityType: request.entityType,
         entityId: request.entityId,

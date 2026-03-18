@@ -29,6 +29,7 @@ import { useAuthStore } from '@/3-features/auth/model/store'
 import { useTimeContextStore } from '@/5-shared/lib/timeContext'
 import { useOrgStore } from '@/3-features/organization/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
 import strategicApi, { approvalApi as taskApprovalApi } from '@/3-features/task/api/strategicApi'
 import { approvalApi as workflowApprovalApi } from '@/3-features/approval/api/approval'
 import { milestoneApi } from '@/4-entities/milestone/api/milestoneApi'
@@ -37,8 +38,9 @@ import {
   getStatusType as _getStatusType,
   getStatusIcon as _getStatusIcon
 } from '@/5-shared/lib/utils/indicatorStatus'
+import { getPlanStatusDisplay, normalizePlanStatus } from '@/3-features/task/lib'
 import AuditLogDrawer from '@/3-features/task/ui/AuditLogDrawer.vue'
-import { ApprovalProgressDrawer, PlanApprovalDrawer } from '@/3-features/approval'
+import { ApprovalProgressDrawer } from '@/3-features/approval'
 import _MilestoneList from '@/3-features/milestone/ui/MilestoneList.vue'
 import { indicatorApi } from '@/3-features/indicator/api'
 import { usePlanStore } from '@/3-features/plan/model/store'
@@ -115,19 +117,24 @@ const canEdit = computed(() => {
   return authStore.userRole === 'strategic_dept' || props.selectedRole === 'strategic_dept'
 })
 
-// 首屏加载态：接口未返回前展示骨架，避免先渲染“暂无数据”造成误判
+// 首屏加载态：接口未返回前展示骨架，避免先渲染"暂无数据"造成误判
 const taskTypeMapLoading = ref(false)
 const currentPlanScopeLoading = ref(false)
 
 const isInitialDataLoading = computed(() => {
+  // 首屏加载：indicators 为空且正在加载
   const indicatorBootstrapping =
     strategicStore.loadingState.indicators && strategicStore.indicators.length === 0
   const orgBootstrapping = orgStore.loading && orgStore.departments.length === 0
+  // 任何时候只要 store 正在加载指标数据，就应该显示加载状态
+  // 这样可以避免在切换部门或刷新数据时先显示"暂无数据"再显示真实数据
+  const anyIndicatorLoading = strategicStore.loadingState.indicators
   return (
     indicatorBootstrapping ||
     orgBootstrapping ||
     taskTypeMapLoading.value ||
-    currentPlanScopeLoading.value
+    currentPlanScopeLoading.value ||
+    anyIndicatorLoading
   )
 })
 
@@ -174,6 +181,23 @@ const departmentNameIdMap = computed(() => {
   return map
 })
 
+const resolvePlanYear = (plan: any): number | null => {
+  const explicitYear = plan?.cycle?.year ?? plan?.year
+  if (explicitYear != null && explicitYear !== '') {
+    return Number(explicitYear)
+  }
+
+  const cycleId = Number(plan?.cycleId)
+  if (cycleId === 4 || cycleId === 90) {
+    return 2026
+  }
+  if (cycleId === 7) {
+    return 2025
+  }
+
+  return null
+}
+
 const findCurrentPlanByDepartment = () => {
   if (!selectedDepartment.value) {
     return null
@@ -183,8 +207,8 @@ const findCurrentPlanByDepartment = () => {
     planStore.plans.find(p => {
       const planAny = p as any
       const orgName = planAny.targetOrgName || planAny.orgName || ''
-      // 优先使用 cycle.year，否则使用 plan 顶层的 year，否则根据 cycleId 推断年份
-      const planYear = planAny.cycle?.year ?? planAny.year ?? (planAny.cycleId === 4 ? 2026 : planAny.cycleId === 7 ? 2025 : planAny.cycleId === 90 ? 2026 : null)
+      // 优先使用后端返回的 year，其次根据 cycleId 推断年份
+      const planYear = resolvePlanYear(planAny)
       return orgName === selectedDepartment.value && planYear === timeContext.currentYear
     }) || null
   )
@@ -195,8 +219,6 @@ const backendTaskTypeMap = ref<Record<string, string>>({})
 const currentPlanTaskTypeMap = ref<Record<string, string>>({})
 const currentPlanTaskIdSet = ref<Set<string>>(new Set())
 
-// 部门数据缓存 - 避免切换部门时重复请求API
-const planTaskCache = ref<Record<string, { taskTypeMap: Record<string, string>, taskIdSet: Set<string> }>>({})
 const milestoneCache = ref<Record<string, Record<string, Array<Record<string, unknown>>>>>({}) // key: "部门名_指标ID"
 
 const normalizeTaskId = (value: unknown): string => {
@@ -345,15 +367,6 @@ const loadCurrentPlanTaskScope = async () => {
     return
   }
 
-  // 优先从缓存读取
-  const cached = planTaskCache.value[dept]
-  if (cached) {
-    currentPlanTaskTypeMap.value = cached.taskTypeMap
-    currentPlanTaskIdSet.value = cached.taskIdSet
-    currentPlanScopeLoading.value = false
-    return
-  }
-
   currentPlanScopeLoading.value = true
   const currentPlan = findCurrentPlanByDepartment()
   const planId = currentPlan?.id
@@ -361,29 +374,41 @@ const loadCurrentPlanTaskScope = async () => {
   if (!planId) {
     currentPlanTaskTypeMap.value = {}
     currentPlanTaskIdSet.value = new Set()
-    // 缓存空结果
-    planTaskCache.value[dept] = { taskTypeMap: {}, taskIdSet: new Set() }
     currentPlanScopeLoading.value = false
     return
   }
 
   try {
-    const response = await strategicApi.getTasksByPlanId(planId)
-    if (response?.success && Array.isArray(response.data)) {
-      const planTaskMap = buildTaskTypeMap(response.data as Array<Record<string, unknown>>)
-      currentPlanTaskTypeMap.value = planTaskMap
-      currentPlanTaskIdSet.value = new Set(Object.keys(planTaskMap))
-      // 存入缓存
-      planTaskCache.value[dept] = {
-        taskTypeMap: planTaskMap,
-        taskIdSet: new Set(Object.keys(planTaskMap))
+    const scope = await fetchWithCache({
+      key: buildQueryKey('task', 'scope', {
+        department: dept,
+        planId: String(planId),
+        year: timeContext.currentYear
+      }),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['task.scope', `task.scope.${planId}`, 'plan.detail']
+      },
+      fetcher: async () => {
+        const response = await strategicApi.getTasksByPlanId(planId)
+        if (!response?.success || !Array.isArray(response.data)) {
+          return {
+            taskTypeMap: {} as Record<string, string>,
+            taskIdSet: [] as string[]
+          }
+        }
+        const planTaskMap = buildTaskTypeMap(response.data as Array<Record<string, unknown>>)
+        return {
+          taskTypeMap: planTaskMap,
+          taskIdSet: Object.keys(planTaskMap)
+        }
       }
-      return
-    }
+    })
 
-    currentPlanTaskTypeMap.value = {}
-    currentPlanTaskIdSet.value = new Set()
-    planTaskCache.value[dept] = { taskTypeMap: {}, taskIdSet: new Set() }
+    currentPlanTaskTypeMap.value = scope.taskTypeMap
+    currentPlanTaskIdSet.value = new Set(scope.taskIdSet)
   } catch (error) {
     currentPlanTaskTypeMap.value = {}
     currentPlanTaskIdSet.value = new Set()
@@ -444,6 +469,30 @@ const normalizeMilestone = (raw: Record<string, unknown>, index: number) => ({
   weightPercent: Number(raw.weightPercent ?? 0),
   sortOrder: Number(raw.sortOrder ?? index)
 })
+
+const toMilestoneRequestStatus = (status: unknown): string => {
+  const normalized = String(status || '').trim().toUpperCase()
+  if (normalized === 'COMPLETED' || normalized === 'IN_PROGRESS' || normalized === 'NOT_STARTED') {
+    return normalized
+  }
+  if (normalized === 'OVERDUE' || normalized === 'DELAYED') {
+    return 'DELAYED'
+  }
+  return 'NOT_STARTED'
+}
+
+const toMilestoneDueDate = (deadline: unknown): string | null => {
+  const text = String(deadline || '').trim()
+  if (!text) {
+    return null
+  }
+
+  if (text.includes('T')) {
+    return text
+  }
+
+  return `${text}T23:59:59`
+}
 
 const extractMilestones = (payload: unknown): Array<Record<string, unknown>> => {
   if (Array.isArray(payload)) {
@@ -550,6 +599,19 @@ const loadMilestonesForCurrentScope = async () => {
   )
 }
 
+const reloadMilestonesForIndicator = async (indicatorId: string, dept: string) => {
+  const response = await milestoneApi.getMilestonesByIndicator(indicatorId)
+  const rawMilestones = response.success ? extractMilestones(response.data) : []
+  const normalizedMilestones = rawMilestones.map((m, idx) => normalizeMilestone(m, idx))
+
+  milestoneMap.value[indicatorId] = normalizedMilestones
+  milestoneCache.value[dept] = milestoneCache.value[dept] || {}
+  milestoneCache.value[dept][indicatorId] = normalizedMilestones
+  loadedMilestoneIds.value.add(indicatorId)
+
+  return normalizedMilestones
+}
+
 const isMilestoneLoading = (indicatorId: string | number): boolean =>
   loadingMilestoneIds.value.has(String(indicatorId))
 
@@ -572,9 +634,8 @@ watch(
     milestoneMap.value = {}
     loadedMilestoneIds.value = new Set<string>()
     loadingMilestoneIds.value = new Set<string>()
-    // 年份变化时清空部门缓存，避免旧数据覆盖新数据
-    planTaskCache.value = {}
     milestoneCache.value = {}
+    invalidateQueries(['task.scope'])
     void loadMilestonesForCurrentScope()
   }
 )
@@ -601,25 +662,14 @@ const ensurePlanCanDistribute = (): boolean => {
 }
 
 // 整体状态：直接使用 Plan 的状态，不再根据指标状态混合计算
-// Plan 状态: DRAFT(草稿), PENDING_REVIEW/PENDING(待审核), DISTRIBUTED/ACTIVE(已下发), COMPLETED(已完成)
+// 兼容后端大写状态和 Plan 模块的小写状态
 const overallStatus = computed(() => {
-  // 如果没有 plan，返回"暂无指标"
   const planStatus = currentPlanStatus.value
   if (!planStatus) {
     return { label: '暂无指标', type: 'info' }
   }
 
-  // 直接使用 plan 的状态映射到显示文案
-  const statusMap: Record<string, { label: string; type: string }> = {
-    'DRAFT': { label: '草稿', type: 'info' },
-    'PENDING_REVIEW': { label: '待审核', type: 'warning' },
-    'PENDING': { label: '待审核', type: 'warning' },
-    'DISTRIBUTED': { label: '已下发', type: 'success' },
-    'ACTIVE': { label: '已下发', type: 'success' },
-    'COMPLETED': { label: '已完成', type: 'success' }
-  }
-
-  return statusMap[planStatus] || { label: planStatus, type: 'info' }
+  return getPlanStatusDisplay(planStatus)
 })
 
 // 获取当前选中部门对应的 Plan（包含审批实例信息）
@@ -629,7 +679,7 @@ const currentPlan = computed(() => {
 
 // 获取当前选中部门对应的 Plan 状态
 const currentPlanStatus = computed(() => {
-  return currentPlan.value?.status || null
+  return normalizePlanStatus(currentPlan.value?.status)
 })
 
 const getCurrentCycleId = async (): Promise<number> => {
@@ -659,6 +709,76 @@ const getIndicatorTaskTypeForPersistence = (
   return getIndicatorCategoryLabel(indicator) === '基础性' ? 'BASIC' : 'DEVELOPMENT'
 }
 
+const getTaskTypeForPersistence = (taskCategory?: string): 'BASIC' | 'DEVELOPMENT' => {
+  return String(taskCategory || '').trim() === '基础性' ? 'BASIC' : 'DEVELOPMENT'
+}
+
+const findExistingTaskIdByName = async (planId: number, taskName: string): Promise<number | null> => {
+  const existingTasksResponse = await strategicApi.getTasksByPlanId(planId)
+  if (!existingTasksResponse.success || !Array.isArray(existingTasksResponse.data)) {
+    return null
+  }
+
+  const matchedTask = existingTasksResponse.data.find(
+    task => String(task.taskName || '').trim() === taskName
+  )
+  const matchedTaskId = Number(matchedTask?.taskId ?? matchedTask?.id ?? NaN)
+  return Number.isFinite(matchedTaskId) ? matchedTaskId : null
+}
+
+const ensurePersistedTaskIdForIndicator = async (
+  indicator: Pick<StrategicIndicator, 'taskContent' | 'type2' | 'remark' | 'responsibleDept' | 'ownerDept'>
+): Promise<number> => {
+  const trimmedTaskName = String(indicator.taskContent || '').trim()
+  if (!trimmedTaskName) {
+    throw new Error('请先填写战略任务')
+  }
+
+  const plan = currentPlan.value as Record<string, unknown> | null
+  const planId = Number(plan?.id ?? plan?.taskId ?? NaN)
+  if (!Number.isFinite(planId)) {
+    throw new Error('未找到当前部门对应的计划，无法创建战略任务')
+  }
+
+  const existingTaskId = await findExistingTaskIdByName(planId, trimmedTaskName)
+  if (existingTaskId) {
+    return existingTaskId
+  }
+
+  const cycleId = await getCurrentCycleId()
+  const targetOrgId =
+    Number(plan?.targetOrgId ?? plan?.orgId ?? NaN) ||
+    resolveDepartmentIdByName(indicator.responsibleDept || selectedDepartment.value) ||
+    null
+  const createdByOrgId =
+    Number(plan?.createdByOrgId ?? NaN) ||
+    resolveDepartmentIdByName(indicator.ownerDept || '战略发展部') ||
+    null
+
+  if (!targetOrgId || !createdByOrgId) {
+    throw new Error('缺少任务归属部门信息，无法创建战略任务')
+  }
+
+  const createTaskResponse = await strategicApi.createBackendTask({
+    taskName: trimmedTaskName,
+    taskType: getTaskTypeForPersistence(indicator.type2),
+    planId,
+    cycleId,
+    orgId: targetOrgId,
+    createdByOrgId,
+    sortOrder: 0,
+    taskDesc: trimmedTaskName,
+    remark: indicator.remark || null
+  })
+
+  const persistedTaskId = Number(createTaskResponse.data?.taskId ?? createTaskResponse.data?.id ?? NaN)
+  if (!Number.isFinite(persistedTaskId)) {
+    throw new Error('创建战略任务成功，但未返回任务ID')
+  }
+
+  return persistedTaskId
+}
+
 const refreshIndicatorsAfterTaskMutation = async () => {
   await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
   await loadBackendTaskTypeMap()
@@ -678,50 +798,13 @@ const persistTaskContentEdit = async (row: StrategicIndicator, taskName: string)
     return
   }
 
-  const plan = currentPlan.value as Record<string, unknown> | null
-  const planId = Number(plan?.id ?? NaN)
-  if (!Number.isFinite(planId)) {
-    throw new Error('未找到当前部门对应的计划，无法保存战略任务')
-  }
-
-  const existingTasksResponse = await strategicApi.getTasksByPlanId(planId)
-  const existingTask =
-    existingTasksResponse.success && Array.isArray(existingTasksResponse.data)
-      ? existingTasksResponse.data.find(task => String(task.taskName || '').trim() === trimmedTaskName)
-      : undefined
-
-  let persistedTaskId = Number(existingTask?.taskId ?? existingTask?.id ?? NaN)
-
-  if (!Number.isFinite(persistedTaskId)) {
-    const cycleId = await getCurrentCycleId()
-    const targetOrgId =
-      Number(plan?.targetOrgId ?? NaN) ||
-      resolveDepartmentIdByName(row.responsibleDept || selectedDepartment.value) ||
-      null
-    const createdByOrgId =
-      Number(plan?.createdByOrgId ?? NaN) || resolveDepartmentIdByName(row.ownerDept || '战略发展部') || null
-
-    if (!targetOrgId || !createdByOrgId) {
-      throw new Error('缺少任务归属部门信息，无法创建战略任务')
-    }
-
-    const createTaskResponse = await strategicApi.createBackendTask({
-      taskName: trimmedTaskName,
-      taskType: getIndicatorTaskTypeForPersistence(row),
-      planId,
-      cycleId,
-      orgId: targetOrgId,
-      createdByOrgId,
-      sortOrder: 0,
-      taskDesc: trimmedTaskName,
-      remark: row.remark || null
-    })
-
-    persistedTaskId = Number(createTaskResponse.data?.taskId ?? createTaskResponse.data?.id ?? NaN)
-    if (!Number.isFinite(persistedTaskId)) {
-      throw new Error('创建战略任务成功，但未返回任务ID')
-    }
-  }
+  const persistedTaskId = await ensurePersistedTaskIdForIndicator({
+    taskContent: trimmedTaskName,
+    type2: row.type2,
+    remark: row.remark,
+    responsibleDept: row.responsibleDept,
+    ownerDept: row.ownerDept
+  })
 
   await strategicStore.updateIndicator(row.id.toString(), {
     taskId: persistedTaskId
@@ -737,8 +820,7 @@ const currentApprovalInstanceId = computed(() => {
 // 判断 Plan 是否已下发（已审批通过，不能撤回）
 const isPlanDistributed = computed(() => {
   const status = currentPlanStatus.value
-  // 已下发状态：APPROVED（已批准/已下发/进行中）
-  return status === 'APPROVED'
+  return status === 'DISTRIBUTED'
 })
 
 // 判断当前审批流程是否处于第一个节点且为待审批状态（可以撤回）
@@ -747,7 +829,7 @@ const isFirstStepPending = computed(() => {
   const currentStep = currentPlan.value?.currentStep
 
   // 只有待审批状态才可能处于第一个节点
-  if (status !== 'PENDING_APPROVAL') {
+  if (status !== 'PENDING') {
     return false
   }
 
@@ -771,7 +853,7 @@ const canWithdrawPlan = computed(() => {
   }
 
   // 待审批状态，只有第一个节点是待审批时才能撤回
-  if (status === 'PENDING_APPROVAL') {
+  if (status === 'PENDING') {
     return isFirstStepPending.value
   }
 
@@ -783,11 +865,9 @@ const canWithdrawPlan = computed(() => {
 // @requirement: Plan-centric status - 使用 Plan 状态判断指标是否在流程中
 // 统一使用 Plan 状态作为口径，一个 Plan 下的所有指标共享同一个状态
 const isIndicatorInFlowStage = (_indicator: StrategicIndicator): boolean => {
-  // Plan 处于待审核、已下发、已激活等状态时，指标都处于流程中
+  // Plan 处于待审核或已下发状态时，指标都处于流程中
   return (
-    currentPlanStatus.value === 'PENDING_REVIEW' ||
     currentPlanStatus.value === 'DISTRIBUTED' ||
-    currentPlanStatus.value === 'ACTIVE' ||
     currentPlanStatus.value === 'PENDING'
   )
 }
@@ -1039,10 +1119,10 @@ const getTaskStatus = (_row: StrategicIndicator) => {
   if (planStatus === 'DRAFT' || !planStatus) {
     return { label: '待下发', type: 'info', canWithdraw: true }
   }
-  if (planStatus === 'ACTIVE' || planStatus === 'APPROVED') {
+  if (planStatus === 'DISTRIBUTED') {
     return { label: '已下发', type: 'success', canWithdraw: false }
   }
-  if (planStatus === 'PENDING' || planStatus === 'PENDING_APPROVAL') {
+  if (planStatus === 'PENDING') {
     return { label: '待审批', type: 'warning', canWithdraw: false }
   }
   if (planStatus === 'REJECTED') {
@@ -1243,46 +1323,55 @@ const saveMilestoneEdit = async () => {
       return
     }
 
-    logger.info(
-      `[StrategicTaskView] Saving ${editingMilestones.value.length} milestones for indicator ${currentIndicator.id}`
+    const indicatorId = currentIndicator.id.toString()
+    const deptKey = selectedDepartment.value || ''
+    const existingMilestones = Array.isArray(currentIndicator.milestones)
+      ? currentIndicator.milestones
+      : []
+    const existingIds = new Set(
+      existingMilestones
+        .map(ms => Number(ms.id))
+        .filter(id => Number.isFinite(id) && id > 0)
     )
 
-    // 使用最新的指标 ID 进行更新
-    await strategicStore.updateIndicator(currentIndicator.id.toString(), {
-      milestones: [...editingMilestones.value]
-    })
+    logger.info(
+      `[StrategicTaskView] Saving ${editingMilestones.value.length} milestones for indicator ${indicatorId}`
+    )
 
-    logger.info(`[StrategicTaskView] Reloading indicators after milestone update...`)
+    const editedIds = new Set<number>()
 
-    // 重新加载指标数据以获取后端更新后的里程碑
-    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    for (const [index, milestone] of editingMilestones.value.entries()) {
+      const milestoneId = Number(milestone.id)
+      const payload = {
+        indicatorId: Number(indicatorId),
+        milestoneName: String(milestone.name || '').trim(),
+        description: '',
+        dueDate: toMilestoneDueDate(milestone.deadline),
+        targetProgress: Number(milestone.targetProgress || 0),
+        status: toMilestoneRequestStatus(milestone.status),
+        sortOrder: Number(milestone.sortOrder ?? index + 1),
+        isPaired: Boolean((milestone as { isPaired?: boolean }).isPaired ?? false),
+        inheritedFrom: null as number | null
+      }
 
-    // 验证重新加载后的里程碑数量
-    const reloadedIndicator = indicators.value.find(i => i.id === currentIndicator.id)
-    if (reloadedIndicator) {
-      logger.info(
-        `[StrategicTaskView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`
-      )
-      logger.info(`[StrategicTaskView] Indicator details:`, {
-        id: reloadedIndicator.id,
-        name: reloadedIndicator.name,
-        indicator_desc: reloadedIndicator.indicator_desc,
-        responsibleDept: reloadedIndicator.responsibleDept,
-        milestonesCount: reloadedIndicator.milestones?.length
-      })
-    } else {
-      logger.warn(
-        `[StrategicTaskView] Could not find indicator ${currentIndicator.id} after reload!`
-      )
+      if (Number.isFinite(milestoneId) && milestoneId > 0) {
+        editedIds.add(milestoneId)
+        await milestoneApi.updateMilestone(String(milestoneId), payload)
+        continue
+      }
+
+      await milestoneApi.createMilestone(payload)
     }
 
-    // 额外验证：检查 store 中的原始数据
-    const storeIndicator = strategicStore.indicators.find(i => i.id === currentIndicator.id)
-    if (storeIndicator) {
-      logger.info(
-        `[StrategicTaskView] Store indicator ${storeIndicator.id} has ${storeIndicator.milestones?.length || 0} milestones`
-      )
+    const deletedIds = [...existingIds].filter(id => !editedIds.has(id))
+    for (const milestoneId of deletedIds) {
+      await milestoneApi.deleteMilestone(String(milestoneId))
     }
+
+    const refreshedMilestones = await reloadMilestonesForIndicator(indicatorId, deptKey)
+    logger.info(
+      `[StrategicTaskView] Milestones synced for indicator ${indicatorId}, count=${refreshedMilestones.length}`
+    )
 
     ElMessage.success('里程碑已更新')
     milestoneEditDialogVisible.value = false
@@ -1407,7 +1496,7 @@ const newRow = ref({
   name: '',
   type1: '定量' as '定性' | '定量',
   type2: '基础性' as '发展性' | '基础性',
-  weight: '',
+  weight: null as number | null,
   remark: '',
   milestones: [] as Milestone[]
 })
@@ -1721,7 +1810,7 @@ const cancelAdd = () => {
     name: '',
     type1: '定量',
     type2: '基础性',
-    weight: '',
+    weight: null,
     remark: '',
     milestones: []
   }
@@ -1730,8 +1819,19 @@ const cancelAdd = () => {
 
 // 保存新行
 const saveNewRow = async () => {
-  if (!newRow.value.name) {
+  if (!String(newRow.value.taskContent || '').trim()) {
+    ElMessage.warning('请填写战略任务')
+    return
+  }
+
+  if (!String(newRow.value.name || '').trim()) {
     ElMessage.warning('请填写核心指标内容')
+    return
+  }
+
+  const weight = Number(newRow.value.weight)
+  if (!Number.isFinite(weight) || weight <= 0) {
+    ElMessage.warning('请填写大于 0 的权重')
     return
   }
 
@@ -1743,6 +1843,14 @@ const saveNewRow = async () => {
   })
 
   try {
+    const persistedTaskId = await ensurePersistedTaskIdForIndicator({
+      taskContent: newRow.value.taskContent,
+      type2: newRow.value.type2,
+      remark: newRow.value.remark,
+      responsibleDept: selectedDepartment.value || '战略发展部',
+      ownerDept: '战略发展部'
+    })
+
     // 添加日志记录 taskContent
     logger.info(
       `[StrategicTaskView] Saving indicator with taskContent: "${newRow.value.taskContent}"`
@@ -1751,14 +1859,15 @@ const saveNewRow = async () => {
     // 调用 Store 添加指标（现在是异步的，会调用后端 API）
     await strategicStore.addIndicator({
       id: Date.now().toString(),
-      taskContent: newRow.value.taskContent || '未命名任务',
-      name: newRow.value.name,
+      taskId: persistedTaskId,
+      taskContent: String(newRow.value.taskContent || '').trim(),
+      name: String(newRow.value.name || '').trim(),
       isQualitative: newRow.value.type1 === '定性',
       type1: newRow.value.type1,
       type2: newRow.value.type2,
       progress: 0,
       createTime: new Date().toLocaleDateString('zh-CN'),
-      weight: Number(newRow.value.weight) || 0,
+      weight,
       remark: newRow.value.remark || '无备注',
       canWithdraw: true,
       milestones: [...newRow.value.milestones],
@@ -1778,6 +1887,8 @@ const saveNewRow = async () => {
       `[StrategicTaskView] Reloading indicators after successful save to sync backend IDs...`
     )
     await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    await loadBackendTaskTypeMap()
+    await loadCurrentPlanTaskScope()
     logger.info(`[StrategicTaskView] Indicators reloaded successfully`)
 
     // 成功：关闭表单并更新 UI
@@ -2517,7 +2628,7 @@ const _handleWithdraw = async (row: StrategicIndicator) => {
   if (!canWithdrawPlan.value) {
     if (isPlanDistributed.value) {
       ElMessage.warning('当前 Plan 已下发，无法撤回')
-    } else if (currentPlanStatus.value === 'PENDING_APPROVAL' && !isFirstStepPending.value) {
+    } else if (currentPlanStatus.value === 'PENDING' && !isFirstStepPending.value) {
       ElMessage.warning('当前 Plan 审批流程已开始，无法撤回')
     } else {
       ElMessage.warning('当前状态无法撤回')
@@ -2682,7 +2793,7 @@ const handleWithdrawAll = async () => {
   if (!canWithdrawPlan.value) {
     if (isPlanDistributed.value) {
       ElMessage.warning('当前 Plan 已下发，无法撤回')
-    } else if (currentPlanStatus.value === 'PENDING_APPROVAL' && !isFirstStepPending.value) {
+    } else if (currentPlanStatus.value === 'PENDING' && !isFirstStepPending.value) {
       ElMessage.warning('当前 Plan 审批流程已开始，无法撤回')
     } else {
       ElMessage.warning('当前状态无法撤回')
@@ -2931,15 +3042,6 @@ const loadPendingPlanApprovalCount = async () => {
   } catch (error) {
     logger.error('[StrategicTaskView] 加载待审批计划数量失败:', error)
   }
-}
-
-/**
- * 打开计划审批抽屉（新功能）
- */
-const planApprovalVisible = ref(false)
-
-const _handleOpenPlanApproval = () => {
-  planApprovalVisible.value = true
 }
 
 // 组件挂载时加载待审批计划数量
@@ -4246,16 +4348,12 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
     <ApprovalProgressDrawer
       v-model="taskApprovalVisible"
       :indicators="approvalIndicators"
+      :department-name="selectedDepartment"
+      :plan-name="currentPlan?.taskName || currentPlan?.name || selectedDepartment"
+      :show-plan-approvals="true"
       :show-approval-section="true"
       approval-type="submission"
       @close="taskApprovalVisible = false"
-      @refresh="handleApprovalRefresh"
-    />
-
-    <!-- 计划审批抽屉 -->
-    <PlanApprovalDrawer
-      v-model:visible="planApprovalVisible"
-      @close="planApprovalVisible = false"
       @refresh="handleApprovalRefresh"
     />
 

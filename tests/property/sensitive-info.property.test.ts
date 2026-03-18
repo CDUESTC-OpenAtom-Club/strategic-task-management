@@ -83,18 +83,29 @@ function checkFileForSensitiveInfo(filePath: string): { hasSensitive: boolean; m
   
   for (const pattern of SENSITIVE_PATTERNS) {
     pattern.lastIndex = 0
-    const found = content.match(pattern)
-    if (found) {
-      const realMatches = found.filter(m => {
-        const lowerMatch = m.toLowerCase()
-        return !lowerMatch.includes('your_') &&
-               !lowerMatch.includes('_here') &&
-               !lowerMatch.includes('placeholder') &&
-               !lowerMatch.includes('example') &&
-               !lowerMatch.includes('process.env') &&
-               !lowerMatch.includes('import.meta.env')
-      })
-      matches.push(...realMatches)
+    for (const match of content.matchAll(pattern)) {
+      const rawMatch = match[0]
+      const matchIndex = match.index ?? -1
+      const previousChar = matchIndex > 0 ? content[matchIndex - 1] : ''
+      const lowerMatch = rawMatch.toLowerCase()
+
+      // Ignore template/event bindings such as @forgot-password="handleForgotPassword".
+      if (/[\w@:-]/.test(previousChar)) {
+        continue
+      }
+
+      if (
+        lowerMatch.includes('your_') ||
+        lowerMatch.includes('_here') ||
+        lowerMatch.includes('placeholder') ||
+        lowerMatch.includes('example') ||
+        lowerMatch.includes('process.env') ||
+        lowerMatch.includes('import.meta.env')
+      ) {
+        continue
+      }
+
+      matches.push(rawMatch)
     }
   }
   

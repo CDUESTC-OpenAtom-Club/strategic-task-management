@@ -62,6 +62,56 @@ const handleSelectHistory = (fill: unknown) => {
   showHistory.value = false
 }
 
+const normalizeMilestoneStatus = (status?: string) => {
+  const normalized = String(status || '').toLowerCase()
+
+  switch (normalized) {
+    case 'completed':
+      return 'completed'
+    case 'in_progress':
+    case 'in-progress':
+    case 'inprogress':
+      return 'in_progress'
+    case 'delayed':
+    case 'overdue':
+      return 'overdue'
+    default:
+      return 'pending'
+  }
+}
+
+const mapIndicatorDetailToFillIndicator = (payload: Record<string, any>): Indicator => {
+  const rawId = payload.indicatorId ?? payload.id
+  const rawName = payload.indicatorName ?? payload.name ?? payload.indicatorDesc ?? '未命名指标'
+  const rawDefinition = payload.indicatorDesc ?? payload.definition ?? rawName
+  const rawProgress = Number(payload.progress ?? payload.latestProgress ?? 0)
+  const rawMilestones = Array.isArray(payload.milestones) ? payload.milestones : []
+
+  return {
+    id: String(rawId),
+    task_id: payload.taskId ?? payload.task_id ?? '',
+    name: rawName,
+    definition: rawDefinition,
+    latest_progress: Number.isFinite(rawProgress) ? rawProgress : 0,
+    latest_fill_date: payload.updatedAt ?? payload.latestFillDate ?? '',
+    milestones: rawMilestones.map((milestone: Record<string, any>) => ({
+      id: String(milestone.milestoneId ?? milestone.id ?? ''),
+      indicator_id: String(milestone.indicatorId ?? rawId ?? ''),
+      name: milestone.milestoneName ?? milestone.name ?? '未命名里程碑',
+      description: milestone.milestoneDesc ?? milestone.description ?? '',
+      deadline: milestone.dueDate ?? milestone.deadline ?? '',
+      targetProgress: Number(milestone.targetProgress ?? 0),
+      weight_percent: Number(milestone.weightPercent ?? milestone.weight ?? 0),
+      status: normalizeMilestoneStatus(milestone.status),
+      sort_order: Number(milestone.sortOrder ?? 0),
+      created_at: milestone.createdAt ?? '',
+      updated_at: milestone.updatedAt ?? ''
+    })),
+    createdAt: payload.createdAt ?? '',
+    updatedAt: payload.updatedAt ?? ''
+  } as Indicator
+}
+
 // 加载指标详情 - ✅ FIXED: 使用真实 API 调用
 const loadIndicator = async () => {
   loading.value = true
@@ -71,28 +121,7 @@ const loadIndicator = async () => {
     const response = await indicatorApi.getIndicatorById(indicatorId.value)
 
     if (response.success && response.data) {
-      // 将 IndicatorVO 转换为 Indicator 类型
-      indicator.value = {
-        id: response.data.indicatorId.toString(),
-        task_id: response.data.taskId,
-        name: response.data.indicatorDesc,
-        definition: response.data.indicatorDesc,
-        milestones:
-          response.data.milestones?.map(m => ({
-            id: m.milestoneId.toString(),
-            indicator_id: m.indicatorId.toString(),
-            name: m.milestoneName,
-            description: m.milestoneDesc || '',
-            deadline: m.dueDate,
-            weight_percent: m.weightPercent,
-            status: m.status.toLowerCase(),
-            sort_order: m.sortOrder,
-            created_at: m.createdAt,
-            updated_at: m.updatedAt
-          })) || [],
-        createdAt: response.data.createdAt,
-        updatedAt: response.data.updatedAt
-      }
+      indicator.value = mapIndicatorDetailToFillIndicator(response.data as Record<string, any>)
       logger.info(`[IndicatorFillView] Indicator loaded successfully`)
     } else {
       throw new Error(response.message || 'Failed to load indicator')
@@ -154,6 +183,7 @@ onMounted(() => {
           <h3 class="card-title">填报历史</h3>
         </template>
         <indicator-fill-history
+          :key="indicatorId"
           :indicator-id="indicatorId"
           @select="handleSelectHistory"
           @close="showHistory = false"

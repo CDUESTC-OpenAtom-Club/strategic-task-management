@@ -43,8 +43,12 @@ export const useOrganizationStore = defineStore('organization', () => {
   )
 
   // ============ Actions ============
-  const loadDepartments = async (retryCount = 0, maxRetries = 2) => {
-    if (loaded.value && departments.value.length > 0) {
+  const loadDepartments = async (
+    retryCount = 0,
+    maxRetries = 2,
+    options: { force?: boolean } = {}
+  ) => {
+    if (!options.force && loaded.value && departments.value.length > 0) {
       return
     }
 
@@ -58,7 +62,7 @@ export const useOrganizationStore = defineStore('organization', () => {
       if (depts.length === 0 && retryCount < maxRetries) {
         loading.value = false
         await new Promise(resolve => setTimeout(resolve, 1000))
-        return loadDepartments(retryCount + 1, maxRetries)
+        return loadDepartments(retryCount + 1, maxRetries, options)
       }
 
       departments.value = depts
@@ -68,7 +72,7 @@ export const useOrganizationStore = defineStore('organization', () => {
       if (retryCount < maxRetries) {
         loading.value = false
         await new Promise(resolve => setTimeout(resolve, 1000))
-        return loadDepartments(retryCount + 1, maxRetries)
+        return loadDepartments(retryCount + 1, maxRetries, options)
       }
 
       logger.error('[Organization Store] Failed to load departments:', error)

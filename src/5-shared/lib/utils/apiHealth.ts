@@ -7,10 +7,13 @@
 import axios from 'axios'
 import { logger } from '@/5-shared/lib/utils/logger'
 import { ElNotification } from 'element-plus'
+import { API_BASE_URL, API_TARGET, USE_MOCK } from '@/5-shared/config/api'
+
+const backendDisplayTarget = API_TARGET || API_BASE_URL
 
 // 创建一个不使用认证的axios实例，专门用于健康检查
 const healthApi = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   timeout: 10000, // 增加超时时间到10秒，避免开发环境下的初始化延迟
   headers: {
     'Content-Type': 'application/json'
@@ -32,8 +35,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
   logger.debug('🏥 [Health Check] 检查后端服务健康状态...')
 
   try {
-    // 优先使用业务健康端点（当前后端稳定提供）
-    const response = await healthApi.get('/auth/health', { timeout: 10000 })
+    const response = await healthApi.get('/organizations', { timeout: 10000 })
 
     logger.debug('✅ [Health Check] 后端服务正常')
     return {
@@ -61,15 +63,14 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       return {
         service: 'Backend API',
         status: 'error',
-        message: '无法连接到后端服务，请确认后端是否运行在 http://localhost:8080',
+        message: `无法连接到后端服务，请确认后端是否运行在 ${backendDisplayTarget}`,
         details: { error: error.message, code: error.code },
         timestamp: new Date()
       }
     }
 
     if (error.response?.status === 404) {
-      logger.warn('⚠️ [Health Check] /auth/health 不存在，尝试降级验证服务可用性')
-      // 如果 /auth/health 不存在，尝试 actuator 端点
+      logger.warn('⚠️ [Health Check] /organizations 不存在，尝试降级验证服务可用性')
       try {
         await healthApi.get('/actuator/health', { timeout: 3000 })
         return {
@@ -84,7 +85,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       }
 
       try {
-        await healthApi.get('/organizations', { timeout: 3000 })
+        await healthApi.get('/auth/validate', { timeout: 3000 })
         return {
           service: 'Backend API',
           status: 'success',
@@ -139,8 +140,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
  */
 export async function quickBackendCheck(): Promise<boolean> {
   try {
-    // 优先使用业务健康端点（避免 actuator 路由差异导致误报）
-    await healthApi.get('/auth/health', { timeout: 3000 })
+    await healthApi.get('/organizations', { timeout: 3000 })
     return true
   } catch (error: unknown) {
     // 404 表示端点不存在，尝试业务只读接口判断服务可达
@@ -148,7 +148,7 @@ export async function quickBackendCheck(): Promise<boolean> {
       const axiosError = error as { response?: { status?: number } }
       if (axiosError.response?.status === 404) {
         try {
-          await healthApi.get('/organizations', { timeout: 3000 })
+          await healthApi.get('/actuator/health', { timeout: 3000 })
           return true
         } catch {
           return false
@@ -186,7 +186,7 @@ export async function showBackendConnectionStatus() {
 
     ElNotification({
       title: '后端连接失败',
-      message: '无法连接到后端服务，请确认后端已启动在 http://localhost:8080',
+      message: `无法连接到后端服务，请确认后端已启动在 ${backendDisplayTarget}`,
       type: 'error',
       duration: 0, // 不自动关闭
       position: 'bottom-right'
@@ -314,7 +314,7 @@ export async function runFullHealthCheck(): Promise<HealthCheckResult[]> {
  * 在开发环境下自动运行健康检查
  */
 export function autoHealthCheck() {
-  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK !== 'true') {
+  if (import.meta.env.DEV && !USE_MOCK) {
     logger.debug('🏥 [Health Check] 开发环境，自动运行健康检查...')
 
     // 延迟2秒执行，确保Vite代理服务器已完全初始化
@@ -336,7 +336,7 @@ export function autoHealthCheck() {
       const hasError = results.some(r => r.status === 'error')
       if (hasError) {
         logger.warn('⚠️ 检测到后端服务问题，请检查')
-        logger.warn('1. 后端服务是否运行在 http://localhost:8080')
+        logger.warn(`1. 后端服务是否运行在 ${backendDisplayTarget}`)
         logger.warn('2. 数据库连接是否正常')
         logger.warn('3. 查看后端日志获取详细错误信息')
 

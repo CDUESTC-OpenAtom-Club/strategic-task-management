@@ -7,7 +7,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type { Plan, PlanStatus, PlanFill, IndicatorFill } from '@/5-shared/types'
+import type { Plan, PlanStatus, PlanFill, IndicatorFill, IndicatorFillForm } from '@/5-shared/types'
 import { useAuthStore } from '@/3-features/auth/model/store'
 import { useTimeContextStore } from '@/5-shared/lib/timeContext'
 import { logger } from '@/5-shared/lib/utils/logger'
@@ -82,7 +82,11 @@ export const usePlanStore = defineStore('plan', () => {
   })
 
   // ============ Actions ============
-  const loadPlans = async () => {
+  const loadPlans = async (options: { force?: boolean; background?: boolean } = {}) => {
+    if (!options.force && plans.value.length > 0) {
+      return plans.value
+    }
+
     loading.value = true
     error.value = null
 
@@ -94,20 +98,34 @@ export const usePlanStore = defineStore('plan', () => {
       if (hasApiData(response)) {
         plans.value = response.data
         logger.info(`[Plan Store] Loaded ${response.data.length} plans`)
+        return response.data
       } else {
         plans.value = []
         logger.warn('[Plan Store] No plans loaded')
+        return []
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '加载计划失败'
       logger.error('[Plan Store] Failed to load plans:', err)
       ElMessage.error('加载计划失败')
+      return []
     } finally {
       loading.value = false
     }
   }
 
-  const loadPlan = async (planId: number | string) => {
+  const loadPlan = async (
+    planId: number | string,
+    options: { force?: boolean; background?: boolean } = {}
+  ) => {
+    if (!options.force) {
+      const existing = plans.value.find(p => p.id === planId)
+      if (existing) {
+        currentPlan.value = existing
+        return existing
+      }
+    }
+
     loading.value = true
     error.value = null
 
@@ -125,13 +143,16 @@ export const usePlanStore = defineStore('plan', () => {
           plans.value.push(response.data)
         }
         logger.info(`[Plan Store] Loaded plan ${planId}`)
+        return response.data
       } else {
         currentPlan.value = null
         error.value = '计划不存在'
+        return null
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '加载计划失败'
       logger.error('[Plan Store] Failed to load plan:', err)
+      return null
     } finally {
       loading.value = false
     }
@@ -141,7 +162,14 @@ export const usePlanStore = defineStore('plan', () => {
    * 加载 Plan 详情（包含指标和里程碑）
    * 调用后端的 /api/v1/plans/{id}/details 接口
    */
-  const loadPlanDetails = async (planId: number | string) => {
+  const loadPlanDetails = async (
+    planId: number | string,
+    options: { force?: boolean; background?: boolean } = {}
+  ) => {
+    if (!options.force && currentPlan.value?.id === planId && currentPlan.value.tasks?.length) {
+      return currentPlan.value
+    }
+
     loading.value = true
     error.value = null
 
@@ -573,6 +601,85 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
+  const loadIndicatorFillHistory = async (indicatorId: number | string) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Loading indicator fill history for ${indicatorId}...`)
+      const { indicatorFillApi } = await import('@/3-features/plan/api/planApi')
+      const response = await indicatorFillApi.getIndicatorFillHistory(indicatorId)
+
+      if (hasApiData(response)) {
+        logger.info(
+          `[Plan Store] Loaded ${response.data.length} fill records for indicator ${indicatorId}`
+        )
+        return response.data
+      }
+
+      throw new Error(response.message || '加载指标填报历史失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载指标填报历史失败'
+      logger.error('[Plan Store] Failed to load indicator fill history:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const saveIndicatorFill = async (form: IndicatorFillForm) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info('[Plan Store] Saving indicator fill...', form)
+      const { indicatorFillApi } = await import('@/3-features/plan/api/planApi')
+      const response = await indicatorFillApi.saveFill(form)
+
+      if (hasApiData(response)) {
+        currentIndicatorFill.value = response.data
+        logger.info(`[Plan Store] Saved indicator fill ${response.data.id}`)
+        return response.data
+      }
+
+      throw new Error(response.message || '保存指标填报失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '保存指标填报失败'
+      logger.error('[Plan Store] Failed to save indicator fill:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  const submitIndicatorFill = async (fillId: number | string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Submitting indicator fill ${fillId}...`)
+      const { indicatorFillApi } = await import('@/3-features/plan/api/planApi')
+      const response = await indicatorFillApi.submitFill(fillId)
+
+      if (hasApiData(response)) {
+        currentIndicatorFill.value = response.data
+        logger.info(`[Plan Store] Submitted indicator fill ${fillId}`)
+        return response.data
+      }
+
+      throw new Error(response.message || '提交指标填报失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '提交指标填报失败'
+      logger.error('[Plan Store] Failed to submit indicator fill:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
   // 审核计划填报
   const auditPlanFill = async (
     fillId: number | string,
@@ -631,12 +738,9 @@ export const usePlanStore = defineStore('plan', () => {
     () => timeContext.currentYear,
     newYear => {
       logger.info(`[Plan Store] Year changed to ${newYear}, reloading plans...`)
-      loadPlans()
+      void loadPlans({ force: true })
     }
   )
-
-  // 初始加载
-  loadPlans()
 
   return {
     // State
@@ -664,10 +768,13 @@ export const usePlanStore = defineStore('plan', () => {
     loadPlan,
     loadPlanDetails,
     loadPendingFills,
+    loadIndicatorFillHistory,
     createPlan,
     updatePlan,
     deletePlan,
     submitPlan,
+    saveIndicatorFill,
+    submitIndicatorFill,
     auditPlanFill,
     setFilter,
     resetFilter,

@@ -198,7 +198,7 @@ const handleSubmit = async () => {
       localStorage.removeItem(TOKEN_KEYS.REMEMBERED_USERNAME)
     }
   } catch (error) {
-    logger.error('Form validation failed:', error)
+    logger.debug('Login form validation blocked submit', error)
   }
 }
 

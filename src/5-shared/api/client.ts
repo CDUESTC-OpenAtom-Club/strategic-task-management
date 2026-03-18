@@ -21,6 +21,7 @@ import { logger } from '@/5-shared/lib/utils/logger'
 import type { ApiErrorResponse } from '@/5-shared/types/error'
 import { createRequestInterceptor } from '@/5-shared/api/interceptors/requestInterceptors'
 import { createResponseInterceptor, createResponseErrorInterceptor } from '@/5-shared/api/interceptors/responseInterceptors'
+import { API_BASE_URL, API_TIMEOUT, USE_MOCK } from '@/5-shared/config/api'
 
 /**
  * 应用错误类型
@@ -55,14 +56,11 @@ export class ApiClient {
   constructor(config: ApiClientConfig) {
     this.client = axios.create({
       baseURL: config.baseURL,
-      timeout: config.timeout || Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000,
+      timeout: config.timeout || API_TIMEOUT,
       headers: {
         'Content-Type': 'application/json'
       }
     })
-
-    // Mock 模式配置
-    const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
     if (USE_MOCK) {
       logger.debug('🎭 [Mock Mode] 初始化 Mock API 客户端')
@@ -263,6 +261,6 @@ export class ApiClient {
  * 使用环境变量配置的基础 URL
  */
 export const apiClient = new ApiClient({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT) || 30000
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT
 })

@@ -11,6 +11,7 @@
  */
 
 import { apiClient } from '@/5-shared/api/client'
+import { buildQueryKey, fetchWithCache } from '@/5-shared/lib/utils/cache'
 import { logger } from '@/5-shared/lib/utils/logger'
 import type { DashboardData, DepartmentProgress, AlertSummary } from '@/5-shared/types'
 
@@ -26,7 +27,17 @@ export const dashboardApi = {
   async getDashboardData(): Promise<DashboardData> {
     try {
       logger.debug('[dashboardApi] Fetching dashboard data')
-      return await apiClient.get<DashboardData>('/analytics/dashboard/overview')
+      return await fetchWithCache({
+        key: buildQueryKey('dashboard', 'overview'),
+        policy: {
+          ttlMs: 45 * 1000,
+          scope: 'memory',
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['dashboard.overview']
+        },
+        fetcher: () => apiClient.post<DashboardData>('/analytics/dashboard', {})
+      })
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch dashboard data:', error)
       throw error
@@ -40,7 +51,8 @@ export const dashboardApi = {
   async getDepartmentProgress(): Promise<DepartmentProgress[]> {
     try {
       logger.debug('[dashboardApi] Fetching department progress')
-      return await apiClient.get<DepartmentProgress[]>('/analytics/dashboard/charts')
+      await apiClient.post('/analytics/dashboard', {})
+      return []
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch department progress:', error)
       throw error
@@ -56,7 +68,7 @@ export const dashboardApi = {
   async getRecentActivities(): Promise<Array<Record<string, unknown>>> {
     try {
       logger.debug('[dashboardApi] Fetching recent activities')
-      return await apiClient.get<Array<Record<string, unknown>>>('/analytics/activities')
+      return []
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch recent activities:', error)
       // 返回空数组而不是抛出错误，保持UI稳定性
@@ -71,7 +83,7 @@ export const dashboardApi = {
   async getAlertSummary(): Promise<AlertSummary> {
     try {
       logger.debug('[dashboardApi] Fetching alert summary')
-      return await apiClient.get<AlertSummary>('/alerts/events/unclosed')
+      return await apiClient.get<AlertSummary>('/alerts/unresolved')
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch alert summary:', error)
       throw error
@@ -91,7 +103,17 @@ export const dashboardApi = {
   }): Promise<DashboardData> {
     try {
       logger.debug('[dashboardApi] Fetching filtered dashboard data:', params)
-      return await apiClient.get<DashboardData>('/analytics/dashboard/overview', { params })
+      return await fetchWithCache({
+        key: buildQueryKey('dashboard', 'overview', params),
+        policy: {
+          ttlMs: 45 * 1000,
+          scope: 'memory',
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['dashboard.overview']
+        },
+        fetcher: () => apiClient.post<DashboardData>('/analytics/dashboard', params)
+      })
     } catch (error) {
       logger.error('[dashboardApi] Failed to fetch filtered dashboard data:', error)
       throw error

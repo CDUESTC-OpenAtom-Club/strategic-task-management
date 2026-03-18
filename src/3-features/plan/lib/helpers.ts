@@ -13,7 +13,7 @@ export function canEditPlan(plan: Plan | null): boolean {
   if (!plan) {
     return false
   }
-  return ['DRAFT', 'REJECTED'].includes(plan.status)
+  return plan.status === 'DRAFT'
 }
 
 /**
@@ -33,7 +33,7 @@ export function canApprovePlan(plan: Plan | null): boolean {
   if (!plan) {
     return false
   }
-  return plan.status === 'PENDING_APPROVAL'
+  return plan.status === 'PENDING_APPROVAL' || plan.status === 'PENDING'
 }
 
 /**
@@ -43,9 +43,9 @@ export function getPlanStatusText(status: PlanStatus): string {
   const statusMap: Record<PlanStatus, string> = {
     DRAFT: '草稿',
     PENDING_APPROVAL: '待审批',
-    APPROVED: '已通过',
-    REJECTED: '已拒绝',
-    ARCHIVED: '已归档'
+    APPROVED: '已下发',
+    PENDING: '待审批',
+    DISTRIBUTED: '已下发'
   }
   return statusMap[status] || status
 }
@@ -58,8 +58,8 @@ export function getPlanStatusColor(status: PlanStatus): string {
     DRAFT: 'info',
     PENDING_APPROVAL: 'warning',
     APPROVED: 'success',
-    REJECTED: 'danger',
-    ARCHIVED: 'info'
+    PENDING: 'warning',
+    DISTRIBUTED: 'success'
   }
   return colorMap[status] || 'info'
 }

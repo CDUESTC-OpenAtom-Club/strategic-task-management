@@ -1,126 +1,292 @@
 /**
- * API Response Cache Manager
- * 
- * Implements caching with ETag and Last-Modified validation for API responses.
- * 
- * Features:
- * - ETag-based cache validation (If-None-Match header)
- * - Last-Modified-based cache validation (If-Modified-Since header)
- * - Configurable TTL (Time To Live) per cache entry
- * - Manual cache invalidation
- * - Memory-based storage with automatic cleanup
- * 
- * **Validates: Requirements 4.2.1, 4.2.2, 4.2.3, 4.2.4, 4.2.5**
+ * Unified query cache and compatibility utilities.
+ *
+ * This module now serves two roles:
+ * 1. Structured query cache used by feature APIs and stores.
+ * 2. Backward-compatible helpers used by existing Axios interceptors.
  */
 
 import { logger } from './logger'
 
-/**
- * Cache entry structure
- */
-export interface CacheEntry<T = unknown> {
-  /** Cached response data */
+export type QueryScope = 'memory' | 'session' | 'local'
+export type QueryKeyParams = Record<string, unknown> | undefined
+export type QueryKey = readonly [domain: string, resource: string, params?: QueryKeyParams]
+export type InvalidationTag = string
+export type CacheSource = 'network' | 'memory' | 'session' | 'local'
+
+export interface CachePolicy {
+  ttlMs: number
+  scope?: QueryScope
+  staleWhileRevalidate?: boolean
+  persist?: boolean
+  dedupeWindowMs?: number
+  invalidateOn?: InvalidationTag[]
+  tags?: InvalidationTag[]
+  version?: string
+  useEtag?: boolean
+  useLastModified?: boolean
+}
+
+export interface QueryCacheEntry<T = unknown> {
   data: T
-  /** ETag from server response */
+  updatedAt: number
+  expiresAt: number
   etag?: string
-  /** Last-Modified timestamp from server response */
   lastModified?: string
-  /** Cache creation timestamp */
+  source: CacheSource
+  version: string
+  tags: InvalidationTag[]
+  key: string
+  scope: QueryScope
+}
+
+export interface CacheEntry<T = unknown> {
+  data: T
+  etag?: string
+  lastModified?: string
   createdAt: number
-  /** Cache expiration timestamp */
   expiresAt: number
 }
 
-/**
- * Cache configuration for a specific endpoint
- */
-export interface CacheConfig {
-  /** Time to live in milliseconds */
-  ttl: number
-  /** Whether to use ETag validation */
-  useEtag: boolean
-  /** Whether to use Last-Modified validation */
-  useLastModified: boolean
+type PendingRequest<T = unknown> = {
+  promise: Promise<T>
+  startedAt: number
 }
 
-/**
- * Default cache configurations for different endpoints
- */
-export const DEFAULT_CACHE_CONFIGS: Record<string, CacheConfig> = {
-  // Organization tree - cache for 5 minutes with ETag
-  '/orgs/hierarchy': {
-    ttl: 5 * 60 * 1000, // 5 minutes
-    useEtag: true,
-    useLastModified: false,
-  },
-  '/orgs': {
-    ttl: 5 * 60 * 1000, // 5 minutes
-    useEtag: true,
-    useLastModified: false,
-  },
-  // Indicator list - conditional cache with Last-Modified
-  '/indicators': {
-    ttl: 2 * 60 * 1000, // 2 minutes
-    useEtag: false,
-    useLastModified: true,
-  },
+type QueryStoragePayload<T = unknown> = Omit<QueryCacheEntry<T>, 'source'>
+
+type QueryCacheStats = {
+  hits: number
+  misses: number
+  staleHits: number
+  writes: number
+  invalidations: number
+  dedupedRequests: number
 }
 
-/**
- * Default TTL for endpoints without specific configuration
- */
-export const DEFAULT_TTL = 60 * 1000 // 1 minute
+const DEFAULT_QUERY_VERSION = 'v1'
+const DEFAULT_TTL = 60 * 1000
+const STORAGE_PREFIX = 'query_cache:'
 
-/**
- * Cache key generator
- */
-export function generateCacheKey(url: string, params?: Record<string, unknown>): string {
-  const baseKey = url.replace(/^\/api/, '')
-  if (!params || Object.keys(params).length === 0) {
-    return baseKey
+const defaultStats = (): QueryCacheStats => ({
+  hits: 0,
+  misses: 0,
+  staleHits: 0,
+  writes: 0,
+  invalidations: 0,
+  dedupedRequests: 0
+})
+
+function stableStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return JSON.stringify(value)
   }
-  const sortedParams = Object.keys(params)
-    .sort()
-    .map(key => `${key}=${JSON.stringify(params[key])}`)
-    .join('&')
-  return `${baseKey}?${sortedParams}`
+
+  if (Array.isArray(value)) {
+    return `[${value.map(item => stableStringify(item)).join(',')}]`
+  }
+
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b)
+    )
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(',')}}`
+  }
+
+  return JSON.stringify(value)
 }
 
+function normalizeParams(params?: QueryKeyParams): QueryKeyParams {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return params
+  }
 
-/**
- * Cache Manager class
- * Manages in-memory cache with ETag and Last-Modified validation
- */
+  return Object.keys(params)
+    .sort()
+    .reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = params[key]
+      return acc
+    }, {})
+}
+
+export function buildQueryKey(domain: string, resource: string, params?: QueryKeyParams): QueryKey {
+  return [domain, resource, normalizeParams(params)]
+}
+
+export function serializeQueryKey(key: QueryKey | string): string {
+  if (typeof key === 'string') {
+    return key
+  }
+
+  const [domain, resource, params] = key
+  const normalizedParams = normalizeParams(params)
+  return stableStringify([domain, resource, normalizedParams ?? null])
+}
+
+export function matchesInvalidationTags(
+  candidate: readonly string[] | undefined,
+  tagsOrKeys: readonly (string | QueryKey)[]
+): boolean {
+  if (!candidate || candidate.length === 0) {
+    return false
+  }
+
+  const normalized = new Set(tagsOrKeys.map(item => (typeof item === 'string' ? item : serializeQueryKey(item))))
+  return candidate.some(item => normalized.has(item))
+}
+
+function getStorage(scope: QueryScope): Storage | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  if (scope === 'session') {
+    return window.sessionStorage
+  }
+
+  if (scope === 'local') {
+    return window.localStorage
+  }
+
+  return null
+}
+
+function toStorageKey(serializedKey: string): string {
+  return `${STORAGE_PREFIX}${serializedKey}`
+}
+
+function fromStoragePayload<T>(
+  serializedKey: string,
+  scope: QueryScope,
+  payload: QueryStoragePayload<T>
+): QueryCacheEntry<T> {
+  return {
+    ...payload,
+    key: serializedKey,
+    scope,
+    source: scope
+  }
+}
+
+function isExpired(entry: QueryCacheEntry | CacheEntry): boolean {
+  return entry.expiresAt < Date.now()
+}
+
+function isStale(entry: QueryCacheEntry | CacheEntry): boolean {
+  return entry.expiresAt <= Date.now()
+}
+
+export const DEFAULT_CACHE_CONFIGS: Record<string, CachePolicy> = {
+  '["org","departments",null]': {
+    ttlMs: 10 * 60 * 1000,
+    scope: 'memory',
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['org.list']
+  },
+  '["plan","list",null]': {
+    ttlMs: 2 * 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    tags: ['plan.list']
+  },
+  '["plan","detail",null]': {
+    ttlMs: 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    tags: ['plan.detail']
+  },
+  '["indicator","list",null]': {
+    ttlMs: 2 * 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    tags: ['indicator.list']
+  },
+  '["task","list",null]': {
+    ttlMs: 2 * 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    tags: ['task.list']
+  },
+  '["dashboard","overview",null]': {
+    ttlMs: 45 * 1000,
+    scope: 'memory',
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['dashboard.overview']
+  },
+  '["auth","user",null]': {
+    ttlMs: 10 * 60 * 1000,
+    scope: 'session',
+    persist: true,
+    dedupeWindowMs: 1000,
+    tags: ['auth.user']
+  }
+}
+
+function createUrlPatternPolicyMap(): Map<string, CachePolicy> {
+  const map = new Map<string, CachePolicy>()
+  map.set('/organizations', {
+    ttlMs: 10 * 60 * 1000,
+    scope: 'memory',
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['org.list']
+  })
+  map.set('/orgs', {
+    ttlMs: 5 * 60 * 1000,
+    scope: 'memory',
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['org.list']
+  })
+  map.set('/plans', {
+    ttlMs: 2 * 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    tags: ['plan.list']
+  })
+  map.set('/indicators', {
+    ttlMs: 2 * 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    useLastModified: true,
+    tags: ['indicator.list']
+  })
+  map.set('/tasks', {
+    ttlMs: 2 * 60 * 1000,
+    scope: 'memory',
+    dedupeWindowMs: 1000,
+    tags: ['task.list']
+  })
+  return map
+}
+
 export class CacheManager {
-  private cache: Map<string, CacheEntry> = new Map()
-  private configs: Map<string, CacheConfig> = new Map()
+  private memory = new Map<string, QueryCacheEntry>()
+  private queryPolicies = new Map<string, CachePolicy>()
+  private urlPolicies = createUrlPatternPolicyMap()
+  private pendingRequests = new Map<string, PendingRequest>()
   private cleanupInterval: ReturnType<typeof setInterval> | null = null
+  private stats: QueryCacheStats = defaultStats()
 
   constructor() {
-    // Initialize with default configs
-    Object.entries(DEFAULT_CACHE_CONFIGS).forEach(([path, config]) => {
-      this.configs.set(path, config)
+    Object.entries(DEFAULT_CACHE_CONFIGS).forEach(([serializedKey, policy]) => {
+      this.queryPolicies.set(serializedKey, policy)
     })
-    
-    // Start cleanup interval (every minute)
     this.startCleanup()
   }
 
-  /**
-   * Start automatic cleanup of expired entries
-   */
   private startCleanup(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval)
     }
+
     this.cleanupInterval = setInterval(() => {
       this.cleanupExpired()
-    }, 60 * 1000) // Every minute
+    }, 60 * 1000)
   }
 
-  /**
-   * Stop automatic cleanup
-   */
   public stopCleanup(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval)
@@ -128,246 +294,426 @@ export class CacheManager {
     }
   }
 
-  /**
-   * Remove expired cache entries
-   */
-  private cleanupExpired(): void {
-    const now = Date.now()
-    let removedCount = 0
-    
-    for (const [key, entry] of this.cache.entries()) {
-      if (entry.expiresAt < now) {
-        this.cache.delete(key)
-        removedCount++
-      }
-    }
-    
-    if (removedCount > 0) {
-      logger.debug(`[Cache] Cleaned up ${removedCount} expired entries`)
-    }
+  public registerPolicy(key: QueryKey | string, policy: CachePolicy): void {
+    this.queryPolicies.set(serializeQueryKey(key), policy)
   }
 
-  /**
-   * Get cache configuration for a URL
-   */
-  public getConfig(url: string): CacheConfig | undefined {
-    // Try exact match first
-    const normalizedUrl = url.replace(/^\/api/, '')
-    if (this.configs.has(normalizedUrl)) {
-      return this.configs.get(normalizedUrl)
+  public registerUrlPolicy(urlPattern: string, policy: CachePolicy): void {
+    const normalized = urlPattern.replace(/^\/api\/v1/, '').replace(/^\/api/, '')
+    this.urlPolicies.set(normalized || '/', policy)
+  }
+
+  public getPolicy(key: QueryKey | string): CachePolicy | undefined {
+    const serializedKey = serializeQueryKey(key)
+    return this.queryPolicies.get(serializedKey)
+  }
+
+  public getConfig(urlOrKey: string): CachePolicy | undefined {
+    if (this.queryPolicies.has(urlOrKey)) {
+      return this.queryPolicies.get(urlOrKey)
     }
-    
-    // Try prefix match
-    for (const [path, config] of this.configs.entries()) {
-      if (normalizedUrl.startsWith(path)) {
-        return config
+
+    const normalizedUrl = urlOrKey.replace(/^\/api\/v1/, '').replace(/^\/api/, '')
+    for (const [pattern, policy] of this.urlPolicies.entries()) {
+      if (normalizedUrl === pattern || normalizedUrl.startsWith(`${pattern}/`)) {
+        return policy
       }
     }
-    
     return undefined
   }
 
-  /**
-   * Set cache configuration for a URL pattern
-   */
-  public setConfig(urlPattern: string, config: CacheConfig): void {
-    this.configs.set(urlPattern, config)
-    logger.debug(`[Cache] Config set for ${urlPattern}:`, config)
+  public peek<T>(key: QueryKey | string): QueryCacheEntry<T> | undefined {
+    const serializedKey = serializeQueryKey(key)
+    const memoryEntry = this.memory.get(serializedKey) as QueryCacheEntry<T> | undefined
+    if (memoryEntry) {
+      return memoryEntry
+    }
+
+    const policy = this.getPolicy(serializedKey)
+    if (!policy) {
+      return undefined
+    }
+
+    return this.readFromPersistentScope<T>(serializedKey, policy)
   }
 
-  /**
-   * Get cached entry
-   */
-  public get<T>(key: string): CacheEntry<T> | undefined {
-    const entry = this.cache.get(key) as CacheEntry<T> | undefined
-    
+  public get<T>(key: QueryKey | string): QueryCacheEntry<T> | undefined {
+    const entry = this.peek<T>(key)
     if (!entry) {
-      logger.debug(`[Cache] Miss: ${key}`)
+      this.stats.misses += 1
       return undefined
     }
-    
-    // Check if expired
-    if (entry.expiresAt < Date.now()) {
-      logger.debug(`[Cache] Expired: ${key}`)
-      this.cache.delete(key)
+
+    if (isExpired(entry)) {
+      this.invalidate(key)
+      this.stats.misses += 1
       return undefined
     }
-    
-    logger.debug(`[Cache] Hit: ${key}`)
+
+    this.stats.hits += 1
     return entry
   }
 
-  /**
-   * Set cache entry
-   */
   public set<T>(
-    key: string, 
-    data: T, 
+    key: QueryKey | string,
+    data: T,
     options: {
       etag?: string
       lastModified?: string
       ttl?: number
+      source?: CacheSource
+      tags?: InvalidationTag[]
+      policy?: CachePolicy
     } = {}
-  ): void {
-    const config = this.getConfig(key)
-    const ttl = options.ttl ?? config?.ttl ?? DEFAULT_TTL
+  ): QueryCacheEntry<T> {
+    const serializedKey = serializeQueryKey(key)
+    const policy = options.policy ?? this.getPolicy(serializedKey) ?? this.getConfig(serializedKey)
+    const scope = policy?.scope ?? 'memory'
+    const ttl = options.ttl ?? policy?.ttlMs ?? DEFAULT_TTL
     const now = Date.now()
-    
-    const entry: CacheEntry<T> = {
+    const version = policy?.version ?? DEFAULT_QUERY_VERSION
+    const entry: QueryCacheEntry<T> = {
       data,
       etag: options.etag,
       lastModified: options.lastModified,
-      createdAt: now,
+      updatedAt: now,
       expiresAt: now + ttl,
+      source: options.source ?? 'network',
+      version,
+      tags: Array.from(new Set([...(policy?.tags ?? []), ...(options.tags ?? [])])),
+      key: serializedKey,
+      scope
     }
-    
-    this.cache.set(key, entry)
-    logger.debug(`[Cache] Set: ${key}, TTL: ${ttl}ms, ETag: ${options.etag || 'none'}`)
+
+    this.memory.set(serializedKey, entry)
+    this.writeToPersistentScope(entry, policy)
+    this.stats.writes += 1
+    return entry
   }
 
-  /**
-   * Check if cache entry is valid (not expired)
-   */
-  public isValid(key: string): boolean {
-    const entry = this.cache.get(key)
-    if (!entry) {return false}
-    return entry.expiresAt >= Date.now()
+  public isValid(key: QueryKey | string): boolean {
+    const entry = this.peek(key)
+    return !!entry && !isExpired(entry)
   }
 
-  /**
-   * Get ETag for cache validation
-   */
-  public getEtag(key: string): string | undefined {
-    const entry = this.cache.get(key)
-    return entry?.etag
+  public getEtag(key: QueryKey | string): string | undefined {
+    return this.peek(key)?.etag
   }
 
-  /**
-   * Get Last-Modified for cache validation
-   */
-  public getLastModified(key: string): string | undefined {
-    const entry = this.cache.get(key)
-    return entry?.lastModified
+  public getLastModified(key: QueryKey | string): string | undefined {
+    return this.peek(key)?.lastModified
   }
 
-  /**
-   * Invalidate (remove) a specific cache entry
-   */
-  public invalidate(key: string): boolean {
-    const deleted = this.cache.delete(key)
-    if (deleted) {
-      logger.debug(`[Cache] Invalidated: ${key}`)
+  public invalidate(key: QueryKey | string): boolean {
+    const serializedKey = serializeQueryKey(key)
+    const existing = this.peek(serializedKey)
+    this.memory.delete(serializedKey)
+    this.removeFromPersistentScopes(serializedKey)
+    if (existing) {
+      this.stats.invalidations += 1
+      logger.debug(`[Cache] Invalidated: ${serializedKey}`)
     }
-    return deleted
+    return !!existing
   }
 
-  /**
-   * Invalidate all cache entries matching a pattern
-   */
-  public invalidatePattern(pattern: string | RegExp): number {
-    const regex = typeof pattern === 'string' ? new RegExp(pattern) : pattern
+  public invalidateMany(tagsOrKeys: readonly (InvalidationTag | QueryKey)[]): number {
     let count = 0
-    
-    for (const key of this.cache.keys()) {
-      if (regex.test(key)) {
-        this.cache.delete(key)
-        count++
+    const serializedKeys = new Set<string>()
+    const tags = new Set<string>()
+
+    tagsOrKeys.forEach(item => {
+      if (typeof item === 'string') {
+        tags.add(item)
+      } else {
+        serializedKeys.add(serializeQueryKey(item))
+      }
+    })
+
+    const invalidateIfMatched = (entry: QueryCacheEntry) => {
+      if (serializedKeys.has(entry.key) || entry.tags.some(tag => tags.has(tag))) {
+        count += this.invalidate(entry.key) ? 1 : 0
       }
     }
-    
-    if (count > 0) {
-      logger.debug(`[Cache] Invalidated ${count} entries matching pattern: ${pattern}`)
-    }
+
+    Array.from(this.memory.values()).forEach(invalidateIfMatched)
+    ;(['session', 'local'] as const).forEach(scope => {
+      const storage = getStorage(scope)
+      if (!storage) {
+        return
+      }
+      for (let index = storage.length - 1; index >= 0; index -= 1) {
+        const storageKey = storage.key(index)
+        if (!storageKey || !storageKey.startsWith(STORAGE_PREFIX)) {
+          continue
+        }
+        try {
+          const serialized = storageKey.slice(STORAGE_PREFIX.length)
+          const raw = storage.getItem(storageKey)
+          if (!raw) {
+            continue
+          }
+          const payload = JSON.parse(raw) as QueryStoragePayload
+          const entry = fromStoragePayload(serialized, scope, payload)
+          if (serializedKeys.has(entry.key) || entry.tags.some(tag => tags.has(tag))) {
+            storage.removeItem(storageKey)
+            this.memory.delete(serialized)
+            count += 1
+          }
+        } catch (error) {
+          logger.warn('[Cache] Failed to inspect persistent entry during invalidation:', error)
+        }
+      }
+    })
+
     return count
   }
 
-  /**
-   * Clear all cache entries
-   */
-  public clear(): void {
-    const size = this.cache.size
-    this.cache.clear()
-    logger.debug(`[Cache] Cleared all ${size} entries`)
+  public invalidatePattern(pattern: string | RegExp): number {
+    const regex = typeof pattern === 'string' ? new RegExp(pattern) : pattern
+    let count = 0
+    Array.from(this.memory.keys()).forEach(key => {
+      if (regex.test(key) && this.invalidate(key)) {
+        count += 1
+      }
+    })
+    return count
   }
 
-  /**
-   * Get cache statistics
-   */
+  public clear(): void {
+    const size = this.memory.size
+    this.memory.clear()
+    ;(['session', 'local'] as const).forEach(scope => {
+      const storage = getStorage(scope)
+      if (!storage) {
+        return
+      }
+      const keys: string[] = []
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index)
+        if (key?.startsWith(STORAGE_PREFIX)) {
+          keys.push(key)
+        }
+      }
+      keys.forEach(key => storage.removeItem(key))
+    })
+    logger.debug(`[Cache] Cleared all ${size} memory entries`)
+  }
+
+  public cleanupExpired(): void {
+    Array.from(this.memory.entries()).forEach(([key, entry]) => {
+      if (isExpired(entry)) {
+        this.memory.delete(key)
+      }
+    })
+
+    ;(['session', 'local'] as const).forEach(scope => {
+      const storage = getStorage(scope)
+      if (!storage) {
+        return
+      }
+
+      const expiredKeys: string[] = []
+      for (let index = 0; index < storage.length; index += 1) {
+        const storageKey = storage.key(index)
+        if (!storageKey || !storageKey.startsWith(STORAGE_PREFIX)) {
+          continue
+        }
+        const raw = storage.getItem(storageKey)
+        if (!raw) {
+          expiredKeys.push(storageKey)
+          continue
+        }
+        try {
+          const payload = JSON.parse(raw) as QueryStoragePayload
+          if (payload.expiresAt < Date.now()) {
+            expiredKeys.push(storageKey)
+          }
+        } catch {
+          expiredKeys.push(storageKey)
+        }
+      }
+      expiredKeys.forEach(key => storage.removeItem(key))
+    })
+  }
+
   public getStats(): {
     size: number
-    entries: Array<{ key: string; expiresIn: number; hasEtag: boolean }>
+    entries: Array<{ key: string; expiresIn: number; hasEtag: boolean; tags: string[]; scope: QueryScope }>
+    counters: QueryCacheStats
   } {
     const now = Date.now()
-    const entries = Array.from(this.cache.entries()).map(([key, entry]) => ({
-      key,
-      expiresIn: Math.max(0, entry.expiresAt - now),
-      hasEtag: !!entry.etag,
-    }))
-    
     return {
-      size: this.cache.size,
-      entries,
+      size: this.memory.size,
+      entries: Array.from(this.memory.values()).map(entry => ({
+        key: entry.key,
+        expiresIn: Math.max(0, entry.expiresAt - now),
+        hasEtag: !!entry.etag,
+        tags: entry.tags,
+        scope: entry.scope
+      })),
+      counters: { ...this.stats }
     }
+  }
+
+  public resetStats(): void {
+    this.stats = defaultStats()
+  }
+
+  public getPendingRequest<T>(key: QueryKey | string): PendingRequest<T> | undefined {
+    return this.pendingRequests.get(serializeQueryKey(key)) as PendingRequest<T> | undefined
+  }
+
+  public setPendingRequest<T>(key: QueryKey | string, promise: Promise<T>): void {
+    this.pendingRequests.set(serializeQueryKey(key), {
+      promise,
+      startedAt: Date.now()
+    })
+  }
+
+  public clearPendingRequest(key: QueryKey | string): void {
+    this.pendingRequests.delete(serializeQueryKey(key))
+  }
+
+  public markDedupedRequest(): void {
+    this.stats.dedupedRequests += 1
+  }
+
+  public markStaleHit(): void {
+    this.stats.staleHits += 1
+  }
+
+  private writeToPersistentScope(entry: QueryCacheEntry, policy?: CachePolicy): void {
+    if (!policy || entry.scope === 'memory') {
+      return
+    }
+
+    if (entry.scope === 'local' && !policy.persist) {
+      return
+    }
+
+    const storage = getStorage(entry.scope)
+    if (!storage) {
+      return
+    }
+
+    const payload: QueryStoragePayload = {
+      data: entry.data,
+      updatedAt: entry.updatedAt,
+      expiresAt: entry.expiresAt,
+      etag: entry.etag,
+      lastModified: entry.lastModified,
+      version: entry.version,
+      tags: entry.tags,
+      key: entry.key,
+      scope: entry.scope
+    }
+
+    try {
+      storage.setItem(toStorageKey(entry.key), JSON.stringify(payload))
+    } catch (error) {
+      logger.warn('[Cache] Failed to persist cache entry:', error)
+    }
+  }
+
+  private readFromPersistentScope<T>(
+    serializedKey: string,
+    policy: CachePolicy
+  ): QueryCacheEntry<T> | undefined {
+    const scope = policy.scope ?? 'memory'
+    const storage = getStorage(scope)
+    if (!storage) {
+      return undefined
+    }
+
+    try {
+      const raw = storage.getItem(toStorageKey(serializedKey))
+      if (!raw) {
+        return undefined
+      }
+
+      const payload = JSON.parse(raw) as QueryStoragePayload<T>
+      if (payload.version !== (policy.version ?? DEFAULT_QUERY_VERSION)) {
+        storage.removeItem(toStorageKey(serializedKey))
+        return undefined
+      }
+
+      if (payload.expiresAt < Date.now()) {
+        storage.removeItem(toStorageKey(serializedKey))
+        return undefined
+      }
+
+      const entry = fromStoragePayload(serializedKey, scope, payload)
+      this.memory.set(serializedKey, entry)
+      return entry
+    } catch (error) {
+      logger.warn('[Cache] Failed to read persistent cache entry:', error)
+      return undefined
+    }
+  }
+
+  private removeFromPersistentScopes(serializedKey: string): void {
+    ;(['session', 'local'] as const).forEach(scope => {
+      const storage = getStorage(scope)
+      storage?.removeItem(toStorageKey(serializedKey))
+    })
   }
 }
 
-// Singleton instance
 export const cacheManager = new CacheManager()
+export const queryCache = cacheManager
 
+function toLegacyCacheKey(url: string, params?: Record<string, unknown>): string {
+  const normalizedUrl = url.replace(/^\/api\/v1/, '').replace(/^\/api/, '')
+  if (!params || Object.keys(params).length === 0) {
+    return normalizedUrl
+  }
+  const sortedParams = Object.keys(params)
+    .sort()
+    .map(key => `${key}=${stableStringify(params[key])}`)
+    .join('&')
+  return `${normalizedUrl}?${sortedParams}`
+}
 
-/**
- * Check if a request should use caching
- */
+export function generateCacheKey(url: string, params?: Record<string, unknown>): string {
+  return toLegacyCacheKey(url, params)
+}
+
 export function shouldCache(method: string, url: string): boolean {
-  // Only cache GET requests
   if (method.toUpperCase() !== 'GET') {
     return false
   }
-  
-  // Check if URL has a cache config
-  const config = cacheManager.getConfig(url)
-  return config !== undefined
+  return cacheManager.getConfig(url) !== undefined
 }
 
-/**
- * Get cache validation headers for a request
- * Returns headers to send with the request for cache validation
- */
 export function getCacheValidationHeaders(
-  url: string, 
+  url: string,
   params?: Record<string, unknown>
 ): Record<string, string> {
   const cacheKey = generateCacheKey(url, params)
   const config = cacheManager.getConfig(url)
   const headers: Record<string, string> = {}
-  
+
   if (!config) {
     return headers
   }
-  
-  // Add If-None-Match header for ETag validation
+
   if (config.useEtag) {
     const etag = cacheManager.getEtag(cacheKey)
     if (etag) {
       headers['If-None-Match'] = etag
     }
   }
-  
-  // Add If-Modified-Since header for Last-Modified validation
+
   if (config.useLastModified) {
     const lastModified = cacheManager.getLastModified(cacheKey)
     if (lastModified) {
       headers['If-Modified-Since'] = lastModified
     }
   }
-  
+
   return headers
 }
 
-/**
- * Handle cache response
- * Updates cache based on response headers and returns cached data if 304
- */
 export function handleCacheResponse<T>(
   url: string,
   params: Record<string, unknown> | undefined,
@@ -382,62 +728,106 @@ export function handleCacheResponse<T>(
   }
 ): { data: T; fromCache: boolean } {
   const cacheKey = generateCacheKey(url, params)
-  
-  // 304 Not Modified - return cached data
+
   if (response.status === 304) {
     const cached = cacheManager.get<T>(cacheKey)
     if (cached) {
       logger.debug(`[Cache] 304 Not Modified, using cached data: ${cacheKey}`)
       return { data: cached.data, fromCache: true }
     }
-    // Cache was invalidated, but server returned 304 - this shouldn't happen
-    // Fall through to cache the response
-    logger.warn(`[Cache] 304 received but no cached data for: ${cacheKey}`)
   }
-  
-  // Cache the new response
-  const etag = response.headers.etag || response.headers['etag']
-  const lastModified = response.headers['last-modified']
-  
+
   cacheManager.set(cacheKey, response.data, {
-    etag,
-    lastModified,
+    etag: response.headers.etag || response.headers['etag'],
+    lastModified: response.headers['last-modified']
   })
-  
+
   return { data: response.data, fromCache: false }
 }
 
-/**
- * Try to get data from cache without making a request
- * Returns undefined if cache miss or expired
- */
-export function getFromCache<T>(
-  url: string, 
-  params?: Record<string, unknown>
-): T | undefined {
-  const cacheKey = generateCacheKey(url, params)
-  const entry = cacheManager.get<T>(cacheKey)
-  return entry?.data
+export function getFromCache<T>(url: string, params?: Record<string, unknown>): T | undefined {
+  return cacheManager.get<T>(generateCacheKey(url, params))?.data
 }
 
-/**
- * Manually refresh cache for a specific URL
- * This invalidates the cache entry, forcing the next request to fetch fresh data
- */
 export function refreshCache(url: string, params?: Record<string, unknown>): void {
-  const cacheKey = generateCacheKey(url, params)
-  cacheManager.invalidate(cacheKey)
-  logger.info(`[Cache] Manual refresh requested for: ${cacheKey}`)
+  cacheManager.invalidate(generateCacheKey(url, params))
 }
 
-/**
- * Refresh all cache entries for a URL pattern
- */
 export function refreshCachePattern(pattern: string | RegExp): number {
-  const count = cacheManager.invalidatePattern(pattern)
-  logger.info(`[Cache] Manual refresh for pattern: ${pattern}, invalidated ${count} entries`)
-  return count
+  return cacheManager.invalidatePattern(pattern)
 }
 
-// Export types for external use
-export type { CacheEntry, CacheConfig }
+type FetchWithCacheOptions<T> = {
+  key: QueryKey
+  policy: CachePolicy
+  fetcher: () => Promise<T>
+  tags?: InvalidationTag[]
+  force?: boolean
+  background?: boolean
+  onHit?: (entry: QueryCacheEntry<T>) => void
+}
+
+export async function fetchWithCache<T>({
+  key,
+  policy,
+  fetcher,
+  tags,
+  force = false,
+  background = false,
+  onHit
+}: FetchWithCacheOptions<T>): Promise<T> {
+  const serializedKey = serializeQueryKey(key)
+  cacheManager.registerPolicy(serializedKey, policy)
+
+  const cached = !force ? cacheManager.peek<T>(serializedKey) : undefined
+  if (cached && !isStale(cached)) {
+    onHit?.(cached)
+    cacheManager.get(serializedKey)
+    return cached.data
+  }
+
+  if (cached && policy.staleWhileRevalidate && !background) {
+    onHit?.(cached)
+    cacheManager.markStaleHit()
+    void fetchWithCache({
+      key,
+      policy,
+      fetcher,
+      tags,
+      force: true,
+      background: true
+    }).catch(error => {
+      logger.warn('[Cache] Background revalidation failed:', error)
+    })
+    return cached.data
+  }
+
+  const pending = cacheManager.getPendingRequest<T>(serializedKey)
+  if (pending && Date.now() - pending.startedAt < (policy.dedupeWindowMs ?? 0)) {
+    cacheManager.markDedupedRequest()
+    return pending.promise
+  }
+
+  const promise = (async () => {
+    try {
+      const data = await fetcher()
+      cacheManager.set(serializedKey, data, {
+        policy,
+        tags,
+        source: 'network'
+      })
+      return data
+    } finally {
+      cacheManager.clearPendingRequest(serializedKey)
+    }
+  })()
+
+  cacheManager.setPendingRequest(serializedKey, promise)
+  return promise
+}
+
+export function invalidateQueries(tagsOrKeys: readonly (InvalidationTag | QueryKey)[]): number {
+  return cacheManager.invalidateMany(tagsOrKeys)
+}
+
+export type { QueryCacheStats }

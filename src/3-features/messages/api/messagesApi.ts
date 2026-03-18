@@ -5,7 +5,6 @@
 
 import { apiClient } from '@/5-shared/api/client'
 import { alertApi, type WarningEvent, type AlertEvent } from '@/5-shared/api/monitoringApi'
-import { useAuthStore } from '@/3-features/auth/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
 
 /**
@@ -131,11 +130,7 @@ export const messagesApi = {
    * 使用正确的后端API路径：/api/v1/notifications/my
    */
   async getMessages() {
-    const authStore = useAuthStore()
-    if (!authStore.user) {
-      throw new Error('用户未登录')
-    }
-    return await apiClient.get('/notifications/my')
+    return await apiClient.get('/notifications')
   },
 
   /**
@@ -144,7 +139,7 @@ export const messagesApi = {
    * 使用POST方法（后端文档定义）
    */
   async markAsRead(id: string | number) {
-    return await apiClient.post(`/notifications/${id}/read`)
+    return await apiClient.patch(`/notifications/${id}/status?newStatus=READ`)
   },
 
   /**
@@ -183,11 +178,14 @@ export const messagesApi = {
    * 使用POST方法（后端文档定义）
    */
   async markAllAsRead() {
-    const authStore = useAuthStore()
-    if (!authStore.user) {
-      throw new Error('用户未登录')
-    }
-    return await apiClient.post('/notifications/read-all')
+    const messages = await this.getMessages()
+    const payload = messages?.data?.data
+    const notificationList = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.content)
+        ? payload.content
+        : []
+    return Promise.allSettled(notificationList.map((msg: MessageItem) => this.markAsRead(msg.id)))
   },
 
   /**

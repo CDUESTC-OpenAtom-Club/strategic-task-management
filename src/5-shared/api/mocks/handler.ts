@@ -255,7 +255,10 @@ export class MockApiHandler {
       // ============================================
       // 组织架构 API
       // ============================================
-      else if (normalizedPath === '/api/orgs' && normalizedMethod === 'GET') {
+      else if (
+        (normalizedPath === '/api/orgs' || normalizedPath === '/api/organizations') &&
+        normalizedMethod === 'GET'
+      ) {
         response = await this.handleGetOrgs()
       }
       // ============================================
@@ -267,26 +270,11 @@ export class MockApiHandler {
       // ============================================
       // 仪表板 API
       // ============================================
-      else if (normalizedPath === '/api/dashboard' && normalizedMethod === 'GET') {
+      else if (normalizedPath === '/api/analytics/dashboard' && normalizedMethod === 'POST') {
         response = await this.handleGetDashboard()
-      } else if (normalizedPath === '/api/dashboard/overview' && normalizedMethod === 'GET') {
-        response = await this.handleGetDashboard()
-      } else if (
-        normalizedPath === '/api/dashboard/department-progress' &&
-        normalizedMethod === 'GET'
-      ) {
-        response = await this.handleGetDepartmentProgress()
-      } else if (
-        normalizedPath === '/api/dashboard/recent-activities' &&
-        normalizedMethod === 'GET'
-      ) {
-        response = await this.handleGetRecentActivities()
       } else if (normalizedPath === '/api/alerts/stats' && normalizedMethod === 'GET') {
         response = createMockResponse(mockAlertStats, '获取告警统计成功')
-      } else if (
-        normalizedPath === '/api/alerts/events/unclosed' &&
-        normalizedMethod === 'GET'
-      ) {
+      } else if (normalizedPath === '/api/alerts/unresolved' && normalizedMethod === 'GET') {
         response = createMockResponse(mockUnclosedAlerts, '获取未关闭告警成功')
       } else if (normalizedPath === '/api/plans/approval/pending' && normalizedMethod === 'GET') {
         response = createMockResponse(mockPendingApprovals, '获取待审批计划成功')
@@ -305,7 +293,7 @@ export class MockApiHandler {
         normalizedMethod === 'POST'
       ) {
         response = createMockResponse('审批驳回', '审批驳回成功')
-      } else if (normalizedPath === '/api/admin/users' && normalizedMethod === 'GET') {
+      } else if (normalizedPath === '/api/auth/users' && normalizedMethod === 'GET') {
         response = createMockResponse(
           {
             content: mockAdminUsers,
@@ -318,24 +306,25 @@ export class MockApiHandler {
           },
           '获取用户列表成功'
         )
-      } else if (normalizedPath === '/api/admin/users' && normalizedMethod === 'POST') {
+      } else if (normalizedPath === '/api/auth/users' && normalizedMethod === 'POST') {
         response = await this.handleCreateAdminUser(data)
-      } else if (/^\/api\/admin\/users\/\d+$/.test(normalizedPath) && normalizedMethod === 'PUT') {
+      } else if (/^\/api\/auth\/users\/\d+$/.test(normalizedPath) && normalizedMethod === 'PUT') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateAdminUser(id ?? '0', data)
       } else if (
-        /^\/api\/admin\/users\/\d+\/status$/.test(normalizedPath) &&
-        normalizedMethod === 'PATCH'
+        /^\/api\/auth\/users\/\d+\/lock$/.test(normalizedPath) &&
+        normalizedMethod === 'POST'
       ) {
         const id = normalizedPath.split('/')[4]
-        response = await this.handleUpdateAdminUserStatus(id ?? '0', query)
+        response = await this.handleUpdateAdminUserStatus(id ?? '0', new URLSearchParams('isActive=false'))
       } else if (
-        /^\/api\/admin\/users\/\d+\/password$/.test(normalizedPath) &&
-        normalizedMethod === 'PUT'
+        /^\/api\/auth\/users\/\d+\/unlock$/.test(normalizedPath) &&
+        normalizedMethod === 'POST'
       ) {
-        response = createMockResponse({ updated: true }, '重置密码成功')
+        const id = normalizedPath.split('/')[4]
+        response = await this.handleUpdateAdminUserStatus(id ?? '0', new URLSearchParams('isActive=true'))
       } else if (
-        /^\/api\/admin\/users\/\d+$/.test(normalizedPath) &&
+        /^\/api\/auth\/users\/\d+$/.test(normalizedPath) &&
         normalizedMethod === 'DELETE'
       ) {
         const id = normalizedPath.split('/').pop()

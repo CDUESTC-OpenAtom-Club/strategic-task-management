@@ -58,7 +58,8 @@ export async function submitPlanForApproval(
   planId: number | string,
   comment?: string
 ): Promise<ApiResponse<void>> {
-  return api.post(`/plans/${planId}/submit-approval`, { comment })
+  void comment
+  return api.post(`/plans/${planId}/publish`)
 }
 
 /**

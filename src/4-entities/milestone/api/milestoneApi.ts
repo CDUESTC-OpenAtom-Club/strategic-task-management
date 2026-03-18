@@ -57,12 +57,42 @@ export const milestoneApi = {
   async createMilestone(request: {
     indicatorId: number
     milestoneName: string
+    description?: string
     targetProgress: number
-    dueDate: string
+    dueDate: string | null
     status: string
     sortOrder: number
+    isPaired?: boolean
+    inheritedFrom?: number | null
   }): Promise<ApiResponse<Milestone>> {
     return apiClient.post<ApiResponse<Milestone>>('/milestones', request)
+  },
+
+  /**
+   * 更新里程碑
+   */
+  async updateMilestone(
+    milestoneId: string,
+    request: {
+      indicatorId: number
+      milestoneName: string
+      description?: string
+      targetProgress: number
+      dueDate: string | null
+      status: string
+      sortOrder: number
+      isPaired?: boolean
+      inheritedFrom?: number | null
+    }
+  ): Promise<ApiResponse<Milestone>> {
+    return apiClient.put<ApiResponse<Milestone>>(`/milestones/${milestoneId}`, request)
+  },
+
+  /**
+   * 删除里程碑
+   */
+  async deleteMilestone(milestoneId: string): Promise<ApiResponse<void>> {
+    return apiClient.delete<ApiResponse<void>>(`/milestones/${milestoneId}`)
   },
 
   /**

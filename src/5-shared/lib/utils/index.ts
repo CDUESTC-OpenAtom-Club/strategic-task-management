@@ -29,7 +29,26 @@ export { getColorByIndex, getGradientColor, isSecondaryCollege } from './colors'
 export { logger, type LogLevel } from './logger'
 
 // 缓存工具
-export { cacheManager, generateCacheKey, refreshCache, refreshCachePattern, getFromCache } from './cache'
+export {
+  buildQueryKey,
+  serializeQueryKey,
+  matchesInvalidationTags,
+  fetchWithCache,
+  invalidateQueries,
+  queryCache,
+  cacheManager,
+  generateCacheKey,
+  refreshCache,
+  refreshCachePattern,
+  getFromCache
+} from './cache'
+export type {
+  QueryKey,
+  CachePolicy,
+  QueryCacheEntry,
+  InvalidationTag,
+  CacheEntry
+} from './cache'
 
 // 性能监控
 export { performanceMonitor, recordApiLatency } from './performance'

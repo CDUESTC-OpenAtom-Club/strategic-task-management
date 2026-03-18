@@ -44,7 +44,7 @@ export interface UpdateUserInput {
  * @returns Created user
  */
 export async function createUser(userData: CreateUserInput): Promise<User> {
-  const response = await api.post('/users', userData)
+  const response = await api.post('/auth/users', userData)
   return response.data
 }
 
@@ -61,7 +61,7 @@ export async function updateUser(
   userId: string | number,
   userData: UpdateUserInput
 ): Promise<User> {
-  const response = await api.put(`/users/${userId}`, userData)
+  const response = await api.put(`/auth/users/${userId}`, userData)
   return response.data
 }
 
@@ -73,7 +73,7 @@ export async function updateUser(
  * @param userId - User ID
  */
 export async function deleteUser(userId: string | number): Promise<void> {
-  await api.delete(`/users/${userId}`)
+  await api.delete(`/auth/users/${userId}`)
 }
 
 /**
@@ -90,7 +90,8 @@ export async function changeUserPassword(
   oldPassword: string,
   newPassword: string
 ): Promise<void> {
-  await api.put(`/users/${userId}/password`, {
+  void userId
+  await api.post('/profile/password', {
     oldPassword,
     newPassword
   })
@@ -108,7 +109,9 @@ export async function resetUserPassword(
   userId: string | number,
   newPassword: string
 ): Promise<void> {
-  await api.put(`/users/${userId}/password/reset`, { newPassword })
+  void userId
+  void newPassword
+  throw new Error('当前 OpenAPI 未提供管理员重置密码接口')
 }
 
 /**
@@ -120,6 +123,6 @@ export async function resetUserPassword(
  * @param role - New role
  */
 export async function assignUserRole(userId: string | number, role: User['role']): Promise<User> {
-  const response = await api.put(`/users/${userId}/role`, { role })
+  const response = await api.put(`/auth/users/${userId}`, { role })
   return response.data
 }

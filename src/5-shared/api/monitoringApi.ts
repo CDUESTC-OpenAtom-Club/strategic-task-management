@@ -2,9 +2,8 @@
  * 预警告警 API
  * 用于 Dashboard 和消息中心的预警统计
  *
- * 注意：根据后端API文档，预警和告警是分开的两个模块
- * - 预警：/api/v1/warnings/
- * - 告警：/api/v1/alerts/
+ * 当前 OpenAPI 只稳定暴露 alerts 相关接口。
+ * warnings 和细粒度 process/acknowledge 能力在前端走兼容降级。
  */
 
 import { apiClient } from '@/5-shared/api/client'
@@ -76,7 +75,7 @@ function unwrapMockResponse<T>(response: T | ApiEnvelope<T>): T {
 export const alertApi = {
   /**
    * 获取告警统计
-   * 使用正确的后端API路径：/api/v1/alerts/stats
+   * 使用 OpenAPI 告警统计接口
    */
   getStats: async () => {
     const response = await apiClient.get<{
@@ -89,20 +88,20 @@ export const alertApi = {
 
   /**
    * 获取未关闭的告警事件
-   * 使用正确的路径：/api/v1/alerts/events/unclosed
+   * 使用 OpenAPI 未解决告警接口
    */
   getUnclosedAlerts: async () => {
     const response = await apiClient.get<{
       code: number
       message: string
       data: AlertEvent[]
-    }>('/alerts/events/unclosed')
+    }>('/alerts/unresolved')
     return unwrapMockResponse(response)
   },
 
   /**
    * 获取活跃的预警事件
-   * 使用正确的路径：/api/v1/warnings/events
+   * 当前 OpenAPI 无预警事件列表，降级为空结果
    */
   getActiveWarnings: async (params?: {
     indicatorId?: number
@@ -110,45 +109,55 @@ export const alertApi = {
     page?: number
     size?: number
   }) => {
-    const response = await apiClient.get<{
-      code: number
-      message: string
-      data: {
-        content: WarningEvent[]
-        total: number
-      }
-    }>('/warnings/events', { params })
-    return unwrapMockResponse(response)
+    void params
+    return {
+      content: [] as WarningEvent[],
+      total: 0
+    }
   },
 
   /**
    * 确认预警
-   * 使用正确的路径：/api/v1/warnings/events/{id}/acknowledge
+   * 当前 OpenAPI 无预警确认接口
    */
   acknowledgeWarning: async (id: number) => {
-    const response = await apiClient.post<{
-      code: number
-      message: string
-      data: WarningEvent
-    }>(`/warnings/events/${id}/acknowledge`)
-    return unwrapMockResponse(response)
+    void id
+    throw new Error('当前 OpenAPI 未提供预警确认接口')
   },
 
   /**
    * 处理告警
-   * 使用正确的路径：/api/v1/alerts/events/{id}/process
+   * 复用通知 handle/status 能力近似表达告警处理
    */
   processAlert: async (id: number, data: {
     assigneeId?: number
     status: string
     actionLog: string
   }) => {
-    const response = await apiClient.post<{
-      code: number
-      message: string
-      data: AlertEvent
-    }>(`/alerts/events/${id}/process`, data)
-    return unwrapMockResponse(response)
+    const handledByUserId = data.assigneeId ?? 0
+    const handleParams = new URLSearchParams({
+      handledByUserId: String(handledByUserId)
+    })
+    if (data.actionLog) {
+      handleParams.set('handledNote', data.actionLog)
+    }
+    await apiClient.post(`/notifications/${id}/handle?${handleParams.toString()}`)
+    await apiClient.patch(
+      `/notifications/${id}/status?newStatus=${encodeURIComponent(data.status)}`
+    )
+
+    return {
+      id,
+      ruleId: 0,
+      ruleName: 'Alert',
+      entityType: 'NOTIFICATION',
+      entityId: id,
+      severity: 'MINOR' as const,
+      message: data.actionLog,
+      status: (data.status || 'IN_PROGRESS') as AlertEvent['status'],
+      triggeredAt: new Date().toISOString(),
+      assigneeId: data.assigneeId
+    }
   }
 }
 

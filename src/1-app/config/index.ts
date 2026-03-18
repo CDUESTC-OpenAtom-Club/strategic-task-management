@@ -1,3 +1,5 @@
+import { API_BASE_URL, API_TIMEOUT } from '@/5-shared/config/api'
+
 /**
  * Application Configuration
  *
@@ -34,8 +36,8 @@ export const ENV = {
  * API configuration
  */
 export const API_CONFIG = {
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 30000
+  baseURL: API_BASE_URL,
+  timeout: API_TIMEOUT
 }
 
 /**

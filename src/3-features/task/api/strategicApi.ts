@@ -7,6 +7,7 @@
  */
 import { apiClient } from '@/5-shared/lib/api'
 import { withRetry } from '@/5-shared/lib/api/wrappers'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
 import { logger } from '@/5-shared/lib/utils/logger'
 /* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type {
@@ -49,6 +50,22 @@ interface BackendTaskCreateRequest {
 
 interface CyclePageResponse<T> {
   content: T[]
+}
+
+function invalidateTaskCaches(taskId?: number | string, year?: number): void {
+  const targets: Array<string | readonly [string, string, Record<string, string | number>]> = [
+    'task.list',
+    'task.scope',
+    'plan.detail',
+    'dashboard.overview'
+  ]
+  if (typeof year === 'number') {
+    targets.push(buildQueryKey('task', 'list', { year }))
+  }
+  if (taskId !== undefined) {
+    targets.push(`task.detail.${taskId}`)
+  }
+  invalidateQueries(targets)
 }
 
 /**
@@ -196,7 +213,33 @@ export const strategicApi = {
    * 获取所有可用的年份（从周期表）
    */
   async getAvailableYears(): Promise<ApiResponse<number[]>> {
-    return apiClient.get<ApiResponse<number[]>>('/cycles/years')
+    try {
+      const response = await apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
+      if (!response.success || !response.data) {
+        return {
+          ...response,
+          data: []
+        }
+      }
+
+      const years = response.data
+        .map(cycle => cycle.year)
+        .filter((year): year is number => typeof year === 'number')
+      const uniqueYears = [...new Set(years)].sort((left, right) => right - left)
+
+      return {
+        ...response,
+        data: uniqueYears
+      }
+    } catch (error) {
+      logger.error('[StrategicAPI] Failed to derive available years from /cycles/list', { error })
+      return {
+        success: false,
+        data: [],
+        message: 'Failed to fetch available years',
+        timestamp: new Date()
+      }
+    }
   },
 
   /**
@@ -231,30 +274,41 @@ export const strategicApi = {
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
     try {
-      const cycleResponse = await this.getCycleByYear(year)
-      if (!cycleResponse.success || !cycleResponse.data) {
-        return {
-          success: false,
-          data: [],
-          message: cycleResponse.message || `No cycle found for year ${year}`,
-          timestamp: new Date()
+      return fetchWithCache({
+        key: buildQueryKey('task', 'list', { year }),
+        policy: {
+          ttlMs: 2 * 60 * 1000,
+          scope: 'memory',
+          dedupeWindowMs: 1000,
+          tags: ['task.list', `task.list.${year}`]
+        },
+        fetcher: async () => {
+          const cycleResponse = await this.getCycleByYear(year)
+          if (!cycleResponse.success || !cycleResponse.data) {
+            return {
+              success: false,
+              data: [],
+              message: cycleResponse.message || `No cycle found for year ${year}`,
+              timestamp: new Date()
+            }
+          }
+
+          const cycleId =
+            (cycleResponse.data as AssessmentCycleVO & { cycleId?: number; id?: number }).cycleId ||
+            (cycleResponse.data as AssessmentCycleVO & { id?: number }).id
+
+          if (!cycleId) {
+            return {
+              success: false,
+              data: [],
+              message: `Cycle ID missing for year ${year}`,
+              timestamp: new Date()
+            }
+          }
+
+          return apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-cycle/${cycleId}`)
         }
-      }
-
-      const cycleId =
-        (cycleResponse.data as AssessmentCycleVO & { cycleId?: number; id?: number }).cycleId ||
-        (cycleResponse.data as AssessmentCycleVO & { id?: number }).id
-
-      if (!cycleId) {
-        return {
-          success: false,
-          data: [],
-          message: `Cycle ID missing for year ${year}`,
-          timestamp: new Date()
-        }
-      }
-
-      return apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-cycle/${cycleId}`)
+      })
     } catch {
       return { success: false, data: [], message: 'Failed to get tasks', timestamp: new Date() }
     }
@@ -265,8 +319,16 @@ export const strategicApi = {
    */
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getAllTasks(): Promise<ApiResponse<StrategicTaskVO[]>> {
-    // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-    return apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
+    return fetchWithCache({
+      key: buildQueryKey('task', 'list'),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['task.list']
+      },
+      fetcher: () => apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
+    })
   },
 
   /**
@@ -297,7 +359,16 @@ export const strategicApi = {
    */
   async getAllIndicators(year?: number): Promise<ApiResponse<IndicatorVO[]>> {
     const params = year ? { year } : {}
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params })
+    return fetchWithCache({
+      key: buildQueryKey('indicator', 'list', year ? { year } : undefined),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['indicator.list', ...(typeof year === 'number' ? [`indicator.list.${year}`] : [])]
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { params })
+    })
   },
 
   /**
@@ -320,6 +391,7 @@ export const strategicApi = {
         apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
       )
 
+      invalidateTaskCaches(response.data?.taskId, request.year)
       logger.info('[API] Successfully created task', { taskId: response.data?.taskId })
       return response
     } catch (error) {
@@ -344,6 +416,7 @@ export const strategicApi = {
         apiClient.put<ApiResponse<StrategicTaskVO>>(`/tasks/${taskId}`, request)
       )
 
+      invalidateTaskCaches(taskId, request.year)
       logger.info('[API] Successfully updated task', { taskId })
       return response
     } catch (error) {
@@ -397,6 +470,7 @@ export const strategicApi = {
         apiClient.delete<ApiResponse<void>>(`/tasks/${taskId}`)
       )
 
+      invalidateTaskCaches(taskId)
       logger.info('[API] Successfully deleted task', { taskId })
       return response
     } catch (error) {

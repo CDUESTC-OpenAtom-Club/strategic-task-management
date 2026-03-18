@@ -19,9 +19,9 @@ import { cacheManager } from '@/5-shared/lib/utils/cache'
 import { transformError, toExtendedError } from '@/5-shared/api/errorHandler'
 import type { ExtendedErrorInfo } from '@/5-shared/types/error'
 import { MockApiHandler } from '@/5-shared/api/mocks/handler'
+import { API_TARGET, USE_MOCK } from '@/5-shared/config/api'
 
-// Mock 模式配置
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
+const backendDisplayTarget = API_TARGET || '当前配置的后端地址'
 
 /**
  * 响应拦截器配置
@@ -234,7 +234,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     if (!error.response && error.request) {
       logger.error('🔌 [Backend Connection] 无法连接到后端服务')
       logger.error('🔍 [Backend Connection] 请检查:')
-      logger.error('   1. 后端服务是否运行在 http://localhost:8080')
+      logger.error(`   1. 后端服务是否运行在 ${backendDisplayTarget}`)
       logger.error('   2. 数据库连接是否正常')
       logger.error('   3. 防火墙或代理设置是否阻止连接')
 
@@ -307,9 +307,6 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
         const { useAuthStore } = await import('@/3-features/auth/model/store')
         const authStore = useAuthStore()
         authStore.token = newToken
-
-        // 同步到 localStorage（确保刷新后状态一致）
-        localStorage.setItem('token', newToken)
 
         // 更新原请求的 Authorization 头
         originalRequest.headers.Authorization = `Bearer ${newToken}`

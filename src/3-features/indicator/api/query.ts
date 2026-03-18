@@ -131,10 +131,12 @@ export async function queryIndicatorsByTask(taskId: number): Promise<Indicator[]
  * @returns Indicator list
  */
 export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicator[]> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    `/indicators/owner/${orgId}`
+  const response = await apiClient.get<
+    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
+  >('/indicators')
+  return normalizeIndicatorArray(unwrapData(response)).filter(
+    indicator => Number((indicator as Record<string, unknown>).ownerOrgId) === orgId
   )
-  return normalizeIndicatorArray(unwrapData(response))
 }
 
 /**
@@ -146,10 +148,12 @@ export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicato
  * @returns Indicator list
  */
 export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicator[]> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    `/indicators/target/${orgId}`
+  const response = await apiClient.get<
+    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
+  >('/indicators')
+  return normalizeIndicatorArray(unwrapData(response)).filter(
+    indicator => Number((indicator as Record<string, unknown>).targetOrgId) === orgId
   )
-  return normalizeIndicatorArray(unwrapData(response))
 }
 
 /**
@@ -161,10 +165,12 @@ export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicat
  * @returns Indicator list
  */
 export async function queryIndicatorsByLevel(level: number): Promise<Indicator[]> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    `/indicators/level/${level}`
+  const response = await apiClient.get<
+    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
+  >('/indicators')
+  return normalizeIndicatorArray(unwrapData(response)).filter(
+    indicator => Number((indicator as Record<string, unknown>).level) === level
   )
-  return normalizeIndicatorArray(unwrapData(response))
 }
 
 /**
@@ -191,10 +197,12 @@ export async function searchIndicators(keyword: string): Promise<Indicator[]> {
  * @returns Indicator list
  */
 export async function queryPendingIndicators(): Promise<Indicator[]> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    '/indicators/pending'
+  const response = await apiClient.get<
+    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
+  >('/indicators')
+  return normalizeIndicatorArray(unwrapData(response)).filter(indicator =>
+    ['PENDING', 'SUBMITTED'].includes(String((indicator as Record<string, unknown>).status))
   )
-  return normalizeIndicatorArray(unwrapData(response))
 }
 
 /**
@@ -206,6 +214,7 @@ export async function queryPendingIndicators(): Promise<Indicator[]> {
  * @returns Distribution records
  */
 export async function queryDistributionRecords(id: number): Promise<any[]> {
-  const response = await apiClient.get<any>(`/indicators/${id}/distribution-records`)
-  return unwrapData(response)
+  const response = await apiClient.get<any>(`/indicators/${id}/distribution-status`)
+  const payload = unwrapData(response)
+  return Array.isArray(payload) ? payload : payload ? [payload] : []
 }
