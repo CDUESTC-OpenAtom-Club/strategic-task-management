@@ -215,9 +215,9 @@ export default defineConfig(({ mode }) => {
       // Terser 压缩配置
       terserOptions: {
         compress: {
-          drop_console: true, // 生产环境移除 console
+          drop_console: false, // 保留 console 用于错误追踪
           drop_debugger: true,
-          pure_funcs: ['console.log', 'console.info', 'console.debug']
+          pure_funcs: ['console.log', 'console.info', 'console.debug'] // 只移除日志类输出
         }
       }
     }
