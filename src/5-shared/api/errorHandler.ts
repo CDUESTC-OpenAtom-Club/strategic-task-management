@@ -7,6 +7,15 @@
 
 import type { AxiosError } from 'axios'
 
+interface NormalizedErrorLike {
+  message?: string
+  code?: string | number
+  status?: number
+  retryable?: boolean
+  requestId?: string
+  severity?: 'low' | 'medium' | 'high'
+}
+
 /**
  * 生成唯一的请求 ID
  */
@@ -145,6 +154,10 @@ function isAxiosError(error: unknown): error is AxiosError {
   )
 }
 
+function isNormalizedErrorLike(error: unknown): error is NormalizedErrorLike {
+  return typeof error === 'object' && error !== null
+}
+
 /**
  * 转换错误为扩展错误信息 (用于响应拦截器)
  */
@@ -154,6 +167,14 @@ export function transformError(error: unknown): { message: string; code?: string
       message: formatErrorMessage(error),
       code: error.code,
       status: error.response?.status
+    }
+  }
+
+  if (isNormalizedErrorLike(error)) {
+    return {
+      message: typeof error.message === 'string' ? error.message : '未知错误',
+      code: typeof error.code === 'string' ? error.code : undefined,
+      status: typeof error.status === 'number' ? error.status : undefined
     }
   }
 
@@ -172,13 +193,31 @@ export function transformError(error: unknown): { message: string; code?: string
 /**
  * 转换为扩展错误信息 (用于响应拦截器)
  */
-export function toExtendedError(error: unknown): { message: string; requestId?: string; severity: 'low' | 'medium' | 'high' } {
-  const severity = getErrorSeverity(error)
-  const message = formatErrorMessage(error)
+export function toExtendedError(error: unknown): {
+  message: string
+  code?: string | number
+  status?: number
+  requestId?: string
+  severity: 'low' | 'medium' | 'high'
+  retryable?: boolean
+} {
+  const normalized = isNormalizedErrorLike(error) ? error : undefined
+  const severity =
+    normalized?.severity || getErrorSeverity(error)
+  const message =
+    typeof normalized?.message === 'string' && normalized.message
+      ? normalized.message
+      : formatErrorMessage(error)
+  const requestId =
+    normalized?.requestId || crypto.randomUUID?.() || Math.random().toString(36)
 
   return {
     message,
+    code: normalized?.code,
+    status: normalized?.status,
     severity,
-    requestId: crypto.randomUUID?.() || Math.random().toString(36)
+    requestId,
+    retryable:
+      typeof normalized?.retryable === 'boolean' ? normalized.retryable : isRetryableError(error)
   }
 }

@@ -6,7 +6,8 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { strategicApi } from '@/3-features/task/api/strategicApi'
 
 export const useTimeContextStore = defineStore('timeContext', () => {
   // ============ State ============
@@ -22,22 +23,39 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   const realCurrentYear = computed(() => new Date().getFullYear())
 
   /**
-   * Available years for selection (current year and historical years)
+   * Loading state for fetching years from API
    */
-  const availableYears = computed(() => {
+  const loading = ref(false)
+
+  /**
+   * Available years for selection (from backend API)
+   */
+  const availableYears = ref<number[]>([])
+
+  /**
+   * Fallback years if API fails
+   */
+  const fallbackYears = computed(() => {
     const current = realCurrentYear.value
     const years: number[] = []
-    // Include current year
     years.push(current)
-    // Include past years (up to 5 years back)
     for (let i = 1; i <= 5; i++) {
       const year = current - i
       if (year >= 2020) {
-        // Start from 2020
         years.push(year)
       }
     }
     return years
+  })
+
+  /**
+   * Computed available years (use API data if available, fallback otherwise)
+   */
+  const yearsForSelector = computed(() => {
+    if (availableYears.value.length > 0) {
+      return availableYears.value
+    }
+    return fallbackYears.value
   })
 
   /**
@@ -46,11 +64,44 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   const isHistoricalMode = computed(() => currentYear.value !== realCurrentYear.value)
 
   /**
+   * Whether the data is read-only (historical mode)
+   */
+  const isReadOnly = computed(() => isHistoricalMode.value)
+
+  /**
    * Whether we're viewing current year
    */
   const isCurrentYear = computed(() => currentYear.value === realCurrentYear.value)
 
   // ============ Actions ============
+
+  /**
+   * Fetch available years from backend API
+   */
+  async function fetchAvailableYears() {
+    loading.value = true
+    try {
+      const response = await strategicApi.getAvailableYears()
+      if (response.success && response.data && response.data.length > 0) {
+        availableYears.value = response.data
+      } else {
+        console.warn('No years returned from API, using fallback')
+        availableYears.value = fallbackYears.value
+      }
+    } catch (error) {
+      console.error('Failed to fetch available years:', error)
+      availableYears.value = fallbackYears.value
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * Initialize - fetch years from API
+   */
+  async function initialize() {
+    await fetchAvailableYears()
+  }
 
   /**
    * Set the current year context
@@ -86,15 +137,21 @@ export const useTimeContextStore = defineStore('timeContext', () => {
     currentYear.value = year
   }
 
+  // Auto-initialize on store creation
+  initialize()
+
   return {
     currentYear,
     realCurrentYear,
-    availableYears,
+    loading,
+    availableYears: yearsForSelector,
     isHistoricalMode,
     isCurrentYear,
+    isReadOnly,
     setYear,
     resetToCurrentYear,
     getYearStatus,
-    switchYear
+    switchYear,
+    initialize
   }
 })

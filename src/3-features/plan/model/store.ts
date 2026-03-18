@@ -137,6 +137,57 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
+  /**
+   * 加载 Plan 详情（包含指标和里程碑）
+   * 调用后端的 /api/v1/plans/{id}/details 接口
+   */
+  const loadPlanDetails = async (planId: number | string) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Loading plan details ${planId}...`)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.getPlanDetails(planId)
+
+      if (hasApiData(response) && response.data) {
+        currentPlan.value = response.data
+        // 更新 plans 列表中的数据
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = response.data
+        } else {
+          plans.value.push(response.data)
+        }
+        logger.info(`[Plan Store] Loaded plan details ${planId} with ${response.data.tasks?.length || 0} tasks`)
+        return response.data
+      } else {
+        currentPlan.value = null
+        error.value = '计划不存在'
+        return null
+      }
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载计划详情失败'
+      logger.error('[Plan Store] Failed to load plan details:', err)
+      return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /**
+   * 根据目标部门名称获取当前年份的 Plan
+   */
+  const getPlanByTargetOrgAndYear = (targetOrgName: string, year: number) => {
+    return plans.value.find(plan => {
+      // 匹配目标组织和年份
+      const p = plan as any
+      const orgName = p.targetOrgName || p.orgName || ''
+      const cycleYear = p.cycle?.year || year
+      return orgName === targetOrgName && cycleYear === year
+    })
+  }
+
   const createPlan = async (data: Partial<Plan>) => {
     loading.value = true
     error.value = null
@@ -269,6 +320,232 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
+  // ==================== Plan Approval Workflow ====================
+  // @requirement: Plan-centric status - Plan 审批流程方法
+
+  /**
+   * 提交 Plan 审批
+   * @param planId Plan ID
+   */
+  const submitPlanForApproval = async (planId: number | string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Submitting plan ${planId} for approval...`)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.submitPlanForApproval(planId)
+
+      if (hasApiData(response)) {
+        // 更新本地 Plan 状态
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = { ...plans.value[index], ...response.data }
+        }
+        if (currentPlan.value?.id === planId) {
+          currentPlan.value = { ...currentPlan.value, ...response.data }
+        }
+        ElMessage.success('已提交审批')
+        return response.data
+      }
+
+      throw new Error(response.message || '提交审批失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '提交审批失败'
+      logger.error('[Plan Store] Failed to submit plan for approval:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /**
+   * 审批通过 Plan
+   * @param planId Plan ID
+   */
+  const approvePlan = async (planId: number | string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Approving plan ${planId}...`)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.approvePlan(planId)
+
+      if (hasApiData(response)) {
+        // 更新本地 Plan 状态
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = { ...plans.value[index], ...response.data }
+        }
+        if (currentPlan.value?.id === planId) {
+          currentPlan.value = { ...currentPlan.value, ...response.data }
+        }
+        ElMessage.success('审批通过')
+        return response.data
+      }
+
+      throw new Error(response.message || '审批失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '审批失败'
+      logger.error('[Plan Store] Failed to approve plan:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /**
+   * 驳回 Plan
+   * @param planId Plan ID
+   * @param reason 驳回原因
+   */
+  const rejectPlan = async (planId: number | string, reason?: string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Rejecting plan ${planId}...`, { reason })
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.rejectPlan(planId, reason)
+
+      if (hasApiData(response)) {
+        // 更新本地 Plan 状态
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = { ...plans.value[index], ...response.data }
+        }
+        if (currentPlan.value?.id === planId) {
+          currentPlan.value = { ...currentPlan.value, ...response.data }
+        }
+        ElMessage.success('已驳回')
+        return response.data
+      }
+
+      throw new Error(response.message || '驳回失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '驳回失败'
+      logger.error('[Plan Store] Failed to reject plan:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /**
+   * 撤回 Plan 到草稿
+   * @param planId Plan ID
+   */
+  const withdrawPlan = async (planId: number | string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Withdrawing plan ${planId}...`)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.withdrawPlan(planId)
+
+      if (hasApiData(response)) {
+        // 更新本地 Plan 状态
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = { ...plans.value[index], ...response.data }
+        }
+        if (currentPlan.value?.id === planId) {
+          currentPlan.value = { ...currentPlan.value, ...response.data }
+        }
+        ElMessage.success('已撤回')
+        return response.data
+      }
+
+      throw new Error(response.message || '撤回失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '撤回失败'
+      logger.error('[Plan Store] Failed to withdraw plan:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /**
+   * 下发 Plan (发布)
+   * @param planId Plan ID
+   */
+  const publishPlan = async (planId: number | string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Publishing plan ${planId}...`)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.publishPlan(planId)
+
+      if (hasApiData(response)) {
+        // 更新本地 Plan 状态
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = { ...plans.value[index], ...response.data }
+        }
+        if (currentPlan.value?.id === planId) {
+          currentPlan.value = { ...currentPlan.value, ...response.data }
+        }
+        ElMessage.success('下发成功')
+        return response.data
+      }
+
+      throw new Error(response.message || '下发失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '下发失败'
+      logger.error('[Plan Store] Failed to publish plan:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /**
+   * 归档 Plan
+   * @param planId Plan ID
+   */
+  const archivePlan = async (planId: number | string) => {
+    submitting.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Archiving plan ${planId}...`)
+      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const response = await planApi.archivePlan(planId)
+
+      if (hasApiData(response)) {
+        // 更新本地 Plan 状态
+        const index = plans.value.findIndex(p => p.id === planId)
+        if (index !== -1) {
+          plans.value[index] = { ...plans.value[index], ...response.data }
+        }
+        if (currentPlan.value?.id === planId) {
+          currentPlan.value = { ...currentPlan.value, ...response.data }
+        }
+        ElMessage.success('归档成功')
+        return response.data
+      }
+
+      throw new Error(response.message || '归档失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '归档失败'
+      logger.error('[Plan Store] Failed to archive plan:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      submitting.value = false
+    }
+  }
+
   const loadPendingFills = async () => {
     loading.value = true
     error.value = null
@@ -378,12 +655,14 @@ export const usePlanStore = defineStore('plan', () => {
     filteredPlans,
     visiblePlans,
     getPlanById,
+    getPlanByTargetOrgAndYear,
     pendingPlanFills,
     visiblePendingFills,
 
     // Actions
     loadPlans,
     loadPlan,
+    loadPlanDetails,
     loadPendingFills,
     createPlan,
     updatePlan,
@@ -392,6 +671,14 @@ export const usePlanStore = defineStore('plan', () => {
     auditPlanFill,
     setFilter,
     resetFilter,
-    clearCurrentPlan
+    clearCurrentPlan,
+
+    // Plan approval workflow
+    submitPlanForApproval,
+    approvePlan,
+    rejectPlan,
+    withdrawPlan,
+    publishPlan,
+    archivePlan
   }
 })

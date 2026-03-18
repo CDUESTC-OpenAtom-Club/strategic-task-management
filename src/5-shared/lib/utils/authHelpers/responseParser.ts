@@ -28,34 +28,66 @@ export interface ParseResult {
 
 /**
  * 映射后端 OrgType 到前端 UserRole
+ *
+ * 与 mapOrgTypeToFrontend 保持一致的映射规则
+ * - STRATEGY_DEPT, SCHOOL, admin（战略发展部）→ strategic_dept
+ * - FUNCTIONAL_DEPT, FUNCTION_DEPT, functional, FUNCTIONAL → functional_dept
+ * - COLLEGE, SECONDARY_COLLEGE, DIVISION, OTHER, academic, ACADEMIC → secondary_college
+ * - admin/ADMIN → 按组织名称二次判定（在调用处处理）
  */
-export function mapOrgTypeToRole(orgType: string): UserRole | null {
+export function mapOrgTypeToRole(
+  orgType: string,
+  orgName?: string
+): UserRole | null {
+  const normalizedType = String(orgType || '').trim()
+  const normalizedName = String(orgName || '').trim()
+
+  // 兼容后端当前数据: 所有组织都标记为 admin，需要按名称区分
+  if (normalizedType === 'admin' || normalizedType === 'ADMIN') {
+    if (normalizedName === '战略发展部') {
+      return 'strategic_dept'
+    }
+    if (normalizedName.includes('学院')) {
+      return 'secondary_college'
+    }
+    return 'functional_dept'
+  }
+
   const mapping: Record<string, UserRole> = {
-    // 支持多种格式（后端可能用不同格式）
-    ADMIN: 'strategic_dept',
-    admin: 'strategic_dept',
+    // 战略发展部
     STRATEGY_DEPT: 'strategic_dept',
     strategic_dept: 'strategic_dept',
+    SCHOOL: 'strategic_dept',
+
+    // 职能部门
     FUNCTIONAL_DEPT: 'functional_dept',
     functional_dept: 'functional_dept',
     FUNCTION_DEPT: 'functional_dept',
     function_dept: 'functional_dept',
+    functional: 'functional_dept',
+    FUNCTIONAL: 'functional_dept',
+
+    // 二级学院
     COLLEGE: 'secondary_college',
     college: 'secondary_college',
     SECONDARY_COLLEGE: 'secondary_college',
     secondary_college: 'secondary_college',
-    SCHOOL: 'strategic_dept',
     DIVISION: 'secondary_college',
-    OTHER: 'secondary_college'
+    OTHER: 'secondary_college',
+    academic: 'secondary_college',
+    ACADEMIC: 'secondary_college'
   }
-  return mapping[orgType] || null
+  return mapping[normalizedType] || null
 }
 
 /**
  * 映射后端用户数据到前端 User 类型
  */
 export function mapBackendUser(userData: Record<string, unknown>): User {
-  const mappedRole = mapOrgTypeToRole(userData.orgType || userData.role)
+  const mappedRole = mapOrgTypeToRole(
+    userData.orgType || userData.role,
+    userData.orgName || userData.department
+  )
 
   return {
     id: userData.userId?.toString() || userData.id?.toString() || '',

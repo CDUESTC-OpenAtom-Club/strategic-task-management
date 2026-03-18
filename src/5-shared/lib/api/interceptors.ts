@@ -231,7 +231,7 @@ async function handleErrorResponse(
 
   // Handle 500 Server Error
   if (error.response?.status === 500) {
-    handle500Error()
+    handle500Error(error)
   }
 
   // Handle network errors
@@ -350,7 +350,8 @@ async function refreshAccessToken(): Promise<string> {
  * Handle 403 Forbidden error
  */
 function handle403Error(error: AxiosError): void {
-  const isHealthCheck = error.config?.url?.includes('/actuator/health')
+  const isHealthCheck =
+    error.config?.url?.includes('/actuator/health') || error.config?.url?.includes('/auth/health')
   const isHealthCheckRequest = error.config?.headers?.['X-Health-Check'] === 'true'
 
   // Don't show notification for health check requests
@@ -366,12 +367,18 @@ function handle403Error(error: AxiosError): void {
 /**
  * Handle 500 Server Error
  */
-function handle500Error(): void {
-  ElMessage.error({
-    message: '服务器内部错误，请稍后重试或联系管理员',
-    duration: 5000,
-    showClose: true
-  })
+function handle500Error(error?: AxiosError): void {
+  const isHealthCheck =
+    error?.config?.url?.includes('/actuator/health') || error?.config?.url?.includes('/auth/health')
+  const isHealthCheckRequest = error?.config?.headers?.['X-Health-Check'] === 'true'
+
+  if (!isHealthCheck && !isHealthCheckRequest) {
+    ElMessage.error({
+      message: '服务器内部错误，请稍后重试或联系管理员',
+      duration: 5000,
+      showClose: true
+    })
+  }
 }
 
 /**

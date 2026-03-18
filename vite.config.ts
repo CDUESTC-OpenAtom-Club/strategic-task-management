@@ -14,18 +14,25 @@ export default defineConfig(({ mode }) => {
 
   // 检查是否启用Mock模式
   const useMock = env.VITE_USE_MOCK === 'true'
+  const apiTarget = env.VITE_API_TARGET || 'http://localhost:8080'
+  const wsTarget =
+    env.VITE_WS_BASE_URL ||
+    (apiTarget.startsWith('https://')
+      ? apiTarget.replace(/^https:/, 'wss:')
+      : apiTarget.replace(/^http:/, 'ws:'))
 
   console.log('🔧 Vite Config:', {
     mode,
     useMock,
     viteUseMock: env.VITE_USE_MOCK,
-    apiTarget: env.VITE_API_TARGET || 'http://localhost:8080'
+    apiTarget,
+    wsTarget
   })
 
   if (!useMock) {
     console.log(
       '🔗 [Proxy Enabled] API requests will be forwarded to:',
-      env.VITE_API_TARGET || 'http://localhost:8080'
+      apiTarget
     )
   } else {
     console.log('🎭 [Mock Mode] Using local mock data')
@@ -66,17 +73,17 @@ export default defineConfig(({ mode }) => {
     server: {
       port: Number(env.VITE_DEV_SERVER_PORT) || 3500,
       open: env.VITE_DEV_AUTO_OPEN === 'true',
-// 只在非Mock模式下配置代理
-        proxy: useMock
-          ? undefined
-          : {
-              '/api/v1': {
-                target: env.VITE_API_TARGET || 'http://localhost:8080',
-                changeOrigin: true,
-                secure: false,
-                // 保持 /api/v1 前缀，不进行路径重写
-                // 前端: /api/v1/indicators → 后端: /api/v1/indicators
-                configure: (proxy, options) => {
+      // 只在非 Mock 模式下配置代理
+      proxy: useMock
+        ? undefined
+        : {
+            '/api/v1': {
+              target: apiTarget,
+              changeOrigin: true,
+              secure: false,
+              // 保持 /api/v1 前缀，不进行路径重写
+              // 前端: /api/v1/indicators → 后端: /api/v1/indicators
+              configure: (proxy, options) => {
                 proxy.on('error', (err, _req, _res) => {
                   console.error('⚠️ [Proxy Error]', err.message)
                 })
@@ -95,6 +102,27 @@ export default defineConfig(({ mode }) => {
                 })
                 proxy.on('proxyRes', (proxyRes, req, _res) => {
                   console.log('📥 [Proxy Response]', proxyRes.statusCode, req.url)
+                })
+              }
+            },
+            '/ws/notifications': {
+              target: wsTarget,
+              changeOrigin: true,
+              secure: false,
+              ws: true,
+              configure: (proxy, options) => {
+                proxy.on('error', (err, _req, _res) => {
+                  console.error('⚠️ [WS Proxy Error]', err.message)
+                })
+                proxy.on('proxyReqWs', (_proxyReq, req) => {
+                  const targetUrl = options.target ? options.target + (req.url || '') : req.url
+                  console.log('📡 [WS Proxy Request]', req.url, '→', targetUrl)
+                })
+                proxy.on('open', () => {
+                  console.log('✅ [WS Proxy] Tunnel opened')
+                })
+                proxy.on('close', () => {
+                  console.log('🔌 [WS Proxy] Tunnel closed')
                 })
               }
             }

@@ -29,6 +29,7 @@ import {
   CirclePlus
 } from '@element-plus/icons-vue'
 import type { WorkflowNode, ApprovalTemplate, ApprovalTemplateStep } from '@/5-shared/types'
+import { approvalApi, type ApprovalFlowTemplate } from '../api/approval'
 
 /**
  * 自定义审批流程组件
@@ -52,6 +53,8 @@ const props = defineProps<{
   allowCustomApprover?: boolean
   // 是否只读
   readonly?: boolean
+  // 审批类型：'distribution' = 下发审批(我们审批下级), 'submission' = 上报审批(下级提交给我们审批)
+  approvalType?: 'distribution' | 'submission'
 }>()
 
 const emit = defineEmits<{
@@ -67,6 +70,15 @@ const emit = defineEmits<{
 
 // ============ 状态 ============
 const loading = ref(false)
+
+// 审批类型标签
+const approvalTypeLabel = computed(() => {
+  return props.approvalType === 'distribution' ? '下发审批' : '上报审批'
+})
+
+const approvalTypeTagType = computed(() => {
+  return props.approvalType === 'distribution' ? 'primary' : 'success'
+})
 const editingNode = ref<string | null>(null)
 const customApprovers = ref<Record<string, string>>({})
 const showTemplateDialog = ref(false)
@@ -74,7 +86,7 @@ const showManageTemplateDialog = ref(false)
 const setAsDefaultTemplate = ref(false)
 
 // 审批模板
-const templates = ref<ApprovalTemplate[]>([])
+const templates = ref<(ApprovalTemplate | ApprovalFlowTemplate)[]>([])
 const selectedTemplateId = ref<string | null>(null)
 
 // 新建模板表单
@@ -206,37 +218,39 @@ const _deleteTemplate = (templateId: string) => {
   ElMessage.success('模板已删除')
 }
 
-// 加载模板列表（模拟）
-const loadTemplates = () => {
-  templates.value = [
-    {
-      id: 'tpl-001',
-      name: '标准审批流程',
-      description: '撰写 → 主任审核 → 校长审批',
-      isDefault: true,
-      steps: [
-        { id: 'step-1', stepOrder: 0, stepName: '提交申请', requiredRole: 'strategic_dept', allowCustomApprover: false, autoApprove: true },
-        { id: 'step-2', stepOrder: 1, stepName: '主任审核', requiredRole: 'strategic_dept', allowCustomApprover: true, autoApprove: false },
-        { id: 'step-3', stepOrder: 2, stepName: '校长审批', requiredRole: 'strategic_dept', allowCustomApprover: true, autoApprove: false }
-      ],
-      applicableRoles: ['strategic_dept', 'functional_dept', 'secondary_college'],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'tpl-002',
-      name: '简化审批流程',
-      description: '直接提交 → 自动通过',
-      isDefault: false,
-      steps: [
-        { id: 'step-1', stepOrder: 0, stepName: '提交申请', requiredRole: 'strategic_dept', allowCustomApprover: false, autoApprove: true },
-        { id: 'step-2', stepOrder: 1, stepName: '系统自动审批', requiredRole: 'strategic_dept', allowCustomApprover: false, autoApprove: true }
-      ],
-      applicableRoles: ['secondary_college'],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+// 加载模板列表（从后端API获取）
+const loadTemplates = async () => {
+  loading.value = true
+  try {
+    const response = await approvalApi.getFlowTemplates()
+    if (response.code === 200 && response.data) {
+      // 将后端返回的数据转换为前端需要的格式
+      templates.value = response.data.map((flow: ApprovalFlowTemplate) => ({
+        id: String(flow.id),
+        name: flow.flowName,
+        description: flow.steps.map(s => s.stepName).join(' → ') || '暂无步骤',
+        isDefault: flow.id === 1, // 假设第一个是默认
+        steps: flow.steps.map((s, index) => ({
+          id: String(s.id),
+          stepOrder: index,
+          stepName: s.stepName,
+          requiredRole: 'strategic_dept',
+          allowCustomApprover: true,
+          autoApprove: s.stepName.includes('自动') || s.stepName.includes('提交')
+        })),
+        applicableRoles: ['strategic_dept', 'functional_dept', 'secondary_college'],
+        createdAt: flow.createdAt,
+        updatedAt: flow.updatedAt
+      }))
+    } else {
+      ElMessage.error(response.message || '加载模板失败')
     }
-  ]
+  } catch (error) {
+    console.error('加载模板失败:', error)
+    ElMessage.error('加载模板失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 
 // ============ 生命周期 ============
@@ -248,12 +262,18 @@ onMounted(() => {
 <template>
   <div class="custom-approval-flow">
     <!-- 头部操作区 -->
-    <div v-if="!readonly" class="flow-header">
+    <div class="flow-header">
       <div class="header-left">
         <h3 class="flow-title">审批流程</h3>
-        <p class="flow-desc">配置审批流程，支持自定义审批人</p>
+        <p class="flow-desc">
+          <ElTag v-if="approvalType" :type="approvalTypeTagType" size="small" style="margin-right: 8px;">
+            {{ approvalTypeLabel }}
+          </ElTag>
+          <span v-if="!readonly">配置审批流程，支持自定义审批人</span>
+          <span v-else>查看审批流程详情</span>
+        </p>
       </div>
-      <div class="header-actions">
+      <div v-if="!readonly" class="header-actions">
         <ElButton
           :icon="Setting"
           size="small"
@@ -456,9 +476,6 @@ onMounted(() => {
         <ElButton @click="showTemplateDialog = false">取消</ElButton>
         <ElButton type="primary" :disabled="!selectedTemplateId" @click="applyTemplate">
           应用模板
-        </ElButton>
-        <ElButton type="success" :icon="CirclePlus" @click="openNewTemplateDialog">
-          保存当前为模板
         </ElButton>
       </template>
     </ElDialog>

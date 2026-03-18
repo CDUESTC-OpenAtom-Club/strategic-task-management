@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Plus, View, Download, Delete as _Delete, ArrowDown as _ArrowDown, Promotion, RefreshLeft, Check, Close, Upload, Edit, Refresh, User, ChatDotRound, Right } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
@@ -17,7 +17,8 @@ import {
 } from '@/5-shared/lib/utils'
 import type { StatusAuditEntry as _StatusAuditEntry } from '@/5-shared/types'
 import { useOrgStore } from '@/3-features/organization/model/store'
-import TaskApprovalDrawer from '@/3-features/task/ui/TaskApprovalDrawer.vue'
+import { usePlanStore } from '@/3-features/plan/model/store'
+import { ApprovalProgressDrawer } from '@/3-features/approval'
 import { useDataValidator } from '@/5-shared/lib/validation/dataValidator'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
@@ -83,6 +84,22 @@ const formatRelativeTime = (timestamp: Date | string) => {
 const strategicStore = useStrategicStore()
 const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
+const planStore = usePlanStore()
+const orgStore = useOrgStore()
+
+onMounted(async () => {
+  try {
+    await orgStore.loadDepartments()
+  } catch {
+    // ignore org load failure, indicator query still proceeds
+  }
+
+  try {
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+  } catch {
+    // errors are already handled in store
+  }
+})
 
 // 使用数据验证器 - 用于验证里程碑数据完整性
 // @requirement 2.4 - Milestone data validation with complete fields
@@ -127,26 +144,47 @@ function getSafeApprovalStatus(status: unknown): ProgressApprovalStatusValue {
 
 /**
  * 检查指标是否处于指定的审批状态
- * 
- * 使用安全的状态获取方法，避免无效状态导致的错误
- * 
- * @param indicator - 指标对象
+ *
+ * @requirement: Plan-centric status - 改为检查 Plan 的状态，而不是单个指标的状态
+ * 一个 Plan 下的所有指标共享同一个 Plan 的状态
+ *
+ * @param _indicator - 指标对象（保留参数以保持兼容性，但不再使用）
  * @param targetStatus - 目标状态或状态数组
  * @returns 是否匹配目标状态
- * 
- * @requirement 2.6 - progressApprovalStatus enum validation
  */
 function isApprovalStatus(
-  indicator: StrategicIndicator, 
+  _indicator: StrategicIndicator,
   targetStatus: ProgressApprovalStatusValue | ProgressApprovalStatusValue[]
 ): boolean {
-  const safeStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
-  
-  if (Array.isArray(targetStatus)) {
-    return targetStatus.includes(safeStatus)
+  // @requirement: Plan-centric - 使用 Plan 的状态作为所有指标的状态
+  const planStatus = currentPlanStatus.value?.toLowerCase() || 'draft'
+
+  // Plan 状态映射: DRAFT -> draft, PENDING -> pending, ACTIVE -> approved/active, REJECTED -> rejected
+  let effectiveStatus: ProgressApprovalStatusValue = 'draft'
+  switch (planStatus) {
+    case 'active':
+      effectiveStatus = 'approved'
+      break
+    case 'pending':
+      effectiveStatus = 'pending'
+      break
+    case 'rejected':
+      effectiveStatus = 'rejected'
+      break
+    case 'completed':
+    case 'archived':
+      effectiveStatus = 'approved'
+      break
+    case 'draft':
+    default:
+      effectiveStatus = 'draft'
   }
-  
-  return safeStatus === targetStatus
+
+  if (Array.isArray(targetStatus)) {
+    return targetStatus.includes(effectiveStatus)
+  }
+
+  return effectiveStatus === targetStatus
 }
 
 // 接收父组件传递的选中角色和部门
@@ -155,20 +193,46 @@ const props = defineProps<{
   viewingDept?: string  // 部门名称: 如 '党委宣传部 | 宣传策划部'
 }>()
 
+// 当前有效角色与部门（支持独立页面直接访问，不依赖外层传参）
+const effectiveViewingRole = computed(() => props.viewingRole || authStore.userRole || '')
+const effectiveViewingDept = computed(() => {
+  return props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || ''
+})
+
 // 判断当前是否为战略发展部角色
 const isStrategicDept = computed(() => {
-  // 使用角色类型判断
-  return props.viewingRole === 'strategic_dept'
+  return effectiveViewingRole.value === 'strategic_dept'
 })
 
 // 判断当前是否为二级学院角色
 const isSecondaryCollege = computed(() => {
-  // 使用角色类型判断
-  return props.viewingRole === 'secondary_college'
+  return effectiveViewingRole.value === 'secondary_college'
 })
 
-// 判断是否可以编辑（只有战略发展部可以编辑，职能部门不能新增指标，历史年份只读）
-const canEdit = computed(() => authStore.userRole === 'strategic_dept' && isStrategicDept.value && !timeContext.isReadOnly)
+// 当前计划的状态
+const currentPlanStatus = computed(() => {
+  return currentPlanDetails.value?.status || null
+})
+
+// 判断计划是否处于草稿状态
+const isPlanDraft = computed(() => {
+  const status = currentPlanStatus.value
+  return status === 'DRAFT' || status === 'draft' || status === null || status === undefined
+})
+
+// 判断计划是否已下发（ACTIVE 状态 = 已下发）
+const isPlanDistributed = computed(() => {
+  const status = currentPlanStatus.value
+  return status === 'ACTIVE' || status === 'active'
+})
+
+// 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
+const canEdit = computed(() => {
+  return authStore.userRole === 'strategic_dept' &&
+         isStrategicDept.value &&
+         !timeContext.isReadOnly &&
+         isPlanDraft.value
+})
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
@@ -188,7 +252,7 @@ const filterOwnerDept = ref('')  // 来源部门筛选（仅学院使用）
 
 // 获取学院接收到的来源部门列表（从指标数据中提取）
 const availableOwnerDepts = computed(() => {
-  if (!isSecondaryCollege.value || !props.viewingDept) {return []}
+  if (!isSecondaryCollege.value || !effectiveViewingDept.value) {return []}
   
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
@@ -198,7 +262,7 @@ const availableOwnerDepts = computed(() => {
   strategicStore.indicators.forEach(i => {
     const indicatorYear = i.year || realYear
     if (indicatorYear === currentYear && 
-        i.responsibleDept === props.viewingDept && 
+        i.responsibleDept === effectiveViewingDept.value && 
         i.ownerDept) {
       ownerDepts.add(i.ownerDept)
     }
@@ -227,10 +291,137 @@ const resetFilters = () => {
   }
 }
 
-const orgStore = useOrgStore()
-
 // 职能部门列表（从数据库动态获取）
 const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartmentNames())
+
+// 获取当前用户对应的 Plan（包含指标数据）
+const currentUserPlan = computed(() => {
+  // 获取当前用户所在的部门
+  const userDept = effectiveViewingDept.value || authStore.userDepartment || ''
+  if (!userDept) {
+    return null
+  }
+
+  // 从 Plan Store 中查找目标部门为当前用户部门的 Plan
+  return planStore.plans.find((p: any) => {
+    const targetOrgName = p.targetOrgName || ''
+    const cycleYear = p.cycle?.year || p.year
+    return targetOrgName === userDept && cycleYear === timeContext.currentYear
+  }) || null
+})
+
+// 当前用户 Plan ID
+const currentUserPlanId = computed(() => {
+  return currentUserPlan.value?.id
+})
+
+// 存储当前 Plan 的详情（包含指标数据）
+const currentPlanDetails = ref<any>(null)
+
+// Plan 详情加载状态
+const isLoadingPlanDetails = ref(false)
+
+// 监听 Plan ID 变化，自动加载 Plan 详情
+watch(
+  currentUserPlanId,
+  async (newPlanId) => {
+    if (newPlanId && (!currentPlanDetails.value || currentPlanDetails.value?.id !== newPlanId)) {
+      // 加载 Plan 详情
+      isLoadingPlanDetails.value = true
+      const plan = await planStore.loadPlanDetails(newPlanId)
+      if (plan) {
+        currentPlanDetails.value = plan
+      }
+      isLoadingPlanDetails.value = false
+    } else if (!newPlanId) {
+      currentPlanDetails.value = null
+      isLoadingPlanDetails.value = false
+    }
+  },
+  { immediate: true }
+)
+
+// 从当前 Plan 中提取指标列表（使用后端返回的指标数据）
+const currentPlanIndicators = computed(() => {
+  const plan = currentPlanDetails.value
+  if (!plan || !plan.indicators) {
+    return []
+  }
+
+  // 后端返回的 PlanDetailsResponse 包含 indicators 数组
+  // 将后端指标格式转换为前端 StrategicIndicator 格式
+  return plan.indicators.map((ind: any) => ({
+    id: String(ind.id),
+    name: ind.indicatorName || ind.name || '',
+    indicator_desc: ind.indicatorDesc || ind.description || '',
+    description: ind.indicatorDesc || ind.description || '',
+    progress: ind.progress || 0,
+    weight: ind.weightPercent || 0,
+    type: '定量',
+    type1: '定量',
+    type2: '发展性',
+    status: ind.status?.toLowerCase() || 'active',
+    isStrategic: true,
+    year: timeContext.currentYear,
+    ownerDept: '战略发展部',
+    responsibleDept: authStore.userDepartment || '',
+    milestones: [],
+    createdAt: ind.createdAt || '',
+    updatedAt: ind.updatedAt || ''
+  } as StrategicIndicator))
+})
+
+// 判断是否有对应的 Plan（有指标数据）
+const hasCurrentUserPlan = computed(() => {
+  const plan = currentPlanDetails.value
+  return plan && plan.indicators && plan.indicators.length > 0
+})
+
+// 判断是否正在加载初始数据
+const isInitialLoading = computed(() => {
+  // Plan Store 正在加载
+  if (planStore.loading) {
+    return true
+  }
+  // Plan 详情正在加载
+  if (isLoadingPlanDetails.value) {
+    return true
+  }
+  // 如果有 currentUserPlanId，但还没有加载 currentPlanDetails
+  if (currentUserPlanId.value && !currentPlanDetails.value) {
+    return true
+  }
+  return false
+})
+
+// 判断是否应该显示"未找到 Plan"的警告
+// 只有在非加载状态、非战略发展部、且确实没有 Plan 时才显示
+const shouldShowPlanWarning = computed(() => {
+  // 加载中不显示警告
+  if (isInitialLoading.value) {
+    return false
+  }
+  // 战略发展部不显示警告
+  if (isStrategicDept.value) {
+    return false
+  }
+  // 有 Plan 不显示警告
+  if (hasCurrentUserPlan.value) {
+    return false
+  }
+  // 确实没有 Plan 时才显示警告
+  return true
+})
+
+const planWarningMessage = computed(() => {
+  const departmentName = effectiveViewingDept.value || authStore.userDepartment || '当前部门'
+
+  if (isSecondaryCollege.value) {
+    return `当前部门（${departmentName}）暂未接收到 ${timeContext.currentYear} 年度的指标计划。请联系上级职能部门下发计划后再查看指标。`
+  }
+
+  return `当前部门（${departmentName}）暂未创建 ${timeContext.currentYear} 年度的战略计划。请联系战略发展部创建计划后再查看指标。`
+})
 
 // 表格引用和选中的指标
 const tableRef = ref<InstanceType<typeof ElTable>>()
@@ -255,11 +446,12 @@ const approvalIndicators = computed(() => {
   })
 
   // 根据当前角色过滤数据
-  if (!isStrategicDept.value && props.viewingDept) {
+  // 非战略部门只有在计划已下发（已下发状态）时才能看到指标
+  if (!isStrategicDept.value && effectiveViewingDept.value) {
     list = list.filter(i => {
-      const isResponsible = i.responsibleDept === props.viewingDept
-      const isOwner = i.ownerDept === props.viewingDept
-      return isResponsible || isOwner
+      // 非战略角色仅查看“接收部门=当前部门”的指标，避免与下发来源部门混淆
+      // 且仅在计划已下发后才可见
+      return isPlanDistributed.value && i.responsibleDept === effectiveViewingDept.value
     })
   }
 
@@ -293,11 +485,12 @@ const _pendingApprovalCount = computed(() => {
   })
 
   // 根据当前角色过滤数据
-  if (!isStrategicDept.value && props.viewingDept) {
+  // 非战略部门只有在计划已下发时才能看到指标
+  if (!isStrategicDept.value && effectiveViewingDept.value) {
     list = list.filter(i => {
-      const isResponsible = i.responsibleDept === props.viewingDept
-      const isOwner = i.ownerDept === props.viewingDept
-      return isResponsible || isOwner
+      // 非战略角色仅统计“接收部门=当前部门”的待审批数据
+      // 且仅在计划已下发后才可见
+      return isPlanDistributed.value && i.responsibleDept === effectiveViewingDept.value
     })
   }
 
@@ -328,15 +521,46 @@ const _currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
 const indicators = computed(() => {
   // 初始化来源部门筛选
   initOwnerDeptFilter()
-  
+
+  // 优先使用当前 Plan 中的指标数据
+  if (hasCurrentUserPlan.value && currentPlanIndicators.value.length > 0) {
+    let list = currentPlanIndicators.value
+
+    // 应用筛选条件
+    if (filterType2.value) {
+      list = list.filter(i => i.type2 === filterType2.value)
+    }
+    if (filterType1.value) {
+      list = list.filter(i => i.type1 === filterType1.value)
+    }
+    if (filterDept.value) {
+      list = list.filter(i => i.responsibleDept === filterDept.value)
+    }
+    // 学院角色：按来源部门筛选
+    if (isSecondaryCollege.value && filterOwnerDept.value) {
+      list = list.filter(i => i.ownerDept === filterOwnerDept.value)
+    }
+
+    // 排序
+    return list.sort((a, b) => {
+      const type2A = a.type2 || ''
+      const type2B = b.type2 || ''
+      if (type2A !== type2B) {
+        return type2A === '发展性' ? -1 : 1
+      }
+      const taskA = a.taskContent || ''
+      const taskB = b.taskContent || ''
+      return taskA.localeCompare(taskB)
+    })
+  }
+
+  // 回退到使用 strategicStore.indicators（向后兼容）
   let list = strategicStore.indicators.map(i => ({
     ...i,
-    // 保持 id 为字符串类型，避免 "301-1" 这样的 id 转换成 NaN
     id: String(i.id)
   }))
 
   // 按当前年份过滤
-  // 没有 year 字段的指标默认为当前真实年份（2025）
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
@@ -344,15 +568,19 @@ const indicators = computed(() => {
     return indicatorYear === currentYear
   })
 
+  // 根据 Plan 筛选指标（优先级高于角色过滤）
+  // 如果存在当前用户的 Plan，只显示该 Plan 包含的指标
+  const plan = currentUserPlan.value
+  if (plan && plan.indicatorIds && plan.indicatorIds.length > 0) {
+    list = list.filter(i => plan.indicatorIds.includes(Number(i.id)))
+  }
+
   // 根据当前角色过滤数据
-  // 如果不是战略发展部，只显示下发给当前部门的指标（responsibleDept 或 ownerDept 匹配）
-  if (!isStrategicDept.value && props.viewingDept) {
+  // 如果不是战略发展部，只显示下发到当前部门（责任部门）的指标
+  // 且仅在计划已下发后才可见
+  if (!isStrategicDept.value && effectiveViewingDept.value) {
     list = list.filter(i => {
-      // 匹配责任部门（当前部门负责的指标）
-      const isResponsible = i.responsibleDept === props.viewingDept
-      // 匹配下发部门（当前部门下发的指标）
-      const isOwner = i.ownerDept === props.viewingDept
-      return isResponsible || isOwner
+      return isPlanDistributed.value && i.responsibleDept === effectiveViewingDept.value
     })
   }
 
@@ -385,19 +613,28 @@ const indicators = computed(() => {
   })
 })
 
+// @requirement: Plan-centric status - 整体状态直接使用 Plan 的状态，而不是从单个指标计算
+// 一个 Plan 下的所有指标共享同一个状态
 const overallStatus = computed(() => {
-  const list = indicators.value
-  if (list.length === 0) {return 'draft'}
-  // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
-  const hasPending = list.some(i => isApprovalStatus(i, 'pending'))
-  if (hasPending) {return 'pending'}
-  const hasRejected = list.some(i => isApprovalStatus(i, 'rejected'))
-  if (hasRejected) {return 'rejected'}
-  const allApproved = list.every(i => isApprovalStatus(i, 'approved'))
-  if (allApproved) {return 'approved'}
-  const hasActive = list.some(i => i.status === 'active')
-  if (hasActive) {return 'active'}
-  return 'draft'
+  const planStatus = currentPlanStatus.value
+  if (!planStatus) { return 'draft' }
+  // 将 Plan 状态转换为小写以统一处理
+  const status = planStatus.toLowerCase()
+  // Plan 状态: DRAFT -> draft, PENDING -> pending, ACTIVE -> active, REJECTED -> rejected, COMPLETED -> completed
+  switch (status) {
+    case 'active':
+      return 'active'
+    case 'pending':
+      return 'pending'
+    case 'rejected':
+      return 'rejected'
+    case 'completed':
+    case 'archived':
+      return 'completed'
+    case 'draft':
+    default:
+      return 'draft'
+  }
 })
 
 // 计算单元格合并信息
@@ -1534,15 +1771,16 @@ const handleWithdrawAllProgressApprovals = () => {
  * @param status - 指标生命周期状态
  * @returns 中文显示文本
  */
-const getLifecycleStatusText = (status: IndicatorStatus): string => {
-  const statusMap: Record<IndicatorStatus, string> = {
+const getLifecycleStatusText = (status: IndicatorStatus | string): string => {
+  const statusMap: Record<string, string> = {
     DRAFT: '草稿',
+    PENDING: '草稿', // 兼容历史状态值，按草稿展示
     PENDING_REVIEW: '待审核',
     DISTRIBUTED: '已下发',
     ACTIVE: '已下发',  // Legacy ACTIVE status treated as DISTRIBUTED
     ARCHIVED: '已归档'
   }
-  return statusMap[status] || '未知状态'
+  return statusMap[String(status || '').toUpperCase()] || '未知状态'
 }
 
 /**
@@ -1550,15 +1788,18 @@ const getLifecycleStatusText = (status: IndicatorStatus): string => {
  * @param status - 指标生命周期状态
  * @returns Element Plus tag type
  */
-const getLifecycleStatusType = (status: IndicatorStatus): 'success' | 'info' | 'warning' | 'danger' => {
-  const typeMap: Record<IndicatorStatus, 'success' | 'info' | 'warning' | 'danger'> = {
+const getLifecycleStatusType = (
+  status: IndicatorStatus | string
+): 'success' | 'info' | 'warning' | 'danger' => {
+  const typeMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
     DRAFT: 'info',
+    PENDING: 'info', // 兼容历史状态值，按草稿样式展示
     PENDING_REVIEW: 'warning',
     DISTRIBUTED: 'success',
     ACTIVE: 'success',  // Legacy ACTIVE status treated as DISTRIBUTED
     ARCHIVED: 'info'
   }
-  return typeMap[status] || 'info'
+  return typeMap[String(status || '').toUpperCase()] || 'info'
 }
 
 /**
@@ -1595,21 +1836,31 @@ const getApprovalStatusType = (status: ProgressApprovalStatusValue): 'success' |
 
 /**
  * 判断是否显示审批状态徽章
- * 只有当指标已下发且有活跃的审批状态时才显示
- * @param indicator - 指标对象
+ * @requirement: Plan-centric status - 使用 Plan 状态判断
+ * @param _indicator - 指标对象（保留参数兼容性）
  * @returns 是否显示徽章
  */
-const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
-  // 只有已下发的指标才可能有审批状态 (including legacy ACTIVE status)
-  if (indicator.status !== IndicatorStatus.DISTRIBUTED && indicator.status !== 'ACTIVE') {
+const showApprovalBadge = (_indicator: StrategicIndicator): boolean => {
+  // @requirement: Plan-centric - 只有 Plan 已下发时才显示徽章
+  if (!isPlanDistributed.value) {
     return false
   }
-  
-  // 获取安全的审批状态
-  const approvalStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
-  
-  // 只有非NONE状态才显示徽章
-  return approvalStatus !== 'NONE'
+
+  // 获取基于 Plan 状态的审批状态
+  const effectiveStatus = isApprovalStatus(_indicator, ['pending', 'approved', 'rejected'])
+
+  // 有审批状态时显示徽章
+  return effectiveStatus
+}
+
+/**
+ * 战略部"撤回下发"按钮展示条件
+ * @requirement: Plan-centric status - 使用 Plan 状态判断
+ * 仅在 Plan 处于已下发态时显示，避免草稿/待填报数据出现错误操作
+ */
+const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
+  // @requirement: Plan-centric - 检查 Plan 是否为已下发状态
+  return isPlanDistributed.value
 }
 </script>
 
@@ -1731,6 +1982,7 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
           <div class="table-container">
             <el-table
               ref="tableRef"
+              v-loading="isLoadingPlanDetails"
               :data="indicators"
               :span-method="getSpanMethod"
               border
@@ -1850,32 +2102,6 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
                   <span class="progress-number" :class="getProgressStatusClass(row)">{{ row.progress || 0 }}</span>
                 </template>
               </el-table-column>
-              <!-- 状态列 - 显示生命周期状态和审批状态 -->
-              <!-- @requirement 2.9, 3.1, 3.2 - 清晰分离生命周期状态和审批状态 -->
-              <el-table-column label="状态" width="140" align="center">
-                <template #default="{ row }">
-                  <div class="status-cell">
-                    <!-- 主要状态：生命周期状态 -->
-                    <el-tag 
-                      :type="getLifecycleStatusType(row.status)" 
-                      size="small"
-                      class="lifecycle-status-tag"
-                    >
-                      {{ getLifecycleStatusText(row.status) }}
-                    </el-tag>
-                    
-                    <!-- 次要状态：审批状态徽章（仅在已下发且有审批状态时显示） -->
-                    <el-tag
-                      v-if="showApprovalBadge(row)"
-                      :type="getApprovalStatusType(getSafeApprovalStatus(row.progressApprovalStatus))"
-                      size="small"
-                      class="approval-status-badge"
-                    >
-                      {{ getApprovalStatusText(getSafeApprovalStatus(row.progressApprovalStatus)) }}
-                    </el-tag>
-                  </div>
-                </template>
-              </el-table-column>
               <el-table-column v-if="showResponsibleDeptColumn" prop="responsibleDept" label="责任部门" min-width="140">
                 <template #default="{ row }">
                   <span class="dept-text">{{ row.responsibleDept || '未分配' }}</span>
@@ -1894,9 +2120,9 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
                       link 
                       :type="isIndicatorFilled(row) ? 'info' : 'success'" 
                       size="small" 
-                      :disabled="isApprovalStatus(row, 'pending') || timeContext.isReadOnly"
+                      :disabled="isApprovalStatus(row, 'PENDING') || timeContext.isReadOnly"
                       @click="handleOpenReportDialog(row)"
-                    >{{ isApprovalStatus(row, 'rejected') ? '重新填报' : (isIndicatorFilled(row) ? '编辑' : '填报') }}</el-button>
+                    >{{ isApprovalStatus(row, 'REJECTED') ? '重新填报' : (isIndicatorFilled(row) ? '编辑' : '填报') }}</el-button>
 
                     <!-- 职能部门/二级学院显示进度审批撤回按钮 -->
                     <!-- 只有待审批状态的指标才显示撤回按钮 -->
@@ -1915,7 +2141,7 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
 
                     <!-- 战略发展部显示撤回下发按钮 -->
                     <el-button 
-                      v-if="isStrategicDept && !row.canWithdraw"
+                      v-if="isStrategicDept && canWithdrawDistribution(row)"
                       link 
                       type="warning" 
                       size="small" 
@@ -1936,12 +2162,32 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
 
           <!-- 空状态 - 统一空状态样式 (Requirements: 7.1, 7.2, 7.3) -->
           <div v-if="indicators.length === 0" class="empty-state">
-            <el-empty description="暂无指标数据">
-              <el-button v-if="canEdit" type="primary" @click="addNewRow">
-                <el-icon><Plus /></el-icon>
-                新增指标
-              </el-button>
-            </el-empty>
+            <!-- 加载中状态 -->
+            <div v-if="isInitialLoading" class="loading-state">
+              <el-skeleton :rows="5" animated />
+            </div>
+
+            <!-- 未找到 Plan 的警告（仅在加载完成后且确实没有数据时显示） -->
+            <template v-else>
+              <el-alert
+                v-if="shouldShowPlanWarning"
+                title="未找到对应的计划"
+                type="warning"
+                :closable="false"
+                style="margin-bottom: 20px"
+              >
+                <template #default>
+                  {{ planWarningMessage }}
+                </template>
+              </el-alert>
+
+              <el-empty :description="shouldShowPlanWarning ? '' : '暂无指标数据'">
+                <el-button v-if="canEdit && !shouldShowPlanWarning" type="primary" @click="addNewRow">
+                  <el-icon><Plus /></el-icon>
+                  新增指标
+                </el-button>
+              </el-empty>
+            </template>
           </div>
         </div>
       </div>
@@ -2008,9 +2254,10 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
             <el-tag size="small" :style="{ backgroundColor: getTaskTypeColor(currentDetail.type2), color: '#fff', border: 'none' }">
               {{ currentDetail.type2 }}任务
             </el-tag>
-            <el-tag size="small" :type="currentDetail.canWithdraw ? 'info' : 'success'">
-              {{ currentDetail.canWithdraw ? '待下发' : '已下发' }}
-            </el-tag>
+            <!-- Plan-centric: 状态由 Plan 控制，不是指标自己的 canWithdraw 字段 -->
+            <el-tag v-if="isPlanDraft" size="small" type="info">待下发</el-tag>
+            <el-tag v-else-if="isPlanDistributed" size="small" type="success">已下发</el-tag>
+            <el-tag v-else size="small" type="info">待下发</el-tag>
           </div>
         </div>
 
@@ -2204,11 +2451,12 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
     </el-dialog>
 
     <!-- 任务审批进度抽屉 -->
-    <TaskApprovalDrawer
-      v-model:visible="approvalDrawerVisible"
+    <ApprovalProgressDrawer
+      v-model="approvalDrawerVisible"
       :indicators="approvalIndicators"
-      :department-name="authStore.userDepartment || '当前部门'"
+      :department-name="effectiveViewingDept || '当前部门'"
       :show-approval-section="isStrategicDept"
+      approval-type="submission"
     />
   </div>
 </template>

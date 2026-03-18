@@ -1,4 +1,5 @@
-import { apiClient, withRetry } from '@/5-shared/lib/api'
+import { apiClient } from '@/5-shared/lib/api'
+import { withRetry } from '@/5-shared/lib/api/wrappers'
 import type {
   ApiResponse,
   IndicatorDistributionRequest,
@@ -196,7 +197,10 @@ export const indicatorApi = {
     updates: Partial<IndicatorVO>
   ): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
-      return apiClient.put<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`, updates)
+      console.log('[API] updateIndicator request:', indicatorId, updates)
+      const result = await apiClient.put<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`, updates)
+      console.log('[API] updateIndicator response:', result)
+      return result
     })
   },
 

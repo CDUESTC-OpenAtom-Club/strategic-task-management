@@ -30,6 +30,24 @@ const orgStore = useOrgStore()
 // 当前用户部门（优先使用视角切换的部门）
 const currentDept = computed(() => props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || '')
 
+const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
+  const raw = indicator as StrategicIndicator & { taskId?: string | number }
+  return String(raw.taskId ?? '').trim()
+}
+
+const getOrgIdByDeptName = (deptName: string): number | undefined => {
+  const normalized = String(deptName || '').trim()
+  if (!normalized) {
+    return undefined
+  }
+  const match = orgStore.departments.find(dept => String(dept.name || '').trim() === normalized)
+  if (!match) {
+    return undefined
+  }
+  const id = Number(match.id)
+  return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
 // 判断是否为战略发展部（只能查看，不能编辑）
 const isStrategicDept = computed(() => {
   // 使用视角角色判断
@@ -383,6 +401,7 @@ const saveNewIndicator = () => {
   
   // 创建子指标（状态为草稿）
   const parentIndicator = strategicStore.indicators.find(i => i.id.toString() === newIndicatorForm.value.parentIndicatorId)
+  const parentTaskId = parentIndicator ? getIndicatorTaskId(parentIndicator as StrategicIndicator) : ''
   
     const newIndicator: StrategicIndicator = {
       id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
@@ -415,6 +434,7 @@ const saveNewIndicator = () => {
       year: timeContext.currentYear,
       statusAudit: []  // 空表示草稿状态
     }
+    ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
     // Step1: 只保存到前端临时状态，不调用后端 createIndicator
     // Step2: 点击"下发"按钮时，再调用 PATCH /indicators/{id}/distribution-status 接口
     strategicStore.addDraftIndicator(newIndicator)
@@ -577,6 +597,7 @@ const _getPendingChildCount = (parentId: string) => {
 // 下发所有新增的子指标
 const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
   const parentId = parentIndicator.id.toString()
+  const parentTaskId = getIndicatorTaskId(parentIndicator)
   const children = newChildIndicators[parentId] || []
   
   if (children.length === 0) {
@@ -638,6 +659,7 @@ const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
           year: timeContext.currentYear,
           statusAudit: []  // 默认为空，状态为草稿
         }
+        ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
         // Step1: 只保存到前端临时状态，不调用后端
         strategicStore.addDraftIndicator(newIndicator)
       })
@@ -988,20 +1010,32 @@ const handleBatchDistribute = async (college: string) => {
         await indicatorApi.publishDistributionStatus(indicatorId, 'DISTRIBUTED')
       } else {
         // 临时 ID（本地草稿）：先调用 createIndicator 创建，再 publish
-        const activeTask = strategicStore.activeTasks[0]
-        const taskId = activeTask ? Number(activeTask.id) : 1
+        const indicatorTaskId = Number(getIndicatorTaskId(indicator as StrategicIndicator))
+        const parentIndicatorId = indicator.parentIndicatorId ? Number(indicator.parentIndicatorId) : undefined
+        const ownerOrgId = getOrgIdByDeptName(currentDept.value)
+        const targetOrgId = getOrgIdByDeptName(college)
+
+        if (!Number.isFinite(indicatorTaskId) || indicatorTaskId <= 0) {
+          throw new Error(`指标缺少有效 taskId，无法挂载到同一计划: ${indicator.name}`)
+        }
+        if (!ownerOrgId || !targetOrgId) {
+          throw new Error(`无法解析组织ID，owner=${currentDept.value}, target=${college}`)
+        }
+
         const createResp = await indicatorApi.createIndicator({
-          taskId,
+          taskId: indicatorTaskId,
           indicatorDesc: indicator.name,
+          ownerOrgId,
+          targetOrgId,
           weightPercent: indicator.weight || 0,
           sortOrder: 0,
           remark: indicator.remark || '',
           progress: indicator.progress || 0,
           year: indicator.year || new Date().getFullYear(),
           canWithdraw: false,
-          parentIndicatorId: indicator.parentIndicatorId ? Number(indicator.parentIndicatorId) : undefined,
+          parentIndicatorId,
           distributionStatus: 'DRAFT' as const,
-        })
+        } as never)
         if (!createResp.success || !createResp.data) {
           throw new Error(createResp.message || '创建指标失败')
         }
@@ -2263,16 +2297,14 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
     <!-- 审计日志抽屉 -->
     <AuditLogDrawer
-      v-model:visible="auditLogVisible"
-      :indicator="currentAuditIndicator"
+      v-model="auditLogVisible"
+      :indicator-id="currentAuditIndicator?.id"
       @close="auditLogVisible = false"
     />
 
     <!-- 任务审批抽屉 -->
     <TaskApprovalDrawer
-      v-model:visible="taskApprovalVisible"
-      :indicators="approvalIndicators"
-      :department-name="selectedCollege || ''"
+      v-model="taskApprovalVisible"
       :show-approval-section="true"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"

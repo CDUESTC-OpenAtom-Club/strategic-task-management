@@ -338,6 +338,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       // 不要为健康检查请求显示错误通知（403是预期的）
       const isHealthCheck =
         error.config?.url?.includes('/actuator/health') ||
+        error.config?.url?.includes('/auth/health') ||
         error.config?.url?.includes('/orgs') ||
         error.config?.url?.includes('/indicators') ||
         error.config?.url?.includes('/tasks') ||
@@ -362,12 +363,19 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
     if (error.response?.status === 500) {
       logger.error('💥 [Server Error] 服务器内部错误')
 
-      const { ElMessage } = await import('element-plus')
-      ElMessage.error({
-        message: '服务器内部错误，请稍后重试或联系管理员',
-        duration: 5000,
-        showClose: true
-      })
+      const isHealthCheck =
+        error.config?.url?.includes('/actuator/health') ||
+        error.config?.url?.includes('/auth/health')
+      const isHealthCheckRequest = error.config?.headers?.['X-Health-Check'] === 'true'
+
+      if (!isHealthCheck && !isHealthCheckRequest) {
+        const { ElMessage } = await import('element-plus')
+        ElMessage.error({
+          message: '服务器内部错误，请稍后重试或联系管理员',
+          duration: 5000,
+          showClose: true
+        })
+      }
     }
 
     // ========================================================================

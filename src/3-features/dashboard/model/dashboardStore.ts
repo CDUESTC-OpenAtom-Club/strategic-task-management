@@ -132,6 +132,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     // 根据下钻状态和角色确定要显示的部门和过滤的指标
     let targetIndicators = indicators
     const targetDepartments: Set<string> = new Set()
+    let summaryGroupField: 'responsibleDept' | 'ownerDept' = 'responsibleDept'
 
     // 如果下钻到职能部门层级，只显示该部门下发任务的目标组织
     if (currentOrgLevel.value === 'functional' && selectedFunctionalDept.value) {
@@ -160,9 +161,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
         })
         targetIndicators = deptIndicators
       } else {
-        // 二级学院只看自己
+        // 二级学院：看“上级来源部门”给本学院下发了哪些任务（按 ownerDept 分组）
         if (userDept) {
-          targetDepartments.add(userDept)
+          targetIndicators = indicators.filter(i => i.responsibleDept === userDept)
+          summaryGroupField = 'ownerDept'
+          targetIndicators.forEach(i => {
+            targetDepartments.add(i.ownerDept || '其他')
+          })
         }
       }
     }
@@ -178,7 +183,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
     // 统计实际指标数据
     targetIndicators.forEach(indicator => {
-      const dept = indicator.responsibleDept
+      const dept =
+        summaryGroupField === 'ownerDept'
+          ? indicator.ownerDept || '其他'
+          : indicator.responsibleDept
       if (!dept) {
         return
       } // Skip indicators without responsible department

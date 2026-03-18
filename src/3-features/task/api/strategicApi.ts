@@ -5,7 +5,8 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient, withRetry } from '@/5-shared/lib/api'
+import { apiClient } from '@/5-shared/lib/api'
+import { withRetry } from '@/5-shared/lib/api/wrappers'
 import { logger } from '@/5-shared/lib/utils/logger'
 /* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type {
@@ -23,6 +24,7 @@ import type { IndicatorVO, AssessmentCycle as AssessmentCycleVO } from '@/5-shar
 interface StrategicTaskVO {
   taskId?: number
   id?: number
+  planId?: number | null
   taskName: string
   taskDesc?: string | null
   taskType?: string
@@ -31,6 +33,18 @@ interface StrategicTaskVO {
   cycleId?: number | null
   createdByOrgName?: string
   createdByOrgId?: number | null
+}
+
+interface BackendTaskCreateRequest {
+  taskName: string
+  taskType: string
+  planId: number
+  cycleId: number
+  orgId: number
+  createdByOrgId: number
+  sortOrder?: number
+  taskDesc?: string | null
+  remark?: string | null
 }
 
 interface CyclePageResponse<T> {
@@ -130,7 +144,8 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     name: vo.indicatorDesc,
     // 使用后端返回的新字段，提供默认值
     isQualitative: vo.isQualitative ?? false,
-    type1: (vo.type1 as '定性' | '定量') ?? '定量',
+    // indicatorType 是后端返回的 type 字段，定量/定性
+    type1: (vo.type1 as '定性' | '定量') ?? (vo.indicatorType === '定量' ? '定量' : vo.indicatorType === '定性' ? '定性' : '定量'),
     type2:
       (vo.type2 as '发展性' | '基础性') ?? (vo.level === 'STRAT_TO_FUNC' ? '发展性' : '基础性'),
     progress: vo.progress ?? calculateProgress(milestones),
@@ -178,6 +193,13 @@ export const strategicApi = {
   },
 
   /**
+   * 获取所有可用的年份（从周期表）
+   */
+  async getAvailableYears(): Promise<ApiResponse<number[]>> {
+    return apiClient.get<ApiResponse<number[]>>('/cycles/years')
+  },
+
+  /**
    * 获取指定年份的考核周期
    */
   async getCycleByYear(year: number): Promise<ApiResponse<AssessmentCycleVO | null>> {
@@ -193,6 +215,14 @@ export const strategicApi = {
     } catch {
       return { success: false, data: null, message: 'Failed to get cycle', timestamp: new Date() }
     }
+  },
+
+  /**
+   * 获取指定计划的战略任务
+   */
+  // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
+  async getTasksByPlanId(planId: number | string): Promise<ApiResponse<StrategicTaskVO[]>> {
+    return apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-plan/${planId}`)
   },
 
   /**
@@ -318,6 +348,40 @@ export const strategicApi = {
       return response
     } catch (error) {
       logger.error('[API] Failed to update task', { error, taskId, request })
+      throw error
+    }
+  },
+
+  async updateTaskName(
+    taskId: number | string,
+    taskName: string
+  ): Promise<ApiResponse<StrategicTaskVO>> {
+    logger.info('[API] Updating strategic task name', { taskId, taskName })
+
+    try {
+      return await withRetry(() =>
+        apiClient.put<ApiResponse<StrategicTaskVO>>(`/tasks/${taskId}/name`, {
+          taskId: Number(taskId),
+          taskName
+        })
+      )
+    } catch (error) {
+      logger.error('[API] Failed to update task name', { error, taskId, taskName })
+      throw error
+    }
+  },
+
+  async createBackendTask(
+    request: BackendTaskCreateRequest
+  ): Promise<ApiResponse<StrategicTaskVO>> {
+    logger.info('[API] Creating backend task for indicator binding', { request })
+
+    try {
+      return await withRetry(() =>
+        apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
+      )
+    } catch (error) {
+      logger.error('[API] Failed to create backend task for indicator binding', { error, request })
       throw error
     }
   },

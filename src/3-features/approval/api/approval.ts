@@ -7,7 +7,9 @@
  * 3. Superior department joint approval (Step 3)
  */
 
+import axios from 'axios'
 import { apiClient } from '@/5-shared/api/client'
+import { tokenManager } from '@/5-shared/lib/utils/tokenManager'
 import type { ApiResponse } from '@/5-shared/types'
 
 // ============================================================
@@ -62,12 +64,41 @@ export interface ApprovalStartRequest {
   entityType: string
   entityId: number
   workflowCode?: string
+  traceId?: string
 }
 
 export interface ApprovalActionRequest {
   userId: number
   comment?: string
   reason?: string
+}
+
+// 审批流程模板
+export interface ApprovalFlowTemplate {
+  id: number
+  flowCode: string
+  flowName: string
+  description?: string
+  entityType: string
+  isActive: boolean
+  version?: number
+  steps: ApprovalFlowStep[]
+  stepCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+// 审批流程步骤
+export interface ApprovalFlowStep {
+  id: number
+  stepName: string
+  stepOrder?: number
+  stepType?: string
+  approverType?: string
+  approverId?: number
+  timeoutHours?: number
+  isRequired: boolean
+  canSkip?: boolean
 }
 
 // ============================================================
@@ -83,14 +114,29 @@ export const approvalApi = {
     if (!request.requesterOrgId) {
       throw new Error('Missing requesterOrgId for approval instance start')
     }
-    return apiClient.post<ApiResponse<ApprovalDetail>>(
-      `/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
+    const token = tokenManager.getAccessToken()
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
+    const response = await axios.post<ApiResponse<ApprovalDetail>>(
+      `${baseURL}/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
       {
         entityType: request.entityType,
         entityId: request.entityId,
         workflowCode: request.workflowCode
+      },
+      {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(request.traceId ? { 'X-Request-ID': request.traceId } : {})
+        },
+        withCredentials: true
       }
     )
+    const requestId = String(response.headers?.['x-request-id'] || request.traceId || '')
+    if (requestId && response.data && typeof response.data === 'object') {
+      ;(response.data as ApiResponse<ApprovalDetail> & { requestId?: string }).requestId = requestId
+    }
+    return response.data
   },
 
   /**
@@ -147,7 +193,28 @@ export const approvalApi = {
    */
   async getApprovalHistory(instanceId: number): Promise<ApiResponse<ApprovalHistory>> {
     return apiClient.get<ApiResponse<ApprovalHistory>>(`/approval/instances/${instanceId}/history`)
+  },
+
+  // ==================== Flow Templates ====================
+
+  /**
+   * Get all approval flow templates
+   */
+  async getFlowTemplates(): Promise<ApiResponse<ApprovalFlowTemplate[]>> {
+    return apiClient.get<ApiResponse<ApprovalFlowTemplate[]>>('/approval/flows')
+  },
+
+  /**
+   * Get approval flow template by ID
+   */
+  async getFlowTemplateById(id: number): Promise<ApiResponse<ApprovalFlowTemplate>> {
+    return apiClient.get<ApiResponse<ApprovalFlowTemplate>>(`/approval/flows/${id}`)
+  },
+
+  /**
+   * Get approval flow templates by entity type
+   */
+  async getFlowTemplatesByEntityType(entityType: string): Promise<ApiResponse<ApprovalFlowTemplate[]>> {
+    return apiClient.get<ApiResponse<ApprovalFlowTemplate[]>>(`/approval/flows/entity-type/${entityType}`)
   }
 }
-
-export default approvalApi

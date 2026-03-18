@@ -54,8 +54,48 @@ export function useNavigation(viewingRole: computed<UserRole | null>) {
   })
 
   // 当前激活的tab基于路由
+  // 即使 viewingRole 暂时为 null，也能正确显示激活状态
   const activeTab = computed(() => {
     const currentPath = route.path
+
+    // 路径到标签ID的映射（不依赖 viewingRole 状态）
+    const pathToTabId: Record<string, string> = {
+      '/dashboard': 'dashboard',
+      '/strategic-tasks': 'strategic',
+      '/indicators': 'indicators',
+      '/distribution': 'distribution',
+      '/messages': 'messages',
+      '/plans': 'plans',
+      '/audit/pending': 'pending-audit'
+    }
+
+    // 如果当前路径在映射中，直接返回对应的标签ID
+    if (pathToTabId[currentPath]) {
+      return pathToTabId[currentPath]
+    }
+
+    // 处理带参数的路径 - 使用路径前缀匹配
+    // /plans/:id -> plans
+    // /plans/:id/edit -> plans
+    // /plans/create -> plans
+    if (currentPath.startsWith('/plans')) {
+      return 'plans'
+    }
+
+    // /fills/indicator/:indicatorId -> indicators (指标填报详情属于指标填报)
+    if (currentPath.startsWith('/fills/')) {
+      return 'indicators'
+    }
+
+    // /audit/plan/:fillId -> pending-audit (审核详情属于待审核列表)
+    if (currentPath.startsWith('/audit/')) {
+      return 'pending-audit'
+    }
+
+    // /profile -> 不在导航标签中，返回当前路径
+    // /admin/console -> 不在导航标签中，返回当前路径
+
+    // 否则尝试从 tabs 中查找
     const tab = tabs.value.find(t => t.path === currentPath)
     return tab?.id || 'dashboard'
   })

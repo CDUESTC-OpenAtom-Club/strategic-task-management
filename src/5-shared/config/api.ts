@@ -9,6 +9,32 @@
  */
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
+function deriveWebSocketBaseUrl(): string {
+  const explicitWsBaseUrl = import.meta.env.VITE_WS_BASE_URL?.trim()
+  if (explicitWsBaseUrl) {
+    return explicitWsBaseUrl.replace(/\/$/, '')
+  }
+
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${protocol}//${window.location.host}`
+  }
+
+  const apiTarget = import.meta.env.VITE_API_TARGET?.trim()
+  if (apiTarget) {
+    return apiTarget
+      .replace(/^http:/, 'ws:')
+      .replace(/^https:/, 'wss:')
+      .replace(/\/$/, '')
+  }
+  return 'ws://localhost:8080'
+}
+
+/**
+ * WebSocket base URL
+ */
+export const WS_BASE_URL = deriveWebSocketBaseUrl()
+
 /**
  * API timeout (ms)
  */

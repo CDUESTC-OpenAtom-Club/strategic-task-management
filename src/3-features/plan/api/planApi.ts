@@ -17,6 +17,7 @@ import type {
   PlanStatus,
   IndicatorFill,
   Indicator,
+  Task,
   IndicatorFillForm,
   PlanSubmitForm,
   AuditForm,
@@ -82,6 +83,28 @@ function normalizeApprovalStatus(status?: string): PlanFillStatus {
     return 'rejected'
   }
   return 'submitted'
+}
+
+function unwrapPlanCollection(
+  data: Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] } | null | undefined
+): Plan[] {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (data && typeof data === 'object') {
+    if ('items' in data && Array.isArray(data.items)) {
+      return data.items
+    }
+    if ('content' in data && Array.isArray(data.content)) {
+      return data.content
+    }
+    if ('records' in data && Array.isArray(data.records)) {
+      return data.records
+    }
+  }
+
+  return []
 }
 
 function convertApprovalDetailToPlanFill(detail: ApprovalDetail & Record<string, unknown>): PlanFill {
@@ -471,27 +494,12 @@ export const planApi = {
     }
 
     // 真实 API 调用（后端就绪后启用）
-    const response = await apiClient.get<ApiResponse<Plan[] | { items?: Plan[] }>>('/plans')
-
-    if (Array.isArray(response.data)) {
-      return response as ApiResponse<Plan[]>
-    }
-
-    if (
-      response.data &&
-      typeof response.data === 'object' &&
-      'items' in response.data &&
-      Array.isArray(response.data.items)
-    ) {
-      return {
-        ...response,
-        data: response.data.items
-      }
-    }
-
+    const response = await apiClient.get<
+      ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
+    >('/plans')
     return {
       ...response,
-      data: []
+      data: unwrapPlanCollection(response.data)
     }
   },
 
@@ -566,6 +574,91 @@ export const planApi = {
     }
 
     return apiClient.get<ApiResponse<Plan>>(`/plans/${planId}`)
+  },
+
+  /**
+   * 获取 Plan 详情（包含指标和里程碑）
+   * 调用后端的 /api/v1/plans/{id}/details 接口
+   */
+  async getPlanDetails(planId: number | string): Promise<ApiResponse<Plan | null>> {
+    if (this.useMockData) {
+      // Mock 数据实现：复用 getPlanById
+      return this.getPlanById(planId)
+    }
+
+    // 调用后端的 Plan 详情接口
+    const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}/details`)
+
+    // 转换后端返回的数据格式到前端 Plan 类型
+    if (hasApiData(response) && response.data) {
+      const backendData = response.data as any
+
+      // 将后端的指标列表转换为前端的 Task 结构
+      const tasks: Task[] = []
+      const indicators = backendData.indicators || []
+
+      // 如果有指标数据，创建一个包含所有指标的 Task
+      if (indicators.length > 0) {
+        tasks.push({
+          id: planId,
+          plan_id: planId,
+          name: backendData.planName || '指标任务',
+          type: 'quantitative',
+          description: backendData.description,
+          sortOrder: 0,
+          indicators: indicators.map((ind: any) => ({
+            id: ind.id,
+            task_id: planId,
+            name: ind.indicatorName || ind.name || '',
+            definition: ind.indicatorDesc || ind.description || '',
+            milestones: [],
+            createdAt: ind.createdAt,
+            updatedAt: ind.updatedAt,
+            latest_progress: ind.progress,
+            latest_fill_date: undefined,
+            latest_fill_id: undefined,
+            fill_count: 0
+          }))
+        })
+      }
+
+      // 构造符合前端类型的 Plan 对象
+      const plan: Plan = {
+        id: backendData.id,
+        name: backendData.planName || '',
+        cycle: backendData.year || '',
+        org_id: backendData.targetOrgId || backendData.orgId || '',
+        status: this.convertStatusFromBackend(backendData.status),
+        tasks,
+        createdAt: backendData.createTime || backendData.createdAt,
+        updatedAt: backendData.updatedAt,
+        createdBy: backendData.createdByOrgId?.toString(),
+        description: backendData.description
+      }
+
+      return {
+        ...response,
+        data: plan
+      }
+    }
+
+    return response
+  },
+
+  /**
+   * 转换后端状态到前端状态
+   */
+  convertStatusFromBackend(status: string): PlanStatus {
+    const map: Record<string, PlanStatus> = {
+      'DRAFT': 'draft',
+      'PENDING': 'pending',
+      'PENDING_APPROVAL': 'pending',
+      'APPROVED': 'published',
+      'ACTIVE': 'published',
+      'PUBLISHED': 'published',
+      'ARCHIVED': 'archived'
+    }
+    return map[status] || 'draft'
   },
 
   /**
@@ -662,7 +755,7 @@ export const planApi = {
   },
 
   /**
-   * 提交 Plan（整包提交）
+   * 提交 Plan（整包提交）- 用于填报提交
    */
   async submitPlan(form: PlanSubmitForm): Promise<ApiResponse<PlanFill>> {
     if (this.useMockData) {
@@ -704,6 +797,195 @@ export const planApi = {
 
     return withRetry(async () => {
       return apiClient.post<ApiResponse<PlanFill>>(`/plans/${form.plan_id}/submit`, form)
+    })
+  },
+
+  /**
+   * 提交 Plan 审批（上报审批）
+   * 将 Plan 状态从 DRAFT 变为 PENDING
+   */
+  async submitPlanForApproval(planId: number | string): Promise<ApiResponse<Plan>> {
+    if (this.useMockData) {
+      const planVO = mockPlans.find(p => p.planId === Number(planId))
+      if (!planVO) {
+        return {
+          code: 1002,
+          data: null as never,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+      planVO.status = 'PENDING'
+      return {
+        code: 200,
+        data: convertPlanVOToPlan(planVO, []),
+        message: '提交审批成功',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/submit`)
+    })
+  },
+
+  /**
+   * 审批通过 Plan
+   * 将 Plan 状态从 PENDING 变为 ACTIVE（已下发）
+   */
+  async approvePlan(planId: number | string): Promise<ApiResponse<Plan>> {
+    if (this.useMockData) {
+      const planVO = mockPlans.find(p => p.planId === Number(planId))
+      if (!planVO) {
+        return {
+          code: 1002,
+          data: null as never,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+      planVO.status = 'ACTIVE'
+      return {
+        code: 200,
+        data: convertPlanVOToPlan(planVO, []),
+        message: '审批通过',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/approve`)
+    })
+  },
+
+  /**
+   * 驳回 Plan
+   * 将 Plan 状态从 PENDING 变为 REJECTED
+   */
+  async rejectPlan(planId: number | string, reason?: string): Promise<ApiResponse<Plan>> {
+    if (this.useMockData) {
+      const planVO = mockPlans.find(p => p.planId === Number(planId))
+      if (!planVO) {
+        return {
+          code: 1002,
+          data: null as never,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+      planVO.status = 'REJECTED'
+      return {
+        code: 200,
+        data: convertPlanVOToPlan(planVO, []),
+        message: '已驳回',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/reject`, { reason })
+    })
+  },
+
+  /**
+   * 撤回 Plan 到草稿
+   * 将 Plan 状态从 PENDING/REJECTED 变为 DRAFT
+   */
+  async withdrawPlan(planId: number | string): Promise<ApiResponse<Plan>> {
+    if (this.useMockData) {
+      const planVO = mockPlans.find(p => p.planId === Number(planId))
+      if (!planVO) {
+        return {
+          code: 1002,
+          data: null as never,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+      planVO.status = 'DRAFT'
+      return {
+        code: 200,
+        data: convertPlanVOToPlan(planVO, []),
+        message: '撤回成功',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/withdraw`)
+    })
+  },
+
+  /**
+   * 根据 Task ID 获取关联的 Plan
+   * 用于指标列表中根据 taskId 获取 Plan 状态
+   */
+  async getPlanByTaskId(taskId: number | string): Promise<ApiResponse<Plan | null>> {
+    if (this.useMockData) {
+      // Mock 数据：假设 taskId 对应 planId
+      return this.getPlanById(taskId)
+    }
+
+    return withRetry(async () => {
+      return apiClient.get<ApiResponse<Plan | null>>(`/plans/task/${taskId}`)
+    })
+  },
+
+  /**
+   * 发布 Plan（下发）
+   * 将 Plan 状态变为 ACTIVE
+   */
+  async publishPlan(planId: number | string): Promise<ApiResponse<Plan>> {
+    if (this.useMockData) {
+      const planVO = mockPlans.find(p => p.planId === Number(planId))
+      if (!planVO) {
+        return {
+          code: 1002,
+          data: null as never,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+      planVO.status = 'ACTIVE'
+      return {
+        code: 200,
+        data: convertPlanVOToPlan(planVO, []),
+        message: '发布成功',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/publish`)
+    })
+  },
+
+  /**
+   * 归档 Plan
+   * 将 Plan 状态变为 ARCHIVED
+   */
+  async archivePlan(planId: number | string): Promise<ApiResponse<Plan>> {
+    if (this.useMockData) {
+      const planVO = mockPlans.find(p => p.planId === Number(planId))
+      if (!planVO) {
+        return {
+          code: 1002,
+          data: null as never,
+          message: 'Plan not found',
+          timestamp: new Date().toISOString()
+        }
+      }
+      planVO.status = 'ARCHIVED'
+      return {
+        code: 200,
+        data: convertPlanVOToPlan(planVO, []),
+        message: '归档成功',
+        timestamp: new Date().toISOString()
+      }
+    }
+
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/archive`)
     })
   }
 }

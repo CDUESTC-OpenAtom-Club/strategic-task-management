@@ -5,7 +5,17 @@ import type { ApprovalHistoryItem } from '@/5-shared/types'
 
 const props = defineProps<{
   history: ApprovalHistoryItem[]
+  // 审批类型：'distribution' = 下发审批, 'submission' = 上报审批
+  approvalType?: 'distribution' | 'submission'
 }>()
+
+const approvalTypeLabel = computed(() => {
+  return props.approvalType === 'distribution' ? '下发审批' : '上报审批'
+})
+
+const approvalTypeTagType = computed(() => {
+  return props.approvalType === 'distribution' ? 'primary' : 'success'
+})
 
 const sortedHistory = computed(() => 
   [...props.history].sort((a, b) => 
@@ -51,6 +61,13 @@ const formatTime = (date: Date) => {
 
 <template>
   <div class="approval-history">
+    <!-- 审批类型标识 -->
+    <div v-if="approvalType" class="history-header-type">
+      <ElTag :type="approvalTypeTagType" size="small">
+        {{ approvalTypeLabel }}
+      </ElTag>
+      <span class="history-header-desc">审批历史记录</span>
+    </div>
     <el-timeline>
       <el-timeline-item
         v-for="item in sortedHistory"
@@ -79,6 +96,21 @@ const formatTime = (date: Date) => {
 <style scoped>
 .approval-history {
   padding: 8px 0;
+}
+
+.history-header-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+}
+
+.history-header-desc {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .history-item {

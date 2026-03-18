@@ -32,8 +32,8 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
   logger.debug('🏥 [Health Check] 检查后端服务健康状态...')
 
   try {
-    // 尝试访问 Spring Boot Actuator 健康检查端点
-    const response = await healthApi.get('/actuator/health', { timeout: 10000 })
+    // 优先使用业务健康端点（当前后端稳定提供）
+    const response = await healthApi.get('/auth/health', { timeout: 10000 })
 
     logger.debug('✅ [Health Check] 后端服务正常')
     return {
@@ -68,14 +68,27 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     }
 
     if (error.response?.status === 404) {
-      logger.warn('⚠️ [Health Check] 健康检查端点不存在，尝试降级验证服务可用性')
-      // 如果 actuator/health 不存在，尝试其他端点来验证服务可用性
+      logger.warn('⚠️ [Health Check] /auth/health 不存在，尝试降级验证服务可用性')
+      // 如果 /auth/health 不存在，尝试 actuator 端点
       try {
-        await healthApi.get('/auth/login', { timeout: 3000 })
+        await healthApi.get('/actuator/health', { timeout: 3000 })
         return {
           service: 'Backend API',
           status: 'success',
-          message: '后端服务可访问（健康检查端点不可用，但服务正常）',
+          message: '后端服务可访问（使用 actuator 健康检查）',
+          details: { status: 'accessible-actuator' },
+          timestamp: new Date()
+        }
+      } catch {
+        // actuator 在当前后端中可能被统一异常包装为 500，继续尝试轻量业务端点
+      }
+
+      try {
+        await healthApi.get('/organizations', { timeout: 3000 })
+        return {
+          service: 'Backend API',
+          status: 'success',
+          message: '后端服务可访问（健康检查端点不可用，但业务接口正常）',
           details: { status: 'accessible' },
           timestamp: new Date()
         }
@@ -126,15 +139,20 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
  */
 export async function quickBackendCheck(): Promise<boolean> {
   try {
-    // 尝试访问 Spring Boot Actuator 健康检查端点
-    await healthApi.get('/actuator/health', { timeout: 3000 })
+    // 优先使用业务健康端点（避免 actuator 路由差异导致误报）
+    await healthApi.get('/auth/health', { timeout: 3000 })
     return true
   } catch (error: unknown) {
-    // 404 表示端点不存在但服务可访问
+    // 404 表示端点不存在，尝试业务只读接口判断服务可达
     if (error && typeof error === 'object' && 'response' in error) {
       const axiosError = error as { response?: { status?: number } }
       if (axiosError.response?.status === 404) {
-        return true
+        try {
+          await healthApi.get('/organizations', { timeout: 3000 })
+          return true
+        } catch {
+          return false
+        }
       }
       // 401/403 表示需要认证但服务可访问
       if (axiosError.response?.status === 401 || axiosError.response?.status === 403) {

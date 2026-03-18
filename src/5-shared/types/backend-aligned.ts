@@ -545,6 +545,9 @@ export interface IndicatorVO {
   type1?: '定性' | '定量'
   type2?: '基础性' | '发展性'
   responsiblePerson?: string | null
+  remark?: string | null
+  // 后端返回的type字段（定量/定性）
+  indicatorType?: string | null
 }
 
 /**
@@ -571,10 +574,15 @@ export interface MilestoneVO {
 export interface IndicatorCreateRequest {
   indicatorDesc: string
   type?: 'QUANTITATIVE' | 'QUALITATIVE'
+  taskId?: number
+  parentIndicatorId?: number
   ownerOrgId: number
   targetOrgId: number
   weightPercent: number
   sortOrder?: number
+  remark?: string
+  progress?: number
+  distributionStatus?: 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
   milestones?: Array<{
     milestoneName: string
     milestoneDesc?: string

@@ -121,12 +121,18 @@ export class ApiClient {
         logger.debug(`[API] Response ${response.status}:`, response.data)
         return response.data
       },
-      (error: AxiosError) => {
+      (error: unknown) => {
         // 处理 401 错误：清除 Token 并跳转登录
-        if (error.response?.status === 401) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
           logger.warn('[API] 401 Unauthorized - redirecting to login')
           tokenManager.clearAccessToken()
           window.location.href = '/login'
+        }
+
+        // 前置拦截器已经转成统一错误格式时，直接透传，避免把 400 再包装成 500/未知错误
+        if (!axios.isAxiosError(error)) {
+          logger.error('[API] Error:', error)
+          return Promise.reject(error)
         }
 
         // 转换为统一的错误格式
@@ -185,7 +191,10 @@ export class ApiClient {
    * PUT 请求
    */
   async put<T>(url: string, data?: unknown): Promise<T> {
-    return this.client.put(url, data)
+    console.log('[API Client] PUT request:', url, data)
+    const result = await this.client.put(url, data)
+    console.log('[API Client] PUT response:', result)
+    return result
   }
 
   /**
@@ -239,6 +248,13 @@ export class ApiClient {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(downloadUrl)
+  }
+
+  /**
+   * 获取底层 axios 实例（兼容需要读取响应头的调用）
+   */
+  getAxiosInstance(): AxiosInstance {
+    return this.client
   }
 }
 

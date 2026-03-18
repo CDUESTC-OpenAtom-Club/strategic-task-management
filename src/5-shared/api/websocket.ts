@@ -6,6 +6,7 @@
 
 import { ref, computed } from 'vue'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { WS_BASE_URL } from '@/5-shared/config/api'
 
 // Notification types matching backend
 export enum NotificationType {
@@ -42,15 +43,29 @@ const RECONNECT_INTERVAL = 5000
 const MAX_RECONNECT_ATTEMPTS = 5
 let reconnectAttempts = 0
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let shouldReconnect = true
+let handshakeRejected = false
+let lastErrorMessage: string | null = null
 
 /**
- * Get WebSocket URL based on current location
+ * Get WebSocket URL from config
  */
 function getWebSocketUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.host
   const userId = getUserId()
-  return `${protocol}//${host}/ws/notifications?userId=${userId}`
+  return `${WS_BASE_URL}/ws/notifications?userId=${encodeURIComponent(userId)}`
+}
+
+function logConnectionError(message: string, error?: unknown): void {
+  if (lastErrorMessage !== message) {
+    lastErrorMessage = message
+    logger.error(`[WebSocket] ${message}`, error)
+  } else if (import.meta.env.DEV && error) {
+    logger.error(`[WebSocket] ${message}`, error)
+  }
+}
+
+function clearConnectionError(): void {
+  lastErrorMessage = null
 }
 
 /**
@@ -123,6 +138,9 @@ function showBrowserNotification(message: NotificationMessage): void {
 function handleOpen(): void {
   connectionState.value = 'connected'
   reconnectAttempts = 0
+  handshakeRejected = false
+  shouldReconnect = true
+  clearConnectionError()
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.log('[WebSocket] Connected')
@@ -132,9 +150,20 @@ function handleOpen(): void {
 /**
  * Handle WebSocket close
  */
-function handleClose(): void {
+function handleClose(event?: CloseEvent): void {
   connectionState.value = 'disconnected'
   ws.value = null
+
+  if (event && [1002, 1003, 1007, 1008, 1011].includes(event.code)) {
+    shouldReconnect = false
+    handshakeRejected = true
+    logConnectionError(`连接被服务端拒绝（code=${event.code}）`)
+    return
+  }
+
+  if (!shouldReconnect || handshakeRejected) {
+    return
+  }
 
   // Attempt reconnection
   if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
@@ -149,7 +178,8 @@ function handleClose(): void {
       connectWebSocket()
     }, RECONNECT_INTERVAL)
   } else {
-    logger.error('[WebSocket] Max reconnection attempts reached')
+    shouldReconnect = false
+    logConnectionError('已达到最大重连次数，停止重试')
   }
 }
 
@@ -158,7 +188,7 @@ function handleClose(): void {
  */
 function handleError(error: Event): void {
   connectionState.value = 'error'
-  logger.error('[WebSocket] Error:', error)
+  logConnectionError('连接失败，请确认后端 WebSocket 服务已启动', error)
 }
 
 /**
@@ -175,11 +205,14 @@ export function connectWebSocket(): void {
 
   const userId = getUserId()
   if (!userId) {
+    shouldReconnect = false
     logger.warn('[WebSocket] No user ID, skipping connection')
     return
   }
 
   connectionState.value = 'connecting'
+  shouldReconnect = true
+  handshakeRejected = false
 
   try {
     const url = getWebSocketUrl()
@@ -187,7 +220,7 @@ export function connectWebSocket(): void {
 
     ws.value.onopen = handleOpen
     ws.value.onmessage = handleMessage
-    ws.value.onclose = handleClose
+    ws.value.onclose = event => handleClose(event)
     ws.value.onerror = handleError
 
     if (import.meta.env.DEV) {
@@ -196,7 +229,8 @@ export function connectWebSocket(): void {
     }
   } catch (error) {
     connectionState.value = 'error'
-    logger.error('[WebSocket] Connection failed:', error)
+    shouldReconnect = false
+    logConnectionError('初始化 WebSocket 连接失败', error)
   }
 }
 
@@ -204,6 +238,8 @@ export function connectWebSocket(): void {
  * Disconnect WebSocket
  */
 export function disconnectWebSocket(): void {
+  shouldReconnect = false
+  handshakeRejected = false
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
@@ -215,6 +251,7 @@ export function disconnectWebSocket(): void {
   }
 
   connectionState.value = 'disconnected'
+  clearConnectionError()
   if (import.meta.env.DEV) {
     // eslint-disable-next-line no-console
     console.log('[WebSocket] Disconnected')

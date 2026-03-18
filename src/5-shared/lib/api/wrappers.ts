@@ -41,6 +41,27 @@ export async function withRetry<T>(fn: () => Promise<T>, config: RetryConfig = {
 
       logger.warn(`[Retry] Attempt ${attempt}/${maxRetries} failed:`, error)
 
+      const explicitlyNonRetryable =
+        typeof error === 'object' &&
+        error !== null &&
+        'retryable' in error &&
+        (error as { retryable?: boolean }).retryable === false
+
+      const status =
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        typeof (error as { status?: unknown }).status === 'number'
+          ? (error as { status: number }).status
+          : undefined
+
+      const isClientError = status !== undefined && status >= 400 && status < 500
+
+      if (explicitlyNonRetryable || isClientError) {
+        logger.debug('[Retry] Error marked as non-retryable, aborting remaining attempts')
+        break
+      }
+
       if (attempt < maxRetries) {
         // 指数退避: 1s, 2s, 3s (capped at maxDelay)
         const delayMs = Math.min(baseDelay * attempt, maxDelay)

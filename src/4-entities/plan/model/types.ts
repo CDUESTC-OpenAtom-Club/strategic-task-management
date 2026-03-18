@@ -22,27 +22,17 @@ export const PlanLevel = {
 
 /**
  * Plan Status
- * Lifecycle states for strategic plans
+ * 战略计划的三种状态：草稿、待审批、已下发
  */
-export type PlanStatus = 
-  | 'DRAFT'             // Draft plan (草稿)
-  | 'PENDING'           // Pending submission (待提交)
-  | 'PENDING_APPROVAL'  // Pending approval (待审批)
-  | 'APPROVED'          // Approved (已批准)
-  | 'REJECTED'          // Rejected (已驳回)
-  | 'ACTIVE'            // Active/In progress (进行中)
-  | 'COMPLETED'         // Completed (已完成)
-  | 'ARCHIVED'          // Archived (已归档)
+export type PlanStatus =
+  | 'DRAFT'             // Draft plan (草稿 - 可编辑)
+  | 'PENDING_APPROVAL'  // Pending approval (待审批 - 已提交等待审批)
+  | 'APPROVED'          // Approved (已批准/已下发 - 进行中)
 
 export const PlanStatus = {
   DRAFT: 'DRAFT' as const,
-  PENDING: 'PENDING' as const,
   PENDING_APPROVAL: 'PENDING_APPROVAL' as const,
-  APPROVED: 'APPROVED' as const,
-  REJECTED: 'REJECTED' as const,
-  ACTIVE: 'ACTIVE' as const,
-  COMPLETED: 'COMPLETED' as const,
-  ARCHIVED: 'ARCHIVED' as const
+  APPROVED: 'APPROVED' as const
 } as const
 
 /**
