@@ -14,11 +14,19 @@ env:
 jobs:
   build-and-deploy:
     name: Build and Deploy Frontend
-    runs-on: ubuntu-latest
-    
+    runs-on: [self-hosted, linux, frontend]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 1
+
+      - name: Fix permissions
+        run: |
+          sudo chown -R $(whoami):$(whoami) . || true
+          chmod -R u+rwX . || true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,76 +45,44 @@ jobs:
           VITE_ENABLE_DEVTOOLS: false
           VITE_LOG_LEVEL: warn
 
-      - name: Create deployment archive
-        run: |
-          cd dist
-          tar -czf ../frontend-dist.tar.gz .
-          cd ..
-          echo "📦 Archive size: $(du -h frontend-dist.tar.gz | cut -f1)"
+      - name: Stop nginx
+        run: sudo systemctl stop nginx || true
 
-      - name: Setup SSH
+      - name: Backup current version
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          if [ -d /var/www/sism ]; then
+            sudo mv /var/www/sism /var/www/sism.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+          sudo mkdir -p /var/www/sism
 
-      - name: Upload and deploy
+      - name: Deploy to nginx directory
         run: |
-          # Upload archive
-          scp -i ~/.ssh/deploy_key frontend-dist.tar.gz \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/tmp/
+          sudo cp -r dist/* /var/www/sism/
+          sudo chown -R www:www /var/www/sism
+          sudo chmod -R 755 /var/www/sism
 
-          # Deploy on server
-          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
-            # Backup current version
-            if [ -d /var/www/sism ]; then
-              sudo mv /var/www/sism /var/www/sism.backup.$(date +%Y%m%d_%H%M%S)
-            fi
-            
-            # Extract new version
-            sudo mkdir -p /var/www/sism
-            sudo tar -xzf /tmp/frontend-dist.tar.gz -C /var/www/sism
-            
-            # Set permissions
-            sudo chown -R www:www /var/www/sism
-            sudo chmod -R 755 /var/www/sism
-            
-            # Cleanup
-            rm /tmp/frontend-dist.tar.gz
-            
-            # Keep only last 3 backups
-            cd /var/www
-            ls -t sism.backup.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
-            
-            echo "✅ Frontend deployed successfully"
-            
-            # Reload nginx
-            sudo nginx -t && sudo systemctl reload nginx
-            
-            echo "✅ Nginx reloaded"
-          EOF
+      - name: Start nginx
+        run: sudo systemctl start nginx
 
       - name: Health check
         run: |
-          echo "⏳ Waiting for deployment to be accessible..."
+          echo "Waiting for deployment..."
           sleep 5
-          
-          for i in 1 2 3; do
-            if curl -sf https://blackevil.cn > /dev/null; then
-              echo "✅ Frontend is accessible"
+
+          for i in 1 2 3 4 5; do
+            if curl -sf https://blackevil.cn > /dev/null 2>&1; then
+              echo "Frontend is accessible"
               exit 0
             fi
-            echo "⏳ Retry $i/3..."
+            echo "Retry $i/5..."
             sleep 5
           done
-          
-          echo "❌ Health check failed"
+
+          echo "Health check failed"
           exit 1
 
-      - name: Cleanup
-        if: always()
+      - name: Cleanup old backups
         run: |
-          rm -f ~/.ssh/deploy_key
-          rm -f frontend-dist.tar.gz
-
+          cd /var/www
+          ls -t sism.backup.* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf || true
+          echo "Cleanup completed"
