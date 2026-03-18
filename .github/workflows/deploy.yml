@@ -34,6 +34,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
+      - name: Free up memory for build
+        run: |
+          # Stop memory-intensive services during build
+          sudo systemctl stop n8n || true
+          # Clear page cache to free memory
+          sync && sudo sysctl -w vm.drop_caches=3 2>/dev/null || true
+          echo "Memory freed for build"
+
       - name: Install dependencies
         run: npm ci
 
@@ -44,6 +52,11 @@ jobs:
           VITE_USE_MOCK: false
           VITE_ENABLE_DEVTOOLS: false
           VITE_LOG_LEVEL: warn
+
+      - name: Restart services
+        run: |
+          sudo systemctl start n8n || true
+          echo "Services restarted"
 
       - name: Stop nginx
         run: sudo systemctl stop nginx || true
