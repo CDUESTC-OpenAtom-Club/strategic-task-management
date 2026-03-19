@@ -41,5 +41,5 @@ export async function getUserPermissions(): Promise<ApiResponse<string[]>> {
     success: true,
     data: [],
     message: '当前 OpenAPI 未提供权限查询接口，返回空权限列表'
-  } as ApiResponse<string[]>)
+  } as unknown as ApiResponse<string[]>)
 }

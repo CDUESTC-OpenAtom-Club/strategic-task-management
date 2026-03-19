@@ -8,7 +8,7 @@
           v-show="currentBgIndex === index"
           :key="img.id"
           class="bg-image"
-          :style="{ backgroundImage: `url(${img.url})` }"
+          :style="{ background: img.background }"
         ></div>
       </transition-group>
       <div class="bg-overlay"></div>
@@ -132,8 +132,8 @@ const authStore = useAuthStore()
 // Background rotation
 interface BgImage {
   id: number
-  url: string
-  author?: string
+  background: string
+  label?: string
 }
 
 const bgImages = ref<BgImage[]>([])
@@ -143,28 +143,33 @@ let bgInterval: ReturnType<typeof setInterval> | null = null
 const defaultBgImages: BgImage[] = [
   {
     id: 1,
-    url: 'https://images.unsplash.com/photo-1562774053-701939374585?w=1920&q=80',
-    author: 'University Campus'
+    background:
+      'radial-gradient(circle at 18% 20%, rgba(255, 208, 124, 0.28), transparent 22%), linear-gradient(135deg, #18324a 0%, #20506d 42%, #6aa2a1 100%)',
+    label: 'Campus Dawn'
   },
   {
     id: 2,
-    url: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1920&q=80',
-    author: 'Library'
+    background:
+      'radial-gradient(circle at 78% 18%, rgba(255, 244, 166, 0.24), transparent 18%), linear-gradient(135deg, #3c1f4a 0%, #694f8e 38%, #d6a66f 100%)',
+    label: 'Library Glow'
   },
   {
     id: 3,
-    url: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&q=80',
-    author: 'Graduation'
+    background:
+      'radial-gradient(circle at 28% 78%, rgba(173, 228, 255, 0.22), transparent 20%), linear-gradient(135deg, #0e3b43 0%, #1b7080 40%, #9ed2c6 100%)',
+    label: 'Graduation Sky'
   },
   {
     id: 4,
-    url: 'https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=1920&q=80',
-    author: 'Campus Building'
+    background:
+      'radial-gradient(circle at 82% 76%, rgba(255, 210, 145, 0.2), transparent 18%), linear-gradient(135deg, #402218 0%, #855236 44%, #caa26f 100%)',
+    label: 'Stone Hall'
   },
   {
     id: 5,
-    url: 'https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?w=1920&q=80',
-    author: 'University Hall'
+    background:
+      'radial-gradient(circle at 50% 16%, rgba(255, 255, 255, 0.18), transparent 16%), linear-gradient(135deg, #1d2745 0%, #325b88 42%, #7caec7 100%)',
+    label: 'Evening Atrium'
   }
 ]
 

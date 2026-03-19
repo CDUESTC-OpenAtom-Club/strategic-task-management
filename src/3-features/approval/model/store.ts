@@ -66,7 +66,7 @@ export const useApprovalStore = defineStore('approval', () => {
   // Check if user has approvals pending
   const hasPendingForCurrentUser = computed(() => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       return false
@@ -84,7 +84,7 @@ export const useApprovalStore = defineStore('approval', () => {
    */
   const loadPendingApprovals = async () => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       logger.warn('[Approval Store] No user ID found')
@@ -98,7 +98,7 @@ export const useApprovalStore = defineStore('approval', () => {
       logger.info('[Approval Store] Loading pending approvals for user:', userId)
 
       // 动态导入 API
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
+      const { approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.getPendingApprovals(userId)
 
       if (response.success && response.data) {
@@ -127,11 +127,11 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading approval detail:', instanceId)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
+      const { approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.getApprovalInstance(instanceId)
 
       if (response.success && response.data) {
-        currentApproval.value = response.data
+        currentApproval.value = response.data as unknown as ApprovalInstance
         logger.info('[Approval Store] Loaded approval detail')
       }
     } catch (err) {
@@ -148,7 +148,7 @@ export const useApprovalStore = defineStore('approval', () => {
    */
   const approve = async (instanceId: number, comment?: string) => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       ElMessage.error('用户未登录')
@@ -161,11 +161,11 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Approving:', instanceId)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
+      const { approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.approve(instanceId, { userId, comment })
 
       if (response.success && response.data) {
-        currentApproval.value = response.data
+        currentApproval.value = response.data as unknown as ApprovalInstance
         ElMessage.success('审批通过')
 
         // Remove from pending list
@@ -191,7 +191,7 @@ export const useApprovalStore = defineStore('approval', () => {
    */
   const reject = async (instanceId: number, reason: string) => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       ElMessage.error('用户未登录')
@@ -209,11 +209,11 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Rejecting:', instanceId, 'reason:', reason)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
+      const { approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.reject(instanceId, { userId, comment: reason, reason })
 
       if (response.success && response.data) {
-        currentApproval.value = response.data
+        currentApproval.value = response.data as unknown as ApprovalInstance
         ElMessage.success('已驳回')
 
         // Remove from pending list
@@ -244,11 +244,13 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading history for:', instanceId)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
+      const { approvalApi } = await import('@/3-features/approval/api/approval')
       const response = await approvalApi.getApprovalHistory(instanceId)
 
       if (response.success && response.data) {
-        approvalHistory.value = response.data
+        approvalHistory.value = Array.isArray(response.data?.logs)
+          ? (response.data.logs as unknown as ApprovalHistory[])
+          : []
         logger.info('[Approval Store] Loaded approval history')
       }
     } catch (err) {

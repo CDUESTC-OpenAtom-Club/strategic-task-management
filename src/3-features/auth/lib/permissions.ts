@@ -83,6 +83,6 @@ export function formatPermission(resource: string, action: string): string {
  * Parse permission string
  */
 export function parsePermission(permission: string): Permission {
-  const [resource, action] = permission.split(':')
+  const [resource = '', action = ''] = permission.split(':')
   return { resource, action }
 }

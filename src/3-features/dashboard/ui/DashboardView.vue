@@ -129,14 +129,14 @@ const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
 
   const currentProgress = indicator.progress || 0
 
-  // 按deadline排序里程碑
+  // 按 dueDate 排序里程碑
   const sortedMilestones = [...milestones].sort(
-    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+    (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
   )
 
   // 检查是否有已过期但未达标的里程碑（延期）
   for (const milestone of sortedMilestones) {
-    const deadlineDate = new Date(milestone.deadline)
+    const deadlineDate = new Date(milestone.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
 
     if (deadlineDate < today && currentProgress < milestone.targetProgress) {
@@ -144,9 +144,9 @@ const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
     }
   }
 
-  // 找到离今天最近的未来里程碑（deadline > 今天）
+  // 找到离今天最近的未来里程碑（dueDate > 今天）
   const nextMilestone = sortedMilestones.find(m => {
-    const deadlineDate = new Date(m.deadline)
+    const deadlineDate = new Date(m.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate >= today
   })
@@ -165,8 +165,8 @@ const getIndicatorStatus = (indicator: Indicator): IndicatorStatus => {
     return 'ahead'
   }
 
-  // 检查是否预警（距离deadline ≤ 3天且未达标）
-  const nextDeadline = new Date(nextMilestone.deadline)
+  // 检查是否预警（距离 dueDate ≤ 3 天且未达标）
+  const nextDeadline = new Date(nextMilestone.dueDate)
   nextDeadline.setHours(23, 59, 59, 999)
   const daysUntilDeadline = Math.ceil(
     (nextDeadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
@@ -211,14 +211,14 @@ const getCurrentTargetProgress = (indicator: Indicator): number | null => {
     return null
   }
 
-  // 按deadline排序里程碑
+  // 按 dueDate 排序里程碑
   const sortedMilestones = [...milestones].sort(
-    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+    (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
   )
 
-  // 找到离今天最近的里程碑（deadline >= 今天）
+  // 找到离今天最近的里程碑（dueDate >= 今天）
   const nextMilestone = sortedMilestones.find(m => {
-    const deadlineDate = new Date(m.deadline)
+    const deadlineDate = new Date(m.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate >= today
   })
@@ -244,14 +244,14 @@ const getCurrentMilestoneIndex = (indicator: Indicator): string | null => {
 
   const total = milestones.length
 
-  // 按deadline排序里程碑
+  // 按 dueDate 排序里程碑
   const sortedMilestones = [...milestones].sort(
-    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+    (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
   )
 
-  // 找到离今天最近的里程碑（deadline >= 今天）
+  // 找到离今天最近的里程碑（dueDate >= 今天）
   const nextMilestoneIndex = sortedMilestones.findIndex(m => {
-    const deadlineDate = new Date(m.deadline)
+    const deadlineDate = new Date(m.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate >= today
   })
@@ -359,14 +359,14 @@ const getIndicatorStatusAtMonth = (
   const monthEnd = new Date(year, month, 0) // month的0日就是上个月的最后一天
   monthEnd.setHours(23, 59, 59, 999)
 
-  // 按deadline排序里程碑
+  // 按 dueDate 排序里程碑
   const sortedMilestones = [...milestones].sort(
-    (a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+    (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
   )
 
   // 筛选截止到该月底的里程碑
   const milestonesUpToMonth = sortedMilestones.filter(m => {
-    const deadlineDate = new Date(m.deadline)
+    const deadlineDate = new Date(m.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     return deadlineDate <= monthEnd
   })
@@ -378,7 +378,7 @@ const getIndicatorStatusAtMonth = (
 
   // 检查是否有已过期但未达标的里程碑（延期）
   for (const milestone of milestonesUpToMonth) {
-    const deadlineDate = new Date(milestone.deadline)
+    const deadlineDate = new Date(milestone.dueDate)
     deadlineDate.setHours(23, 59, 59, 999)
     if (deadlineDate < monthEnd && (indicator.progress || 0) < milestone.targetProgress) {
       return 'delayed'

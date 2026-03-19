@@ -29,6 +29,7 @@ import { useAuthStore } from '@/3-features/auth/model/store'
 import { useTimeContextStore } from '@/5-shared/lib/timeContext'
 import { useOrgStore } from '@/3-features/organization/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { sortMilestonesByProgress } from '@/5-shared/lib/utils/milestoneSort'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
 import strategicApi, { approvalApi as taskApprovalApi } from '@/3-features/task/api/strategicApi'
 import { approvalApi as workflowApprovalApi } from '@/3-features/approval/api/approval'
@@ -625,7 +626,8 @@ watch(
   () => {
     void loadMilestonesForCurrentScope()
   },
-  { immediate: true }
+  // 移除 immediate: true，因为初始执行时 selectedDepartment 为空会导致加载错误的指标范围
+  // 里程碑加载改为在 onMounted 中显式调用，确保与主数据同时加载
 )
 
 watch(
@@ -1757,6 +1759,9 @@ onMounted(async () => {
 
   await loadCurrentPlanTaskScope()
 
+  // 显式加载里程碑数据，确保与主数据同时加载，而非依赖 watch 延迟触发
+  void loadMilestonesForCurrentScope()
+
   document.addEventListener('click', handleGlobalClick, true)
 })
 
@@ -1817,6 +1822,31 @@ const cancelAdd = () => {
   updateEditTime()
 }
 
+const getCurrentActorUserId = () => {
+  const userRecord = authStore.user as { id?: string | number; userId?: string | number } | null
+  const candidateId = Number(userRecord?.userId ?? userRecord?.id ?? NaN)
+  return Number.isFinite(candidateId) && candidateId > 0 ? candidateId : null
+}
+
+const persistNewIndicatorMilestones = async (indicatorId: number, milestones: Milestone[]) => {
+  if (!Number.isFinite(indicatorId) || indicatorId <= 0 || milestones.length === 0) {
+    return
+  }
+
+  for (const [index, milestone] of milestones.entries()) {
+    await milestoneApi.createMilestone({
+      indicatorId,
+      milestoneName: String(milestone.name || '').trim() || `里程碑 ${index + 1}`,
+      targetProgress: Number(milestone.targetProgress) || 0,
+      dueDate: milestone.deadline || null,
+      status: milestone.status === 'completed' ? 'COMPLETED' : 'NOT_STARTED',
+      sortOrder: index + 1
+    })
+  }
+
+  await reloadMilestonesForIndicator(String(indicatorId), selectedDepartment.value || '战略发展部')
+}
+
 // 保存新行
 const saveNewRow = async () => {
   if (!String(newRow.value.taskContent || '').trim()) {
@@ -1857,7 +1887,7 @@ const saveNewRow = async () => {
     )
 
     // 调用 Store 添加指标（现在是异步的，会调用后端 API）
-    await strategicStore.addIndicator({
+    const createdIndicatorResponse = await strategicStore.addIndicator({
       id: Date.now().toString(),
       taskId: persistedTaskId,
       taskContent: String(newRow.value.taskContent || '').trim(),
@@ -1881,6 +1911,13 @@ const saveNewRow = async () => {
       year: timeContext.currentYear,
       statusAudit: []
     })
+
+    const createdIndicatorId = Number(
+      createdIndicatorResponse?.data?.indicatorId ?? createdIndicatorResponse?.data?.id ?? NaN
+    )
+    if (Number.isFinite(createdIndicatorId) && newRow.value.milestones.length > 0) {
+      await persistNewIndicatorMilestones(createdIndicatorId, newRow.value.milestones)
+    }
 
     // 🔧 修复：强制从后端重新加载指标数据，确保前端显示的是包含正式ID的数据
     logger.info(
@@ -2024,13 +2061,16 @@ interface MilestoneTooltipItem {
 }
 
 const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipItem[] => {
-  return (indicator.milestones || []).map(m => ({
+  return sortMilestonesByProgress(indicator.milestones || []).map(m => ({
     id: m.id || '',
     name: m.name,
     expectedDate: m.deadline || '',
     progress: m.targetProgress || 0
   }))
 }
+
+const getSortedMilestones = (milestones?: StrategicIndicator['milestones']) =>
+  sortMilestonesByProgress(milestones || [])
 
 const selectDepartment = (dept: string) => {
   selectedDepartment.value = dept
@@ -2393,7 +2433,7 @@ const triggerApprovalForDistribution = async (indicator: StrategicIndicator) => 
     return { skipped: true as const, reason: 'temporary_indicator' }
   }
 
-  const requesterId = Number(authStore.user?.id || 0)
+  const requesterId = Number(getCurrentActorUserId() || 0)
   const rawOrgId = Number((authStore.user as { orgId?: number | string } | null)?.orgId || 0)
   const fallbackOrgId =
     departmentNameIdMap.value.get(authStore.effectiveDepartment || authStore.userDepartment || '') || 0
@@ -2464,7 +2504,7 @@ const confirmDistribute = () => {
             // 构建审计记录
             const newAuditEntry = {
               id: `audit-${row.id}-${Date.now()}`,
-              operator: authStore.user?.id || 'admin',
+              operator: String(getCurrentActorUserId() || 'admin'),
               operatorName: authStore.user?.name || '管理员',
               operatorDept:
                 authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
@@ -2483,7 +2523,7 @@ const confirmDistribute = () => {
                 await indicatorApi.distributeIndicator({
                   parentIndicatorId: persistedIndicatorId,
                   targetOrgId: String(targetOrgId),
-                  actorUserId: String(authStore.user?.id || '')
+                  actorUserId: String(getCurrentActorUserId() || '')
                 })
               } else {
                 await strategicStore.addIndicator({
@@ -2556,7 +2596,7 @@ const confirmDistribute = () => {
         // 构建审计记录
         const newAuditEntry = {
           id: `audit-${row.id}-${Date.now()}`,
-          operator: authStore.user?.id || 'admin',
+          operator: String(getCurrentActorUserId() || 'admin'),
           operatorName: authStore.user?.name || '管理员',
           operatorDept: authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
           action: 'distribute' as const,
@@ -2575,7 +2615,7 @@ const confirmDistribute = () => {
             await indicatorApi.distributeIndicator({
               parentIndicatorId: persistedIndicatorId,
               targetOrgId: String(targetOrgId),
-              actorUserId: String(authStore.user?.id || '')
+              actorUserId: String(getCurrentActorUserId() || '')
             })
           } else {
             await strategicStore.addIndicator({
@@ -2721,7 +2761,7 @@ const handleDistributeAll = async () => {
         for (const row of pendingRows) {
           const newAuditEntry = {
             id: `audit-${row.id}-${Date.now()}`,
-            operator: authStore.user?.id || 'admin',
+            operator: String(getCurrentActorUserId() || 'admin'),
             operatorName: authStore.user?.name || '管理员',
             operatorDept:
               authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
@@ -2737,7 +2777,7 @@ const handleDistributeAll = async () => {
             await indicatorApi.distributeIndicator({
               parentIndicatorId: indicatorId,
               targetOrgId: String(targetOrgId),
-              actorUserId: String(authStore.user?.id || '')
+              actorUserId: String(getCurrentActorUserId() || '')
             })
           } else {
             throw new Error(`指标 ${indicatorId} 缺少持久化 ID 或目标部门映射，无法执行批量下发`)
@@ -3034,7 +3074,7 @@ const pendingPlanApprovalCount = ref(0)
  */
 const loadPendingPlanApprovalCount = async () => {
   try {
-    const userId = authStore.user?.id || 1
+    const userId = getCurrentActorUserId() || 1
     const response = await taskApprovalApi.countPendingApprovals(userId)
     if (response.success && response.data !== undefined) {
       pendingPlanApprovalCount.value = response.data
@@ -4051,7 +4091,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           <h4>里程碑节点</h4>
           <el-timeline style="margin-top: 20px; padding-left: 5px">
             <el-timeline-item
-              v-for="(milestone, index) in currentDetail.milestones"
+              v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
               :key="index"
               :timestamp="milestone.deadline"
               :type="

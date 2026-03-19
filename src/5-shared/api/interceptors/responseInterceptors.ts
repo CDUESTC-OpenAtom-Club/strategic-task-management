@@ -18,10 +18,14 @@ import { recordApiLatency } from '@/5-shared/lib/utils/performance'
 import { cacheManager } from '@/5-shared/lib/utils/cache'
 import { transformError, toExtendedError } from '@/5-shared/api/errorHandler'
 import type { ExtendedErrorInfo } from '@/5-shared/types/error'
-import { MockApiHandler } from '@/5-shared/api/mocks/handler'
 import { API_TARGET, USE_MOCK } from '@/5-shared/config/api'
 
 const backendDisplayTarget = API_TARGET || '当前配置的后端地址'
+
+async function loadMockResponse(config: InternalAxiosRequestConfig): Promise<unknown> {
+  const { MockApiHandler } = await import('@/5-shared/api/mocks/handler')
+  return MockApiHandler.handleRequest(config)
+}
 
 /**
  * 响应拦截器配置
@@ -46,7 +50,7 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
         return response
       }
 
-      const mockResponse = await MockApiHandler.handleRequest(response.config)
+      const mockResponse = await loadMockResponse(response.config)
 
       return {
         ...response,
@@ -192,7 +196,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
         error.config.url
       )
 
-      const mockResponse = await MockApiHandler.handleRequest(error.config)
+      const mockResponse = await loadMockResponse(error.config)
       return {
         ...error,
         status: 200,

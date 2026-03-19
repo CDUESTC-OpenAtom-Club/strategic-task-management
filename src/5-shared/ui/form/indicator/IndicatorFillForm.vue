@@ -19,6 +19,7 @@ import { Delete as _Delete, UploadFilled, Paperclip } from '@element-plus/icons-
 import type { Indicator, IndicatorFill, IndicatorFillForm, Milestone as _Milestone } from '@/5-shared/types'
 import { usePlanStore } from '@/3-features/plan/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
+import { sortMilestonesByProgress } from '@/5-shared/lib/utils/milestoneSort'
 
 /**
  * 指标填报表单组件
@@ -81,10 +82,10 @@ const currentMilestone = computed(() => {
     return null
   }
 
+  const sortedMilestones = sortMilestonesByProgress(props.indicator.milestones)
+
   // 找到第一个未完成的里程碑
-  return (
-    props.indicator.milestones.find(m => m.status !== 'completed') || props.indicator.milestones[0]
-  )
+  return sortedMilestones.find(m => m.status !== 'completed') || sortedMilestones[0]
 })
 
 // 初始化表单数据（编辑模式）

@@ -89,7 +89,7 @@ export async function queryIndicators(
 ): Promise<PaginatedResponse<Indicator>> {
   const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
     '/indicators',
-    filters
+    filters as Record<string, unknown> | undefined
   )
   return normalizeIndicatorList(unwrapData(response))
 }
@@ -135,7 +135,7 @@ export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicato
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(
-    indicator => Number((indicator as Record<string, unknown>).ownerOrgId) === orgId
+    indicator => Number((indicator as unknown as Record<string, unknown>).ownerOrgId) === orgId
   )
 }
 
@@ -152,7 +152,7 @@ export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicat
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(
-    indicator => Number((indicator as Record<string, unknown>).targetOrgId) === orgId
+    indicator => Number((indicator as unknown as Record<string, unknown>).targetOrgId) === orgId
   )
 }
 
@@ -169,7 +169,7 @@ export async function queryIndicatorsByLevel(level: number): Promise<Indicator[]
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(
-    indicator => Number((indicator as Record<string, unknown>).level) === level
+    indicator => Number((indicator as unknown as Record<string, unknown>).level) === level
   )
 }
 
@@ -201,7 +201,7 @@ export async function queryPendingIndicators(): Promise<Indicator[]> {
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(indicator =>
-    ['PENDING', 'SUBMITTED'].includes(String((indicator as Record<string, unknown>).status))
+    ['PENDING', 'SUBMITTED'].includes(String((indicator as unknown as Record<string, unknown>).status))
   )
 }
 

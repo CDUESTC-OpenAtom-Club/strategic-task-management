@@ -25,13 +25,34 @@ import type {
   AuditForm,
   Attachment
 } from '@/5-shared/types'
-import type { PlanVO, TaskVO } from '@/5-shared/types'
 import { approvalApi, type ApprovalDetail } from '@/3-features/approval/api/approval'
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
 // Note: PlanVO and TaskVO are now imported from backend-aligned.ts
 // ============================================================
+
+export interface PlanVO {
+  planId: number
+  planName: string
+  cycle: string
+  orgId: number
+  orgName: string
+  status: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string
+  description?: string
+}
+
+export interface TaskVO {
+  taskId: number
+  planId: number
+  taskName: string
+  taskType: string
+  description?: string
+  sortOrder?: number
+}
 
 // 计划模块专用的指标 VO（简化版本，仅用于计划填报）
 export interface PlanIndicatorVO {

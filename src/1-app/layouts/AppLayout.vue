@@ -58,7 +58,10 @@ watch(viewingDept, (newDept, oldDept) => {
     return
   }
 
-  router.push(tabs.value[0].path)
+  const firstTab = tabs.value[0]
+  if (firstTab) {
+    router.push(firstTab.path)
+  }
 })
 
 /**

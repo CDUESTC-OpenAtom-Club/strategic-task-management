@@ -105,7 +105,7 @@ export async function batchDistributeIndicators(
     )
   )
 
-  return responses[0]?.data ?? ({ success: true } as DistributionResult)
+  return responses[0]?.data ?? ({ success: true } as unknown as DistributionResult)
 }
 
 /**

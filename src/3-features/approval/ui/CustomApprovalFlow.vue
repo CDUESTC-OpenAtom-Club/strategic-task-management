@@ -85,8 +85,22 @@ const showTemplateDialog = ref(false)
 const showManageTemplateDialog = ref(false)
 const setAsDefaultTemplate = ref(false)
 
+interface TemplateViewStep {
+  id: string
+  stepName: string
+  autoApprove: boolean
+}
+
+interface TemplateViewItem {
+  id: string
+  name: string
+  description?: string
+  isDefault: boolean
+  steps: TemplateViewStep[]
+}
+
 // 审批模板
-const templates = ref<(ApprovalTemplate | ApprovalFlowTemplate)[]>([])
+const templates = ref<TemplateViewItem[]>([])
 const selectedTemplateId = ref<string | null>(null)
 
 // 新建模板表单
@@ -218,30 +232,41 @@ const _deleteTemplate = (templateId: string) => {
   ElMessage.success('模板已删除')
 }
 
+const toTemplateViewItem = (template: ApprovalTemplate | ApprovalFlowTemplate): TemplateViewItem => {
+  if ('flowName' in template) {
+    return {
+      id: String(template.id),
+      name: template.flowName,
+      description: template.description ?? template.steps.map(step => step.stepName).join(' → '),
+      isDefault: template.id === 1,
+      steps: template.steps.map(step => ({
+        id: String(step.id),
+        stepName: step.stepName,
+        autoApprove: false
+      }))
+    }
+  }
+
+  return {
+    id: String(template.id),
+    name: template.name,
+    description: template.description,
+    isDefault: template.isDefault,
+    steps: template.steps.map(step => ({
+      id: String(step.id),
+      stepName: step.stepName,
+      autoApprove: step.autoApprove
+    }))
+  }
+}
+
 // 加载模板列表（从后端API获取）
 const loadTemplates = async () => {
   loading.value = true
   try {
     const response = await approvalApi.getFlowTemplates()
     if (response.code === 200 && response.data) {
-      // 将后端返回的数据转换为前端需要的格式
-      templates.value = response.data.map((flow: ApprovalFlowTemplate) => ({
-        id: String(flow.id),
-        name: flow.flowName,
-        description: flow.steps.map(s => s.stepName).join(' → ') || '暂无步骤',
-        isDefault: flow.id === 1, // 假设第一个是默认
-        steps: flow.steps.map((s, index) => ({
-          id: String(s.id),
-          stepOrder: index,
-          stepName: s.stepName,
-          requiredRole: 'strategic_dept',
-          allowCustomApprover: true,
-          autoApprove: s.stepName.includes('自动') || s.stepName.includes('提交')
-        })),
-        applicableRoles: ['strategic_dept', 'functional_dept', 'secondary_college'],
-        createdAt: flow.createdAt,
-        updatedAt: flow.updatedAt
-      }))
+      templates.value = response.data.map((flow: ApprovalFlowTemplate) => toTemplateViewItem(flow))
     } else {
       ElMessage.error(response.message || '加载模板失败')
     }

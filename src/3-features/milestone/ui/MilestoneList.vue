@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Check } from '@element-plus/icons-vue'
 
 import type { MilestoneUI } from '@/5-shared/types'
+import { sortMilestonesByProgress } from '@/5-shared/lib/utils/milestoneSort'
 
 const props = defineProps<{
   milestones: MilestoneUI[]
@@ -20,9 +21,11 @@ const isMilestoneCompleted = (milestone: MilestoneUI) => {
   return props.currentProgress >= milestone.targetProgress
 }
 
+const sortedMilestones = computed(() => sortMilestonesByProgress(props.milestones || []))
+
 // 格式化里程碑数据用于显示
 const formattedMilestones = computed(() => {
-  return props.milestones.map(ms => ({
+  return sortedMilestones.value.map(ms => ({
     id: ms.id,
     name: ms.name,
     expectedDate: ms.deadline,

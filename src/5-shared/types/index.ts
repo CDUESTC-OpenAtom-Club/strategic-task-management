@@ -57,7 +57,10 @@ export type {
   IndicatorVO,
   MilestoneVO,
   IndicatorCreateRequest,
-  DistributionStatus
+  DistributionStatus,
+  IndicatorDistributionRequest,
+  BatchDistributionRequest,
+  IndicatorDistributionEligibility
 } from './backend-aligned'
 
 export { TaskType } from './backend-aligned'

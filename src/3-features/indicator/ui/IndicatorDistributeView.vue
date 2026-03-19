@@ -14,6 +14,7 @@ import { useOrgStore } from '@/3-features/organization/model/store'
 import AuditLogDrawer from '@/3-features/task/ui/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/3-features/task/ui/TaskApprovalDrawer.vue'
 import { indicatorApi } from '@/3-features/indicator/api'
+import { logger } from '@/5-shared/lib/utils/logger'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -500,6 +501,7 @@ const validateAndSaveNewChild = (parentId: string, childId: string) => {
   if (childIndex === -1) {return}
   
   const child = children[childIndex]
+  if (!child) {return}
   
   // 如果名称和学院都为空，删除该行
   if (!child.name && (!child.college || child.college.length === 0)) {
@@ -783,9 +785,9 @@ const saveChildEdit = (child: StrategicIndicator, field: string) => {
     valueToSave = progressValue
   }
   
-  const updates: Partial<StrategicIndicator> = {
+  const updates = {
     [field]: valueToSave
-  }
+  } as Record<string, unknown>
   
   strategicStore.updateIndicator(child.id.toString(), updates)
   
@@ -861,7 +863,7 @@ const _handleBatchApprove = (college: string) => {
     // 为每个待审批指标添加审计日志并更新状态
     pendingIndicators.forEach(indicator => {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.user?.id || 'admin',
+        operator: authStore.user?.userId || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
         action: 'approve',
@@ -899,7 +901,7 @@ const _handleBatchReject = (college: string) => {
     // 为每个待审批指标添加审计日志并更新状态
     pendingIndicators.forEach(indicator => {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.user?.id || 'admin',
+        operator: authStore.user?.userId || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
         action: 'reject',
@@ -956,7 +958,7 @@ const handleBatchWithdraw = async (college: string) => {
 
       // 更新前端状态
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.user?.id || 'admin',
+        operator: authStore.user?.userId || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
         action: 'withdraw',
@@ -1053,7 +1055,7 @@ const handleBatchDistribute = async (college: string) => {
 
       // 更新前端状态
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.user?.id || 'admin',
+        operator: authStore.user?.userId || 'admin',
         operatorName: authStore.user?.name || '管理员',
         operatorDept: currentDept.value,
         action: 'distribute',
@@ -1147,7 +1149,7 @@ const _handleApprove = (indicator: StrategicIndicator) => {
     type: 'success'
   }).then(() => {
     strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-      operator: authStore.user?.id || 'admin',
+      operator: authStore.user?.userId || 'admin',
       operatorName: authStore.user?.name || '管理员',
       operatorDept: currentDept.value,
       action: 'approve',
@@ -1167,7 +1169,7 @@ const _handleReject = (indicator: StrategicIndicator) => {
     inputPlaceholder: '请输入打回原因（选填）'
   }).then(({ value }) => {
     strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-      operator: authStore.user?.id || 'admin',
+    operator: authStore.user?.userId || 'admin',
       operatorName: authStore.user?.name || '管理员',
       operatorDept: currentDept.value,
       action: 'reject',

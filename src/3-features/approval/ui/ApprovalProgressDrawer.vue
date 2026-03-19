@@ -167,11 +167,11 @@ const currentPlanApprovalSummary = computed(() => {
     return null
   }
 
-  const latestCreatedAt = scopedPlanApprovals.value
+  const sortedCreatedAt = scopedPlanApprovals.value
     .map(item => item.createdAt)
     .filter(Boolean)
     .sort()
-    .at(-1)
+  const latestCreatedAt = sortedCreatedAt[sortedCreatedAt.length - 1]
 
   return {
     key: props.planName || props.departmentName || 'current-plan',
@@ -215,7 +215,8 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
       name: '职能部门审核',
       status: getFunctionalStatus(indicator.progressApprovalStatus),
       operatorName: indicator.functionalDeptName || '职能部门',
-      comment: indicator.statusAudit?.find(a => a.action === 'approve')?.comment
+      comment: indicator.statusAudit?.find((a: Record<string, unknown>) => a.action === 'approve')
+        ?.comment as string | undefined
     })
   }
 
@@ -226,7 +227,8 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
     status: getStrategicStatus(indicator.progressApprovalStatus),
     operatorName: '战略发展部',
     operateTime: indicator.updatedAt,
-    comment: indicator.statusAudit?.find(a => a.action === 'reject')?.comment
+    comment: indicator.statusAudit?.find((a: Record<string, unknown>) => a.action === 'reject')
+      ?.comment as string | undefined
   })
 
   return nodes
@@ -253,15 +255,15 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
   const indicator = currentIndicator.value
   if (!indicator?.statusAudit) return []
 
-  return indicator.statusAudit.map((audit, index) => ({
+  return indicator.statusAudit.map((audit: Record<string, unknown>, index: number) => ({
     id: String(index),
     action: audit.action as ApprovalHistoryItem['action'],
-    operator: audit.operator || String(index),
-    operatorName: audit.operatorName || '系统',
-    operateTime: new Date(audit.operateTime || Date.now()),
-    comment: audit.comment,
-    dataBefore: audit.dataBefore,
-    dataAfter: audit.dataAfter
+    operator: String(audit.operator ?? index),
+    operatorName: String(audit.operatorName ?? '系统'),
+    operateTime: new Date((audit.operateTime as string | number | Date | undefined) ?? Date.now()),
+    comment: audit.comment as string | undefined,
+    dataBefore: audit.dataBefore as Record<string, unknown> | undefined,
+    dataAfter: audit.dataAfter as Record<string, unknown> | undefined
   }))
 })
 
@@ -276,7 +278,9 @@ const currentNodeId = computed(() => {
 // 驳回原因
 const rejectionReason = computed(() => {
   const indicator = currentIndicator.value
-  const rejectAudit = indicator?.statusAudit?.find(a => a.action === 'reject')
+  const rejectAudit = indicator?.statusAudit?.find(
+    (a: Record<string, unknown>) => a.action === 'reject'
+  )
   return rejectAudit?.comment || ''
 })
 
@@ -298,7 +302,7 @@ async function loadPendingPlanApprovals() {
 
   planApprovalsLoading.value = true
   try {
-    const userId = authStore.user?.id || 1
+    const userId = authStore.user?.userId || 1
     const response = await approvalApi.getPendingApprovals(userId)
     if (response.success && Array.isArray(response.data)) {
       pendingPlanApprovals.value = response.data
@@ -343,7 +347,7 @@ async function handleApprovePlanBatch() {
     })
 
     try {
-      const userId = authStore.user?.id || 1
+      const userId = authStore.user?.userId || 1
       for (const instance of scopedPlanApprovals.value) {
         const response = await approvalApi.approvePlan(
           instance.instanceId,
@@ -393,7 +397,7 @@ async function handleRejectPlanBatch() {
     })
 
     try {
-      const userId = authStore.user?.id || 1
+      const userId = authStore.user?.userId || 1
       for (const instance of scopedPlanApprovals.value) {
         const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
         if (!response.success) {

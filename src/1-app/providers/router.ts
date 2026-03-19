@@ -10,6 +10,7 @@
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/3-features/auth/model/store'
+import { tokenManager } from '@/5-shared/lib/utils/tokenManager'
 import { startProgress, doneProgress } from './router-progress'
 import './router-progress.css'
 
@@ -17,8 +18,13 @@ import './router-progress.css'
 const ensureAuthRestored = () => {
   const authStore = useAuthStore()
 
-  // 如果有 token 但没有 user 或 user 没有 id，尝试从 localStorage 恢复
-  if (authStore.token && (!authStore.user || !authStore.user.id)) {
+  if (authStore.token && !tokenManager.hasValidToken()) {
+    authStore.logout()
+    return
+  }
+
+  // 如果有 token 但没有 user 或 user 没有 userId，尝试从 localStorage 恢复
+  if (authStore.token && (!authStore.user || !authStore.user.userId)) {
     const savedUser = localStorage.getItem('currentUser')
     if (savedUser) {
       try {

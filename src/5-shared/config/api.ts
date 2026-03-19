@@ -48,11 +48,6 @@ function deriveWebSocketBaseUrl(): string {
     return explicitWsBaseUrl.replace(/\/$/, '')
   }
 
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}`
-  }
-
   if (API_TARGET) {
     return API_TARGET
       .replace(/^http:/, 'ws:')

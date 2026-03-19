@@ -54,7 +54,7 @@ app.use(router)
 /**
  * Global error handling
  */
-app.config.errorHandler = (err, vm, info) => {
+app.config.errorHandler = (err, _vm, info) => {
   console.error('Global error:', err)
   console.error('Error info:', info)
 }
@@ -67,7 +67,7 @@ app.mount('#app')
 /**
  * Print application version information
  */
-const version = import.meta.env.VITE_APP_VERSION || '1.0.1'
+const version = import.meta.env['VITE_APP_VERSION'] || '1.0.1'
 const buildTime = new Date().toISOString()
 if (import.meta.env.DEV) {
   // eslint-disable-next-line no-console

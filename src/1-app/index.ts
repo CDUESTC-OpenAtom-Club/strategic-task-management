@@ -21,13 +21,13 @@
  */
 
 // Export main entry point
-export { app, pinia, router } from './main'
+export { app, pinia, router } from './app-main'
 
 // Export providers
 export * from './providers'
 
 // Export layout
-export * from './layout'
+export * from './layouts'
 
 // Export config
 export * from './config'

@@ -55,7 +55,15 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
 
 // 获取操作日志
 const auditLogs = computed<AuditLogItem[]>(() =>
-  auditLogStore.getEntityHistory('indicator', props.indicatorId)
+  auditLogStore.logs
+    .filter(log => log.entityType === 'indicator' && log.entityId === props.indicatorId)
+    .map(log => ({
+      id: log.id ?? `${log.entityType}-${log.entityId}-${log.timestamp}`,
+      action: log.action,
+      operatorName: log.operatorName ?? log.userName ?? '未知用户',
+      operateTime: new Date(log.timestamp),
+      changes: []
+    }))
 )
 
 const dialogVisible = computed({

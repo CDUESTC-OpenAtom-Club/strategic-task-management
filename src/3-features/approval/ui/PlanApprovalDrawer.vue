@@ -9,10 +9,20 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/3-features/task/api/strategicApi'
 import { useAuthStore } from '@/3-features/auth/model/store'
 import { logger } from '@/5-shared/lib/utils/logger'
+import type { PendingApproval } from '@/5-shared/types'
 
 const props = defineProps<{
   visible: boolean
 }>()
+
+interface PendingPlanApproval {
+  instanceId: number
+  planName?: string
+  year?: number
+  submitterName?: string
+  createdAt?: string
+  currentStepName?: string
+}
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
@@ -29,34 +39,52 @@ const drawerVisible = computed({
 })
 
 // 待审批列表
-const pendingApprovals = ref<Record<string, unknown>[]>([])
+const pendingApprovals = ref<PendingPlanApproval[]>([])
 const loading = ref(false)
+
+const normalizePendingApproval = (
+  approval: PendingApproval,
+  index: number
+): PendingPlanApproval => ({
+  instanceId: Number(approval.id) || index + 1,
+  planName: approval.title,
+  submitterName: approval.submitter,
+  createdAt: approval.time,
+  currentStepName: approval.approvalStatus
+})
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return (error as { message?: string }).message || fallback
+}
 
 // 加载待审批列表
 const loadPendingApprovals = async () => {
   loading.value = true
   try {
-    const userId = authStore.user?.id || 1
+    const userId = authStore.user?.userId || 1
     const response = await approvalApi.getPendingApprovals(userId)
 
     if (response.success && response.data) {
-      pendingApprovals.value = response.data
+      pendingApprovals.value = response.data.map(normalizePendingApproval)
       logger.info('[PlanApprovalDrawer] 加载待审批列表成功', { count: response.data.length })
     } else {
       ElMessage.error(response.message || '加载待审批列表失败')
     }
   } catch (error: unknown) {
     logger.error('[PlanApprovalDrawer] 加载待审批列表失败:', error)
-    ElMessage.error(error.message || '加载失败')
+    ElMessage.error(getErrorMessage(error, '加载失败'))
   } finally {
     loading.value = false
   }
 }
 
 // 审批通过
-const handleApprove = async (instance: { close: () => void }) => {
+const handleApprove = async (instance: PendingPlanApproval) => {
   try {
-    await ElMessageBox.prompt(
+    const { value } = await ElMessageBox.prompt(
       `确认审批通过计划"${instance.planName || '年度计划'}"？`,
       '审批通过',
       {
@@ -74,8 +102,8 @@ const handleApprove = async (instance: { close: () => void }) => {
     })
 
     try {
-      const userId = authStore.user?.id || 1
-      const comment = (arguments[0] as { value: string }).value || '审批通过'
+      const userId = authStore.user?.userId || 1
+      const comment = value || '审批通过'
 
       const response = await approvalApi.approvePlan(instance.instanceId, userId, comment)
 
@@ -95,7 +123,7 @@ const handleApprove = async (instance: { close: () => void }) => {
 }
 
 // 审批拒绝
-const handleReject = async (instance: { close: () => void }) => {
+const handleReject = async (instance: PendingPlanApproval) => {
   try {
     const { value } = await ElMessageBox.prompt(
       `确认拒绝计划"${instance.planName || '年度计划'}"？`,
@@ -121,7 +149,7 @@ const handleReject = async (instance: { close: () => void }) => {
     })
 
     try {
-      const userId = authStore.user?.id || 1
+      const userId = authStore.user?.userId || 1
       const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
 
       if (response.success) {
@@ -237,7 +265,7 @@ watch(
             <div class="info-row">
               <el-icon><Timer /></el-icon>
               <span class="label">提交时间：</span>
-              <span class="value">{{ formatTime(instance.createdAt) }}</span>
+              <span class="value">{{ instance.createdAt ? formatTime(instance.createdAt) : '--' }}</span>
             </div>
             <div class="info-row">
               <el-icon><Right /></el-icon>

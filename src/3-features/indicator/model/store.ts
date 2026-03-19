@@ -7,12 +7,44 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Indicator, IndicatorFilters } from '@/4-entities/indicator/model/types'
+import type {
+  Indicator,
+  IndicatorCreateRequest,
+  IndicatorFilters,
+  IndicatorType
+} from '@/4-entities/indicator/model/types'
 import type { IndicatorListState, IndicatorStatistics } from './types'
 import * as indicatorApi from '../api/query'
 import * as indicatorMutations from '../api/mutations'
 
 export const useIndicatorStore = defineStore('strategic-indicator', () => {
+  function toCreateRequest(data: Partial<Indicator>): IndicatorCreateRequest {
+    return {
+      name: data.name ?? '',
+      description: data.description,
+      code: data.code,
+      type: (data.type as IndicatorType | undefined) ?? 'QUANTITATIVE',
+      taskId: Number(data.taskId ?? 0),
+      ownerOrgId: Number(data.ownerOrgId ?? 0),
+      targetOrgId: Number(data.targetOrgId ?? 0),
+      level: data.level,
+      indicatorLevel: data.indicatorLevel,
+      parentIndicatorId: data.parentIndicatorId,
+      weight: data.weight,
+      weightPercent: data.weightPercent,
+      targetValue: data.targetValue,
+      actualValue: data.actualValue,
+      unit: data.unit,
+      year: data.year,
+      deadline: data.deadline,
+      type1: data.type1,
+      type2: data.type2,
+      isQualitative: data.isQualitative,
+      qualitativeOptions: data.qualitativeOptions,
+      remark: data.remark
+    }
+  }
+
   // State
   const indicators = ref<Indicator[]>([])
   const total = ref(0)
@@ -105,7 +137,7 @@ export const useIndicatorStore = defineStore('strategic-indicator', () => {
     error.value = null
 
     try {
-      const newIndicator = await indicatorMutations.createIndicator(data)
+      const newIndicator = await indicatorMutations.createIndicator(toCreateRequest(data))
       indicators.value.unshift(newIndicator)
       total.value += 1
       return newIndicator

@@ -450,9 +450,11 @@ export const strategicApi = {
     logger.info('[API] Creating backend task for indicator binding', { request })
 
     try {
-      return await withRetry(() =>
+      const response = await withRetry(() =>
         apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
       )
+      invalidateTaskCaches(response.data?.taskId ?? response.data?.id)
+      return response
     } catch (error) {
       logger.error('[API] Failed to create backend task for indicator binding', { error, request })
       throw error
