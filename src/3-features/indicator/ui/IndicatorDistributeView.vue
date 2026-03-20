@@ -6,15 +6,15 @@
 import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Plus, Promotion, Check, Close, View, Search, RefreshLeft, Timer, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { StrategicIndicator } from '@/5-shared/types'
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import AuditLogDrawer from '@/3-features/task/ui/AuditLogDrawer.vue'
-import TaskApprovalDrawer from '@/3-features/task/ui/TaskApprovalDrawer.vue'
-import { indicatorApi } from '@/3-features/indicator/api'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { StrategicIndicator } from '@/shared/types'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { useOrgStore } from '@/features/organization/model/store'
+import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
+import TaskApprovalDrawer from '@/features/task/ui/TaskApprovalDrawer.vue'
+import { indicatorApi } from '@/features/indicator/api'
+import { logger } from '@/shared/lib/utils/logger'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -432,7 +432,6 @@ const saveNewIndicator = () => {
       responsibleDept: selectedCollege.value!,
       responsiblePerson: '',
       status: 'draft',
-      distributionStatus: 'DRAFT',
       isStrategic: false,
       ownerDept: currentDept.value,
       parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
@@ -441,7 +440,7 @@ const saveNewIndicator = () => {
     }
     ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
     // Step1: 只保存到前端临时状态，不调用后端 createIndicator
-    // Step2: 点击"下发"按钮时，再调用 PATCH /indicators/{id}/distribution-status 接口
+    // Step2: 点击"下发"按钮时，再调用正式的下发接口
     strategicStore.addDraftIndicator(newIndicator)
   
   ElMessage.success('已添加指标（草稿状态）')
@@ -658,7 +657,6 @@ const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
           responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
           responsiblePerson: '',
           status: 'draft',
-          distributionStatus: 'DRAFT',
           isStrategic: false,
           ownerDept: currentDept.value,
           parentIndicatorId: parentId,
@@ -951,8 +949,7 @@ const handleBatchWithdraw = async (college: string) => {
 
     try {
       if (isRealBackendId) {
-        // 调用 PATCH /indicators/{id}/distribution-status 撤回到 DRAFT
-        await indicatorApi.publishDistributionStatus(indicatorId, 'DRAFT')
+        await indicatorApi.withdrawIndicator(indicatorId)
       }
       // 临时 ID 的草稿本来就没有下发，直接更新前端状态即可
 
@@ -966,7 +963,6 @@ const handleBatchWithdraw = async (college: string) => {
       })
       await strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'draft',
-        distributionStatus: 'DRAFT',
         canWithdraw: true
       })
     } catch (err) {
@@ -1013,10 +1009,13 @@ const handleBatchDistribute = async (college: string) => {
 
     try {
       if (isRealBackendId) {
-        // 已有后端 ID：直接调用 PATCH /indicators/{id}/distribution-status
-        await indicatorApi.publishDistributionStatus(indicatorId, 'DISTRIBUTED')
+        await indicatorApi.distributeIndicator({
+          parentIndicatorId: indicatorId,
+          targetOrgId: String(getOrgIdByDeptName(college) || ''),
+          customDesc: indicator.name
+        })
       } else {
-        // 临时 ID（本地草稿）：先调用 createIndicator 创建，再 publish
+        // 临时 ID（本地草稿）：先调用 createIndicator 创建，再下发
         const indicatorTaskId = Number(getIndicatorTaskId(indicator as StrategicIndicator))
         const parentIndicatorId = indicator.parentIndicatorId ? Number(indicator.parentIndicatorId) : undefined
         const ownerOrgId = getOrgIdByDeptName(currentDept.value)
@@ -1041,16 +1040,18 @@ const handleBatchDistribute = async (college: string) => {
           year: indicator.year || new Date().getFullYear(),
           canWithdraw: false,
           parentIndicatorId,
-          distributionStatus: 'DRAFT' as const,
         } as never)
         if (!createResp.success || !createResp.data) {
           throw new Error(createResp.message || '创建指标失败')
         }
         const newBackendId = createResp.data.indicatorId.toString()
         // 用真实 ID 替换临时 ID（纯本地操作，不调用后端）
-        strategicStore.replaceIndicatorId(indicatorId, newBackendId, { distributionStatus: 'DRAFT' })
-        // 发布状态
-        await indicatorApi.publishDistributionStatus(newBackendId, 'DISTRIBUTED')
+        strategicStore.replaceIndicatorId(indicatorId, newBackendId)
+        await indicatorApi.distributeIndicator({
+          parentIndicatorId: newBackendId,
+          targetOrgId: String(targetOrgId),
+          customDesc: indicator.name
+        })
       }
 
       // 更新前端状态
@@ -1063,7 +1064,6 @@ const handleBatchDistribute = async (college: string) => {
       })
       await strategicStore.updateIndicator(indicator.id.toString(), {
         status: 'distributed',
-        distributionStatus: 'DISTRIBUTED',
         canWithdraw: false
       })
     } catch (err) {
@@ -1191,19 +1191,19 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
 // 注意：这里的 pending 状态是指进度审批待审批（progressApprovalStatus），不是指标定义审核（lifecycle status 的 PENDING_REVIEW）
 // Legacy ACTIVE status is treated as equivalent to DISTRIBUTED
 const getChildStatus = (child: StrategicIndicator) => {
-  // 优先使用后端持久化的 distributionStatus（页面刷新后仍准确）
-  if (child.distributionStatus) {
-    const distributionStatusMap: Record<string, string> = {
-      'DRAFT': 'draft',
-      'DISTRIBUTED': 'distributed',
-      'PENDING_REVIEW': 'pending_review',  // 指标定义审核状态（不在此页面使用）
-      'APPROVED': 'approved',
-      'REJECTED': 'distributed',
-    }
-    return distributionStatusMap[child.distributionStatus] ?? 'draft'
+  const normalizedStatus = String(child.status || '').toUpperCase()
+  const statusMap: Record<string, string> = {
+    DRAFT: 'draft',
+    PENDING: 'pending',
+    PENDING_REVIEW: 'pending',
+    DISTRIBUTED: 'distributed',
+    ACTIVE: 'distributed',
+    APPROVED: 'approved',
+    REJECTED: 'distributed'
   }
+  if (normalizedStatus) {return statusMap[normalizedStatus] ?? 'draft'}
 
-  // fallback：后端尚未返回 distributionStatus 时，从 statusAudit 本地推导
+  // fallback：兼容本地 statusAudit 推导
   const audit = child.statusAudit || []
   if (audit.length === 0) {return 'draft'}
   const lastAudit = audit[audit.length - 1]

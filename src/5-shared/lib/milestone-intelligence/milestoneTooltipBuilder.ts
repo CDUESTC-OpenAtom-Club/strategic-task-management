@@ -4,11 +4,11 @@
  * Builds milestone tooltip data for display purposes.
  */
 
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 import type { MilestoneTooltipItem, MilestoneStatusValue } from './types'
-import { milestoneDeadline } from '@/5-shared/lib/utils/dataMappers/milestoneDateNormalizer'
-import { validateMilestone, safeGet } from '@/5-shared/lib/validation/dataValidator'
-import { MILESTONE_STATUS_VALUES } from '@/5-shared/config/validationRules'
+import { milestoneDeadline } from '@/shared/lib/utils/dataMappers/milestoneDateNormalizer'
+import { validateMilestone, safeGet } from '@/shared/lib/validation/dataValidator'
+import { MILESTONE_STATUS_VALUES } from '@/shared/config/validationRules'
 
 /**
  * Validates and gets milestone data for tooltip display

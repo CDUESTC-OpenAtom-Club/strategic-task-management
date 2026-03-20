@@ -120,14 +120,14 @@ export default defineConfig(({ mode }) => {
       })
     ],
     resolve: {
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@/1-app': fileURLToPath(new URL('./src/1-app', import.meta.url)),
-        '@/3-features': fileURLToPath(new URL('./src/3-features', import.meta.url)),
-        '@/4-entities': fileURLToPath(new URL('./src/4-entities', import.meta.url)),
-        '@/5-shared': fileURLToPath(new URL('./src/5-shared', import.meta.url)),
-        '@/6-processes': fileURLToPath(new URL('./src/6-processes', import.meta.url))
-      }
+      alias: [
+        { find: /^@\/app\//, replacement: `${fileURLToPath(new URL('./src/1-app', import.meta.url))}/` },
+        { find: /^@\/features\//, replacement: `${fileURLToPath(new URL('./src/3-features', import.meta.url))}/` },
+        { find: /^@\/entities\//, replacement: `${fileURLToPath(new URL('./src/4-entities', import.meta.url))}/` },
+        { find: /^@\/shared\//, replacement: `${fileURLToPath(new URL('./src/5-shared', import.meta.url))}/` },
+        { find: /^@\/processes\//, replacement: `${fileURLToPath(new URL('./src/6-processes', import.meta.url))}/` },
+        { find: /^@\//, replacement: `${fileURLToPath(new URL('./src', import.meta.url))}/` }
+      ]
     },
     optimizeDeps: {
       entries: prebundleEntries,

@@ -2,7 +2,7 @@
  * 2026年指标数据
  * 当前工作年份数据，状态为 active（进行中）
  */
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 import { generateQuarterlyMilestones } from './utils'
 
 export const indicators2026: StrategicIndicator[] = [

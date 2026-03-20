@@ -20,7 +20,7 @@
  * @composable
  */
 import { onUnmounted } from 'vue'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 export interface TimeoutManager {
   /**

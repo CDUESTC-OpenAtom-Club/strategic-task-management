@@ -5,8 +5,8 @@
  * Based on API documentation: GET /api/indicators/*
  */
 
-import { apiClient } from '@/5-shared/lib/api/client'
-import type { Indicator, IndicatorFilters } from '@/4-entities/indicator/model/types'
+import { apiClient } from '@/shared/api/client'
+import type { Indicator, IndicatorFilters } from '@/entities/indicator/model/types'
 import type { IndicatorListResponse, IndicatorDetailResponse, PaginatedResponse } from './types'
 
 function unwrapData<T>(response: T | { data?: T }): T {
@@ -213,8 +213,6 @@ export async function queryPendingIndicators(): Promise<Indicator[]> {
  * @param id - Indicator ID
  * @returns Distribution records
  */
-export async function queryDistributionRecords(id: number): Promise<any[]> {
-  const response = await apiClient.get<any>(`/indicators/${id}/distribution-status`)
-  const payload = unwrapData(response)
-  return Array.isArray(payload) ? payload : payload ? [payload] : []
+export async function queryDistributionRecords(_id: number): Promise<any[]> {
+  return []
 }

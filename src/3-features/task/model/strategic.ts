@@ -7,11 +7,11 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { StrategicIndicator, StrategicTask } from '@/5-shared/types'
-import { indicatorApi } from '@/3-features/indicator/api'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import type { Department } from '@/3-features/organization/api'
+import type { StrategicIndicator, StrategicTask } from '@/shared/types'
+import { indicatorApi } from '@/features/indicator/api'
+import { logger } from '@/shared/lib/utils/logger'
+import { useOrgStore } from '@/features/organization/model/store'
+import type { Department } from '@/features/organization/api'
 
 type BackendIndicatorListPayload =
   | StrategicIndicator[]
@@ -226,20 +226,6 @@ function resolveDepartmentIdByName(
   return null
 }
 
-function normalizeDistributionStatus(
-  indicator: StrategicIndicator
-): 'DRAFT' | 'PENDING' | 'DISTRIBUTED' | undefined {
-  if (indicator.status === 'archived') {
-    return undefined
-  }
-
-  if (indicator.canWithdraw === false) {
-    return 'PENDING'
-  }
-
-  return 'DRAFT'
-}
-
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
 
@@ -252,6 +238,8 @@ export const useStrategicStore = defineStore('strategic', () => {
   })
   const error = ref<string | null>(null)
   const dataSource = ref<'api' | 'fallback' | 'local'>('local')
+  const loadingYearPromise = ref<Promise<StrategicIndicator[]> | null>(null)
+  const loadingYear = ref<number | null>(null)
 
   // ============ Getters ============
 
@@ -294,45 +282,58 @@ export const useStrategicStore = defineStore('strategic', () => {
   // ============ Actions ============
 
   async function loadIndicatorsByYear(year: number) {
+    if (loadingYearPromise.value && loadingYear.value === year) {
+      return loadingYearPromise.value
+    }
+
     loading.value = true
     loadingState.value.indicators = true
     loadingState.value.error = null
     error.value = null
 
-    try {
-      logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
-      const response = await indicatorApi.getAllIndicators(year, { page: 0, size: 1000 })
+    loadingYear.value = year
+    const request = (async () => {
+      try {
+        logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
+        const response = await indicatorApi.getAllIndicators(year, { page: 0, size: 1000 })
 
-      if (response.success && response.data) {
-        const normalized = normalizeIndicators(response.data as BackendIndicatorListPayload)
+        if (response.success && response.data) {
+          const normalized = normalizeIndicators(response.data as BackendIndicatorListPayload)
 
-        // 统一部门字段：ID/别名 -> 标准部门名（含合并名称），避免跨页面筛选不命中
-        const orgStore = useOrgStore()
-        if (!orgStore.loaded || orgStore.departments.length === 0) {
-          try {
-            await orgStore.loadDepartments()
-          } catch (orgError) {
-            logger.warn('[Strategic Store] 组织数据加载失败，跳过部门归一化', orgError)
+          // 统一部门字段：ID/别名 -> 标准部门名（含合并名称），避免跨页面筛选不命中
+          const orgStore = useOrgStore()
+          if (!orgStore.loaded || orgStore.departments.length === 0) {
+            try {
+              await orgStore.loadDepartments()
+            } catch (orgError) {
+              logger.warn('[Strategic Store] 组织数据加载失败，跳过部门归一化', orgError)
+            }
           }
-        }
-        const resolveDept = buildDepartmentResolver(orgStore.departments)
-        indicators.value = normalizeIndicatorDepartments(normalized, resolveDept)
+          const resolveDept = buildDepartmentResolver(orgStore.departments)
+          indicators.value = normalizeIndicatorDepartments(normalized, resolveDept)
 
-        dataSource.value = 'api'
-        logger.debug(`[Strategic Store] Loaded ${indicators.value.length} indicators`)
-      } else {
+          dataSource.value = 'api'
+          logger.debug(`[Strategic Store] Loaded ${indicators.value.length} indicators`)
+          return indicators.value
+        }
+
         throw new Error(response.message || 'Failed to load indicators')
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Unknown error'
+        loadingState.value.error = error.value
+        dataSource.value = 'fallback'
+        logger.error('[Strategic Store] Failed to load indicators:', err)
+        throw err
+      } finally {
+        loading.value = false
+        loadingState.value.indicators = false
+        loadingYearPromise.value = null
+        loadingYear.value = null
       }
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error'
-      loadingState.value.error = error.value
-      dataSource.value = 'fallback'
-      logger.error('[Strategic Store] Failed to load indicators:', err)
-      throw err
-    } finally {
-      loading.value = false
-      loadingState.value.indicators = false
-    }
+    })()
+
+    loadingYearPromise.value = request
+    return request
   }
 
   async function updateIndicator(id: string, data: Record<string, unknown>) {
@@ -465,8 +466,7 @@ export const useStrategicStore = defineStore('strategic', () => {
         weightPercent: Number(indicator.weight) || 0,
         sortOrder: 0,
         remark: indicator.remark || undefined,
-        progress: Number(indicator.progress) || 0,
-        distributionStatus: normalizeDistributionStatus(indicator)
+        progress: Number(indicator.progress) || 0
       })
 
       if (!response.success || !response.data) {

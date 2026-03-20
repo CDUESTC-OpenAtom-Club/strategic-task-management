@@ -57,7 +57,6 @@ export type {
   IndicatorVO,
   MilestoneVO,
   IndicatorCreateRequest,
-  DistributionStatus,
   IndicatorDistributionRequest,
   BatchDistributionRequest,
   IndicatorDistributionEligibility
@@ -116,7 +115,7 @@ export interface Permission {
 // ============================================================================
 // 以下是 UI 特有的类型定义
 // 实体类型(StrategicTask, Indicator, Milestone 等)已移至 entities.ts
-// 请使用: import { StrategicTask, Indicator, Milestone } from '@/5-shared/types'
+// 请使用: import { StrategicTask, Indicator, Milestone } from '@/shared/types'
 // ============================================================================
 
 // 里程碑配对状态摘要
@@ -206,7 +205,7 @@ export interface ApprovalHistory {
 }
 
 // Reporting Types
-// ProgressReport 已移至 entities.ts,请使用: import { ProgressReport } from '@/5-shared/types'
+// ProgressReport 已移至 entities.ts,请使用: import { ProgressReport } from '@/shared/types'
 
 // Message Types
 export interface Message {
@@ -438,6 +437,7 @@ export interface ApprovalHistoryItem {
   operator: string
   operatorName: string
   operateTime: Date
+  stepName?: string
   comment?: string
   dataBefore?: Record<string, unknown>
   dataAfter?: Record<string, unknown>
@@ -506,7 +506,7 @@ export type OrgLevel = 'strategy' | 'functional' | 'college'
 // ============================================================
 
 // Plan 状态类型
-export type PlanStatus = 'draft' | 'pending' | 'published' | 'archived'
+export type PlanStatus = 'draft' | 'pending' | 'returned' | 'published' | 'archived'
 
 // Plan 审核状态
 export type PlanFillStatus = 'submitted' | 'approved' | 'rejected'
@@ -533,6 +533,28 @@ export interface Plan {
   totalIndicators?: number // 总指标数
   completedIndicators?: number // 已完成指标数
   latestFillDate?: string // 最近填报日期
+  workflowInstanceId?: number
+  workflowStatus?: string
+  currentTaskId?: number
+  currentStep?: string
+  currentStepName?: string
+  currentApproverId?: number
+  currentApproverName?: string
+  canWithdraw?: boolean
+  canEdit?: boolean
+  canResubmit?: boolean
+  submittedBy?: number
+  submittedAt?: string
+  lastRejectReason?: string
+  workflowHistory?: Array<{
+    taskId?: number
+    stepName?: string
+    operatorId?: number
+    operatorName?: string
+    action?: string
+    comment?: string
+    operateTime?: string
+  }>
 }
 
 /**

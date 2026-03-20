@@ -3,7 +3,7 @@
  * 用于前端数据结构和后端API之间的转换
  */
 
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 
 /**
  * 检查更新对象中是否包含需要同步到后端的字段

@@ -7,8 +7,8 @@
 
 import { computed } from 'vue'
 import { ElNotification } from 'element-plus'
-import { useWebSocketNotifications, NotificationType } from '@/5-shared/api/websocket'
-import type { NotificationMessage } from '@/5-shared/api/websocket'
+import { useWebSocketNotifications, NotificationType } from '@/shared/api/websocket'
+import type { NotificationMessage } from '@/shared/api/websocket'
 
 /**
  * Get icon and notification type based on notification type

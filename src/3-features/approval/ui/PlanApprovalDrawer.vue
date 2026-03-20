@@ -6,10 +6,10 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Check, Close, Document, User, Timer, Right } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
-import { approvalApi } from '@/3-features/task/api/strategicApi'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
-import type { PendingApproval } from '@/5-shared/types'
+import { approvalApi } from '@/features/task/api/strategicApi'
+import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
+import type { PendingApproval } from '@/shared/types'
 
 const props = defineProps<{
   visible: boolean

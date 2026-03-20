@@ -3,12 +3,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElButton, ElIcon as _ElIcon, ElCard, ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
-import type { Indicator } from '@/5-shared/types'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import IndicatorFillForm from '@/5-shared/ui/form/indicator/IndicatorFillForm.vue'
-import IndicatorFillHistory from '@/5-shared/ui/form/indicator/IndicatorFillHistory.vue'
-import { indicatorApi } from '@/3-features/indicator/api'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { Indicator } from '@/shared/types'
+import { usePlanStore } from '@/features/plan/model/store'
+import IndicatorFillForm from '@/features/plan/ui/IndicatorFillForm.vue'
+import IndicatorFillHistory from '@/features/plan/ui/IndicatorFillHistory.vue'
+import { indicatorApi } from '@/features/indicator/api'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 指标填报页面

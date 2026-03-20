@@ -12,15 +12,12 @@ import { watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Aim, Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
-import YearSelector from '@/5-shared/ui/form/YearSelector.vue'
-import {
-  useAppLayout,
-  useNavigation,
-  useDepartmentSwitcher,
-  useNotificationCenter
-} from '@/5-shared/lib/layout'
-import { initApprovalNotifications } from '@/3-features/approval/lib/approvalNotifications'
-import { disconnectWebSocket } from '@/5-shared/api/websocket'
+import { ApprovalProgressDrawer, useApprovalCenter } from '@/features/approval'
+import YearSelector from '@/shared/ui/form/YearSelector.vue'
+import { useNavigation } from '@/shared/lib/layout'
+import { useAppLayout, useDepartmentSwitcher, useNotificationCenter } from './lib'
+import { initApprovalNotifications } from '@/features/approval/lib/approvalNotifications'
+import { disconnectWebSocket } from '@/shared/api/websocket'
 
 const router = useRouter()
 
@@ -35,6 +32,7 @@ const { viewingDept, viewingRole, viewingDeptName, deptOptions } = useDepartment
 const { tabs, activeTab, handleTabClick } = useNavigation(viewingRole)
 
 const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
+const { approvalCenterVisible, closeApprovalCenter } = useApprovalCenter()
 
 /**
  * Initialize approval notifications on mount
@@ -223,6 +221,15 @@ const handleDropdownCommand = async (command: string) => {
         />
       </div>
     </main>
+
+    <ApprovalProgressDrawer
+      :model-value="approvalCenterVisible"
+      :show-plan-approvals="true"
+      :show-approval-section="true"
+      approval-type="submission"
+      @update:model-value="(value) => !value && closeApprovalCenter()"
+      @close="closeApprovalCenter"
+    />
   </div>
 </template>
 

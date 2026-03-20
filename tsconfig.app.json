@@ -6,11 +6,11 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@/1-app/*": ["src/1-app/*"],
-      "@/3-features/*": ["src/3-features/*"],
-      "@/4-entities/*": ["src/4-entities/*"],
-      "@/5-shared/*": ["src/5-shared/*"],
-      "@/6-processes/*": ["src/6-processes/*"]
+      "@/app/*": ["src/1-app/*"],
+      "@/features/*": ["src/3-features/*"],
+      "@/entities/*": ["src/4-entities/*"],
+      "@/shared/*": ["src/5-shared/*"],
+      "@/processes/*": ["src/6-processes/*"]
     },
 
     /* Linting */

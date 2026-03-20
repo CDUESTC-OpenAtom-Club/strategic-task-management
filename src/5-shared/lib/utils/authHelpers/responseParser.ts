@@ -9,8 +9,8 @@
  * @module utils/authHelpers
  */
 
-import type { User, UserRole } from '@/5-shared/types'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { User, UserRole } from '@/shared/types'
+import { logger } from '@/shared/lib/utils/logger'
 
 /** 登录响应数据接口 */
 export interface LoginResponseData {

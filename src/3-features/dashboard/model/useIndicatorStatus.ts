@@ -9,8 +9,11 @@
  * @module features/dashboard/model
  */
 
-import type { StrategicIndicator } from '@/5-shared/types'
-import type { IndicatorStatus, STATUS_COLORS as _STATUS_COLORS } from '@/5-shared/lib/hooks/dashboard/useDashboardState'
+import type { StrategicIndicator } from '@/shared/types'
+import type {
+  IndicatorStatus,
+  STATUS_COLORS as _STATUS_COLORS
+} from '@/shared/lib/hooks/dashboard/useDashboardState'
 
 /**
  * 计算指标状态

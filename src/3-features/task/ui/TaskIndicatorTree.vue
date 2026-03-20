@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { Folder, Document, Warning, Connection } from '@element-plus/icons-vue'
 // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types use strategic_task terminology
-import type { StrategicTask, StrategicIndicator } from '@/5-shared/types'
+import type { StrategicTask, StrategicIndicator } from '@/shared/types'
 import { useStrategicStore } from '@/stores/strategic'
 
 // 节点统计接口

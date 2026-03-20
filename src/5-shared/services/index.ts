@@ -6,7 +6,6 @@
  */
 
 // Dashboard Services
-export { DashboardDataService, useDashboardDataService } from './dashboard/DashboardDataService'
 export {
   DashboardCalculationService,
   useDashboardCalculationService

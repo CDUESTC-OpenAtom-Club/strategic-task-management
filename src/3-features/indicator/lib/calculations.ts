@@ -4,7 +4,7 @@
  * Business calculations for indicators (completion rate, weight validation, etc.)
  */
 
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 
 /**
  * Calculate completion rate

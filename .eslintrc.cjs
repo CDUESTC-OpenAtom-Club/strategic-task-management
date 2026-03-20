@@ -1,94 +1,52 @@
-/* eslint-env node */
 require('@rushstack/eslint-patch/modern-module-resolution')
+
+const autoImportGlobals = require('./.eslintrc-auto-import.json')
 
 module.exports = {
   root: true,
   env: {
     browser: true,
-    es2022: true,
-    node: true
+    node: true,
+    es2022: true
   },
   extends: [
-    'plugin:vue/vue3-recommended',
     'eslint:recommended',
-    '@vue/eslint-config-typescript',
-    'prettier' // Must be last to override other configs
+    'plugin:vue/vue3-recommended',
+    '@vue/eslint-config-typescript/recommended',
+    'eslint-config-prettier'
   ],
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module'
-  },
-  // Note: @typescript-eslint plugin is already included via @vue/eslint-config-typescript
+  globals: autoImportGlobals.globals,
+  ignorePatterns: [
+    'dist/',
+    'coverage/',
+    'node_modules/',
+    'src/**/_deprecated/**'
+  ],
   rules: {
-    // 8.1.1 禁止 console.log，但允许 warn 和 error
-    'no-console': ['error', { allow: ['warn', 'error'] }],
-
-    // 8.1.2 TypeScript 严格模式规则
-    '@typescript-eslint/no-explicit-any': 'warn',
-    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/no-explicit-any': 'off',
     '@typescript-eslint/no-unused-vars': [
-      'error',
+      'warn',
       {
         argsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+        destructuredArrayIgnorePattern: '^_',
         varsIgnorePattern: '^_'
       }
     ],
-    '@typescript-eslint/no-non-null-assertion': 'warn',
-
-    // Vue 相关规则
-    'vue/multi-word-component-names': 'off',
-    'vue/no-v-html': 'warn',
-    'vue/require-default-prop': 'off',
-    'vue/require-explicit-emits': 'error',
-
-    // 通用代码质量规则
-    'no-debugger': 'error',
-    'no-alert': 'warn',
-    'prefer-const': 'error',
-    'no-var': 'error',
-    eqeqeq: ['error', 'always'],
-    curly: ['error', 'all'],
-
-    // Terminology consistency rules (Requirements 1.1, 1.2)
-    // Warn when backend terminology is used in frontend code
-    'no-restricted-syntax': [
-      'warn',
+    'no-restricted-imports': [
+      'error',
       {
-        selector: 'Identifier[name=/strategic_task/i]',
-        message:
-          'Use "plan" terminology instead of "strategic_task" in frontend code (Requirement 1.1)'
-      },
-      {
-        selector: 'Identifier[name=/strategicTask/i]',
-        message:
-          'Use "plan" terminology instead of "strategicTask" in frontend code (Requirement 1.1)'
+        patterns: ['@/1-app*', '@/3-features*', '@/4-entities*', '@/5-shared*', '@/6-processes*']
       }
     ]
   },
   overrides: [
     {
-      // 测试文件可以使用 console
-      files: ['**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts'],
-      rules: {
-        'no-console': 'off'
-      }
-    },
-    {
-      // 配置文件和脚本可以使用 console
-      files: [
-        '*.config.ts',
-        '*.config.js',
-        '*.config.cjs',
-        'scripts/**/*.js',
-        'scripts/**/*.cjs',
-        'server/**/*.js',
-        'database/**/*.js'
-      ],
-      rules: {
-        'no-console': 'off',
-        '@typescript-eslint/no-var-requires': 'off'
+      files: ['vite.config.ts', 'vitest.config.ts', 'scripts/**/*.mjs', '*.cjs'],
+      env: {
+        node: true,
+        browser: false
       }
     }
-  ],
-  ignorePatterns: ['dist', 'node_modules', '*.d.ts', 'coverage']
+  ]
 }

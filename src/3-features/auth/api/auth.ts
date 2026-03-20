@@ -1,12 +1,7 @@
-/**
- * Auth Feature - Authentication API
- * 
- * API calls for authentication operations.
- * Based on backend API documentation: sism-backend/docs/API接口文档.md
- */
 
-import api from '@/5-shared/api'
-import type { LoginCredentials, LoginResponse } from '@/4-entities/user/model/types'
+
+import { apiClient as api } from '@/shared/api/client'
+import type { LoginCredentials, LoginResponse } from '@/entities/user/model/types'
 import type { ApiResponse, LoginRequest } from './types'
 
 /**

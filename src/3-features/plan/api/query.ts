@@ -4,8 +4,8 @@
  * Read-only API operations for plan data.
  */
 
-import api from '@/5-shared/api'
-import type { ApiResponse, Plan } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import type { ApiResponse, Plan } from '@/shared/types'
 
 /**
  * Get all plans

@@ -5,13 +5,13 @@
  * Based on API documentation: POST/PUT/DELETE /api/indicators/*
  */
 
-import { apiClient } from '@/5-shared/lib/api/client'
+import { apiClient } from '@/shared/api/client'
 import type {
   Indicator,
   IndicatorCreateRequest,
   IndicatorUpdateRequest,
   DistributeRequest
-} from '@/4-entities/indicator/model/types'
+} from '@/entities/indicator/model/types'
 import type {
   IndicatorDetailResponse,
   DistributionResponse,

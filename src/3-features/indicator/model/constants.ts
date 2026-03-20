@@ -4,7 +4,7 @@
  * Business constants and configuration for the strategic indicator feature.
  */
 
-import { IndicatorStatus, IndicatorLevel, WorkflowStatus } from '@/4-entities/indicator/model/types'
+import { IndicatorStatus, IndicatorLevel, WorkflowStatus } from '@/entities/indicator/model/types'
 
 /**
  * Status display configuration

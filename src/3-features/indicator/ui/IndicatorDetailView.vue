@@ -18,15 +18,15 @@ import {
   ElCard,
   ElEmpty
 } from 'element-plus'
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import {
   useIndicatorStore,
   STATUS_CONFIG,
   LEVEL_CONFIG,
   calculateCompletionRate,
   formatWeightAsPercentage
-} from '@/3-features/indicator'
-import { logger } from '@/5-shared/lib/utils/logger'
+} from '@/features/indicator'
+import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()
 const route = useRoute()

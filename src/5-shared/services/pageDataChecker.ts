@@ -5,8 +5,8 @@
  *
  * Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1, 8.4
  */
-import type { StrategicIndicator } from '@/5-shared/types'
-import { useDataValidator } from '@/5-shared/lib/validation/dataValidator'
+import type { StrategicIndicator } from '@/shared/types'
+import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 
 // ============================================================================
 // 类型定义

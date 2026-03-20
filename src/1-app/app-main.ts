@@ -25,8 +25,9 @@ import './styles/_colors.css'
 import App from './App.vue'
 
 // Utilities
-import { autoHealthCheck } from '@/5-shared/lib/utils/apiHealth'
-import { performanceMonitor } from '@/5-shared/lib/utils/performance'
+import { autoHealthCheck } from '@/shared/lib/utils/apiHealth'
+import { performanceMonitor } from '@/shared/lib/utils/performance'
+import { registerSharedDirectives } from '@/shared/lib/directives'
 
 /**
  * Create Vue application instance
@@ -37,13 +38,7 @@ const pinia = createPinia()
 /**
  * Register global directives
  */
-app.directive('focus', {
-  mounted(el) {
-    // 对于 el-input 组件，需要找到内部的 input 元素
-    const input = el.querySelector('input') || el.querySelector('textarea') || el
-    input?.focus()
-  }
-})
+registerSharedDirectives(app)
 
 /**
  * Use plugins

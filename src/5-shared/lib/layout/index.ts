@@ -1,10 +1,7 @@
 /**
  * Shared Library - Layout
  *
- * Exports all layout-related utilities for app-level layout management
+ * Exports shared layout utilities that do not depend on feature slices.
  */
 
-export * from './useAppLayout'
-export * from './useDepartmentSwitcher'
 export * from './useNavigation'
-export * from './useNotificationCenter'

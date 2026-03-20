@@ -5,7 +5,7 @@ import { use } from 'echarts/core'
 import { SankeyChart } from 'echarts/charts'
 import { TooltipComponent, TitleComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import type { SankeyData } from '@/5-shared/types'
+import type { SankeyData } from '@/shared/types'
 
 use([SankeyChart, TooltipComponent, TitleComponent, GraphicComponent, CanvasRenderer])
 

@@ -5,9 +5,10 @@
  */
 
 import axios from 'axios'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import { ElNotification } from 'element-plus'
-import { API_BASE_URL, API_TARGET, USE_MOCK } from '@/5-shared/config/api'
+import { API_BASE_URL, API_TARGET, USE_MOCK } from '@/shared/config/api'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
 
 const backendDisplayTarget = API_TARGET || API_BASE_URL
 
@@ -19,6 +20,16 @@ const healthApi = axios.create({
     'Content-Type': 'application/json'
   }
 })
+
+async function probeEndpoint(url: string, timeout: number) {
+  const token = tokenManager.getAccessToken()
+  return healthApi.get(url, {
+    timeout,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    // 401/403/404 在健康检查里属于“有响应”的状态，不应该走异常分支制造噪音。
+    validateStatus: status => status >= 200 && status < 500
+  })
+}
 
 export interface HealthCheckResult {
   service: string
@@ -35,63 +46,65 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
   logger.debug('🏥 [Health Check] 检查后端服务健康状态...')
 
   try {
-    const response = await healthApi.get('/organizations', { timeout: 10000 })
+    const response = await probeEndpoint('/organizations', 10000)
 
-    logger.debug('✅ [Health Check] 后端服务正常')
-    return {
-      service: 'Backend API',
-      status: 'success',
-      message: '后端服务运行正常',
-      details: response.data,
-      timestamp: new Date()
-    }
-  } catch (error: unknown) {
-    // 处理超时错误
-    if (error.code === 'ECONNABORTED' && error.message?.includes('timeout')) {
-      logger.error('❌ [Health Check] 后端服务响应超时:', error)
+    if (response.status >= 200 && response.status < 300) {
+      logger.debug('✅ [Health Check] 后端服务正常')
       return {
         service: 'Backend API',
-        status: 'error',
-        message: '后端服务响应超时，可能正在启动或负载过高',
-        details: { error: error.message, code: error.code },
+        status: 'success',
+        message: '后端服务运行正常',
+        details: response.data,
         timestamp: new Date()
       }
     }
 
-    if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
-      logger.error('❌ [Health Check] 无法连接到后端服务:', error)
+    if (response.status === 401 || response.status === 403) {
+      logger.debug('✅ [Health Check] 健康检查端点需要认证，后端服务可达')
       return {
         service: 'Backend API',
-        status: 'error',
-        message: `无法连接到后端服务，请确认后端是否运行在 ${backendDisplayTarget}`,
-        details: { error: error.message, code: error.code },
+        status: 'success',
+        message: '后端服务运行正常（健康检查端点需要认证）',
+        details: { status: response.status },
         timestamp: new Date()
       }
     }
 
-    if (error.response?.status === 404) {
+    if (response.status === 404) {
       logger.warn('⚠️ [Health Check] /organizations 不存在，尝试降级验证服务可用性')
       try {
-        await healthApi.get('/actuator/health', { timeout: 3000 })
-        return {
-          service: 'Backend API',
-          status: 'success',
-          message: '后端服务可访问（使用 actuator 健康检查）',
-          details: { status: 'accessible-actuator' },
-          timestamp: new Date()
+        const actuatorResponse = await probeEndpoint('/actuator/health', 3000)
+        if (
+          (actuatorResponse.status >= 200 && actuatorResponse.status < 300) ||
+          actuatorResponse.status === 401 ||
+          actuatorResponse.status === 403
+        ) {
+          return {
+            service: 'Backend API',
+            status: 'success',
+            message: '后端服务可访问（使用 actuator 健康检查）',
+            details: { status: 'accessible-actuator', code: actuatorResponse.status },
+            timestamp: new Date()
+          }
         }
       } catch {
         // actuator 在当前后端中可能被统一异常包装为 500，继续尝试轻量业务端点
       }
 
       try {
-        await healthApi.get('/auth/validate', { timeout: 3000 })
-        return {
-          service: 'Backend API',
-          status: 'success',
-          message: '后端服务可访问（健康检查端点不可用，但业务接口正常）',
-          details: { status: 'accessible' },
-          timestamp: new Date()
+        const authValidateResponse = await probeEndpoint('/auth/validate', 3000)
+        if (
+          (authValidateResponse.status >= 200 && authValidateResponse.status < 300) ||
+          authValidateResponse.status === 401 ||
+          authValidateResponse.status === 403
+        ) {
+          return {
+            service: 'Backend API',
+            status: 'success',
+            message: '后端服务可访问（健康检查端点不可用，但业务接口正常）',
+            details: { status: 'accessible', code: authValidateResponse.status },
+            timestamp: new Date()
+          }
         }
       } catch {
         return {
@@ -104,21 +117,47 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       }
     }
 
-    // 403 表示端点存在但需要认证，这实际上意味着服务是正常的
-    if (error.response?.status === 403) {
-      logger.debug('✅ [Health Check] 健康检查端点需要认证，后端服务可达')
+    return {
+      service: 'Backend API',
+      status: 'warning',
+      message: `后端服务已响应，但返回了异常状态码 ${response.status}`,
+      details: {
+        status: response.status,
+        response: response.data
+      },
+      timestamp: new Date()
+    }
+  } catch (error: unknown) {
+    const axiosError = axios.isAxiosError(error) ? error : null
+    const errorCode = axiosError?.code
+    const errorMessage = axiosError?.message || (error instanceof Error ? error.message : String(error))
+
+    // 处理超时错误
+    if (errorCode === 'ECONNABORTED' && errorMessage.includes('timeout')) {
+      logger.error('❌ [Health Check] 后端服务响应超时:', error)
       return {
         service: 'Backend API',
-        status: 'success',
-        message: '后端服务运行正常（健康检查端点需要认证）',
-        details: { status: 403 },
+        status: 'error',
+        message: '后端服务响应超时，可能正在启动或负载过高',
+        details: { error: errorMessage, code: errorCode },
+        timestamp: new Date()
+      }
+    }
+
+    if (errorCode === 'ECONNREFUSED' || errorMessage.includes('Network Error')) {
+      logger.error('❌ [Health Check] 无法连接到后端服务:', error)
+      return {
+        service: 'Backend API',
+        status: 'error',
+        message: `无法连接到后端服务，请确认后端是否运行在 ${backendDisplayTarget}`,
+        details: { error: errorMessage, code: errorCode },
         timestamp: new Date()
       }
     }
 
     // 提取后端返回的详细错误信息
-    const responseData = error.response?.data
-    const detailedMessage = responseData?.message || error.message
+    const responseData = axiosError?.response?.data as { message?: string; code?: string } | undefined
+    const detailedMessage = responseData?.message || errorMessage
     logger.error('❌ [Health Check] 后端服务异常:', error)
 
     return {
@@ -126,7 +165,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       status: 'error',
       message: `后端服务异常: ${detailedMessage}`,
       details: {
-        error: error.message,
+        error: errorMessage,
         response: responseData,
         code: responseData?.code
       },
@@ -140,25 +179,31 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
  */
 export async function quickBackendCheck(): Promise<boolean> {
   try {
-    await healthApi.get('/organizations', { timeout: 3000 })
-    return true
-  } catch (error: unknown) {
-    // 404 表示端点不存在，尝试业务只读接口判断服务可达
-    if (error && typeof error === 'object' && 'response' in error) {
-      const axiosError = error as { response?: { status?: number } }
-      if (axiosError.response?.status === 404) {
-        try {
-          await healthApi.get('/actuator/health', { timeout: 3000 })
-          return true
-        } catch {
-          return false
-        }
-      }
-      // 401/403 表示需要认证但服务可访问
-      if (axiosError.response?.status === 401 || axiosError.response?.status === 403) {
-        return true
+    const response = await probeEndpoint('/organizations', 3000)
+
+    if (response.status >= 200 && response.status < 300) {
+      return true
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return true
+    }
+
+    if (response.status === 404) {
+      try {
+        const actuatorResponse = await probeEndpoint('/actuator/health', 3000)
+        return (
+          (actuatorResponse.status >= 200 && actuatorResponse.status < 300) ||
+          actuatorResponse.status === 401 ||
+          actuatorResponse.status === 403
+        )
+      } catch {
+        return false
       }
     }
+
+    return false
+  } catch (error: unknown) {
     return false
   }
 }
@@ -315,6 +360,11 @@ export async function runFullHealthCheck(): Promise<HealthCheckResult[]> {
  */
 export function autoHealthCheck() {
   if (import.meta.env.DEV && !USE_MOCK) {
+    if (tokenManager.hasValidToken()) {
+      logger.debug('🏥 [Health Check] 检测到已登录会话，跳过自动健康检查')
+      return
+    }
+
     logger.debug('🏥 [Health Check] 开发环境，自动运行健康检查...')
 
     // 延迟2秒执行，确保Vite代理服务器已完全初始化

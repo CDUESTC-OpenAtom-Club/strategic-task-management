@@ -8,13 +8,13 @@
   - 支持数据更新动画
 -->
 <script setup lang="ts">
-import { computed, ref as _ref } from 'vue'
+import { computed } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getGradientColor } from '@/5-shared/lib/utils/colors'
+import { getGradientColor } from '@/shared/lib/utils/colors'
 import type { EChartsOption } from 'echarts'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
@@ -63,6 +63,8 @@ const props = withDefaults(defineProps<BasePieChartProps>(), {
   outerRadius: '65%',
   center: () => ['35%', '50%'],
   showCenterText: true,
+  centerTopText: '',
+  centerBottomText: '',
   totalText: '总计',
   clickable: false
 })
@@ -70,9 +72,6 @@ const props = withDefaults(defineProps<BasePieChartProps>(), {
 const emit = defineEmits<{
   click: [item: PieDataItem, index: number]
 }>()
-
-/** 数据总计 */
-const _total = computed(() => props.data.reduce((sum, item) => sum + item.value, 0))
 
 /** 图表配置 */
 const chartOption = computed<EChartsOption>(() => {

@@ -4,10 +4,10 @@
  * Calculates milestone and indicator progress status based on milestone data.
  */
 
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 import type { ProgressStatusType, MilestoneStatusType, MilestoneCalculationOptions } from './types'
 import { PROGRESS_WARNING_DAYS, UPCOMING_MILESTONE_DAYS } from './constants'
-import { safeGet } from '@/5-shared/lib/validation/dataValidator'
+import { safeGet } from '@/shared/lib/validation/dataValidator'
 
 /**
  * Calculates overall milestone status of an indicator

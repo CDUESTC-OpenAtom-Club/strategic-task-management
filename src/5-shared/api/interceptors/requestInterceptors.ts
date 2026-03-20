@@ -14,18 +14,18 @@
  */
 
 import type { InternalAxiosRequestConfig } from 'axios'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { generateSignature } from '@/5-shared/lib/utils/security'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { adaptV1Path } from '@/5-shared/api/v1PathAdapter'
-import { addRequestId } from '@/5-shared/api/errorHandler'
+import { generateSignature } from '@/shared/lib/utils/security'
+import { logger } from '@/shared/lib/utils/logger'
+import { adaptV1Path } from '@/shared/api/v1PathAdapter'
+import { addRequestId } from '@/shared/api/errorHandler'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
 import {
   generateIdempotencyKey,
   shouldAddIdempotencyKey,
   DEFAULT_IDEMPOTENCY_CONFIG
-} from '@/5-shared/lib/utils/idempotency'
-import { generateCacheKey, shouldCache, getCacheValidationHeaders } from '@/5-shared/lib/utils/cache'
-import { USE_MOCK } from '@/5-shared/config/api'
+} from '@/shared/lib/utils/idempotency'
+import { generateCacheKey, shouldCache, getCacheValidationHeaders } from '@/shared/lib/utils/cache'
+import { USE_MOCK } from '@/shared/config/api'
 
 // 需要签名验证的敏感操作路径
 const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
@@ -120,29 +120,23 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     // ========================================================================
     // AUTH TOKEN
     // ========================================================================
-    const authStore = useAuthStore()
-
-    // 优先从 authStore 读取 token，退回到内存 tokenManager。
-    const storeToken = authStore.token
-    const { tokenManager } = await import('@/5-shared/lib/utils/tokenManager')
-    const memoryToken = tokenManager.getAccessToken()
-    const token = storeToken || memoryToken
+    const token = tokenManager.getAccessToken()
 
     // Debug logging for token checks (development only)
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-      console.log('[RequestInterceptor] Token检查:', {
-        url: config.url,
-        hasStoreToken: !!storeToken,
-        hasLocalToken: false,
-        willUseToken: !!token,
-        tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
-      })
+        console.log('[RequestInterceptor] Token检查:', {
+          url: config.url,
+          hasStoreToken: false,
+          hasLocalToken: !!token,
+          willUseToken: !!token,
+          tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
+        })
     }
 
     logger.debug('🔍 [API Auth] Token检查:', {
-      hasStoreToken: !!storeToken,
-      hasLocalToken: !!memoryToken,
+      hasStoreToken: false,
+      hasLocalToken: !!token,
       willUseToken: !!token,
       url: config.url
     })
@@ -154,13 +148,13 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
         console.log('[RequestInterceptor] ✅ Authorization头已添加:', config.url)
       }
       logger.debug('🔐 [API Auth] Token已添加', {
-        source: storeToken ? 'authStore' : 'tokenManager',
+        source: 'tokenManager',
         tokenPreview: token.substring(0, 20) + '...',
         url: config.url
       })
     } else {
       logger.warn('[RequestInterceptor] 无Token，未添加Authorization头:', config.url)
-      logger.warn('⚠️ [API Auth] 无Token (authStore 和 tokenManager 都为空)', {
+      logger.warn('⚠️ [API Auth] 无Token (tokenManager 为空)', {
         url: config.url
       })
     }

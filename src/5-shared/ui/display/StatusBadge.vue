@@ -30,7 +30,8 @@ export interface StatusBadgeProps {
 const props = withDefaults(defineProps<StatusBadgeProps>(), {
   type: 'default',
   size: 'default',
-  dot: false
+  dot: false,
+  color: ''
 })
 
 /** 计算徽章类名 */

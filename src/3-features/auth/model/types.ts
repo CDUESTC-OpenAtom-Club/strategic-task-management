@@ -5,7 +5,7 @@
  * These extend the entity types with feature-specific concerns.
  */
 
-import type { User, UserRole, LoginCredentials, LoginResponse } from '@/4-entities/user/model/types'
+import type { User, UserRole, LoginCredentials, LoginResponse } from '@/entities/user/model/types'
 
 /**
  * Auth state

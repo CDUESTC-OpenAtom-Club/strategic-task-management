@@ -7,13 +7,13 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import api from '@/5-shared/api'
-import type { User, UserRole } from '@/5-shared/types'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { tokenManager, TokenRefreshError } from '@/5-shared/lib/utils/tokenManager'
-import { parseLoginResponse, mapBackendUser } from '@/5-shared/lib/utils/authHelpers'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
+import { apiClient as api } from '@/shared/api/client'
+import type { User, UserRole } from '@/shared/types'
+import { logger } from '@/shared/lib/utils/logger'
+import { tokenManager, TokenRefreshError } from '@/shared/lib/utils/tokenManager'
+import { parseLoginResponse, mapBackendUser } from '@/shared/lib/utils/authHelpers'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 
 export const useAuthStore = defineStore('auth', () => {
   // ============ State ============
@@ -189,7 +189,7 @@ export const useAuthStore = defineStore('auth', () => {
         logger.debug('✅[Auth] Token设置完成，准备加载数据')
 
         // 登录成功后，触发数据重新加载
-        import('@/3-features/task/model/strategic')
+        import('@/features/task/model/strategic')
           .then(({ useStrategicStore }) => {
             const strategicStore = useStrategicStore()
             const timeContext = useTimeContextStore()

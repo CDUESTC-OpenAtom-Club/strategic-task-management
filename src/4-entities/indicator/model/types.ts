@@ -170,7 +170,6 @@ export interface Indicator {
 
   // Status tracking
   status: IndicatorStatus
-  distributionStatus?: string
   workflowStatus: WorkflowStatus
   progressApprovalStatus?: ProgressApprovalStatus
 

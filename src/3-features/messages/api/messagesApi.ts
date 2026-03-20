@@ -3,9 +3,9 @@
  * 集成预警告警消息
  */
 
-import { apiClient } from '@/5-shared/api/client'
-import { alertApi, type WarningEvent, type AlertEvent } from '@/5-shared/api/monitoringApi'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { apiClient } from '@/shared/api/client'
+import { alertApi, type WarningEvent, type AlertEvent } from '@/shared/api/monitoringApi'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 消息类型

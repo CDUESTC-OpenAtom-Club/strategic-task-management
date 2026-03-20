@@ -1,4 +1,4 @@
-import type { User, UserRole } from '@/5-shared/types/entities'
+import type { User, UserRole } from '@/shared/types/entities'
 
 export const mockUsers: User[] = [
   {

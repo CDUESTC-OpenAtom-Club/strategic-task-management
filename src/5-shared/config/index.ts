@@ -7,5 +7,4 @@
 export * from './api'
 export * from './app'
 export * from './constants/errorCodes'
-export * from './departments'
 export * from './validationRules'

@@ -2,7 +2,7 @@
  * User Feature
  *
  * User management functionality
- * Note: Authentication is handled by @/3-features/auth
+ * Note: Authentication is handled by @/features/auth
  */
 
 // API Layer

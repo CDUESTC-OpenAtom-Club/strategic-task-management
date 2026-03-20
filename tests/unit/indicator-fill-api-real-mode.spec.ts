@@ -14,15 +14,15 @@ const {
   loadDepartments: vi.fn()
 }))
 
-vi.mock('@/5-shared/config/api', async importOriginal => {
-  const actual = await importOriginal<typeof import('@/5-shared/config/api')>()
+vi.mock('@/shared/config/api', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/shared/config/api')>()
   return {
     ...actual,
     USE_MOCK: false
   }
 })
 
-vi.mock('@/5-shared/lib/api', () => ({
+vi.mock('@/shared/api/client', () => ({
   apiClient: {
     get: apiGet,
     post: apiPost,
@@ -30,13 +30,17 @@ vi.mock('@/5-shared/lib/api', () => ({
   }
 }))
 
-vi.mock('@/3-features/indicator/api', () => ({
+vi.mock('@/shared/api', () => ({
+  withRetry: <T>(fn: () => Promise<T>) => fn()
+}))
+
+vi.mock('@/features/indicator/api', () => ({
   indicatorApi: {
     getIndicatorById
   }
 }))
 
-vi.mock('@/3-features/auth/model/store', () => ({
+vi.mock('@/features/auth/model/store', () => ({
   useAuthStore: () => ({
     user: { id: 124 },
     effectiveRole: 'strategic_dept',
@@ -45,7 +49,7 @@ vi.mock('@/3-features/auth/model/store', () => ({
   })
 }))
 
-vi.mock('@/3-features/organization/model/store', () => ({
+vi.mock('@/features/organization/model/store', () => ({
   useOrgStore: () => ({
     loaded: true,
     departments: [{ id: 39, name: '战略发展部', type: 'functional_dept' }],
@@ -55,11 +59,11 @@ vi.mock('@/3-features/organization/model/store', () => ({
   })
 }))
 
-vi.mock('@/3-features/approval/api/approval', () => ({
+vi.mock('@/features/approval/api/approval', () => ({
   approvalApi: {}
 }))
 
-import { indicatorFillApi } from '@/3-features/plan/api/planApi'
+import { indicatorFillApi } from '@/features/plan/api/planApi'
 
 const currentReportMonth = new Date().toISOString().slice(0, 7).replace('-', '')
 

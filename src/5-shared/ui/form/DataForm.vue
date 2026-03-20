@@ -10,7 +10,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick as _nextTick } from 'vue'
 import type { FormInstance, FormRules, FormItemProp } from 'element-plus'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /** 表单字段类型 */
 export type FieldType =
@@ -120,6 +120,7 @@ export interface DataFormProps {
 }
 
 const props = withDefaults(defineProps<DataFormProps>(), {
+  rules: () => ({}),
   labelWidth: '100px',
   labelPosition: 'right',
   columns: 1,

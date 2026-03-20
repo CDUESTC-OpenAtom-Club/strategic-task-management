@@ -12,7 +12,7 @@ import type {
   IndicatorCreateRequest,
   IndicatorFilters,
   IndicatorType
-} from '@/4-entities/indicator/model/types'
+} from '@/entities/indicator/model/types'
 import type { IndicatorListState, IndicatorStatistics } from './types'
 import * as indicatorApi from '../api/query'
 import * as indicatorMutations from '../api/mutations'

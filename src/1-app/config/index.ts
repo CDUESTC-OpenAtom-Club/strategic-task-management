@@ -1,4 +1,4 @@
-import { API_BASE_URL, API_TIMEOUT } from '@/5-shared/config/api'
+import { API_BASE_URL, API_TIMEOUT } from '@/shared/config/api'
 
 /**
  * Application Configuration

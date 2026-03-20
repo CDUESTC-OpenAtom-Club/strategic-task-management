@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const loggerWarnMock = vi.fn()
 const loggerErrorMock = vi.fn()
 
-vi.mock('@/5-shared/config/api', () => ({
+vi.mock('@/shared/config/api', () => ({
   WS_BASE_URL: 'ws://localhost:8080'
 }))
 
-vi.mock('@/5-shared/lib/utils/logger', () => ({
+vi.mock('@/shared/lib/utils/logger', () => ({
   logger: {
     warn: loggerWarnMock,
     error: loggerErrorMock
@@ -46,13 +46,13 @@ describe('websocket notifications', () => {
   })
 
   afterEach(async () => {
-    const websocketModule = await import('@/5-shared/api/websocket')
+    const websocketModule = await import('@/shared/api/websocket')
     websocketModule.disconnectWebSocket()
     vi.unstubAllGlobals()
   })
 
   it('does not connect when user id is unavailable', async () => {
-    const websocketModule = await import('@/5-shared/api/websocket')
+    const websocketModule = await import('@/shared/api/websocket')
 
     websocketModule.connectWebSocket()
 
@@ -62,7 +62,7 @@ describe('websocket notifications', () => {
 
   it('connects to the notifications endpoint for the current user', async () => {
     localStorage.setItem('user', JSON.stringify({ id: 124 }))
-    const websocketModule = await import('@/5-shared/api/websocket')
+    const websocketModule = await import('@/shared/api/websocket')
 
     websocketModule.connectWebSocket()
 

@@ -4,7 +4,7 @@
  * Permission checking utilities for auth feature.
  */
 
-import type { UserRole } from '@/5-shared/types'
+import type { UserRole } from '@/shared/types'
 
 /**
  * Permission definition

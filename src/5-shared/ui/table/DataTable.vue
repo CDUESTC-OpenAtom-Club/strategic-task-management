@@ -83,13 +83,19 @@ export interface DataTableProps<T> {
 }
 
 const props = withDefaults(defineProps<DataTableProps<T>>(), {
+  height: undefined,
+  maxHeight: undefined,
   border: true,
   stripe: true,
+  rowKey: '',
   loading: false,
   empty: false,
   emptyText: '暂无数据',
   pagination: false,
-  selectable: false
+  defaultSort: undefined,
+  selectedRows: () => [],
+  selectable: false,
+  rowClassName: ''
 })
 
 const emit = defineEmits<{

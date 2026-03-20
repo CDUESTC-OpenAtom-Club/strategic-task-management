@@ -54,8 +54,7 @@ import {
   Connection,
   Loading,
   FolderOpened,
-  DataAnalysis,
-  Calendar as _Calendar
+  DataAnalysis
 } from '@element-plus/icons-vue'
 
 interface Props {
@@ -80,6 +79,9 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   type: 'empty',
   size: 'medium',
+  icon: undefined,
+  title: '',
+  description: '',
   showAction: false,
   actionText: '',
   actionType: 'primary'

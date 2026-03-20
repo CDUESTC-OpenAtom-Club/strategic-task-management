@@ -7,7 +7,7 @@
 
 import { computed } from 'vue'
 import { ElCard, ElTag, ElProgress, ElButton, ElSpace } from 'element-plus'
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import { STATUS_CONFIG, LEVEL_CONFIG } from '../model/constants'
 import { calculateCompletionRate, formatWeightAsPercentage } from '../lib/calculations'
 import { getAvailableActions } from '../lib/validations'

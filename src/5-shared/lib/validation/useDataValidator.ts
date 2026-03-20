@@ -24,8 +24,8 @@ import {
   type DateValidationRule,
   type ArrayValidationRule,
   type EnumValidationRule
-} from '@/5-shared/config/validationRules'
-import { logger } from '@/5-shared/lib/utils/logger'
+} from '@/shared/config/validationRules'
+import { logger } from '@/shared/lib/utils/logger'
 
 // ============================================================================
 // 类型定义
@@ -786,4 +786,4 @@ export type {
   DateValidationRule,
   ArrayValidationRule,
   EnumValidationRule
-} from '@/5-shared/config/validationRules'
+} from '@/shared/config/validationRules'

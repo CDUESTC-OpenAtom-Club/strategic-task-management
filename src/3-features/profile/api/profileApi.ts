@@ -5,7 +5,7 @@
  * @module features/profile/api
  */
 
-import { apiClient } from '@/5-shared/api/client'
+import { apiClient } from '@/shared/api/client'
 
 export const profileApi = {
   /**

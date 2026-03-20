@@ -16,12 +16,12 @@
 
 import axios, { AxiosError } from 'axios'
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
-import { tokenManager } from '@/5-shared/lib/utils/tokenManager'
-import { logger } from '@/5-shared/lib/utils/logger'
-import type { ApiErrorResponse } from '@/5-shared/types/error'
-import { createRequestInterceptor } from '@/5-shared/api/interceptors/requestInterceptors'
-import { createResponseInterceptor, createResponseErrorInterceptor } from '@/5-shared/api/interceptors/responseInterceptors'
-import { API_BASE_URL, API_TIMEOUT, USE_MOCK } from '@/5-shared/config/api'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
+import { logger } from '@/shared/lib/utils/logger'
+import type { ApiErrorResponse } from '@/shared/types/error'
+import { createRequestInterceptor } from '@/shared/api/interceptors/requestInterceptors'
+import { createResponseInterceptor, createResponseErrorInterceptor } from '@/shared/api/interceptors/responseInterceptors'
+import { API_BASE_URL, API_TIMEOUT, USE_MOCK } from '@/shared/config/api'
 
 /**
  * 应用错误类型

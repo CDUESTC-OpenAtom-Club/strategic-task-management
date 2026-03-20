@@ -37,17 +37,25 @@ export default defineConfig({
     }
   },
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
-      '@views': fileURLToPath(new URL('./src/views', import.meta.url)),
-      '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
-      '@types': fileURLToPath(new URL('./src/types', import.meta.url)),
-      '@utils': fileURLToPath(new URL('./src/utils', import.meta.url)),
-      '@api': fileURLToPath(new URL('./src/api', import.meta.url)),
-      '@composables': fileURLToPath(new URL('./src/composables', import.meta.url)),
-      '@/features': fileURLToPath(new URL('./src/features', import.meta.url)),
-      '@/shared': fileURLToPath(new URL('./src/shared', import.meta.url))
-    }
+    alias: [
+      { find: /^@\/app(?=\/|$)/, replacement: fileURLToPath(new URL('./src/1-app', import.meta.url)) },
+      { find: /^@\/features(?=\/|$)/, replacement: fileURLToPath(new URL('./src/3-features', import.meta.url)) },
+      { find: /^@\/entities(?=\/|$)/, replacement: fileURLToPath(new URL('./src/4-entities', import.meta.url)) },
+      { find: /^@\/shared(?=\/|$)/, replacement: fileURLToPath(new URL('./src/5-shared', import.meta.url)) },
+      { find: /^@\/processes(?=\/|$)/, replacement: fileURLToPath(new URL('./src/6-processes', import.meta.url)) },
+      { find: /^@\/1-app(?=\/|$)/, replacement: fileURLToPath(new URL('./src/1-app', import.meta.url)) },
+      { find: /^@\/3-features(?=\/|$)/, replacement: fileURLToPath(new URL('./src/3-features', import.meta.url)) },
+      { find: /^@\/4-entities(?=\/|$)/, replacement: fileURLToPath(new URL('./src/4-entities', import.meta.url)) },
+      { find: /^@\/5-shared(?=\/|$)/, replacement: fileURLToPath(new URL('./src/5-shared', import.meta.url)) },
+      { find: /^@\/6-processes(?=\/|$)/, replacement: fileURLToPath(new URL('./src/6-processes', import.meta.url)) },
+      { find: /^@components(?=\/|$)/, replacement: fileURLToPath(new URL('./src/components', import.meta.url)) },
+      { find: /^@views(?=\/|$)/, replacement: fileURLToPath(new URL('./src/views', import.meta.url)) },
+      { find: /^@stores(?=\/|$)/, replacement: fileURLToPath(new URL('./src/stores', import.meta.url)) },
+      { find: /^@types(?=\/|$)/, replacement: fileURLToPath(new URL('./src/types', import.meta.url)) },
+      { find: /^@utils(?=\/|$)/, replacement: fileURLToPath(new URL('./src/utils', import.meta.url)) },
+      { find: /^@api(?=\/|$)/, replacement: fileURLToPath(new URL('./src/api', import.meta.url)) },
+      { find: /^@composables(?=\/|$)/, replacement: fileURLToPath(new URL('./src/composables', import.meta.url)) },
+      { find: /^@\//, replacement: `${fileURLToPath(new URL('./src', import.meta.url))}/` }
+    ]
   }
 })

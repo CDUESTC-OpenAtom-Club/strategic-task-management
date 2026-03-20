@@ -2,7 +2,7 @@
  * 2025年指标数据
  * 历史数据，状态为 archived（已归档）
  */
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 import { generateQuarterlyMilestones } from './utils'
 
 export const indicators2025: StrategicIndicator[] = [

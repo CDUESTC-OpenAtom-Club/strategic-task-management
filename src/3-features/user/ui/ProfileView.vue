@@ -55,10 +55,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
-import BasicInfo from '@/3-features/profile/ui/BasicInfo.vue'
-import ChangePassword from '@/3-features/profile/ui/ChangePassword.vue'
-import NotificationSettings from '@/3-features/profile/ui/NotificationSettings.vue'
-import { useAuthStore } from '@/3-features/auth/model/store'
+import BasicInfo from '@/features/profile/ui/BasicInfo.vue'
+import ChangePassword from '@/features/profile/ui/ChangePassword.vue'
+import NotificationSettings from '@/features/profile/ui/NotificationSettings.vue'
+import { useAuthStore } from '@/features/auth/model/store'
 
 // 使用共享 Store
 const authStore = useAuthStore()

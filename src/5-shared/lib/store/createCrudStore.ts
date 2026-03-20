@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * import { createCrudStore } from '@/5-shared/lib/store/createCrudStore'
+ * import { createCrudStore } from '@/shared/lib/store/createCrudStore'
  * import type { Indicator } from './types'
  * import * as indicatorApi from '../api/query'
  * import * as indicatorMutations from '../api/mutations'

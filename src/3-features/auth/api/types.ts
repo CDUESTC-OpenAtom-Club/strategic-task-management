@@ -4,7 +4,7 @@
  * API request/response types specific to authentication endpoints.
  */
 
-import type { User } from '@/4-entities/user/model/types'
+import type { User } from '@/entities/user/model/types'
 
 /**
  * API response wrapper

@@ -68,8 +68,8 @@
 
 <script setup lang="ts">
 import { defineProps, defineEmits } from 'vue'
-import { formatDateTime } from '@/5-shared/lib/utils'
-import type { Message, MessageType, AlertLevel } from '@/5-shared/types'
+import { formatDateTime } from '@/shared/lib/utils'
+import type { Message, MessageType, AlertLevel } from '@/shared/types'
 
 interface Props {
   messages: Message[]

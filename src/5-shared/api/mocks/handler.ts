@@ -4,7 +4,7 @@
  */
 
 import type { InternalAxiosRequestConfig } from 'axios'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import {
   mockUsers,
   mockAnnouncements,

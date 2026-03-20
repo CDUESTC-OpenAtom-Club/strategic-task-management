@@ -6,7 +6,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Message } from '@/5-shared/types'
+import type { Message } from '@/shared/types'
 
 const mockMessages: Message[] = [
   {
@@ -27,7 +27,7 @@ const mockMessages: Message[] = [
     isRead: false,
     createdAt: new Date('2026-03-15T15:10:00'),
     relatedId: 'plan-fill-1',
-    actionUrl: '/audit/pending'
+    actionUrl: '/messages'
   },
   {
     id: 'msg-3',

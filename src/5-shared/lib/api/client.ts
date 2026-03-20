@@ -1,6 +1,8 @@
 /**
  * Unified API Client
  *
+ * @deprecated Use `@/shared/api/client` as the canonical client entry.
+ *
  * Production-ready HTTP client with:
  * - Request/response interceptors
  * - Authentication token handling
@@ -15,8 +17,8 @@
 
 import axios, { type AxiosInstance, type AxiosRequestConfig, type CancelTokenSource } from 'axios'
 import { setupRequestInterceptors, setupResponseInterceptors } from './interceptors'
-import { createRetryInterceptor } from '@/5-shared/api/retry'
-import { API_BASE_URL, API_TIMEOUT } from '@/5-shared/config/api'
+import { createRetryInterceptor } from '@/shared/api/retry'
+import { API_BASE_URL, API_TIMEOUT } from '@/shared/config/api'
 
 /**
  * API Client configuration

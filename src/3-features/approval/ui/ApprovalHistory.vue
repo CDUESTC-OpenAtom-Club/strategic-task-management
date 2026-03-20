@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Check, Close, Upload, RefreshLeft } from '@element-plus/icons-vue'
-import type { ApprovalHistoryItem } from '@/5-shared/types'
+import type { ApprovalHistoryItem } from '@/shared/types'
 
 const props = defineProps<{
   history: ApprovalHistoryItem[]
@@ -53,6 +53,10 @@ const getActionLabel = (action: ApprovalHistoryItem['action']) => {
   }
 }
 
+const getStepLabel = (item: ApprovalHistoryItem) => {
+  return item.stepName?.trim() || '流程节点'
+}
+
 const formatTime = (date: Date) => {
   const d = new Date(date)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -84,6 +88,7 @@ const formatTime = (date: Date) => {
             </el-tag>
             <span class="operator-name">{{ item.operatorName }}</span>
           </div>
+          <p v-if="item.stepName" class="history-step">节点：{{ getStepLabel(item) }}</p>
           <p v-if="item.comment" class="history-comment">{{ item.comment }}</p>
         </div>
       </el-timeline-item>
@@ -129,6 +134,12 @@ const formatTime = (date: Date) => {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-main);
+}
+
+.history-step {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
 }
 
 .history-comment {

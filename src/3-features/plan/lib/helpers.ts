@@ -4,7 +4,7 @@
  * Internal helper functions for plan feature.
  */
 
-import type { Plan, PlanStatus } from '@/5-shared/types'
+import type { Plan, PlanStatus } from '@/shared/types'
 
 /**
  * Check if plan can be edited

@@ -2,8 +2,8 @@
 import { computed } from 'vue'
 import { Check } from '@element-plus/icons-vue'
 
-import type { MilestoneUI } from '@/5-shared/types'
-import { sortMilestonesByProgress } from '@/5-shared/lib/utils/milestoneSort'
+import type { MilestoneUI } from '@/shared/types'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 
 const props = defineProps<{
   milestones: MilestoneUI[]

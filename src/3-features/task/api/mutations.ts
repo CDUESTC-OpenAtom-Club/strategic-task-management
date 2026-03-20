@@ -4,12 +4,13 @@
  * Write operations for task data.
  */
 
-import api from '@/5-shared/api'
-import type { ApiResponse, StrategicTask } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import { startWorkflow, approveTask as workflowApproveTask, rejectTask as workflowRejectTask } from '@/features/workflow/api'
+import type { ApiResponse, StrategicTask } from '@/shared/types'
 import type {
   TaskCreateRequest,
   TaskUpdateRequest
-} from '@/5-shared/types'
+} from '@/shared/types'
 
 /**
  * Create new task
@@ -53,70 +54,61 @@ export async function deleteTask(taskId: number): Promise<ApiResponse<void>> {
 /**
  * Submit task for approval
  *
- * API: POST /api/v1/approval/instances
+ * API: POST /api/v1/workflows/start
  *
  * @param taskId - Task ID
- * @param requesterId - Requester user ID
- * @param requesterOrgId - Requester org ID
+ * @param requesterId - Requester user ID (unused, taken from JWT)
+ * @param requesterOrgId - Requester org ID (unused, taken from JWT)
  * @param comment - Submission comment (optional)
  */
 export async function submitTaskForApproval(
   taskId: number,
-  requesterId: number,
-  requesterOrgId: number,
-  comment?: string
+  _requesterId: number,
+  _requesterOrgId: number,
+  _comment?: string
 ): Promise<ApiResponse<void>> {
-  return api.post(
-    `/approval/instances?requesterId=${requesterId}&requesterOrgId=${requesterOrgId}`,
-    {
-      entityType: 'TASK',
-      entityId: taskId,
-      workflowCode: 'TASK_APPROVAL',
-      comment
-    }
-  )
+  await startWorkflow({
+    workflowCode: 'TASK_APPROVAL',
+    businessEntityId: taskId,
+    businessEntityType: 'TASK'
+  })
+  return { success: true, data: undefined }
 }
 
 /**
  * Approve task (approval instance)
  *
- * API: POST /api/v1/approval/instances/{instanceId}/approve?userId=...&comment=...
+ * API: POST /api/v1/workflows/tasks/{taskId}/approve
  *
  * @param instanceId - Approval instance ID
- * @param userId - Approver user ID
+ * @param userId - Approver user ID (unused, taken from JWT)
  * @param comment - Approval comment
  */
 export async function approveTask(
   instanceId: number,
-  userId: number,
+  _userId: number,
   comment?: string
 ): Promise<ApiResponse<void>> {
-  const encodedComment = comment ? `&comment=${encodeURIComponent(comment)}` : ''
-  return api.post(`/approval/instances/${instanceId}/approve?userId=${userId}${encodedComment}`, {
-    comment
-  })
+  await workflowApproveTask(String(instanceId), { comment })
+  return { success: true, data: undefined }
 }
 
 /**
  * Reject task (approval instance)
  *
- * API: POST /api/v1/approval/instances/{instanceId}/reject?userId=...&comment=...
+ * API: POST /api/v1/workflows/tasks/{taskId}/reject
  *
  * @param instanceId - Approval instance ID
- * @param userId - Approver user ID
+ * @param userId - Approver user ID (unused, taken from JWT)
  * @param reason - Rejection reason (required)
  */
 export async function rejectTask(
   instanceId: number,
-  userId: number,
+  _userId: number,
   reason: string
 ): Promise<ApiResponse<void>> {
-  return api.post(
-    `/approval/instances/${instanceId}/reject?userId=${userId}&comment=${encodeURIComponent(
-      reason
-    )}`,
-    { comment: reason }
-  )
+  await workflowRejectTask(String(instanceId), { reason })
+  return { success: true, data: undefined }
 }
 
 /**

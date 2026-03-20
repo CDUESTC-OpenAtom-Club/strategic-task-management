@@ -32,12 +32,12 @@ import {
   Key,
   WarningFilled
 } from '@element-plus/icons-vue'
-import type { UserManagementItem, UserForm, Organization, UserRole } from '@/5-shared/types'
-import api from '@/5-shared/api'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useAuditLogStore } from '@/3-features/admin/model/auditLog'
-import { logger } from '@/5-shared/lib/utils/logger'
-import orgApi from '@/3-features/organization/api/org'
+import type { UserManagementItem, UserForm, Organization, UserRole } from '@/shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useAuditLogStore } from '@/features/admin/model/auditLog'
+import { logger } from '@/shared/lib/utils/logger'
+import orgApi from '@/features/organization/api/org'
 
 const authStore = useAuthStore()
 const auditLogStore = useAuditLogStore()

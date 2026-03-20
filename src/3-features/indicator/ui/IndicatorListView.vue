@@ -4,31 +4,30 @@ import { Plus, View, Download, Delete as _Delete, ArrowDown as _ArrowDown, Promo
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
-import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/5-shared/types'
-import { IndicatorStatus } from '@/5-shared/types/entities'
+import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
 import {
   getProgressStatus,
   getProgressColor as _getProgressColor,
   getStatusTagType as _getStatusTagType
-} from '@/5-shared/lib/utils'
-import type { StatusAuditEntry as _StatusAuditEntry } from '@/5-shared/types'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import { ApprovalProgressDrawer } from '@/3-features/approval'
-import { useDataValidator } from '@/5-shared/lib/validation/dataValidator'
-import { normalizePlanStatus } from '@/3-features/task/lib/planStatus'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { sortMilestonesByProgress } from '@/5-shared/lib/utils/milestoneSort'
+} from '@/shared/lib/utils'
+import type { StatusAuditEntry as _StatusAuditEntry } from '@/shared/types'
+import { useOrgStore } from '@/features/organization/model/store'
+import { usePlanStore } from '@/features/plan/model/store'
+import { ApprovalProgressDrawer } from '@/features/approval'
+import { useDataValidator } from '@/shared/lib/validation/dataValidator'
+import { normalizePlanStatus } from '@/features/task/lib/planStatus'
+import { logger } from '@/shared/lib/utils/logger'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
   MILESTONE_STATUS_VALUES,
   PROGRESS_APPROVAL_STATUS_VALUES,
   type ProgressApprovalStatusValue
-} from '@/5-shared/config/validationRules'
+} from '@/shared/config/validationRules'
 
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
@@ -717,7 +716,7 @@ const overallStatus = computed(() => {
 })
 
 // 计算单元格合并信息
-const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
+const getSpanMethod = ({ row, column: _column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
   const dataList = indicators.value
 
   // 只有战略任务列（第0列）需要合并
@@ -1855,93 +1854,6 @@ const handleWithdrawAllProgressApprovals = () => {
 // ============================================================================
 
 /**
- * 获取生命周期状态的显示文本
- * @param status - 指标生命周期状态
- * @returns 中文显示文本
- */
-const getLifecycleStatusText = (status: IndicatorStatus | string): string => {
-  const statusMap: Record<string, string> = {
-    DRAFT: '草稿',
-    PENDING: '草稿', // 兼容历史状态值，按草稿展示
-    PENDING_REVIEW: '待审核',
-    DISTRIBUTED: '已下发',
-    ACTIVE: '已下发',  // Legacy ACTIVE status treated as DISTRIBUTED
-    ARCHIVED: '已归档'
-  }
-  return statusMap[String(status || '').toUpperCase()] || '未知状态'
-}
-
-/**
- * 获取生命周期状态的标签类型
- * @param status - 指标生命周期状态
- * @returns Element Plus tag type
- */
-const getLifecycleStatusType = (
-  status: IndicatorStatus | string
-): 'success' | 'info' | 'warning' | 'danger' => {
-  const typeMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
-    DRAFT: 'info',
-    PENDING: 'info', // 兼容历史状态值，按草稿样式展示
-    PENDING_REVIEW: 'warning',
-    DISTRIBUTED: 'success',
-    ACTIVE: 'success',  // Legacy ACTIVE status treated as DISTRIBUTED
-    ARCHIVED: 'info'
-  }
-  return typeMap[String(status || '').toUpperCase()] || 'info'
-}
-
-/**
- * 获取审批状态的显示文本
- * @param status - 进度审批状态
- * @returns 中文显示文本
- */
-const getApprovalStatusText = (status: ProgressApprovalStatusValue): string => {
-  const statusMap: Record<ProgressApprovalStatusValue, string> = {
-    NONE: '无',
-    DRAFT: '草稿',
-    PENDING: '待审批',
-    APPROVED: '已通过',
-    REJECTED: '已驳回'
-  }
-  return statusMap[status] || '未知'
-}
-
-/**
- * 获取审批状态的标签类型
- * @param status - 进度审批状态
- * @returns Element Plus badge type
- */
-const getApprovalStatusType = (status: ProgressApprovalStatusValue): 'success' | 'info' | 'warning' | 'danger' => {
-  const typeMap: Record<ProgressApprovalStatusValue, 'success' | 'info' | 'warning' | 'danger'> = {
-    NONE: 'info',
-    DRAFT: 'info',
-    PENDING: 'warning',
-    APPROVED: 'success',
-    REJECTED: 'danger'
-  }
-  return typeMap[status] || 'info'
-}
-
-/**
- * 判断是否显示审批状态徽章
- * @requirement: Plan-centric status - 使用 Plan 状态判断
- * @param _indicator - 指标对象（保留参数兼容性）
- * @returns 是否显示徽章
- */
-const showApprovalBadge = (_indicator: StrategicIndicator): boolean => {
-  // @requirement: Plan-centric - 只有 Plan 已下发时才显示徽章
-  if (!isPlanDistributed.value) {
-    return false
-  }
-
-  // 获取基于 Plan 状态的审批状态
-  const effectiveStatus = isApprovalStatus(_indicator, ['PENDING', 'APPROVED', 'REJECTED'])
-
-  // 有审批状态时显示徽章
-  return effectiveStatus
-}
-
-/**
  * 战略部"撤回下发"按钮展示条件
  * @requirement: Plan-centric status - 使用 Plan 状态判断
  * 仅在 Plan 处于已下发态时显示，避免草稿/待填报数据出现错误操作
@@ -1962,10 +1874,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
         <p class="page-desc">管理和查看所有战略考核指标</p>
       </div>
       <div class="page-actions">
-        <el-button v-if="canEdit" type="primary" @click="addNewRow">
-          <el-icon><Plus /></el-icon>
-          新增指标
-        </el-button>
         <el-button>
           <el-icon><Download /></el-icon>
           导出
@@ -2270,10 +2178,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               </el-alert>
 
               <el-empty :description="shouldShowPlanWarning ? '' : '暂无指标数据'">
-                <el-button v-if="canEdit && !shouldShowPlanWarning" type="primary" @click="addNewRow">
-                  <el-icon><Plus /></el-icon>
-                  新增指标
-                </el-button>
               </el-empty>
             </template>
           </div>

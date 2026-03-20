@@ -4,7 +4,7 @@
  * API request/response types specific to indicator endpoints.
  */
 
-import type { Indicator, IndicatorFilters } from '@/4-entities/indicator/model/types'
+import type { Indicator, IndicatorFilters } from '@/entities/indicator/model/types'
 
 /**
  * Paginated response

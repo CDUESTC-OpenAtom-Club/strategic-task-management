@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Check, Clock, Warning } from '@element-plus/icons-vue'
-import type { Milestone } from '@/5-shared/types'
-import { sortMilestonesByProgress } from '@/5-shared/lib/utils/milestoneSort'
+import type { Milestone } from '@/shared/types'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 
 const props = defineProps<{
   milestones: Milestone[]

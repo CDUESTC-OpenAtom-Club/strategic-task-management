@@ -11,7 +11,7 @@
 
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import type { UserRole } from '@/5-shared/types'
+import type { UserRole } from '@/shared/types'
 import type { Component } from 'vue'
 import { DataAnalysis, Document as _Document, Edit, List, Promotion } from '@element-plus/icons-vue'
 
@@ -65,8 +65,7 @@ export function useNavigation(viewingRole: computed<UserRole | null>) {
       '/indicators': 'indicators',
       '/distribution': 'distribution',
       '/messages': 'messages',
-      '/plans': 'plans',
-      '/audit/pending': 'pending-audit'
+      '/plans': 'plans'
     }
 
     // 如果当前路径在映射中，直接返回对应的标签ID
@@ -82,9 +81,9 @@ export function useNavigation(viewingRole: computed<UserRole | null>) {
       return 'plans'
     }
 
-    // /audit/plan/:fillId -> pending-audit (审核详情属于待审核列表)
+    // 历史 audit 路径已经回收到主工作台
     if (currentPath.startsWith('/audit/')) {
-      return 'pending-audit'
+      return 'strategic'
     }
 
     // /profile -> 不在导航标签中，返回当前路径

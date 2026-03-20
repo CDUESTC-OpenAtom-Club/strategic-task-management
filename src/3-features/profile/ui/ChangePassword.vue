@@ -64,9 +64,9 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import api from '@/5-shared/api'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { useAuthStore } from '@/features/auth/model/store'
+import { apiClient as api } from '@/shared/api/client'
+import { logger } from '@/shared/lib/utils/logger'
 
 const router = useRouter()
 const authStore = useAuthStore()

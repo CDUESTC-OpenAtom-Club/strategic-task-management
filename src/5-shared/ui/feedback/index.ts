@@ -14,7 +14,7 @@ export {
   showSubmitConfirm,
   showApprovalConfirm,
   useConfirmDialog
-} from '@/5-shared/lib/ui/feedback/confirmDialog'
-export type { ConfirmDialogOptions, DialogType } from '@/5-shared/lib/ui/feedback/confirmDialog'
+} from '@/shared/lib/ui/feedback/confirmDialog'
+export type { ConfirmDialogOptions, DialogType } from '@/shared/lib/ui/feedback/confirmDialog'
 export { default as SkeletonLoader } from './SkeletonLoader.vue'
 export { default as EmptyState } from './EmptyState.vue'

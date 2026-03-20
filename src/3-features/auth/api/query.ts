@@ -4,7 +4,7 @@
  * Read-only API operations for authentication.
  */
 
-import api from '@/5-shared/api'
+import { apiClient as api } from '@/shared/api/client'
 import type { ApiResponse } from './types'
 
 /**

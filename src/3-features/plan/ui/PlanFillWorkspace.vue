@@ -38,10 +38,10 @@ import type {
   Indicator as _Indicator,
   IndicatorFill,
   Milestone
-} from '@/5-shared/types'
-import IndicatorFillForm from '@/5-shared/ui/form/indicator/IndicatorFillForm.vue'
-import IndicatorFillHistory from '@/5-shared/ui/form/indicator/IndicatorFillHistory.vue'
-import { logger } from '@/5-shared/lib/utils/logger'
+} from '@/shared/types'
+import IndicatorFillForm from './IndicatorFillForm.vue'
+import IndicatorFillHistory from './IndicatorFillHistory.vue'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 填报工作区 - 分栏式布局

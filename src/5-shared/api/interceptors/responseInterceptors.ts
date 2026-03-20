@@ -11,19 +11,22 @@
  * @module api/interceptors
  */
 
+import axios from 'axios'
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import type { AxiosError } from 'axios'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { recordApiLatency } from '@/5-shared/lib/utils/performance'
-import { cacheManager } from '@/5-shared/lib/utils/cache'
-import { transformError, toExtendedError } from '@/5-shared/api/errorHandler'
-import type { ExtendedErrorInfo } from '@/5-shared/types/error'
-import { API_TARGET, USE_MOCK } from '@/5-shared/config/api'
+import { logger } from '@/shared/lib/utils/logger'
+import { recordApiLatency } from '@/shared/lib/utils/performance'
+import { cacheManager } from '@/shared/lib/utils/cache'
+import { transformError, toExtendedError } from '@/shared/api/errorHandler'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
+import { clearPersistedAuthState, redirectToLogin } from '@/shared/lib/utils/authSession'
+import type { ExtendedErrorInfo } from '@/shared/types/error'
+import { API_TARGET, USE_MOCK } from '@/shared/config/api'
 
 const backendDisplayTarget = API_TARGET || '当前配置的后端地址'
 
 async function loadMockResponse(config: InternalAxiosRequestConfig): Promise<unknown> {
-  const { MockApiHandler } = await import('@/5-shared/api/mocks/handler')
+  const { MockApiHandler } = await import('@/shared/api/mocks/handler')
   return MockApiHandler.handleRequest(config)
 }
 
@@ -285,12 +288,9 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       // 防止重复刷新（如果已经尝试过刷新但仍然失败）
       if (originalRequest._retry) {
         logger.warn('🔒 [API Auth] Token 刷新后仍然失败，跳转登录')
-
-        const { useAuthStore } = await import('@/3-features/auth/model/store')
-        const authStore = useAuthStore()
-
-        // logout() 会自动跳转到登录页，无需额外处理
-        authStore.logout()
+        tokenManager.clearAccessToken()
+        clearPersistedAuthState()
+        redirectToLogin()
 
         return Promise.reject(error)
       }
@@ -302,29 +302,21 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
         logger.debug('🔄 [API Auth] 尝试刷新 Token...')
 
         // 刷新 Token
-        const { tokenManager } = await import('@/5-shared/lib/utils/tokenManager')
         const newToken = await tokenManager.refreshAccessToken()
 
         logger.debug('✅ [API Auth] Token 刷新成功，重试原请求')
-
-        // 更新 auth store 中的 token
-        const { useAuthStore } = await import('@/3-features/auth/model/store')
-        const authStore = useAuthStore()
-        authStore.token = newToken
 
         // 更新原请求的 Authorization 头
         originalRequest.headers.Authorization = `Bearer ${newToken}`
 
         // 重新发起原请求
-        const axios = (await import('axios')).default
         return axios.request(originalRequest)
       } catch (refreshError) {
         logger.error('❌ [API Auth] Token 刷新失败:', refreshError)
 
-        // 刷新失败，清除登录状态并跳转（logout() 会自动跳转）
-        const { useAuthStore } = await import('@/3-features/auth/model/store')
-        const authStore = useAuthStore()
-        authStore.logout()
+        tokenManager.clearAccessToken()
+        clearPersistedAuthState()
+        redirectToLogin()
 
         return Promise.reject(refreshError)
       }

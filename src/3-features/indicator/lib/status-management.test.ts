@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   getSafeApprovalStatus,
   isApprovalStatus,
@@ -17,12 +17,12 @@ import {
   getAllowedTransitions,
   isValidTransition
 } from './status-management'
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import {
   IndicatorStatus,
   ProgressApprovalStatus,
   WorkflowStatus
-} from '@/4-entities/indicator/model/types'
+} from '@/entities/indicator/model/types'
 
 describe('Advanced Status Management', () => {
   // 创建测试用的基础指标对象

@@ -10,7 +10,7 @@ export { useAuthStore } from './model/store'
 
 // Types
 export type * from './model/types'
-export type { User, UserRole } from '@/4-entities/user/model/types'
+export type { User, UserRole } from '@/entities/user/model/types'
 
 // Constants
 export * from './model/constants'

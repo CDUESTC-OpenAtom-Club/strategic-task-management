@@ -1,4 +1,4 @@
-import type { Milestone, MilestoneStatus } from '@/5-shared/types/entities'
+import type { Milestone, MilestoneStatus } from '@/shared/types/entities'
 
 export const mockMilestones: Milestone[] = [
   {

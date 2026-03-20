@@ -9,24 +9,24 @@ import {
   Top,
   Close
 } from '@element-plus/icons-vue'
-import type { DashboardData, UserRole, Indicator } from '@/5-shared/types'
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useDashboardStore } from '@/3-features/dashboard/model/store'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import BreadcrumbNav from '@/5-shared/ui/layout/BreadcrumbNav.vue'
-import ScoreCompositionChart from '@/5-shared/ui/charts/ScoreCompositionChart.vue'
-import AlertDistributionChart from '@/5-shared/ui/charts/AlertDistributionChart.vue'
-import DepartmentProgressChart from '@/5-shared/ui/charts/DepartmentProgressChart.vue'
+import type { DashboardData, UserRole, Indicator } from '@/shared/types'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useDashboardStore } from '@/features/dashboard/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import BreadcrumbNav from '@/shared/ui/layout/BreadcrumbNav.vue'
+import ScoreCompositionChart from '@/shared/ui/charts/ScoreCompositionChart.vue'
+import AlertDistributionChart from '@/shared/ui/charts/AlertDistributionChart.vue'
+import DepartmentProgressChart from './DepartmentProgressChart.vue'
 // 新增图表组件
-import TaskSankeyChart from '@/5-shared/ui/charts/TaskSankeyChart.vue'
-import SourcePieChart from '@/5-shared/ui/charts/SourcePieChart.vue'
+import TaskSankeyChart from '@/shared/ui/charts/TaskSankeyChart.vue'
+import SourcePieChart from '@/shared/ui/charts/SourcePieChart.vue'
 import { ElMessage } from 'element-plus'
-import { isSecondaryCollege } from '@/5-shared/lib/utils/colors'
-import { useOrgStore } from '@/3-features/organization/model/store'
+import { isSecondaryCollege } from '@/shared/lib/utils/colors'
+import { useOrgStore } from '@/features/organization/model/store'
 // 加载状态管理 - Requirements 1.5, 1.6
-import { useLoadingState } from '@/5-shared/lib/loading/useLoadingState'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { useLoadingState } from '@/shared/lib/loading/useLoadingState'
+import { logger } from '@/shared/lib/utils/logger'
 
 // 动态导入 echarts，避免初始加载时打包
 let echarts: typeof import('echarts') | null = null

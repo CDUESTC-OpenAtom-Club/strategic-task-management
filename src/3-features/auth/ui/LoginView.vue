@@ -123,7 +123,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useAuthStore } from '@/3-features/auth/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
 import LoginForm from './LoginForm.vue'
 
 const router = useRouter()
@@ -143,35 +143,41 @@ let bgInterval: ReturnType<typeof setInterval> | null = null
 const defaultBgImages: BgImage[] = [
   {
     id: 1,
-    background:
-      'radial-gradient(circle at 18% 20%, rgba(255, 208, 124, 0.28), transparent 22%), linear-gradient(135deg, #18324a 0%, #20506d 42%, #6aa2a1 100%)',
-    label: 'Campus Dawn'
+    background: 'url(https://images.unsplash.com/photo-1562774053-701939374585?w=1920&q=80) center/cover no-repeat',
+    label: 'Campus Building'
   },
   {
     id: 2,
-    background:
-      'radial-gradient(circle at 78% 18%, rgba(255, 244, 166, 0.24), transparent 18%), linear-gradient(135deg, #3c1f4a 0%, #694f8e 38%, #d6a66f 100%)',
-    label: 'Library Glow'
+    background: 'url(https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&q=80) center/cover no-repeat',
+    label: 'University Library'
   },
   {
     id: 3,
-    background:
-      'radial-gradient(circle at 28% 78%, rgba(173, 228, 255, 0.22), transparent 20%), linear-gradient(135deg, #0e3b43 0%, #1b7080 40%, #9ed2c6 100%)',
-    label: 'Graduation Sky'
+    background: 'url(https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1920&q=80) center/cover no-repeat',
+    label: 'Graduation Ceremony'
   },
   {
     id: 4,
-    background:
-      'radial-gradient(circle at 82% 76%, rgba(255, 210, 145, 0.2), transparent 18%), linear-gradient(135deg, #402218 0%, #855236 44%, #caa26f 100%)',
-    label: 'Stone Hall'
+    background: 'url(https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=1920&q=80) center/cover no-repeat',
+    label: 'Historic Hall'
   },
   {
     id: 5,
-    background:
-      'radial-gradient(circle at 50% 16%, rgba(255, 255, 255, 0.18), transparent 16%), linear-gradient(135deg, #1d2745 0%, #325b88 42%, #7caec7 100%)',
-    label: 'Evening Atrium'
+    background: 'url(https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=1920&q=80) center/cover no-repeat',
+    label: 'Evening Campus'
   }
 ]
+
+// Preload background images
+const preloadImages = () => {
+  defaultBgImages.forEach((img) => {
+    const match = img.background.match(/url\((.*?)\)/)
+    if (match) {
+      const imgEl = new Image()
+      imgEl.src = match[1]
+    }
+  })
+}
 
 const startBgRotation = () => {
   bgInterval = setInterval(() => {
@@ -243,6 +249,7 @@ const handleForgotPassword = () => {
 // Lifecycle
 onMounted(() => {
   bgImages.value = defaultBgImages
+  preloadImages() // 预加载所有图片
   startBgRotation()
   updateTime()
   timeInterval = setInterval(updateTime, 1000)

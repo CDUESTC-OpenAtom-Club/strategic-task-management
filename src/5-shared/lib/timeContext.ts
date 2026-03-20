@@ -6,8 +6,10 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed, onMounted } from 'vue'
-import { strategicApi } from '@/3-features/task/api/strategicApi'
+import { ref, computed } from 'vue'
+import { apiClient } from '@/shared/api/client'
+import { logger } from '@/shared/lib/utils/logger'
+import type { AssessmentCycle as AssessmentCycleVO } from '@/shared/types/backend-aligned'
 
 export const useTimeContextStore = defineStore('timeContext', () => {
   // ============ State ============
@@ -81,15 +83,26 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   async function fetchAvailableYears() {
     loading.value = true
     try {
-      const response = await strategicApi.getAvailableYears()
-      if (response.success && response.data && response.data.length > 0) {
-        availableYears.value = response.data
+      const response = await apiClient.get<{
+        success?: boolean
+        data?: AssessmentCycleVO[]
+        message?: string
+      }>('/cycles/list')
+
+      const years = Array.isArray(response.data)
+        ? response.data
+            .map(cycle => cycle.year)
+            .filter((year): year is number => typeof year === 'number')
+        : []
+
+      if (response.success && years.length > 0) {
+        availableYears.value = [...new Set(years)].sort((left, right) => right - left)
       } else {
-        console.warn('No years returned from API, using fallback')
+        logger.warn('[TimeContext] No years returned from API, using fallback')
         availableYears.value = fallbackYears.value
       }
     } catch (error) {
-      console.error('Failed to fetch available years:', error)
+      logger.error('[TimeContext] Failed to fetch available years:', error)
       availableYears.value = fallbackYears.value
     } finally {
       loading.value = false

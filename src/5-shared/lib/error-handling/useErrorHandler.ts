@@ -10,7 +10,7 @@
 
 import { ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 // ============================================================================
 // 类型定义

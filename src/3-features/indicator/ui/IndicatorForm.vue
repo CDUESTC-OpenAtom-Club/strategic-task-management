@@ -19,10 +19,10 @@ import {
   type FormInstance,
   type FormRules
 } from 'element-plus'
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import { INDICATOR_TYPE_OPTIONS, VALIDATION_RULES } from '../model/constants'
 import { indicatorCreateSchema, indicatorUpdateSchema } from '../model/schema'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 interface Props {
   modelValue: Partial<Indicator>

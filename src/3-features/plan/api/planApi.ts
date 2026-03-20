@@ -7,10 +7,10 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient } from '@/5-shared/lib/api'
-import { withRetry } from '@/5-shared/lib/api/wrappers'
-import { USE_MOCK } from '@/5-shared/config/api'
-import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
+import { apiClient } from '@/shared/api/client'
+import { withRetry } from '@/shared/api'
+import { USE_MOCK } from '@/shared/config/api'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import type {
   ApiResponse,
   Plan,
@@ -24,8 +24,17 @@ import type {
   PlanSubmitForm,
   AuditForm,
   Attachment
-} from '@/5-shared/types'
-import { approvalApi, type ApprovalDetail } from '@/3-features/approval/api/approval'
+} from '@/shared/types'
+import { getMyPendingTasks, approveTask, rejectTask } from '@/features/workflow/api'
+import { useAuthStore } from '@/features/auth/model/store'
+
+export interface SubmitPlanApprovalPayload {
+  workflowCode: string
+  selectedApprovers: Array<{
+    stepDefId: number
+    approverId: number
+  }>
+}
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
@@ -161,16 +170,33 @@ function inferYearFromCycleId(cycleId: unknown): number | null {
   return null
 }
 
+function resolvePlanYear(raw: Record<string, any>): number | null {
+  const explicitYear = raw.year ?? raw.cycle?.year
+  if (explicitYear != null && explicitYear !== '') {
+    const numericYear = Number(explicitYear)
+    return Number.isFinite(numericYear) ? numericYear : null
+  }
+
+  return inferYearFromCycleId(raw.cycleId)
+}
+
 function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
-  const inferredYear = raw.year ?? inferYearFromCycleId(raw.cycleId)
+  const inferredYear = resolvePlanYear(raw)
   const cycleLabel = raw.year ?? inferredYear ?? raw.cycle ?? ''
+  const effectiveWorkflowStatus = typeof raw.workflowStatus === 'string' ? raw.workflowStatus.toUpperCase() : ''
+  const effectiveStatus =
+    effectiveWorkflowStatus === 'PENDING' ||
+    effectiveWorkflowStatus === 'IN_REVIEW' ||
+    effectiveWorkflowStatus === 'SUBMITTED'
+      ? effectiveWorkflowStatus
+      : raw.status
 
   return {
     id: raw.id ?? raw.planId,
     name: raw.planName ?? raw.name ?? '',
     cycle: String(cycleLabel),
     org_id: raw.targetOrgId ?? raw.orgId ?? raw.org_id ?? '',
-    status: planApi.convertStatusFromBackend(raw.status),
+    status: planApi.convertStatusFromBackend(effectiveStatus),
     tasks: Array.isArray(raw.tasks) ? raw.tasks : [],
     createdAt: raw.createTime ?? raw.createdAt,
     updatedAt: raw.updatedAt,
@@ -184,7 +210,20 @@ function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
     ...('orgName' in raw ? { orgName: raw.orgName } : {}),
     ...('cycleId' in raw ? { cycleId: raw.cycleId } : {}),
     ...(inferredYear != null ? { year: inferredYear } : {}),
-    ...('planLevel' in raw ? { planLevel: raw.planLevel } : {})
+    ...('planLevel' in raw ? { planLevel: raw.planLevel } : {}),
+    ...('workflowInstanceId' in raw ? { workflowInstanceId: Number(raw.workflowInstanceId) || undefined } : {}),
+    ...('currentTaskId' in raw ? { currentTaskId: Number(raw.currentTaskId) || undefined } : {}),
+    ...('workflowStatus' in raw ? { workflowStatus: raw.workflowStatus } : {}),
+    ...('currentStepName' in raw ? { currentStepName: raw.currentStepName, currentStep: raw.currentStepName } : {}),
+    ...('currentApproverId' in raw ? { currentApproverId: Number(raw.currentApproverId) || undefined } : {}),
+    ...('currentApproverName' in raw ? { currentApproverName: raw.currentApproverName } : {}),
+    ...('canWithdraw' in raw ? { canWithdraw: Boolean(raw.canWithdraw) } : {}),
+    ...('canEdit' in raw ? { canEdit: Boolean(raw.canEdit) } : {}),
+    ...('canResubmit' in raw ? { canResubmit: Boolean(raw.canResubmit) } : {}),
+    ...('submittedBy' in raw ? { submittedBy: Number(raw.submittedBy) || undefined } : {}),
+    ...('submittedAt' in raw ? { submittedAt: raw.submittedAt } : {}),
+    ...('lastRejectReason' in raw ? { lastRejectReason: raw.lastRejectReason } : {}),
+    ...('workflowHistory' in raw && Array.isArray(raw.workflowHistory) ? { workflowHistory: raw.workflowHistory } : {})
   } as Plan
 }
 
@@ -424,20 +463,6 @@ const mockPlanFills: PlanFillVO[] = [
 // 类型转换函数
 // ============================================================
 
-function convertStatus(status: string): PlanStatus {
-  const map: Record<string, PlanStatus> = {
-    DRAFT: 'draft',
-    PENDING: 'pending',
-    IN_REVIEW: 'pending',
-    DISTRIBUTED: 'published',
-    APPROVED: 'published',
-    ACTIVE: 'published',
-    PUBLISHED: 'published',
-    ARCHIVED: 'archived'
-  }
-  return map[status] || 'draft'
-}
-
 function convertFillStatus(status: string): PlanFillStatus {
   const map: Record<string, PlanFillStatus> = {
     SUBMITTED: 'submitted',
@@ -624,9 +649,8 @@ function isLockedPlanReportStatus(status?: string | null): boolean {
 async function resolveIndicatorReportContext(
   indicatorId: number | string
 ): Promise<IndicatorReportContext> {
-  const { indicatorApi } = await import('@/3-features/indicator/api')
-  const { useAuthStore } = await import('@/3-features/auth/model/store')
-  const { useOrgStore } = await import('@/3-features/organization/model/store')
+  const { indicatorApi } = await import('@/features/indicator/api')
+  const { useOrgStore } = await import('@/features/organization/model/store')
 
   const indicatorResponse = await indicatorApi.getIndicatorById(String(indicatorId))
   if (!hasApiData(indicatorResponse) || !indicatorResponse.data) {
@@ -715,6 +739,56 @@ function normalizePlanCollection(
   return unwrapPlanCollection(data).map(item => convertBackendPlanToPlan(item as Record<string, any>))
 }
 
+async function loadPlansByCycleFallback(): Promise<ApiResponse<Plan[]>> {
+  const cyclesResponse = await apiClient.get<
+    ApiResponse<Array<{ id?: number | string; cycleId?: number | string }>>
+  >('/cycles/list')
+
+  const cycles = Array.isArray(cyclesResponse.data) ? cyclesResponse.data : []
+  const cycleIds = cycles
+    .map(cycle => Number(cycle.id ?? cycle.cycleId ?? NaN))
+    .filter(cycleId => Number.isFinite(cycleId) && cycleId > 0)
+
+  if (cycleIds.length === 0) {
+    return {
+      ...(cyclesResponse as ApiResponse<Plan[]>),
+      data: []
+    }
+  }
+
+  const cyclePlanResponses = await Promise.all(
+    cycleIds.map(async cycleId => {
+      const response = await apiClient.get<ApiResponse<Plan[]>>(`/plans/cycle/${cycleId}`)
+      return Array.isArray(response.data) ? response.data : []
+    })
+  )
+
+  const planMap = new Map<string, Plan>()
+  cyclePlanResponses
+    .flat()
+    .map(plan => convertBackendPlanToPlan(plan as Record<string, any>))
+    .forEach(plan => {
+      const key = String(plan.id ?? '')
+      if (key) {
+        planMap.set(key, plan)
+      }
+    })
+
+  const data = Array.from(planMap.values()).sort((a, b) => {
+    const left = new Date(String((a as Plan & { created_at?: string }).created_at || '')).getTime()
+    const right = new Date(String((b as Plan & { created_at?: string }).created_at || '')).getTime()
+    return right - left
+  })
+
+  return {
+    success: true,
+    code: 200,
+    message: '获取成功（周期兜底）',
+    data,
+    timestamp: new Date().toISOString()
+  }
+}
+
 function convertPlanFillVOToPlanFill(vo: PlanFillVO, fills: IndicatorFill[]): PlanFill {
   return {
     id: vo.fillId,
@@ -776,12 +850,17 @@ export const planApi = {
         tags: ['plan.list']
       },
       fetcher: async () => {
-        const response = await apiClient.get<
-          ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
-        >('/plans')
-        return {
-          ...response,
-          data: normalizePlanCollection(response.data)
+        try {
+          const response = await apiClient.get<
+            ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
+          >('/plans', { page: 0, size: 1000 })
+          return {
+            ...response,
+            data: normalizePlanCollection(response.data)
+          }
+        } catch (error) {
+          const fallbackResponse = await loadPlansByCycleFallback()
+          return fallbackResponse
         }
       }
     })
@@ -970,6 +1049,8 @@ export const planApi = {
       'PENDING': 'pending',
       'IN_REVIEW': 'pending',
       'PENDING_APPROVAL': 'pending',
+      'RETURNED': 'returned',
+      'REJECTED': 'returned',
       'APPROVED': 'published',
       'DISTRIBUTED': 'published',
       'ACTIVE': 'published',
@@ -1132,7 +1213,10 @@ export const planApi = {
    * 提交 Plan 审批（上报审批）
    * 将 Plan 状态从 DRAFT 变为 PENDING
    */
-  async submitPlanForApproval(planId: number | string): Promise<ApiResponse<Plan>> {
+  async submitPlanForApproval(
+    planId: number | string,
+    payload: SubmitPlanApprovalPayload
+  ): Promise<ApiResponse<Plan>> {
     if (this.useMockData) {
       const planVO = mockPlans.find(p => p.planId === Number(planId))
       if (!planVO) {
@@ -1153,7 +1237,7 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/publish`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/submit-dispatch`, payload)
       invalidatePlanCaches(planId)
       return response
     })
@@ -1667,7 +1751,6 @@ export const indicatorFillApi = {
       }
     }
 
-    const { useAuthStore } = await import('@/3-features/auth/model/store')
     const authStore = useAuthStore()
     const userId = Number(authStore.user?.id)
 
@@ -1743,7 +1826,7 @@ export const planFillApi = {
   /**
    * 获取待审核的 PlanFill 列表（审核人视角）
    */
-  async getPendingPlanFills(auditorOrgId?: number | string): Promise<ApiResponse<PlanFill[]>> {
+  async getPendingPlanFills(_auditorOrgId?: number | string): Promise<ApiResponse<PlanFill[]>> {
     if (this.useMockData) {
       const fills = mockPlanFills
         .filter(f => f.status === 'SUBMITTED')
@@ -1762,11 +1845,13 @@ export const planFillApi = {
       }
     }
 
-    const response = await approvalApi.getPendingApprovals(Number(auditorOrgId))
+    const response = await getMyPendingTasks(1)
 
     return {
       ...response,
-      data: Array.isArray(response.data) ? response.data.map(convertApprovalDetailToPlanFill) : []
+      data: Array.isArray((response.data as unknown as { items: unknown[] })?.items)
+        ? (response.data as unknown as { items: unknown[] }).items.map(convertApprovalDetailToPlanFill)
+        : []
     }
   },
 
@@ -1809,24 +1894,17 @@ export const planFillApi = {
     }
 
     return withRetry(async () => {
-      const userId = form.userId || 1 // TODO: 从当前用户上下文获取实际userId
-
-      const response =
-        form.action?.toLowerCase() === 'approve'
-          ? await approvalApi.approve(Number(fillId), {
-              userId,
-              comment: form.comment || ''
-            })
-          : await approvalApi.reject(Number(fillId), {
-              userId,
-              comment: form.comment || '',
-              reason: form.comment || ''
-            })
+      if (form.action?.toLowerCase() === 'approve') {
+        await approveTask(String(fillId), { comment: form.comment || '' })
+      } else {
+        await rejectTask(String(fillId), { reason: form.comment || '' })
+      }
 
       return {
-        ...response,
-        data: response.data ? convertApprovalDetailToPlanFill(response.data) : null
-      } as ApiResponse<PlanFill>
+        success: true,
+        data: null,
+        message: form.action === 'approve' ? '审核通过' : '已驳回'
+      } as unknown as ApiResponse<PlanFill>
     })
   }
 }

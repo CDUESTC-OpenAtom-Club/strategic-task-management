@@ -1,8 +1,9 @@
-import type { StatusTagType } from '@/5-shared/lib/utils/formatters'
+import type { StatusTagType } from '@/shared/lib/utils/formatters'
 
 export type CanonicalPlanStatus =
   | 'DRAFT'
   | 'PENDING'
+  | 'RETURNED'
   | 'DISTRIBUTED'
 
 const PLAN_STATUS_NORMALIZATION_MAP: Record<string, CanonicalPlanStatus> = {
@@ -16,8 +17,8 @@ const PLAN_STATUS_NORMALIZATION_MAP: Record<string, CanonicalPlanStatus> = {
   PUBLISHED: 'DISTRIBUTED',
   DISTRIBUTED: 'DISTRIBUTED',
   ACTIVE: 'DISTRIBUTED',
-  REJECTED: 'DRAFT',
-  RETURNED: 'DRAFT',
+  REJECTED: 'RETURNED',
+  RETURNED: 'RETURNED',
   WITHDRAWN: 'DRAFT',
   CANCELLED: 'DRAFT',
   COMPLETED: 'DRAFT',
@@ -27,6 +28,7 @@ const PLAN_STATUS_NORMALIZATION_MAP: Record<string, CanonicalPlanStatus> = {
 const PLAN_STATUS_DISPLAY_MAP: Record<CanonicalPlanStatus, { label: string; type: StatusTagType }> = {
   DRAFT: { label: '草稿', type: 'info' },
   PENDING: { label: '待审核', type: 'warning' },
+  RETURNED: { label: '已退回', type: 'danger' },
   DISTRIBUTED: { label: '已下发', type: 'success' }
 }
 

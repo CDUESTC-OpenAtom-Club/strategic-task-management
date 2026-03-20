@@ -32,6 +32,7 @@
               v-if="activeTab === 'all'"
               :messages="allMessages"
               @read="handleMessageRead"
+              @view="handleMessageView"
             />
           </transition>
         </el-tab-pane>
@@ -53,6 +54,7 @@
               v-if="activeTab === 'alerts'"
               :messages="alertMessages"
               @read="handleMessageRead"
+              @view="handleMessageView"
             />
           </transition>
         </el-tab-pane>
@@ -74,6 +76,7 @@
               v-if="activeTab === 'approvals'"
               :messages="approvalMessages"
               @read="handleMessageRead"
+              @view="handleMessageView"
             />
           </transition>
         </el-tab-pane>
@@ -95,6 +98,7 @@
               v-if="activeTab === 'system'"
               :messages="systemMessages"
               @read="handleMessageRead"
+              @view="handleMessageView"
             />
           </transition>
         </el-tab-pane>
@@ -106,11 +110,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import MessageList from '@/5-shared/ui/message/MessageList.vue'
-import { useMessageStore } from '@/3-features/messages/model/message'
+import MessageList from '@/shared/ui/message/MessageList.vue'
+import { useApprovalCenter } from '@/features/approval'
+import { useMessageStore } from '@/features/messages/model/message'
+import type { Message } from '@/shared/types'
 
 // 使用消息 Store
 const messageStore = useMessageStore()
+const { openApprovalCenter } = useApprovalCenter()
 
 const activeTab = ref('all')
 
@@ -125,6 +132,12 @@ const unreadCount = computed(() => messageStore.unreadCount)
 
 const handleMessageRead = (messageId: string) => {
   messageStore.markAsRead(messageId)
+}
+
+const handleMessageView = (message: Message) => {
+  if (message.type === 'approval') {
+    openApprovalCenter()
+  }
 }
 
 const markAllAsRead = () => {

@@ -156,11 +156,11 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Message, Phone } from '@element-plus/icons-vue'
-import type { User as UserType } from '@/4-entities/user/model/types'
+import type { User as UserType } from '@/entities/user/model/types'
 import type { UserProfileFormState, PasswordChangeFormState } from '../model/types'
 import { ROLE_CONFIG, VALIDATION_RULES } from '../model/constants'
 import { userApi } from '../api'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Props
 interface Props {

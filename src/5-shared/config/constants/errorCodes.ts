@@ -6,7 +6,7 @@
  * **Validates: Requirements 3.1.4**
  */
 
-import { ErrorCodePrefix, ErrorSeverity } from '@/5-shared/types/error'
+import { ErrorCodePrefix, ErrorSeverity } from '@/shared/types/error'
 
 /**
  * 错误码定义接口

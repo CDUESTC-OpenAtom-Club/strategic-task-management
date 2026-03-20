@@ -15,7 +15,7 @@ import {
   ElPagination,
   ElEmpty
 } from 'element-plus'
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import {
   STATUS_CONFIG,
   LEVEL_CONFIG,

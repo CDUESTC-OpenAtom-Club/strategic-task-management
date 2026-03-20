@@ -4,7 +4,7 @@
  * Business rule validations for indicators.
  */
 
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import { validateWeightSum } from './calculations'
 
 /**

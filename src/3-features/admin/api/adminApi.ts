@@ -12,8 +12,8 @@
  * 注意：后端API路径已修正，不使用/admin前缀
  */
 
-import { apiClient } from '@/5-shared/api/client'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { apiClient } from '@/shared/api/client'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * System statistics

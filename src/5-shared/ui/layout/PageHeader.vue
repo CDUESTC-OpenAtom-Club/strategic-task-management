@@ -38,6 +38,8 @@ export interface PageHeaderProps {
 }
 
 const props = withDefaults(defineProps<PageHeaderProps>(), {
+  description: '',
+  breadcrumb: () => [],
   showBack: false,
   backText: '返回',
   divider: true

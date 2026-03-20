@@ -5,8 +5,8 @@
  */
 
 import { ref, computed } from 'vue'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { WS_BASE_URL } from '@/5-shared/config/api'
+import { logger } from '@/shared/lib/utils/logger'
+import { WS_BASE_URL } from '@/shared/config/api'
 
 // Notification types matching backend
 export enum NotificationType {

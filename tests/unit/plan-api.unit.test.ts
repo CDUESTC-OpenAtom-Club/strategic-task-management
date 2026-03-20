@@ -1,16 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { cacheManager } from '@/5-shared/lib/utils/cache'
+import { cacheManager } from '@/shared/lib/utils/cache'
 
 const apiGetMock = vi.fn()
 
-vi.mock('@/5-shared/lib/api', () => ({
+vi.mock('@/shared/api/client', () => ({
   apiClient: {
     get: apiGetMock
   }
 }))
 
-vi.mock('@/3-features/approval/api/approval', () => ({
+vi.mock('@/shared/api', () => ({
+  withRetry: <T>(fn: () => Promise<T>) => fn()
+}))
+
+vi.mock('@/features/approval/api/approval', () => ({
   approvalApi: {}
+}))
+
+vi.mock('@/features/auth/model/store', () => ({
+  useAuthStore: () => ({
+    user: { id: 1 },
+    effectiveRole: 'strategic_dept',
+    effectiveDepartment: '战略发展部',
+    userDepartment: '战略发展部'
+  })
 }))
 
 describe('planApi.getAllPlans', () => {
@@ -31,10 +44,10 @@ describe('planApi.getAllPlans', () => {
       }
     })
 
-    const { planApi } = await import('@/3-features/plan/api/planApi')
+    const { planApi } = await import('@/features/plan/api/planApi')
     const result = await planApi.getAllPlans()
 
-    expect(apiGetMock).toHaveBeenCalledWith('/plans')
+    expect(apiGetMock).toHaveBeenCalledWith('/plans', { page: 0, size: 1000 })
     expect(result.data).toHaveLength(1)
     expect(result.data?.[0]).toMatchObject(plan)
   })
@@ -50,7 +63,7 @@ describe('planApi.getAllPlans', () => {
       }
     })
 
-    const { planApi } = await import('@/3-features/plan/api/planApi')
+    const { planApi } = await import('@/features/plan/api/planApi')
     const result = await planApi.getAllPlans()
 
     expect(result.data).toHaveLength(1)

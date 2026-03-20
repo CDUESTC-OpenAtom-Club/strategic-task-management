@@ -11,10 +11,9 @@
 export { ApiClient, apiClient } from './api/client'
 export type { ApiClientConfig, AppError } from './api/client'
 
-// Legacy components export (deprecated - use @/5-shared/ui instead)
+// Legacy components export (deprecated - use @/shared/ui instead)
 // Kept for backward compatibility during migration
 export { default as BreadcrumbNav } from './ui/layout/BreadcrumbNav.vue'
-export { default as DashboardFilters } from './ui/form/DashboardFilters.vue'
 export { default as DataForm } from './ui/form/DataForm.vue'
 export { default as DataTable } from './ui/table/DataTable.vue'
 export { default as EmptyState } from './ui/feedback/EmptyState.vue'

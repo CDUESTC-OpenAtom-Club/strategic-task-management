@@ -101,5 +101,6 @@ export { default as IndicatorDetailView } from './ui/IndicatorDetailView.vue'
 export { default as IndicatorEditView } from './ui/IndicatorEditView.vue'
 export { default as IndicatorDistributeView } from './ui/IndicatorDistributeView.vue'
 
-// Re-export shared form components
-export { IndicatorFillForm, IndicatorFillHistory, MilestoneTimeline } from '@/5-shared/ui/form'
+// Re-export plan-driven fill components
+export { IndicatorFillForm, IndicatorFillHistory } from '@/features/plan/ui'
+export { MilestoneTimeline } from '@/shared/ui/form'

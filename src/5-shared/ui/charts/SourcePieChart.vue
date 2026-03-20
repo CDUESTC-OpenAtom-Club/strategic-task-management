@@ -10,8 +10,8 @@ import {
   GraphicComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import type { SourcePieData } from '@/5-shared/types'
-import { getColorByIndex, getGradientColor } from '@/5-shared/lib/utils/colors'
+import type { SourcePieData } from '@/shared/types'
+import { getColorByIndex, getGradientColor } from '@/shared/lib/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, TitleComponent, GraphicComponent, CanvasRenderer])
 

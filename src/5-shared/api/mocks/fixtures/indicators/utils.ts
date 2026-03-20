@@ -1,7 +1,7 @@
 /**
  * 指标数据工具函数
  */
-import type { Milestone } from '@/5-shared/types'
+import type { Milestone } from '@/shared/types'
 
 // 生成季度里程碑（历史数据里程碑大部分已完成）
 export const generateQuarterlyMilestones = (year: number, progress: number): Milestone[] => {
