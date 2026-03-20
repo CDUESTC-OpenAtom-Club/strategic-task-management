@@ -12,10 +12,10 @@ import {
 } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Check, Close } from '@element-plus/icons-vue'
-import type { PlanFill } from '@/5-shared/types'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { approvalApi } from '@/3-features/approval/api/approval'
+import type { PlanFill } from '@/shared/types'
+import { usePlanStore } from '@/features/plan/model/store'
+import { logger } from '@/shared/lib/utils/logger'
+import { getWorkflowInstanceDetail } from '@/features/workflow/api'
 
 /**
  * Plan 审核页面
@@ -47,36 +47,6 @@ const getStatusConfig = (status?: string) => {
     rejected: { label: '已驳回', type: 'danger' }
   }
   return configs[status || ''] || { label: status || '', type: 'info' }
-}
-
-const toPlanFill = (detail: Record<string, unknown>): PlanFill => {
-  const statusMap: Record<string, 'submitted' | 'approved' | 'rejected'> = {
-    IN_REVIEW: 'submitted',
-    APPROVED: 'approved',
-    REJECTED: 'rejected'
-  }
-
-  return {
-    id: detail.id as string | number,
-    plan_id: (detail.entityId as string | number) ?? '',
-    submit_date: (detail.startedAt as string) || (detail.createdAt as string) || '',
-    status: statusMap[(detail.status as string) || ''] || 'submitted',
-    submitted_by: String(detail.requesterId ?? ''),
-    submitted_by_name:
-      (detail.requesterName as string) ||
-      (detail.title as string) ||
-      (detail.requesterId ? `申请人 #${detail.requesterId}` : '待确认提交人'),
-    fills: [],
-    audit_logs: [],
-    created_at: (detail.createdAt as string) || (detail.startedAt as string) || '',
-    updated_at:
-      (detail.updatedAt as string) ||
-      (detail.completedAt as string) ||
-      (detail.startedAt as string) ||
-      '',
-    total_indicators: 0,
-    completed_indicators: 0
-  }
 }
 
 // 操作方法
@@ -131,9 +101,29 @@ const handleReject = async () => {
 const loadPlanFill = async () => {
   loading.value = true
   try {
-    const response = await approvalApi.getApprovalInstance(Number(fillId.value))
+    const response = await getWorkflowInstanceDetail(String(fillId.value))
     if (response.success && response.data) {
-      planFill.value = toPlanFill(response.data as unknown as Record<string, unknown>)
+      const detail = response.data as unknown as {
+        instanceId: string
+        status: string
+        starterId?: number
+        starterName?: string
+        startTime?: string
+      }
+      planFill.value = {
+        id: detail.instanceId,
+        plan_id: '',
+        submit_date: detail.startTime || '',
+        status: detail.status === 'APPROVED' ? 'approved' : detail.status === 'REJECTED' ? 'rejected' : 'submitted',
+        submitted_by: String(detail.starterId || ''),
+        submitted_by_name: detail.starterName || 'Unknown',
+        fills: [],
+        audit_logs: [],
+        created_at: detail.startTime || '',
+        updated_at: '',
+        total_indicators: 0,
+        completed_indicators: 0
+      }
     } else {
       planFill.value = null
     }

@@ -9,7 +9,7 @@ import {
   User, OfficeBuilding, TrendCharts, Warning as _Warning
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { StrategicIndicator, StatusAuditEntry as _StatusAuditEntry } from '@/5-shared/types'
+import type { StrategicIndicator, StatusAuditEntry as _StatusAuditEntry } from '@/shared/types'
 
 const props = defineProps<{
   indicator: StrategicIndicator

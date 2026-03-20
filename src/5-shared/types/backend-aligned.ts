@@ -582,7 +582,6 @@ export interface IndicatorCreateRequest {
   sortOrder?: number
   remark?: string
   progress?: number
-  distributionStatus?: 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
   milestones?: Array<{
     milestoneName: string
     milestoneDesc?: string
@@ -591,11 +590,6 @@ export interface IndicatorCreateRequest {
     sortOrder?: number
   }>
 }
-
-/**
- * Distribution status for indicators
- */
-export type DistributionStatus = 'DRAFT' | 'DISTRIBUTED'
 
 /**
  * Indicator distribution request

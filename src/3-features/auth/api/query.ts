@@ -4,7 +4,7 @@
  * Read-only API operations for authentication.
  */
 
-import api from '@/5-shared/api'
+import { apiClient as api } from '@/shared/api/client'
 import type { ApiResponse } from './types'
 
 /**
@@ -41,5 +41,5 @@ export async function getUserPermissions(): Promise<ApiResponse<string[]>> {
     success: true,
     data: [],
     message: '当前 OpenAPI 未提供权限查询接口，返回空权限列表'
-  } as ApiResponse<string[]>)
+  } as unknown as ApiResponse<string[]>)
 }

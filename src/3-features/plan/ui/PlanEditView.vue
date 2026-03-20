@@ -13,9 +13,9 @@ import {
   ElOption
 } from 'element-plus'
 import { ArrowLeft, Plus, Delete as _Delete } from '@element-plus/icons-vue'
-import type { Plan, Task } from '@/5-shared/types'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import { useAuthStore } from '@/3-features/auth/model/store'
+import type { Plan, Task } from '@/shared/types'
+import { usePlanStore } from '@/features/plan/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
 
 /**
  * Plan 编辑页

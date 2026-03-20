@@ -6,7 +6,7 @@ import {
   fetchWithCache,
   invalidateQueries,
   serializeQueryKey
-} from '@/5-shared/lib/utils/cache'
+} from '@/shared/lib/utils/cache'
 
 describe('query cache core', () => {
   beforeEach(() => {

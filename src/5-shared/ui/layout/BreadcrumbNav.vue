@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { BreadcrumbItem } from '@/5-shared/types'
+import type { BreadcrumbItem } from '@/shared/types'
 
 const props = defineProps<{
   items: BreadcrumbItem[]

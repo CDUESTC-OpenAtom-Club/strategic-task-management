@@ -5,7 +5,7 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getColorByIndex as _getColorByIndex, getGradientColor } from '@/5-shared/lib/utils/colors'
+import { getColorByIndex as _getColorByIndex, getGradientColor } from '@/shared/lib/utils/colors'
 
 use([PieChart, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 

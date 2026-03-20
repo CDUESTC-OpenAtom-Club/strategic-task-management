@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Check, Clock, Warning } from '@element-plus/icons-vue'
-import type { Milestone } from '@/5-shared/types'
+import type { Milestone } from '@/shared/types'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 
 const props = defineProps<{
   milestones: Milestone[]
@@ -10,11 +11,7 @@ const props = defineProps<{
 
 const now = computed(() => props.currentDate || new Date())
 
-const sortedMilestones = computed(() => 
-  [...props.milestones].sort((a, b) => 
-    new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-  )
-)
+const sortedMilestones = computed(() => sortMilestonesByProgress(props.milestones || []))
 
 const getStatusIcon = (status: Milestone['status']) => {
   switch (status) {

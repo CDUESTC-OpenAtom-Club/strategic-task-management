@@ -5,14 +5,14 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient } from '@/5-shared/api/client'
+import { apiClient } from '@/shared/api/client'
 import type {
   ApiResponse,
   Milestone,
   MilestonePairingStatus,
   MilestoneReportValidation
-} from '@/5-shared/types'
-import { logger } from '@/5-shared/lib/utils/logger'
+} from '@/shared/types'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 重试辅助函数 - 使用指数退避策略

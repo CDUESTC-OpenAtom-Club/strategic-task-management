@@ -36,28 +36,19 @@ export const indicatorCreateSchema = z.object({
     .optional(),
 
   type: z.enum(['QUALITATIVE', 'QUANTITATIVE'], {
-    errorMap: () => ({ message: '请选择指标类型' })
+    message: '请选择指标类型'
   }),
 
   taskId: z
-    .number({
-      required_error: '请选择所属任务',
-      invalid_type_error: '任务ID必须是数字'
-    })
+    .number({ message: '任务ID必须是数字' })
     .positive('任务ID必须大于0'),
 
   ownerOrgId: z
-    .number({
-      required_error: '请选择责任组织',
-      invalid_type_error: '组织ID必须是数字'
-    })
+    .number({ message: '组织ID必须是数字' })
     .positive('组织ID必须大于0'),
 
   targetOrgId: z
-    .number({
-      required_error: '请选择目标组织',
-      invalid_type_error: '组织ID必须是数字'
-    })
+    .number({ message: '组织ID必须是数字' })
     .positive('组织ID必须大于0'),
 
   level: z.enum(['FIRST', 'SECOND']).optional(),
@@ -172,10 +163,7 @@ export const distributeRequestSchema = z.object({
  * Progress submit schema
  */
 export const progressSubmitSchema = z.object({
-  value: z.number({
-    required_error: '请输入进度值',
-    invalid_type_error: '进度值必须是数字'
-  }),
+  value: z.number({ message: '进度值必须是数字' }),
 
   evidence: z.string().optional(),
 

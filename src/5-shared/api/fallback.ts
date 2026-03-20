@@ -9,8 +9,8 @@
  * @deprecated 模拟数据已废弃，请使用后端API获取真实数据
  */
 import type { AxiosError } from 'axios'
-import type { ApiResponse } from '@/5-shared/types'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { ApiResponse } from '@/shared/types'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 降级配置

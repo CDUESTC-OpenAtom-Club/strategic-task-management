@@ -2,15 +2,15 @@
  * User Feature Store
  *
  * User management state and operations.
- * Note: Authentication state is managed in @/3-features/auth/model/store
+ * Note: Authentication state is managed in @/features/auth/model/store
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User, UserRole } from '@/5-shared/types'
+import type { User, UserRole } from '@/shared/types'
 import type { UserListParams } from '../api'
 import * as userApi from '../api'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 export const useUserStore = defineStore('user', () => {
   // ============ State ============

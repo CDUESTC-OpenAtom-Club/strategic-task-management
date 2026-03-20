@@ -6,7 +6,7 @@
  * @see src/api/fallback.ts 降级机制已禁用
  * 保留仅用于向后兼容，建议后续版本删除此文件
  */
-import type { DashboardData, Indicator, DepartmentProgress, PendingApproval, TabItem, RoleOption } from '@/5-shared/types'
+import type { DashboardData, Indicator, DepartmentProgress, PendingApproval, TabItem, RoleOption } from '@/shared/types'
 
 // 临时兼容:返回空数组
 const getAllFunctionalDepartments = () => []

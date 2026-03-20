@@ -3,5 +3,3 @@
  *
  * Exports all authorization and permission utilities
  */
-
-export * from './usePermission'

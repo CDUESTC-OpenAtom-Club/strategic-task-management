@@ -3,8 +3,6 @@
  * 对应后端接口：GET /api/audit/logs
  */
 
-import { apiClient } from '@/5-shared/api/client'
-
 /**
  * 审计日志查询参数
  */

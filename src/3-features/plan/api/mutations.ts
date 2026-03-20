@@ -4,8 +4,9 @@
  * Write operations for plan data.
  */
 
-import api from '@/5-shared/api'
-import type { ApiResponse, Plan } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import { approveTask, rejectTask } from '@/features/workflow/api'
+import type { ApiResponse, Plan } from '@/shared/types'
 
 /**
  * Create new plan
@@ -65,41 +66,37 @@ export async function submitPlanForApproval(
 /**
  * Approve plan
  *
- * API: POST /api/approval/instances/{instanceId}/approve?userId=...&comment=...
+ * API: POST /api/v1/workflows/tasks/{taskId}/approve
  *
  * @param instanceId - Approval instance ID
- * @param userId - Approver user ID
+ * @param userId - Approver user ID (unused, taken from JWT)
  * @param comment - Approval comment
  */
 export async function approvePlan(
   instanceId: number | string,
-  userId: number | string,
+  _userId: number | string,
   comment?: string
 ): Promise<ApiResponse<void>> {
-  const encodedComment = comment ? `&comment=${encodeURIComponent(comment)}` : ''
-  return api.post(`/approval/instances/${instanceId}/approve?userId=${userId}${encodedComment}`, {
-    comment
-  })
+  await approveTask(String(instanceId), { comment })
+  return { success: true, data: undefined }
 }
 
 /**
  * Reject plan
  *
- * API: POST /api/approval/instances/{instanceId}/reject?userId=...&comment=...
+ * API: POST /api/v1/workflows/tasks/{taskId}/reject
  *
  * @param instanceId - Approval instance ID
- * @param userId - Approver user ID
+ * @param userId - Approver user ID (unused, taken from JWT)
  * @param comment - Rejection reason (required)
  */
 export async function rejectPlan(
   instanceId: number | string,
-  userId: number | string,
+  _userId: number | string,
   comment: string
 ): Promise<ApiResponse<void>> {
-  return api.post(
-    `/approval/instances/${instanceId}/reject?userId=${userId}&comment=${encodeURIComponent(comment)}`,
-    { comment }
-  )
+  await rejectTask(String(instanceId), { reason: comment })
+  return { success: true, data: undefined }
 }
 
 /**

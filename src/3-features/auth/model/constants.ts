@@ -4,7 +4,7 @@
  * Business constants and configuration for the authentication feature.
  */
 
-import { UserRole } from '@/4-entities/user/model/types'
+import { UserRole } from '@/entities/user/model/types'
 
 /**
  * Role display configuration

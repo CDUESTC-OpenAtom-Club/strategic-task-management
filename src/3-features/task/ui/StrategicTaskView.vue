@@ -1,4 +1,4 @@
-﻿﻿﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
   Plus,
@@ -22,28 +22,30 @@ import {
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import type { ElTable } from 'element-plus'
 // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types
-import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/5-shared/types'
-import { IndicatorStatus, ProgressApprovalStatus } from '@/5-shared/types/entities'
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
-import strategicApi, { approvalApi as taskApprovalApi } from '@/3-features/task/api/strategicApi'
-import { approvalApi as workflowApprovalApi } from '@/3-features/approval/api/approval'
-import { milestoneApi } from '@/4-entities/milestone/api/milestoneApi'
+import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/shared/types'
+import { IndicatorStatus } from '@/shared/types/entities'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { useOrgStore } from '@/features/organization/model/store'
+import { logger } from '@/shared/lib/utils/logger'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
+import strategicApi, { approvalApi as taskApprovalApi } from '@/features/task/api/strategicApi'
+import { getWorkflowDefinitionPreviewByCode, startWorkflow } from '@/features/workflow/api'
+import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import {
   getStatusText as _getStatusText,
   getStatusType as _getStatusType,
   getStatusIcon as _getStatusIcon
-} from '@/5-shared/lib/utils/indicatorStatus'
-import { getPlanStatusDisplay, normalizePlanStatus } from '@/3-features/task/lib'
-import AuditLogDrawer from '@/3-features/task/ui/AuditLogDrawer.vue'
-import { ApprovalProgressDrawer } from '@/3-features/approval'
-import _MilestoneList from '@/3-features/milestone/ui/MilestoneList.vue'
-import { indicatorApi } from '@/3-features/indicator/api'
-import { usePlanStore } from '@/3-features/plan/model/store'
+} from '@/shared/lib/utils/indicatorStatus'
+import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib'
+import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
+import { ApprovalProgressDrawer } from '@/features/approval'
+import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
+import { indicatorApi } from '@/features/indicator/api'
+import { usePlanStore } from '@/features/plan/model/store'
+import type { WorkflowDefinitionPreviewResponse } from '@/features/workflow/api/types'
 
 // 使用共享 Store
 const strategicStore = useStrategicStore()
@@ -129,12 +131,15 @@ const isInitialDataLoading = computed(() => {
   // 任何时候只要 store 正在加载指标数据，就应该显示加载状态
   // 这样可以避免在切换部门或刷新数据时先显示"暂无数据"再显示真实数据
   const anyIndicatorLoading = strategicStore.loadingState.indicators
+  // 修复：加入 planStore.loading，避免在 plan 未加载完成时显示"暂无指标"
+  const planLoading = planStore.loading
   return (
     indicatorBootstrapping ||
     orgBootstrapping ||
     taskTypeMapLoading.value ||
     currentPlanScopeLoading.value ||
-    anyIndicatorLoading
+    anyIndicatorLoading ||
+    planLoading
   )
 })
 
@@ -147,6 +152,7 @@ const viewMode = ref<'table' | 'card'>('table')
 
 // 卡片视图当前指标索引
 const currentIndicatorIndex = ref(0)
+const isBootstrappingPage = ref(true)
 
 // 职能部门列表（从 orgStore 动态获取）
 const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartmentNames())
@@ -202,14 +208,22 @@ const findCurrentPlanByDepartment = () => {
   if (!selectedDepartment.value) {
     return null
   }
-  // 兼容处理：API 可能不返回 cycle 对象，直接用 plan 顶层的 year 或 cycleId 匹配
+
+  const selectedDepartmentId = resolveDepartmentIdByName(selectedDepartment.value)
+
   return (
     planStore.plans.find(p => {
       const planAny = p as any
-      const orgName = planAny.targetOrgName || planAny.orgName || ''
-      // 优先使用后端返回的 year，其次根据 cycleId 推断年份
       const planYear = resolvePlanYear(planAny)
-      return orgName === selectedDepartment.value && planYear === timeContext.currentYear
+      const planTargetOrgId = Number(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId ?? NaN)
+      const orgName = normalizeDepartmentName(planAny.targetOrgName || planAny.orgName || '')
+      const sameDepartment =
+        (selectedDepartmentId != null &&
+          Number.isFinite(planTargetOrgId) &&
+          planTargetOrgId === selectedDepartmentId) ||
+        orgName === normalizeDepartmentName(selectedDepartment.value)
+
+      return sameDepartment && planYear === timeContext.currentYear
     }) || null
   )
 }
@@ -521,7 +535,7 @@ const normalizedIndicators = computed(() =>
 )
 
 const getCurrentScopeIndicatorsForMilestones = () => {
-  let list = strategicStore.indicators.filter(i => !i.year || i.year === timeContext.currentYear)
+  const list = strategicStore.indicators.filter(i => !i.year || i.year === timeContext.currentYear)
   const normalized = list.map(i => ({
     ...i,
     ownerDept: normalizeDepartmentName(i.ownerDept),
@@ -623,9 +637,13 @@ watch(
     () => timeContext.currentYear
   ],
   () => {
+    if (isBootstrappingPage.value) {
+      return
+    }
     void loadMilestonesForCurrentScope()
   },
-  { immediate: true }
+  // 移除 immediate: true，因为初始执行时 selectedDepartment 为空会导致加载错误的指标范围
+  // 里程碑加载改为在 onMounted 中显式调用，确保与主数据同时加载
 )
 
 watch(
@@ -636,6 +654,9 @@ watch(
     loadingMilestoneIds.value = new Set<string>()
     milestoneCache.value = {}
     invalidateQueries(['task.scope'])
+    if (isBootstrappingPage.value) {
+      return
+    }
     void loadMilestonesForCurrentScope()
   }
 )
@@ -679,7 +700,22 @@ const currentPlan = computed(() => {
 
 // 获取当前选中部门对应的 Plan 状态
 const currentPlanStatus = computed(() => {
+  const workflowStatus = normalizePlanStatus(currentPlan.value?.workflowStatus)
+  if (workflowStatus === 'PENDING') {
+    return workflowStatus
+  }
   return normalizePlanStatus(currentPlan.value?.status)
+})
+
+const PLAN_APPROVAL_WORKFLOW_CODE = 'PLAN_DISPATCH_STRATEGY'
+
+const approvalSetupDialogVisible = ref(false)
+const approvalPreviewLoading = ref(false)
+const approvalSubmitting = ref(false)
+const approvalWorkflowPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
+
+const hasApprovalPreview = computed(() => {
+  return (approvalWorkflowPreview.value?.steps?.length || 0) > 0
 })
 
 const getCurrentCycleId = async (): Promise<number> => {
@@ -701,12 +737,6 @@ const resolveDepartmentIdByName = (departmentName?: string | null): number | nul
     return null
   }
   return departmentNameIdMap.value.get(normalized) ?? null
-}
-
-const getIndicatorTaskTypeForPersistence = (
-  indicator: StrategicIndicator
-): 'BASIC' | 'DEVELOPMENT' => {
-  return getIndicatorCategoryLabel(indicator) === '基础性' ? 'BASIC' : 'DEVELOPMENT'
 }
 
 const getTaskTypeForPersistence = (taskCategory?: string): 'BASIC' | 'DEVELOPMENT' => {
@@ -812,11 +842,6 @@ const persistTaskContentEdit = async (row: StrategicIndicator, taskName: string)
   await refreshIndicatorsAfterTaskMutation()
 }
 
-// 获取审批实例 ID
-const currentApprovalInstanceId = computed(() => {
-  return currentPlan.value?.approvalInstanceId || null
-})
-
 // 判断 Plan 是否已下发（已审批通过，不能撤回）
 const isPlanDistributed = computed(() => {
   const status = currentPlanStatus.value
@@ -845,6 +870,10 @@ const isFirstStepPending = computed(() => {
 // 判断 Plan 是否可以撤回
 // 条件：草稿状态 OR（待审批状态 AND 第一个节点处于待审批）
 const canWithdrawPlan = computed(() => {
+  if (typeof currentPlan.value?.canWithdraw === 'boolean') {
+    return currentPlan.value.canWithdraw
+  }
+
   const status = currentPlanStatus.value
 
   // 草稿状态可以撤回
@@ -871,17 +900,6 @@ const isIndicatorInFlowStage = (_indicator: StrategicIndicator): boolean => {
     currentPlanStatus.value === 'PENDING'
   )
 }
-
-// 判断当前部门是否存在已进入流程（待审核/已下发）的指标
-// 用于控制下发/撤回按钮和编辑权限
-const hasDistributedIndicators = computed(() => {
-  const list = indicators.value
-  if (list.length === 0) {
-    return false
-  }
-
-  return list.some(isIndicatorInFlowStage)
-})
 
 // 判断是否可以编辑（未下发状态才能编辑）
 const canEditIndicators = computed(() => {
@@ -910,19 +928,45 @@ const canDeleteIndicator = (indicator: StrategicIndicator): boolean => {
   }
 
   // Plan 必须处于草稿状态才能删除指标
-  const isPlanDraft = currentPlanStatus.value === 'DRAFT' || !currentPlanStatus.value
+  const isPlanDraft =
+    currentPlanStatus.value === 'DRAFT' ||
+    currentPlanStatus.value === 'RETURNED' ||
+    !currentPlanStatus.value
   return isPlanDraft
 }
 
 // @requirement: Plan-centric status - 使用 Plan 状态判断待审批数量
 // Plan 处于 PENDING 状态时，表示有待审批的内容
 const pendingApprovalCount = computed(() => {
-  return currentPlanStatus.value === 'PENDING' ? indicators.value.length : 0
+  return currentPlanStatus.value === 'PENDING' ? 1 : 0
 })
 
-// @requirement: Plan-centric status - 使用 Plan 状态判断是否可以下发
-// Plan 处于 DRAFT 状态时才能下发
-const _canDistribute = computed(() => {
+const approvalEntryButtonText = computed(() => {
+  if (currentPlanStatus.value === 'PENDING') {
+    return '审批中'
+  }
+  if (currentPlanStatus.value === 'RETURNED') {
+    return '查看退回'
+  }
+  if (currentPlanStatus.value === 'DISTRIBUTED') {
+    return '查看审批'
+  }
+  return '审批进度'
+})
+
+// ==================== 下发/撤回按钮逻辑 ====================
+// 判断是否有已下发的指标
+const hasDistributedIndicators = computed(() => {
+  const list = indicators.value
+  if (list.length === 0) {
+    return false
+  }
+
+  return list.some(isIndicatorInFlowStage)
+})
+
+// 判断是否处于"可以下发"状态（Plan 是草稿状态）
+const canDistribute = computed(() => {
   if (isReadOnly.value) {
     return false
   }
@@ -931,22 +975,169 @@ const _canDistribute = computed(() => {
   }
 
   // Plan 必须处于草稿状态才能下发
-  const isPlanDraft = currentPlanStatus.value === 'DRAFT' || !currentPlanStatus.value
-  if (!isPlanDraft) {
-    return false
-  }
-
-  // 检查是否有待审批的进度（Plan 处于 PENDING 状态）
-  const _hasPendingApproval = pendingApprovalCount.value > 0
-
-  // 如果有待审批的进度，不允许下发
-  if (_hasPendingApproval) {
+  const canSubmitPlan =
+    currentPlanStatus.value === 'DRAFT' ||
+    currentPlanStatus.value === 'RETURNED' ||
+    !currentPlanStatus.value
+  if (!canSubmitPlan) {
     return false
   }
 
   // 有指标且 Plan 处于草稿状态时可以下发
   return indicators.value.length > 0
 })
+
+// 下发/撤回按钮文本
+// 基于 Plan 状态：
+// - 草稿状态 → 下发
+// - 待审批/已下发状态 → 撤回
+const distributeButtonText = computed(() => {
+  const status = currentPlanStatus.value
+  if (status === 'DRAFT' || !status) {
+    return '发起审批'
+  }
+  if (status === 'RETURNED') {
+    return '重新提交'
+  }
+  return '撤回'
+})
+
+// 下发/撤回按钮类型
+const distributeButtonType = computed(() => {
+  const status = currentPlanStatus.value
+  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
+    return 'success'
+  }
+  // 待审批/已下发状态：可撤回用 warning，不可撤回用 info(禁用)
+  return canWithdrawPlan.value ? 'warning' : 'info'
+})
+
+// 下发/撤回按钮图标
+const distributeButtonIcon = computed(() => {
+  const status = currentPlanStatus.value
+  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
+    return Promotion
+  }
+  return RefreshLeft
+})
+
+// 下发/撤回按钮是否禁用
+// 基于 Plan 状态：
+// - 只读状态：禁用
+// - 草稿状态：启用（下发）
+// - 待审批状态：检查是否在第一个节点
+// - 已下发状态：禁用（不可撤回）
+const distributeButtonDisabled = computed(() => {
+  if (isReadOnly.value) return true
+
+  const status = currentPlanStatus.value
+
+  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
+    // 草稿/退回状态：启用提交
+    return false
+  }
+
+  if (status === 'PENDING') {
+    // 待审批状态：只有第一个节点是待审批时才能撤回
+    return !canWithdrawPlan.value
+  }
+
+  // 已下发状态：禁用
+  return true
+})
+
+const resetApprovalSetupDialog = () => {
+  approvalWorkflowPreview.value = null
+}
+
+const openApprovalSetupDialog = async () => {
+  const planId = Number(currentPlan.value?.id ?? NaN)
+  if (!Number.isFinite(planId) || planId <= 0) {
+    ElMessage.warning('当前部门还没有可提交审批的计划')
+    return
+  }
+
+  approvalPreviewLoading.value = true
+  approvalSetupDialogVisible.value = true
+
+  try {
+    const response = await getWorkflowDefinitionPreviewByCode(PLAN_APPROVAL_WORKFLOW_CODE)
+    if (!response.success || !response.data) {
+      throw new Error(response.message || '加载审批流程失败')
+    }
+
+    approvalWorkflowPreview.value = response.data
+  } catch (error) {
+    approvalSetupDialogVisible.value = false
+    resetApprovalSetupDialog()
+    logger.error('[StrategicTaskView] Failed to load workflow preview:', error)
+    const message = error instanceof Error ? error.message : '加载审批流程失败'
+    if (message.includes('Workflow definition not found')) {
+      ElMessage.error('当前环境未配置审批流程定义，无法发起审批')
+      return
+    }
+    if (message.includes('No available approver candidates')) {
+      ElMessage.error('当前审批节点未匹配到可用审批人，无法发起审批')
+      return
+    }
+    if (message.includes('missing role assignment')) {
+      ElMessage.error('当前审批流程配置不完整，无法发起审批')
+      return
+    }
+    ElMessage.error(message)
+  } finally {
+    approvalPreviewLoading.value = false
+  }
+}
+
+const handleCloseApprovalSetupDialog = () => {
+  approvalSetupDialogVisible.value = false
+  resetApprovalSetupDialog()
+}
+
+const confirmPlanApprovalSubmission = async () => {
+  const planId = Number(currentPlan.value?.id ?? NaN)
+  if (!Number.isFinite(planId) || planId <= 0) {
+    ElMessage.warning('当前计划不存在，无法发起审批')
+    return
+  }
+
+  const preview = approvalWorkflowPreview.value
+  if (!preview || !Array.isArray(preview.steps) || preview.steps.length === 0) {
+    ElMessage.warning('审批流程尚未准备完成')
+    return
+  }
+
+  approvalSubmitting.value = true
+  try {
+    await planStore.submitPlanForApproval(planId, {
+      workflowCode: preview.workflowCode || PLAN_APPROVAL_WORKFLOW_CODE
+    })
+    await planStore.loadPlanDetails(planId, { force: true, background: true })
+    await loadPendingPlanApprovalCount()
+    handleCloseApprovalSetupDialog()
+    ElMessage.success('已发起整体计划审批')
+  } catch (error) {
+    logger.error('[StrategicTaskView] Failed to submit plan approval:', error)
+  } finally {
+    approvalSubmitting.value = false
+  }
+}
+
+// 下发/撤回按钮点击处理
+const handleDistributeOrWithdraw = () => {
+  const status = currentPlanStatus.value
+
+  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
+    // 草稿/退回状态：确认流程后发起整体计划审批
+    void openApprovalSetupDialog()
+  } else {
+    // 待审批/已下发状态：撤回
+    if (canWithdrawPlan.value) {
+      handleWithdrawAll()
+    }
+  }
+}
 
 // 表格引用和选中的指标
 const tableRef = ref<InstanceType<typeof ElTable>>()
@@ -1496,7 +1687,7 @@ const newRow = ref({
   name: '',
   type1: '定量' as '定性' | '定量',
   type2: '基础性' as '发展性' | '基础性',
-  weight: null as number | null,
+  weight: 0,
   remark: '',
   milestones: [] as Milestone[]
 })
@@ -1675,7 +1866,9 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
   } catch (error) {
     console.error('[saveIndicatorEdit] Error details:', error)
     logger.error('[StrategicTaskView] Failed to save indicator:', error)
-    // 错误已经在Store中显示，这里不需要再显示
+    const message =
+      error instanceof Error && error.message ? error.message : '保存失败，请稍后重试'
+    ElMessage.error(message)
   } finally {
     isSavingIndicatorEdit.value = false
   }
@@ -1706,7 +1899,14 @@ const handleGlobalClick = (event: MouseEvent) => {
   // 检查点击是否在 el-input 内
   const isInInput = target.closest('.el-input') || target.closest('.el-textarea')
 
-  // 如果点击不在编辑组件内，则优先保存当前编辑值
+  const blurManagedFields = new Set(['taskContent', 'name', 'remark', 'weight', 'progress'])
+
+  // 这些字段已经在组件自身的 blur 事件里保存，避免点击捕获阶段再触发一次。
+  if (blurManagedFields.has(editingIndicatorField.value)) {
+    return
+  }
+
+  // 仅对非 blur 驱动的编辑控件兜底
   if (!isInSelect && !isInInput) {
     const currentRow = indicators.value.find(
       item => String(item.id) === String(editingIndicatorId.value)
@@ -1756,6 +1956,8 @@ onMounted(async () => {
   ])
 
   await loadCurrentPlanTaskScope()
+  await loadMilestonesForCurrentScope()
+  isBootstrappingPage.value = false
 
   document.addEventListener('click', handleGlobalClick, true)
 })
@@ -1767,6 +1969,9 @@ onUnmounted(() => {
 watch(
   () => timeContext.currentYear,
   async () => {
+    if (isBootstrappingPage.value) {
+      return
+    }
     await loadBackendTaskTypeMap()
     await loadCurrentPlanTaskScope()
   }
@@ -1775,9 +1980,11 @@ watch(
 watch(
   [selectedDepartment, () => planStore.plans.length],
   async () => {
+    if (isBootstrappingPage.value) {
+      return
+    }
     await loadCurrentPlanTaskScope()
-  },
-  { immediate: true }
+  }
 )
 
 // 方法
@@ -1815,6 +2022,31 @@ const cancelAdd = () => {
     milestones: []
   }
   updateEditTime()
+}
+
+const getCurrentActorUserId = () => {
+  const userRecord = authStore.user as { id?: string | number; userId?: string | number } | null
+  const candidateId = Number(userRecord?.userId ?? userRecord?.id ?? NaN)
+  return Number.isFinite(candidateId) && candidateId > 0 ? candidateId : null
+}
+
+const persistNewIndicatorMilestones = async (indicatorId: number, milestones: Milestone[]) => {
+  if (!Number.isFinite(indicatorId) || indicatorId <= 0 || milestones.length === 0) {
+    return
+  }
+
+  for (const [index, milestone] of milestones.entries()) {
+    await milestoneApi.createMilestone({
+      indicatorId,
+      milestoneName: String(milestone.name || '').trim() || `里程碑 ${index + 1}`,
+      targetProgress: Number(milestone.targetProgress) || 0,
+      dueDate: milestone.deadline || null,
+      status: milestone.status === 'completed' ? 'COMPLETED' : 'NOT_STARTED',
+      sortOrder: index + 1
+    })
+  }
+
+  await reloadMilestonesForIndicator(String(indicatorId), selectedDepartment.value || '战略发展部')
 }
 
 // 保存新行
@@ -1857,7 +2089,7 @@ const saveNewRow = async () => {
     )
 
     // 调用 Store 添加指标（现在是异步的，会调用后端 API）
-    await strategicStore.addIndicator({
+    const createdIndicatorResponse = await strategicStore.addIndicator({
       id: Date.now().toString(),
       taskId: persistedTaskId,
       taskContent: String(newRow.value.taskContent || '').trim(),
@@ -1881,6 +2113,13 @@ const saveNewRow = async () => {
       year: timeContext.currentYear,
       statusAudit: []
     })
+
+    const createdIndicatorId = Number(
+      createdIndicatorResponse?.data?.indicatorId ?? createdIndicatorResponse?.data?.id ?? NaN
+    )
+    if (Number.isFinite(createdIndicatorId) && newRow.value.milestones.length > 0) {
+      await persistNewIndicatorMilestones(createdIndicatorId, newRow.value.milestones)
+    }
 
     // 🔧 修复：强制从后端重新加载指标数据，确保前端显示的是包含正式ID的数据
     logger.info(
@@ -2024,13 +2263,16 @@ interface MilestoneTooltipItem {
 }
 
 const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipItem[] => {
-  return (indicator.milestones || []).map(m => ({
+  return sortMilestonesByProgress(indicator.milestones || []).map(m => ({
     id: m.id || '',
     name: m.name,
     expectedDate: m.deadline || '',
     progress: m.targetProgress || 0
   }))
 }
+
+const getSortedMilestones = (milestones?: StrategicIndicator['milestones']) =>
+  sortMilestonesByProgress(milestones || [])
 
 const selectDepartment = (dept: string) => {
   selectedDepartment.value = dept
@@ -2121,13 +2363,23 @@ const _handleViewAuditLog = (row: StrategicIndicator) => {
 
 // 打开任务审批抽屉
 const handleOpenApproval = () => {
-  taskApprovalVisible.value = true
+  void (async () => {
+    const planId = currentPlan.value?.id
+    if (planId !== undefined && planId !== null && planId !== '') {
+      await planStore.loadPlanDetails(planId, { force: true, background: true })
+    }
+    taskApprovalVisible.value = true
+  })()
 }
 
 // 审批后刷新
 const handleApprovalRefresh = async () => {
   // 刷新待审批计划数量
   await loadPendingPlanApprovalCount()
+  const planId = currentPlan.value?.id
+  if (planId !== undefined && planId !== null && planId !== '') {
+    await planStore.loadPlanDetails(planId, { force: true, background: true })
+  }
   // 强制关闭并重新打开抽屉以刷新数据
   taskApprovalVisible.value = false
   nextTick(() => {
@@ -2393,7 +2645,7 @@ const triggerApprovalForDistribution = async (indicator: StrategicIndicator) => 
     return { skipped: true as const, reason: 'temporary_indicator' }
   }
 
-  const requesterId = Number(authStore.user?.id || 0)
+  const requesterId = Number(getCurrentActorUserId() || 0)
   const rawOrgId = Number((authStore.user as { orgId?: number | string } | null)?.orgId || 0)
   const fallbackOrgId =
     departmentNameIdMap.value.get(authStore.effectiveDepartment || authStore.userDepartment || '') || 0
@@ -2404,27 +2656,23 @@ const triggerApprovalForDistribution = async (indicator: StrategicIndicator) => 
     return { skipped: true as const, reason: 'missing_requester_context', traceId }
   }
 
-  const response = await workflowApprovalApi.startApprovalFlow({
-    submitterId: requesterId,
-    requesterOrgId,
-    entityType: 'TASK',
-    entityId: indicatorId,
+  // Use new workflow API
+  await startWorkflow({
     workflowCode: 'TASK_DISTRIBUTION',
-    traceId
+    businessEntityId: indicatorId,
+    businessEntityType: 'TASK'
   })
-  const instanceId = (response.data as { id?: number } | null)?.id
-  const requestId = (response as { requestId?: string } | null)?.requestId
+  const requestId = traceId
 
   logger.info('[StrategicTaskView] Distribution approval triggered', {
     traceId,
     requestId,
     indicatorId,
-    instanceId,
     requesterId,
     requesterOrgId
   })
 
-  return { skipped: false as const, traceId, requestId, instanceId }
+  return { skipped: false as const, traceId, requestId, instanceId: undefined }
 }
 
 // 确认下发（支持单个和整体下发）
@@ -2464,7 +2712,7 @@ const confirmDistribute = () => {
             // 构建审计记录
             const newAuditEntry = {
               id: `audit-${row.id}-${Date.now()}`,
-              operator: authStore.user?.id || 'admin',
+              operator: String(getCurrentActorUserId() || 'admin'),
               operatorName: authStore.user?.name || '管理员',
               operatorDept:
                 authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
@@ -2483,7 +2731,7 @@ const confirmDistribute = () => {
                 await indicatorApi.distributeIndicator({
                   parentIndicatorId: persistedIndicatorId,
                   targetOrgId: String(targetOrgId),
-                  actorUserId: String(authStore.user?.id || '')
+                  actorUserId: String(getCurrentActorUserId() || '')
                 })
               } else {
                 await strategicStore.addIndicator({
@@ -2556,7 +2804,7 @@ const confirmDistribute = () => {
         // 构建审计记录
         const newAuditEntry = {
           id: `audit-${row.id}-${Date.now()}`,
-          operator: authStore.user?.id || 'admin',
+          operator: String(getCurrentActorUserId() || 'admin'),
           operatorName: authStore.user?.name || '管理员',
           operatorDept: authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
           action: 'distribute' as const,
@@ -2575,7 +2823,7 @@ const confirmDistribute = () => {
             await indicatorApi.distributeIndicator({
               parentIndicatorId: persistedIndicatorId,
               targetOrgId: String(targetOrgId),
-              actorUserId: String(authStore.user?.id || '')
+              actorUserId: String(getCurrentActorUserId() || '')
             })
           } else {
             await strategicStore.addIndicator({
@@ -2719,17 +2967,6 @@ const handleDistributeAll = async () => {
 
         // 更新所有指标状态为已下发，并逐条触发审批流
         for (const row of pendingRows) {
-          const newAuditEntry = {
-            id: `audit-${row.id}-${Date.now()}`,
-            operator: authStore.user?.id || 'admin',
-            operatorName: authStore.user?.name || '管理员',
-            operatorDept:
-              authStore.effectiveDepartment || authStore.userDepartment || '战略发展部',
-            action: 'distribute' as const,
-            comment: '批量下发',
-            timestamp: new Date()
-          }
-
           const indicatorId = String(row.id)
           const targetOrgId = departmentNameIdMap.value.get(row.responsibleDept)
 
@@ -2737,7 +2974,7 @@ const handleDistributeAll = async () => {
             await indicatorApi.distributeIndicator({
               parentIndicatorId: indicatorId,
               targetOrgId: String(targetOrgId),
-              actorUserId: String(authStore.user?.id || '')
+              actorUserId: String(getCurrentActorUserId() || '')
             })
           } else {
             throw new Error(`指标 ${indicatorId} 缺少持久化 ID 或目标部门映射，无法执行批量下发`)
@@ -3034,7 +3271,7 @@ const pendingPlanApprovalCount = ref(0)
  */
 const loadPendingPlanApprovalCount = async () => {
   try {
-    const userId = authStore.user?.id || 1
+    const userId = getCurrentActorUserId() || 1
     const response = await taskApprovalApi.countPendingApprovals(userId)
     if (response.success && response.data !== undefined) {
       pendingPlanApprovalCount.value = response.data
@@ -3187,15 +3424,15 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           </el-button>
           <!-- 下发/撤回合并按钮 -->
           <el-button
-            :type="hasDistributedIndicators ? 'warning' : 'success'"
+            :type="distributeButtonType"
             size="small"
-            :disabled="isReadOnly"
-            @click.stop="hasDistributedIndicators ? handleWithdrawAll() : handleDistributeAll()"
+            :disabled="distributeButtonDisabled"
+            @click.stop="handleDistributeOrWithdraw"
           >
             <el-icon
-              ><component :is="hasDistributedIndicators ? RefreshLeft : Promotion"
+              ><component :is="distributeButtonIcon"
             /></el-icon>
-            {{ hasDistributedIndicators ? '撤回' : '下发' }}
+            {{ distributeButtonText }}
           </el-button>
           <!-- 审批进度按钮（带徽章） -->
           <el-badge
@@ -3205,12 +3442,12 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           >
             <el-button size="small" type="warning" @click="handleOpenApproval">
               <el-icon><Check /></el-icon>
-              审批进度
+              {{ approvalEntryButtonText }}
             </el-button>
           </el-badge>
           <el-button v-else size="small" @click="handleOpenApproval">
             <el-icon><Check /></el-icon>
-            审批进度
+            {{ approvalEntryButtonText }}
           </el-button>
           <el-button size="small">
             <el-icon><Download /></el-icon>
@@ -3262,7 +3499,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
         style="margin: 12px 16px"
       >
         <template #title>
-          有 {{ pendingApprovalCount }} 个指标有待审批的进度，请先完成审批后再下发
+          当前计划已进入审批流程，请先完成整体计划审批后再继续下发或编辑
         </template>
       </el-alert>
 
@@ -3479,29 +3716,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             <el-table-column label="操作" width="180" align="center">
               <template #default="{ row }">
                 <div class="action-buttons-inline">
-                  <!-- @requirement: Plan-centric status - 使用 Plan 状态判断 -->
-                  <!-- 审核通过按钮 - Plan 处于待审核状态且是战略发展部 -->
-                  <el-button
-                    v-if="currentPlanStatus === 'PENDING' && isStrategicDept"
-                    link
-                    type="success"
-                    size="small"
-                    @click="approveIndicatorReview(row.id.toString())"
-                  >
-                    审核通过
-                  </el-button>
-
-                  <!-- 审核驳回按钮 - Plan 处于待审核状态且是战略发展部 -->
-                  <el-button
-                    v-if="currentPlanStatus === 'PENDING' && isStrategicDept"
-                    link
-                    type="warning"
-                    size="small"
-                    @click="rejectIndicatorReview(row.id.toString())"
-                  >
-                    审核驳回
-                  </el-button>
-
                   <!-- 查看按钮 - 始终显示 -->
                   <el-button link type="primary" size="small" @click="handleViewDetail(row)"
                     >查看</el-button
@@ -3589,20 +3803,19 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                   >
                     {{ getCategoryText(currentIndicator.type2) }}任务
                   </el-tag>
-                  <!-- 进度审批状态标签 -->
                   <el-tag
-                    v-if="currentIndicator.progressApprovalStatus === 'PENDING'"
+                    v-if="currentPlanStatus === 'PENDING'"
                     type="warning"
                     size="small"
                   >
-                    待审批
+                    计划审批中
                   </el-tag>
                   <el-tag
-                    v-else-if="currentIndicator.progressApprovalStatus === 'REJECTED'"
+                    v-else-if="currentPlanStatus === 'RETURNED'"
                     type="danger"
                     size="small"
                   >
-                    已驳回
+                    计划已退回
                   </el-tag>
                 </div>
               </div>
@@ -4051,7 +4264,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           <h4>里程碑节点</h4>
           <el-timeline style="margin-top: 20px; padding-left: 5px">
             <el-timeline-item
-              v-for="(milestone, index) in currentDetail.milestones"
+              v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
               :key="index"
               :timestamp="milestone.deadline"
               :type="
@@ -4344,10 +4557,94 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       @close="auditLogVisible = false"
     />
 
+    <el-dialog
+      v-model="approvalSetupDialogVisible"
+      title="确认审批流程"
+      width="640px"
+      :close-on-click-modal="false"
+      @close="handleCloseApprovalSetupDialog"
+    >
+      <div v-loading="approvalPreviewLoading" class="approval-setup-dialog">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="发起整体计划审批前，请确认流程节点。审批人将由后端根据流程角色和组织自动计算。"
+          style="margin-bottom: 16px"
+        />
+
+        <div v-if="currentPlan" class="approval-setup-summary">
+          <div class="summary-row">
+            <span class="summary-label">当前计划：</span>
+            <span class="summary-value">{{ currentPlan.name || selectedDepartment || '当前计划' }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">审批流程：</span>
+            <span class="summary-value">
+              {{ approvalWorkflowPreview?.workflowName || PLAN_APPROVAL_WORKFLOW_CODE }}
+            </span>
+          </div>
+        </div>
+
+        <el-empty
+          v-if="!approvalPreviewLoading && !hasApprovalPreview"
+          description="暂未加载到审批流程定义"
+          :image-size="88"
+        />
+
+        <div v-else class="approval-step-list">
+          <div
+            v-for="step in approvalWorkflowPreview?.steps || []"
+            :key="step.stepDefId"
+            class="approval-step-item"
+          >
+            <div class="approval-step-header">
+              <div class="approval-step-name">
+                {{ step.stepOrder }}. {{ step.stepName }}
+              </div>
+              <el-tag type="info" size="small">
+                系统自动分配
+              </el-tag>
+            </div>
+
+            <div class="approval-step-readonly">
+              <span>
+                {{ step.roleId ? `角色ID: ${step.roleId}` : '未返回角色ID' }}
+              </span>
+              <span v-if="(step.candidateApprovers || []).length > 0">
+                参考候选人：
+                {{
+                  (step.candidateApprovers || [])
+                    .map(candidate => candidate.realName || candidate.username || `用户 ${candidate.userId}`)
+                    .join('、')
+                }}
+              </span>
+              <span v-else>
+                系统将根据流程定义和角色自动确定审批人
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="handleCloseApprovalSetupDialog">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="approvalSubmitting"
+          :disabled="approvalPreviewLoading || !hasApprovalPreview"
+          @click="confirmPlanApprovalSubmission"
+        >
+          确认发起审批
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 任务审批抽屉 -->
     <ApprovalProgressDrawer
       v-model="taskApprovalVisible"
       :indicators="approvalIndicators"
+      :plan="currentPlan"
       :department-name="selectedDepartment"
       :plan-name="currentPlan?.taskName || currentPlan?.name || selectedDepartment"
       :show-plan-approvals="true"
@@ -6623,6 +6920,74 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 .milestone-cell.editable:hover {
   background: var(--bg-page, #f8fafc);
   border-radius: 4px;
+}
+
+.approval-setup-dialog {
+  min-height: 220px;
+}
+
+.approval-setup-summary {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: var(--el-fill-color-light);
+  border-radius: 10px;
+}
+
+.summary-row + .summary-row {
+  margin-top: 8px;
+}
+
+.summary-label {
+  color: var(--el-text-color-secondary);
+}
+
+.summary-value {
+  color: var(--el-text-color-primary);
+  font-weight: 500;
+}
+
+.approval-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-step-item {
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
+}
+
+.approval-step-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.approval-step-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.approval-step-readonly {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+
+.approval-user-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.approval-user-org {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 /* 响应式调整 */

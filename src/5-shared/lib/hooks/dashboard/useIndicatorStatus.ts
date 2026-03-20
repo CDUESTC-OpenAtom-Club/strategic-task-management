@@ -9,7 +9,7 @@
  * @module composables/dashboard
  */
 
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 import type { IndicatorStatus, STATUS_COLORS as _STATUS_COLORS } from './useDashboardState'
 
 /**

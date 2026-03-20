@@ -130,8 +130,8 @@
 import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheck, CircleClose, Download } from '@element-plus/icons-vue'
-import { auditLogApi, type AuditLogItem } from '@/3-features/admin/api/auditLogApi'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { auditLogApi, type AuditLogItem } from '@/features/admin/api/auditLogApi'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Props
 const props = defineProps<{

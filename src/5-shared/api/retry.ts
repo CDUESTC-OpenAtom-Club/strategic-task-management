@@ -10,7 +10,7 @@
  */
 
 import type { AxiosError, AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * HTTP methods that are considered idempotent and safe to retry

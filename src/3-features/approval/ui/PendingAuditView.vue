@@ -3,8 +3,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElCard, ElTable, ElTableColumn, ElTag, ElButton, ElEmpty, ElInput } from 'element-plus'
 import { View, Search, Refresh } from '@element-plus/icons-vue'
-import type { PlanFill } from '@/5-shared/types'
-import { usePlanStore } from '@/3-features/plan/model/store'
+import type { PlanFill } from '@/shared/types'
+import { usePlanStore } from '@/features/plan/model/store'
 
 /**
  * 待审核列表视图

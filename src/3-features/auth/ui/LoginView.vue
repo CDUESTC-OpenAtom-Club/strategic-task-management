@@ -8,7 +8,7 @@
           v-show="currentBgIndex === index"
           :key="img.id"
           class="bg-image"
-          :style="{ backgroundImage: `url(${img.url})` }"
+          :style="{ background: img.background }"
         ></div>
       </transition-group>
       <div class="bg-overlay"></div>
@@ -123,7 +123,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { useAuthStore } from '@/3-features/auth/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
 import LoginForm from './LoginForm.vue'
 
 const router = useRouter()
@@ -132,8 +132,8 @@ const authStore = useAuthStore()
 // Background rotation
 interface BgImage {
   id: number
-  url: string
-  author?: string
+  background: string
+  label?: string
 }
 
 const bgImages = ref<BgImage[]>([])
@@ -143,30 +143,41 @@ let bgInterval: ReturnType<typeof setInterval> | null = null
 const defaultBgImages: BgImage[] = [
   {
     id: 1,
-    url: 'https://images.unsplash.com/photo-1562774053-701939374585?w=1920&q=80',
-    author: 'University Campus'
+    background: 'url(https://images.unsplash.com/photo-1562774053-701939374585?w=1920&q=80) center/cover no-repeat',
+    label: 'Campus Building'
   },
   {
     id: 2,
-    url: 'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1920&q=80',
-    author: 'Library'
+    background: 'url(https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&q=80) center/cover no-repeat',
+    label: 'University Library'
   },
   {
     id: 3,
-    url: 'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&q=80',
-    author: 'Graduation'
+    background: 'url(https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1920&q=80) center/cover no-repeat',
+    label: 'Graduation Ceremony'
   },
   {
     id: 4,
-    url: 'https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=1920&q=80',
-    author: 'Campus Building'
+    background: 'url(https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=1920&q=80) center/cover no-repeat',
+    label: 'Historic Hall'
   },
   {
     id: 5,
-    url: 'https://images.unsplash.com/photo-1607237138185-eedd9c632b0b?w=1920&q=80',
-    author: 'University Hall'
+    background: 'url(https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=1920&q=80) center/cover no-repeat',
+    label: 'Evening Campus'
   }
 ]
+
+// Preload background images
+const preloadImages = () => {
+  defaultBgImages.forEach((img) => {
+    const match = img.background.match(/url\((.*?)\)/)
+    if (match) {
+      const imgEl = new Image()
+      imgEl.src = match[1]
+    }
+  })
+}
 
 const startBgRotation = () => {
   bgInterval = setInterval(() => {
@@ -238,6 +249,7 @@ const handleForgotPassword = () => {
 // Lifecycle
 onMounted(() => {
   bgImages.value = defaultBgImages
+  preloadImages() // 预加载所有图片
   startBgRotation()
   updateTime()
   timeInterval = setInterval(updateTime, 1000)

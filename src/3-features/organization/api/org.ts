@@ -6,9 +6,9 @@
  * @see Requirements 2.1, 2.3 - 使用 Zod 推导的 OrgVO 类型
  * @see Requirements 2.4, 2.6 - 使用简化的 apiClient
  */
-import { apiClient } from '@/5-shared/api/client'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { buildQueryKey, fetchWithCache } from '@/5-shared/lib/utils/cache'
+import { apiClient } from '@/shared/api/client'
+import { logger } from '@/shared/lib/utils/logger'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
 import { orgListResponseSchema, type OrgVO, type OrgType } from './org.schema'
 
 // 重新导出 OrgVO 类型供其他模块使用

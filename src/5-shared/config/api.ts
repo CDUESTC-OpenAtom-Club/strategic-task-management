@@ -48,11 +48,6 @@ function deriveWebSocketBaseUrl(): string {
     return explicitWsBaseUrl.replace(/\/$/, '')
   }
 
-  if (import.meta.env.DEV && typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}`
-  }
-
   if (API_TARGET) {
     return API_TARGET
       .replace(/^http:/, 'ws:')
@@ -117,7 +112,6 @@ export const API_ENDPOINTS = {
     create: '/indicators',
     distribute: (id: string) => `/indicators/${id}/distribute`,
     breakdown: (id: string) => `/indicators/${id}/breakdown`,
-    distributionStatus: (id: string) => `/indicators/${id}/distribution-status`,
     submit: (id: string) => `/indicators/${id}/submit`,
     approve: (id: string) => `/indicators/${id}/approve`,
     reject: (id: string) => `/indicators/${id}/reject`,

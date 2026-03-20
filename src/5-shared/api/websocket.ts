@@ -5,8 +5,8 @@
  */
 
 import { ref, computed } from 'vue'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { WS_BASE_URL } from '@/5-shared/config/api'
+import { logger } from '@/shared/lib/utils/logger'
+import { WS_BASE_URL } from '@/shared/config/api'
 
 // Notification types matching backend
 export enum NotificationType {
@@ -41,11 +41,13 @@ const unreadCount = ref(0)
 // Reconnection settings
 const RECONNECT_INTERVAL = 5000
 const MAX_RECONNECT_ATTEMPTS = 5
+const MAX_CONSECUTIVE_FAILURES = 2
 let reconnectAttempts = 0
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let shouldReconnect = true
 let handshakeRejected = false
 let lastErrorMessage: string | null = null
+let consecutiveFailureCount = 0
 
 /**
  * Get WebSocket URL from config
@@ -138,6 +140,7 @@ function showBrowserNotification(message: NotificationMessage): void {
 function handleOpen(): void {
   connectionState.value = 'connected'
   reconnectAttempts = 0
+  consecutiveFailureCount = 0
   handshakeRejected = false
   shouldReconnect = true
   clearConnectionError()
@@ -188,6 +191,15 @@ function handleClose(event?: CloseEvent): void {
  */
 function handleError(error: Event): void {
   connectionState.value = 'error'
+  consecutiveFailureCount++
+
+  if (consecutiveFailureCount >= MAX_CONSECUTIVE_FAILURES) {
+    shouldReconnect = false
+    handshakeRejected = true
+    logConnectionError('WebSocket 握手连续失败，已暂停自动重连，请检查后端通知通道权限或可用性', error)
+    return
+  }
+
   logConnectionError('连接失败，请确认后端 WebSocket 服务已启动', error)
 }
 
@@ -240,6 +252,7 @@ export function connectWebSocket(): void {
 export function disconnectWebSocket(): void {
   shouldReconnect = false
   handshakeRejected = false
+  consecutiveFailureCount = 0
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null

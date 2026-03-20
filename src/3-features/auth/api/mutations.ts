@@ -4,8 +4,8 @@
  * Write operations for authentication.
  */
 
-import api from '@/5-shared/api'
-import type { LoginCredentials, LoginResponse } from '@/4-entities/user/model/types'
+import { apiClient as api } from '@/shared/api/client'
+import type { LoginCredentials, LoginResponse } from '@/entities/user/model/types'
 import type { ApiResponse } from './types'
 
 /**

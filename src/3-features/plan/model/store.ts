@@ -7,10 +7,10 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import type { Plan, PlanStatus, PlanFill, IndicatorFill, IndicatorFillForm } from '@/5-shared/types'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { Plan, PlanStatus, PlanFill, IndicatorFill, IndicatorFillForm } from '@/shared/types'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { logger } from '@/shared/lib/utils/logger'
 import { ElMessage } from 'element-plus'
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
@@ -32,6 +32,7 @@ export const usePlanStore = defineStore('plan', () => {
   const loading = ref(false)
   const submitting = ref(false)
   const error = ref<string | null>(null)
+  const loadingPlansPromise = ref<Promise<Plan[]> | null>(null)
 
   const filterStatus = ref<PlanStatus | 'all'>('all')
   const filterOrgId = ref<number | string | null>(null)
@@ -81,37 +82,65 @@ export const usePlanStore = defineStore('plan', () => {
     return pendingPlanFills.value.filter(fill => fill.submitted_by !== userId)
   })
 
+  const resolvePlanYear = (plan: Plan): number | null => {
+    const planRecord = plan as Plan & { year?: number | string; cycleId?: number | string; cycle?: { year?: number | string } }
+    const explicitYear = planRecord.year ?? planRecord.cycle?.year
+    if (explicitYear != null && explicitYear !== '') {
+      const numericYear = Number(explicitYear)
+      return Number.isFinite(numericYear) ? numericYear : null
+    }
+
+    const cycleId = Number(planRecord.cycleId)
+    if (cycleId === 4 || cycleId === 90) {
+      return 2026
+    }
+    if (cycleId === 7) {
+      return 2025
+    }
+
+    return null
+  }
+
   // ============ Actions ============
   const loadPlans = async (options: { force?: boolean; background?: boolean } = {}) => {
     if (!options.force && plans.value.length > 0) {
       return plans.value
     }
+    if (loadingPlansPromise.value) {
+      return loadingPlansPromise.value
+    }
 
     loading.value = true
     error.value = null
 
-    try {
-      logger.info('[Plan Store] Loading plans...')
-      const { planApi } = await import('@/3-features/plan/api/planApi')
-      const response = await planApi.getAllPlans()
+    const request = (async () => {
+      try {
+        logger.info('[Plan Store] Loading plans...')
+        const { planApi } = await import('@/features/plan/api/planApi')
+        const response = await planApi.getAllPlans()
 
-      if (hasApiData(response)) {
-        plans.value = response.data
-        logger.info(`[Plan Store] Loaded ${response.data.length} plans`)
-        return response.data
-      } else {
+        if (hasApiData(response)) {
+          plans.value = response.data
+          logger.info(`[Plan Store] Loaded ${response.data.length} plans`)
+          return response.data
+        }
+
         plans.value = []
         logger.warn('[Plan Store] No plans loaded')
         return []
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : '加载计划失败'
+        logger.error('[Plan Store] Failed to load plans:', err)
+        ElMessage.error('加载计划失败')
+        return []
+      } finally {
+        loading.value = false
+        loadingPlansPromise.value = null
       }
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : '加载计划失败'
-      logger.error('[Plan Store] Failed to load plans:', err)
-      ElMessage.error('加载计划失败')
-      return []
-    } finally {
-      loading.value = false
-    }
+    })()
+
+    loadingPlansPromise.value = request
+    return request
   }
 
   const loadPlan = async (
@@ -131,7 +160,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Loading plan ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.getPlanById(planId)
 
       if (hasApiData(response)) {
@@ -175,7 +204,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Loading plan details ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.getPlanDetails(planId)
 
       if (hasApiData(response) && response.data) {
@@ -208,10 +237,12 @@ export const usePlanStore = defineStore('plan', () => {
    */
   const getPlanByTargetOrgAndYear = (targetOrgName: string, year: number) => {
     return plans.value.find(plan => {
-      // 匹配目标组织和年份
-      const p = plan as any
+      const p = plan as Plan & {
+        targetOrgName?: string
+        orgName?: string
+      }
       const orgName = p.targetOrgName || p.orgName || ''
-      const cycleYear = p.cycle?.year || year
+      const cycleYear = resolvePlanYear(plan)
       return orgName === targetOrgName && cycleYear === year
     })
   }
@@ -222,7 +253,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info('[Plan Store] Creating plan...', data)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.createPlan(data)
 
       if (hasApiData(response)) {
@@ -248,7 +279,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Updating plan ${planId}...`, data)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.updatePlan(planId, data)
 
       if (hasApiData(response)) {
@@ -280,7 +311,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Deleting plan ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.deletePlan(planId)
 
       if (response.success ?? response.code === 200) {
@@ -327,7 +358,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info('[Plan Store] Submitting plan...', form)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.submitPlan(form)
 
       if (hasApiData(response)) {
@@ -355,14 +386,19 @@ export const usePlanStore = defineStore('plan', () => {
    * 提交 Plan 审批
    * @param planId Plan ID
    */
-  const submitPlanForApproval = async (planId: number | string) => {
+  const submitPlanForApproval = async (
+    planId: number | string,
+    payload: {
+      workflowCode: string
+    }
+  ) => {
     submitting.value = true
     error.value = null
 
     try {
       logger.info(`[Plan Store] Submitting plan ${planId} for approval...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
-      const response = await planApi.submitPlanForApproval(planId)
+      const { planApi } = await import('@/features/plan/api/planApi')
+      const response = await planApi.submitPlanForApproval(planId, payload)
 
       if (hasApiData(response)) {
         // 更新本地 Plan 状态
@@ -398,7 +434,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Approving plan ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.approvePlan(planId)
 
       if (hasApiData(response)) {
@@ -436,7 +472,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Rejecting plan ${planId}...`, { reason })
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.rejectPlan(planId, reason)
 
       if (hasApiData(response)) {
@@ -473,7 +509,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Withdrawing plan ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.withdrawPlan(planId)
 
       if (hasApiData(response)) {
@@ -510,7 +546,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Publishing plan ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.publishPlan(planId)
 
       if (hasApiData(response)) {
@@ -547,7 +583,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Archiving plan ${planId}...`)
-      const { planApi } = await import('@/3-features/plan/api/planApi')
+      const { planApi } = await import('@/features/plan/api/planApi')
       const response = await planApi.archivePlan(planId)
 
       if (hasApiData(response)) {
@@ -580,7 +616,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info('[Plan Store] Loading pending plan fills...')
-      const { planFillApi } = await import('@/3-features/plan/api/planApi')
+      const { planFillApi } = await import('@/features/plan/api/planApi')
       const authStore = useAuthStore()
       const response = await planFillApi.getPendingPlanFills(authStore.user?.id)
 
@@ -607,7 +643,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Loading indicator fill history for ${indicatorId}...`)
-      const { indicatorFillApi } = await import('@/3-features/plan/api/planApi')
+      const { indicatorFillApi } = await import('@/features/plan/api/planApi')
       const response = await indicatorFillApi.getIndicatorFillHistory(indicatorId)
 
       if (hasApiData(response)) {
@@ -634,7 +670,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info('[Plan Store] Saving indicator fill...', form)
-      const { indicatorFillApi } = await import('@/3-features/plan/api/planApi')
+      const { indicatorFillApi } = await import('@/features/plan/api/planApi')
       const response = await indicatorFillApi.saveFill(form)
 
       if (hasApiData(response)) {
@@ -660,7 +696,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Submitting indicator fill ${fillId}...`)
-      const { indicatorFillApi } = await import('@/3-features/plan/api/planApi')
+      const { indicatorFillApi } = await import('@/features/plan/api/planApi')
       const response = await indicatorFillApi.submitFill(fillId)
 
       if (hasApiData(response)) {
@@ -694,7 +730,7 @@ export const usePlanStore = defineStore('plan', () => {
 
     try {
       logger.info(`[Plan Store] Auditing plan fill ${fillId}...`, form)
-      const { planFillApi } = await import('@/3-features/plan/api/planApi')
+      const { planFillApi } = await import('@/features/plan/api/planApi')
       const authStore = useAuthStore()
       const response = await planFillApi.auditPlanFill(fillId, {
         ...form,

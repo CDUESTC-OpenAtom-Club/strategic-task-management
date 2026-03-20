@@ -3,7 +3,7 @@
  * 用于在没有后端服务的情况下提供模拟数据
  */
 
-import type { ApiResponse, PageResponse } from '@/5-shared/types/entities'
+import type { ApiResponse, PageResponse } from '@/shared/types/entities'
 import {
   mockUsers,
   mockAssessmentCycles,

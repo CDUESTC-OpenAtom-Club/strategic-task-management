@@ -18,7 +18,7 @@
 
 <script setup lang="ts">
 import { Monitor } from '@element-plus/icons-vue'
-import UserManagement from '@/3-features/admin/ui/UserManagement.vue'
+import UserManagement from '@/features/admin/ui/UserManagement.vue'
 </script>
 
 <style scoped>

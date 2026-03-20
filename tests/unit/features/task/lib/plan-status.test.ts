@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getPlanStatusDisplay, normalizePlanStatus } from '@/3-features/task/lib/planStatus'
+import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib/planStatus'
 
 describe('task/lib/planStatus', () => {
   it('normalizes lowercase draft status from plan module', () => {

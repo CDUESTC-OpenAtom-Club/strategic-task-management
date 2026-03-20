@@ -7,14 +7,15 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { logger } from '@/5-shared/lib/utils/logger'
-import type { Department } from '@/3-features/organization/api'
+import { logger } from '@/shared/lib/utils/logger'
+import type { Department } from '@/features/organization/api'
 
 export const useOrganizationStore = defineStore('organization', () => {
   // ============ State ============
   const departments = ref<Department[]>([])
   const loading = ref(false)
   const loaded = ref(false)
+  const loadingDepartmentsPromise = ref<Promise<void> | null>(null)
 
   // ============ Getters ============
   const strategicDept = computed(() => departments.value.find(d => d.type === 'strategic_dept'))
@@ -51,35 +52,44 @@ export const useOrganizationStore = defineStore('organization', () => {
     if (!options.force && loaded.value && departments.value.length > 0) {
       return
     }
+    if (loadingDepartmentsPromise.value && retryCount === 0) {
+      return loadingDepartmentsPromise.value
+    }
 
     loading.value = true
 
-    try {
-      // 动态导入 API
-      const { orgApi } = await import('@/3-features/organization/api')
-      const depts = await orgApi.getAllDepartments()
+    const request = (async () => {
+      try {
+        // 动态导入 API
+        const { orgApi } = await import('@/features/organization/api')
+        const depts = await orgApi.getAllDepartments()
 
-      if (depts.length === 0 && retryCount < maxRetries) {
+        if (depts.length === 0 && retryCount < maxRetries) {
+          loading.value = false
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          return loadDepartments(retryCount + 1, maxRetries, options)
+        }
+
+        departments.value = depts
+        loaded.value = true
+        logger.info(`[Organization Store] Loaded ${depts.length} departments`)
+      } catch (error) {
+        if (retryCount < maxRetries) {
+          loading.value = false
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          return loadDepartments(retryCount + 1, maxRetries, options)
+        }
+
+        logger.error('[Organization Store] Failed to load departments:', error)
+        loaded.value = true
+      } finally {
         loading.value = false
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        return loadDepartments(retryCount + 1, maxRetries, options)
+        loadingDepartmentsPromise.value = null
       }
+    })()
 
-      departments.value = depts
-      loaded.value = true
-      logger.info(`[Organization Store] Loaded ${depts.length} departments`)
-    } catch (error) {
-      if (retryCount < maxRetries) {
-        loading.value = false
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        return loadDepartments(retryCount + 1, maxRetries, options)
-      }
-
-      logger.error('[Organization Store] Failed to load departments:', error)
-      loaded.value = true
-    } finally {
-      loading.value = false
-    }
+    loadingDepartmentsPromise.value = request
+    return request
   }
 
   // 工具函数

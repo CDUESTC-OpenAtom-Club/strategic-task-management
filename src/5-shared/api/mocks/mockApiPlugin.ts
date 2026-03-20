@@ -1,4 +1,4 @@
-﻿import { Plugin } from 'vite'
+﻿import type { Plugin } from 'vite'
 import { mockApiMiddleware } from './mockApiMiddleware'
 
 // 创建一个Vite插件，用于在Mock模式下处理API请求

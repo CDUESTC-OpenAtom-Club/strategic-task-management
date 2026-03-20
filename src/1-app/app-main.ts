@@ -25,8 +25,9 @@ import './styles/_colors.css'
 import App from './App.vue'
 
 // Utilities
-import { autoHealthCheck } from '@/5-shared/lib/utils/apiHealth'
-import { performanceMonitor } from '@/5-shared/lib/utils/performance'
+import { autoHealthCheck } from '@/shared/lib/utils/apiHealth'
+import { performanceMonitor } from '@/shared/lib/utils/performance'
+import { registerSharedDirectives } from '@/shared/lib/directives'
 
 /**
  * Create Vue application instance
@@ -37,13 +38,7 @@ const pinia = createPinia()
 /**
  * Register global directives
  */
-app.directive('focus', {
-  mounted(el) {
-    // 对于 el-input 组件，需要找到内部的 input 元素
-    const input = el.querySelector('input') || el.querySelector('textarea') || el
-    input?.focus()
-  }
-})
+registerSharedDirectives(app)
 
 /**
  * Use plugins
@@ -54,7 +49,7 @@ app.use(router)
 /**
  * Global error handling
  */
-app.config.errorHandler = (err, vm, info) => {
+app.config.errorHandler = (err, _vm, info) => {
   console.error('Global error:', err)
   console.error('Error info:', info)
 }
@@ -67,7 +62,7 @@ app.mount('#app')
 /**
  * Print application version information
  */
-const version = import.meta.env.VITE_APP_VERSION || '1.0.1'
+const version = import.meta.env['VITE_APP_VERSION'] || '1.0.1'
 const buildTime = new Date().toISOString()
 if (import.meta.env.DEV) {
   // eslint-disable-next-line no-console

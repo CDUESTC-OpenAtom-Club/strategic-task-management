@@ -3,7 +3,11 @@
  * getMilestonesTooltip, getIndicatorMilestoneProgressText)
  */
 import { describe, it, expect } from 'vitest'
-import { getMilestonesTooltip, calculateMilestoneStatus, _getIndicatorMilestoneProgressText } from '@/shared/lib/milestone-intelligence'
+import {
+  calculateMilestoneStatus,
+  getIndicatorMilestoneProgressText,
+  getMilestonesTooltip
+} from '@/shared/lib/milestone-intelligence'
 import type { StrategicIndicator } from '@/types'
 
 function makeIndicatorWithMilestones(milestones: any[], progress: number = 0): StrategicIndicator {
@@ -46,7 +50,7 @@ describe('Milestone Intelligence', () => {
   it('getIndicatorMilestoneProgressText should reflect pending milestones', () => {
     const deadline = '2026-12-31'
     const indicator = makeIndicatorWithMilestones([{ id: 'm4', name: 'M4', deadline, targetProgress: 50, status: 'pending' }], 0)
-    const text = (require('@/shared/lib/milestone-intelligence/milestoneTooltipBuilder').getIndicatorMilestoneProgressText as any)(indicator)
+    const text = getIndicatorMilestoneProgressText(indicator)
     expect(typeof text).toBe('string')
     expect(text).toMatch(/待完成|里程碑/)
   })

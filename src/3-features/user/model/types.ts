@@ -4,7 +4,7 @@
  * Type definitions for User state management.
  */
 
-import type { UserRole } from '@/5-shared/types'
+import type { UserRole } from '@/shared/types'
 
 /**
  * User filter state

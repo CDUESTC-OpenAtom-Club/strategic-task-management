@@ -5,13 +5,13 @@
  * Based on API documentation: POST/PUT/DELETE /api/indicators/*
  */
 
-import { apiClient } from '@/5-shared/lib/api/client'
+import { apiClient } from '@/shared/api/client'
 import type {
   Indicator,
   IndicatorCreateRequest,
   IndicatorUpdateRequest,
   DistributeRequest
-} from '@/4-entities/indicator/model/types'
+} from '@/entities/indicator/model/types'
 import type {
   IndicatorDetailResponse,
   DistributionResponse,
@@ -105,7 +105,7 @@ export async function batchDistributeIndicators(
     )
   )
 
-  return responses[0]?.data ?? ({ success: true } as DistributionResult)
+  return responses[0]?.data ?? ({ success: true } as unknown as DistributionResult)
 }
 
 /**

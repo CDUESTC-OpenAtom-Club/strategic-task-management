@@ -4,7 +4,7 @@
  */
 
 import { ref } from 'vue'
-import type { Milestone } from '@/5-shared/types'
+import type { Milestone } from '@/shared/types'
 
 export function useMilestoneManagement() {
   const dialogVisible = ref(false)

@@ -8,10 +8,10 @@
  */
 
 import axios from 'axios'
-import { apiClient } from '@/5-shared/api/client'
-import { API_BASE_URL } from '@/5-shared/config/api'
-import { tokenManager } from '@/5-shared/lib/utils/tokenManager'
-import type { ApiResponse } from '@/5-shared/types'
+import { apiClient } from '@/shared/api/client'
+import { API_BASE_URL } from '@/shared/config/api'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
+import type { ApiResponse } from '@/shared/types'
 
 // ============================================================
 // Types

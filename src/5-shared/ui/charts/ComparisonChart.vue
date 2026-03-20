@@ -10,8 +10,8 @@ import {
   GraphicComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import type { ComparisonItem } from '@/5-shared/types'
-import { getProgressColor } from '@/5-shared/lib/utils/colors'
+import type { ComparisonItem } from '@/shared/types'
+import { getProgressColor } from '@/shared/lib/utils/colors'
 
 use([BarChart, GridComponent, TooltipComponent, LegendComponent, GraphicComponent, CanvasRenderer])
 

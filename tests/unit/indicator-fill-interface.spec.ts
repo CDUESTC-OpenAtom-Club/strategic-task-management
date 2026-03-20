@@ -8,7 +8,7 @@ const getIndicatorFillHistory = vi.fn()
 const saveFill = vi.fn()
 const submitFill = vi.fn()
 
-vi.mock('@/3-features/plan/api/planApi', () => ({
+vi.mock('@/features/plan/api/planApi', () => ({
   indicatorFillApi: {
     getIndicatorFillHistory,
     saveFill,
@@ -28,8 +28,8 @@ vi.mock('element-plus', async () => {
   }
 })
 
-import { usePlanStore } from '@/3-features/plan/model/store'
-import IndicatorFillHistory from '@/5-shared/ui/form/indicator/IndicatorFillHistory.vue'
+import { usePlanStore } from '@/features/plan/model/store'
+import IndicatorFillHistory from '@/shared/ui/form/indicator/IndicatorFillHistory.vue'
 
 const passthroughStub = (name: string, tag = 'div') =>
   defineComponent({

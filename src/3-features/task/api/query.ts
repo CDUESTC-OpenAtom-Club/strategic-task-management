@@ -4,8 +4,8 @@
  * Read-only API operations for task data.
  */
 
-import api from '@/5-shared/api'
-import type { ApiResponse, StrategicTask } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import type { ApiResponse, StrategicTask } from '@/shared/types'
 
 /**
  * Get tasks by year
@@ -57,7 +57,7 @@ export async function getTasksByOrg(orgId: number): Promise<ApiResponse<Strategi
  * @param status - Task status (not used, kept for API compatibility)
  * @returns Empty result (status filtering not supported)
  */
-export async function getTasksByStatus(status: string): Promise<ApiResponse<StrategicTask[]>> {
+export async function getTasksByStatus(_status: string): Promise<ApiResponse<StrategicTask[]>> {
   // 后端不支持按 status 查询，返回空结果
   return {
     success: true,

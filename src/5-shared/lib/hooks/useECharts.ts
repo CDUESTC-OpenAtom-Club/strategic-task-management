@@ -34,7 +34,7 @@ import {
 // 导入渲染器
 import { LabelLayout, UniversalTransition } from 'echarts/features'
 import { CanvasRenderer } from 'echarts/renderers'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 // 注册所有需要的组件
 echarts.use([

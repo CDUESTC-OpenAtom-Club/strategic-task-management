@@ -6,8 +6,8 @@
 
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
-import type { AlertLevel, UserRole } from '@/5-shared/types'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { AlertLevel, UserRole } from '@/shared/types'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Configure dayjs
 dayjs.locale('zh-cn')

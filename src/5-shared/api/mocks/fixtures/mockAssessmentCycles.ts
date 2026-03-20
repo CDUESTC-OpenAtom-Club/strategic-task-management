@@ -1,4 +1,4 @@
-import type { AssessmentCycle } from '@/5-shared/types/entities'
+import type { AssessmentCycle } from '@/shared/types/entities'
 
 export const mockAssessmentCycles: AssessmentCycle[] = [
   {

@@ -15,7 +15,7 @@ import type {
   ComparisonItem,
   SankeyData,
   SourcePieData
-} from '@/5-shared/types'
+} from '@/shared/types'
 
 // Re-export common types
 export type {

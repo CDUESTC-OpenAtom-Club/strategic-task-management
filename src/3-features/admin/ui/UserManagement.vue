@@ -29,17 +29,48 @@ import {
   Lock,
   Unlock,
   User,
-  Key
+  Key,
+  WarningFilled
 } from '@element-plus/icons-vue'
-import type { UserManagementItem, UserForm, Organization, UserRole } from '@/5-shared/types'
-import api from '@/5-shared/api'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useAuditLogStore } from '@/3-features/admin/model/auditLog'
-import { logger } from '@/5-shared/lib/utils/logger'
-import orgApi from '@/3-features/organization/api/org'
+import type { UserManagementItem, UserForm, Organization, UserRole } from '@/shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useAuditLogStore } from '@/features/admin/model/auditLog'
+import { logger } from '@/shared/lib/utils/logger'
+import orgApi from '@/features/organization/api/org'
 
 const authStore = useAuthStore()
 const auditLogStore = useAuditLogStore()
+
+interface UserListPageData {
+  content: Record<string, unknown>[]
+}
+
+interface UserListResponseShape {
+  data?: UserListPageData | { data?: UserListPageData }
+}
+
+const getCurrentOperatorName = () => authStore.user?.name || ''
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  const message = (error as { response?: { data?: { message?: string } }; message?: string }).response
+    ?.data?.message
+  return message || (error as { message?: string }).message || fallback
+}
+
+const resolveUserListPageData = (response: UserListResponseShape): UserListPageData | null => {
+  if (response.data && 'content' in response.data) {
+    return response.data
+  }
+  if (response.data && 'data' in response.data && response.data.data?.content) {
+    return response.data.data
+  }
+  return null
+}
 
 /**
  * 用户管理组件
@@ -254,34 +285,37 @@ const loadUsers = async () => {
       sortBy: 'id',
       sortOrder: 'asc'
     }
-    const response = await api.get('/auth/users', { params })
+    const response = (await api.get('/auth/users', { params })) as UserListResponseShape
 
-    const pageData = response?.data?.content
-      ? response.data
-      : response?.data?.data?.content
-        ? response.data.data
-        : null
+    const pageData = resolveUserListPageData(response)
     if (!pageData || !pageData.content) {
       throw new Error('响应数据格式错误')
     }
 
-    users.value = pageData.content.map(user => ({
-      id: user.id,
-      username: user.username,
-      realName: user.realName,
-      email: user.email || '',
-      phone: user.phone || '',
-      orgId: String(user.orgId),
-      orgName: user.orgName,
-      roles: user.roles.map((r: { roleCode: string }) => r.roleCode),
-      status: user.status,
-      lastLoginAt: user.lastLoginAt || '',
-      createdAt: user.createdAt || '',
-      updatedAt: user.updatedAt || ''
+    users.value = pageData.content.map((user: Record<string, unknown>) => ({
+      id:
+        typeof user.userId === 'string' || typeof user.userId === 'number'
+          ? user.userId
+          : typeof user.id === 'string' || typeof user.id === 'number'
+            ? user.id
+            : '',
+      username: String(user.username ?? ''),
+      realName: String(user.realName ?? user.name ?? ''),
+      email: String(user.email ?? ''),
+      phone: String(user.phone ?? ''),
+      orgId: String(user.orgId ?? ''),
+      orgName: String(user.orgName ?? user.department ?? ''),
+      roles: Array.isArray(user.roles)
+        ? user.roles.map((r: { roleCode?: string; role?: string }) => r.roleCode ?? r.role ?? '')
+        : [],
+      status: (user.status ?? 'active') as UserManagementItem['status'],
+      lastLoginAt: String(user.lastLoginAt ?? ''),
+      createdAt: String(user.createdAt ?? ''),
+      updatedAt: String(user.updatedAt ?? '')
     }))
   } catch (error) {
     logger.error('加载用户列表失败:', error)
-    ElMessage.error('加载用户列表失败')
+    ElMessage.error(getErrorMessage(error, '加载用户列表失败'))
   } finally {
     loading.value = false
   }
@@ -326,7 +360,7 @@ const openEditDialog = (user: UserManagementItem) => {
     phone: user.phone,
     orgId: user.orgId,
     roles: [...user.roles],
-    status: user.status
+    status: user.status === 'locked' ? 'disabled' : user.status
   }
 
   showUserDialog.value = true
@@ -344,7 +378,7 @@ const resetUserForm = () => {
     roles: [],
     status: 'active'
   }
-  userFormRef.value.clearValidate()
+  userFormRef.value?.clearValidate()
 }
 
 // 保存用户
@@ -373,7 +407,7 @@ const handleSave = async () => {
       roles: userForm.value.roles
     }
 
-    let result
+    let result: { data?: Record<string, unknown> } | undefined
     if (dialogMode.value === 'create') {
       userData.password = userForm.value.password
       result = await api.post('/auth/users', userData)
@@ -383,11 +417,11 @@ const handleSave = async () => {
       try {
         auditLogStore.logAction({
           entityType: 'user',
-          entityId: String(result.data.id || ''),
+          entityId: String(result?.data?.userId ?? result?.data?.id ?? ''),
           entityName: userData.realName as string,
           action: 'create_user',
-          operator: authStore.user.id || '',
-          operatorName: authStore.user.name || '',
+          operator: String(authStore.user?.userId ?? ''),
+          operatorName: getCurrentOperatorName(),
           dataAfter: {
             username: userData.username,
             realName: userData.realName,
@@ -413,8 +447,8 @@ const handleSave = async () => {
           entityId: String(editingUserId.value),
           entityName: userData.realName as string,
           action: 'update_user',
-          operator: authStore.user.id || '',
-          operatorName: authStore.user.name || '',
+          operator: String(authStore.user?.userId ?? ''),
+          operatorName: getCurrentOperatorName(),
           dataBefore: originalUser,
           dataAfter: userData
         })
@@ -427,7 +461,7 @@ const handleSave = async () => {
     await loadUsers()
   } catch (error: unknown) {
     logger.error('保存失败:', error)
-    ElMessage.error(error.response.data.message || '操作失败，请重试')
+    ElMessage.error(getErrorMessage(error, '操作失败，请重试'))
   } finally {
     loading.value = false
   }
@@ -470,8 +504,8 @@ const toggleUserStatus = async (user: UserManagementItem) => {
         entityId: String(user.id),
         entityName: user.realName,
         action: 'toggle_user_status',
-        operator: authStore.user.id || '',
-        operatorName: authStore.user.name || '',
+        operator: String(authStore.user?.userId ?? ''),
+        operatorName: getCurrentOperatorName(),
         dataBefore: { status: user.status },
         dataAfter: { status: newStatus }
       })
@@ -483,7 +517,7 @@ const toggleUserStatus = async (user: UserManagementItem) => {
   } catch (error: unknown) {
     if (error !== 'cancel') {
       logger.error('状态更新失败:', error)
-      ElMessage.error(error.response.data.message || '操作失败')
+      ElMessage.error(getErrorMessage(error, '操作失败'))
     }
   }
 }
@@ -511,9 +545,9 @@ const handleDelete = async (user: UserManagementItem) => {
         entityId: String(user.id),
         entityName: user.realName,
         action: 'delete_user',
-        operator: authStore.user.id || '',
-        operatorName: authStore.user.name || '',
-        dataBefore: user,
+        operator: String(authStore.user?.userId ?? ''),
+        operatorName: getCurrentOperatorName(),
+        dataBefore: user as unknown as Record<string, unknown>,
         dataAfter: { deleted: true, deletedAt: new Date().toISOString() }
       })
     } catch (logError) {
@@ -524,7 +558,7 @@ const handleDelete = async (user: UserManagementItem) => {
   } catch (error: unknown) {
     if (error !== 'cancel') {
       logger.error('删除失败:', error)
-      ElMessage.error(error.response.data.message || '删除失败')
+      ElMessage.error(getErrorMessage(error, '删除失败'))
     }
   }
 }
@@ -560,7 +594,7 @@ const handleResetPassword = async () => {
     showPasswordDialog.value = false
   } catch (error: unknown) {
     logger.error('重置密码失败:', error)
-    ElMessage.error(error.response.data.message || error.message || '密码重置失败，请重试')
+    ElMessage.error(getErrorMessage(error, '密码重置失败，请重试'))
   } finally {
     loading.value = false
   }
@@ -853,7 +887,8 @@ onMounted(() => {
           <ElTreeSelect
             v-model="userForm.orgId"
             :data="organizationTree"
-            :props="{ label: 'name', value: 'id' }"
+            :props="{ label: 'name', children: 'children' }"
+            value-key="id"
             placeholder="请选择所属组织"
             :loading="organizationLoading"
             check-strictly
@@ -956,7 +991,6 @@ onMounted(() => {
 </template>
 
 <script lang="ts">
-import { WarningFilled } from '@element-plus/icons-vue'
 </script>
 
 <style scoped>

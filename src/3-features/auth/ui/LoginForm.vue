@@ -95,7 +95,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import type { LoginFormState } from '../model/types'
 import { VALIDATION_RULES, SESSION_CONFIG, TOKEN_KEYS } from '../model/constants'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 // Props
 interface Props {

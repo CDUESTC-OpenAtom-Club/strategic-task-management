@@ -5,7 +5,7 @@
  * This module provides smart milestone management capabilities.
  */
 
-import type { StrategicIndicator, Milestone } from '@/5-shared/types'
+import type { StrategicIndicator, Milestone } from '@/shared/types'
 
 /**
  * Progress status types for indicators based on milestones

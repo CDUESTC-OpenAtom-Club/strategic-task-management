@@ -1,16 +1,15 @@
-import { apiClient } from '@/5-shared/lib/api'
-import { withRetry } from '@/5-shared/lib/api/wrappers'
+import { apiClient } from '@/shared/api/client'
+import { withRetry } from '@/shared/api'
 import type {
   ApiResponse,
   IndicatorDistributionRequest,
   IndicatorDistributionEligibility,
   BatchDistributionRequest
-} from '@/5-shared/types'
+} from '@/shared/types'
 import type {
   IndicatorVO,
-  DistributionStatus,
   IndicatorCreateRequest
-} from '@/5-shared/types/backend-aligned'
+} from '@/shared/types/backend-aligned'
 
 /**
  * 指标 API 服务
@@ -24,9 +23,8 @@ import type {
 export type {
   IndicatorVO,
   MilestoneVO,
-  DistributionStatus,
   IndicatorCreateRequest
-} from '@/5-shared/types/backend-aligned'
+} from '@/shared/types/backend-aligned'
 
 export const indicatorApi = {
   /**
@@ -218,30 +216,6 @@ export const indicatorApi = {
     return withRetry(async () => {
       return apiClient.post<ApiResponse<IndicatorVO>>('/indicators', request)
     })
-  },
-
-  /**
-   * 发布/变更指标的下发状态
-   *
-   * 注意：后端未实现 PATCH /indicators/{id}/distribution-status 接口
-   * 使用已有的下发和撤回接口来实现类似功能
-   *
-   * @param indicatorId 指标ID
-   * @param distributionStatus 目标状态（DISTRIBUTED=下发, DRAFT=撤回草稿）
-   */
-  async publishDistributionStatus(
-    indicatorId: string,
-    distributionStatus: DistributionStatus
-  ): Promise<ApiResponse<IndicatorVO>> {
-    if (distributionStatus === 'DISTRIBUTED') {
-      // 如果目标状态是 DISTRIBUTED，使用分发接口
-      // 注意：这里需要提供 targetOrgId，但目前接口不提供，需要从其他地方获取
-      // 暂时抛出错误，提示使用正确的分发接口
-      throw new Error('请使用 distributeIndicator 接口进行指标分发，需要提供目标组织ID')
-    } else {
-      // 如果目标状态是 DRAFT，使用撤回接口
-      return this.withdrawIndicator(indicatorId)
-    }
   },
 
   /**

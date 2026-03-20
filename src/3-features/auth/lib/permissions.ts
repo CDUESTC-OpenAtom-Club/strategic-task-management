@@ -4,7 +4,7 @@
  * Permission checking utilities for auth feature.
  */
 
-import type { UserRole } from '@/5-shared/types'
+import type { UserRole } from '@/shared/types'
 
 /**
  * Permission definition
@@ -83,6 +83,6 @@ export function formatPermission(resource: string, action: string): string {
  * Parse permission string
  */
 export function parsePermission(permission: string): Permission {
-  const [resource, action] = permission.split(':')
+  const [resource = '', action = ''] = permission.split(':')
   return { resource, action }
 }

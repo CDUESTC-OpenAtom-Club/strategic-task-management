@@ -5,7 +5,7 @@
  * These extend the entity types with feature-specific concerns.
  */
 
-import type { Indicator, IndicatorFilters } from '@/4-entities/indicator/model/types'
+import type { Indicator, IndicatorFilters } from '@/entities/indicator/model/types'
 
 /**
  * Indicator list state

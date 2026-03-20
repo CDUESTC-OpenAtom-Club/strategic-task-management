@@ -5,7 +5,7 @@
  * 包括进度计算、权重计算、统计计算等
  */
 
-import type { Indicator } from '@/5-shared/types'
+import type { Indicator } from '@/shared/types'
 
 export class DashboardCalculationService {
   /**

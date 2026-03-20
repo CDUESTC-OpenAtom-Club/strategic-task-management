@@ -5,8 +5,8 @@
  * Based on API documentation: GET /api/indicators/*
  */
 
-import { apiClient } from '@/5-shared/lib/api/client'
-import type { Indicator, IndicatorFilters } from '@/4-entities/indicator/model/types'
+import { apiClient } from '@/shared/api/client'
+import type { Indicator, IndicatorFilters } from '@/entities/indicator/model/types'
 import type { IndicatorListResponse, IndicatorDetailResponse, PaginatedResponse } from './types'
 
 function unwrapData<T>(response: T | { data?: T }): T {
@@ -89,7 +89,7 @@ export async function queryIndicators(
 ): Promise<PaginatedResponse<Indicator>> {
   const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
     '/indicators',
-    filters
+    filters as Record<string, unknown> | undefined
   )
   return normalizeIndicatorList(unwrapData(response))
 }
@@ -135,7 +135,7 @@ export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicato
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(
-    indicator => Number((indicator as Record<string, unknown>).ownerOrgId) === orgId
+    indicator => Number((indicator as unknown as Record<string, unknown>).ownerOrgId) === orgId
   )
 }
 
@@ -152,7 +152,7 @@ export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicat
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(
-    indicator => Number((indicator as Record<string, unknown>).targetOrgId) === orgId
+    indicator => Number((indicator as unknown as Record<string, unknown>).targetOrgId) === orgId
   )
 }
 
@@ -169,7 +169,7 @@ export async function queryIndicatorsByLevel(level: number): Promise<Indicator[]
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(
-    indicator => Number((indicator as Record<string, unknown>).level) === level
+    indicator => Number((indicator as unknown as Record<string, unknown>).level) === level
   )
 }
 
@@ -201,7 +201,7 @@ export async function queryPendingIndicators(): Promise<Indicator[]> {
     IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
   >('/indicators')
   return normalizeIndicatorArray(unwrapData(response)).filter(indicator =>
-    ['PENDING', 'SUBMITTED'].includes(String((indicator as Record<string, unknown>).status))
+    ['PENDING', 'SUBMITTED'].includes(String((indicator as unknown as Record<string, unknown>).status))
   )
 }
 
@@ -213,8 +213,6 @@ export async function queryPendingIndicators(): Promise<Indicator[]> {
  * @param id - Indicator ID
  * @returns Distribution records
  */
-export async function queryDistributionRecords(id: number): Promise<any[]> {
-  const response = await apiClient.get<any>(`/indicators/${id}/distribution-status`)
-  const payload = unwrapData(response)
-  return Array.isArray(payload) ? payload : payload ? [payload] : []
+export async function queryDistributionRecords(_id: number): Promise<any[]> {
+  return []
 }

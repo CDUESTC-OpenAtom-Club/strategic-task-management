@@ -15,8 +15,7 @@ import {
   ElFormItem,
   ElInput,
   ElSwitch,
-  ElMessage,
-  type FormInstance
+  ElMessage
 } from 'element-plus'
 import {
   Check,
@@ -24,11 +23,10 @@ import {
   Loading,
   Clock,
   Edit,
-  User as _User,
   Setting,
   CirclePlus
 } from '@element-plus/icons-vue'
-import type { WorkflowNode, ApprovalTemplate, ApprovalTemplateStep } from '@/5-shared/types'
+import type { WorkflowNode, ApprovalTemplate, ApprovalTemplateStep } from '@/shared/types'
 import { approvalApi, type ApprovalFlowTemplate } from '../api/approval'
 
 /**
@@ -42,7 +40,7 @@ import { approvalApi, type ApprovalFlowTemplate } from '../api/approval'
  * - 当前节点呼吸灯效果
  */
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   // 审批节点列表
   nodes: WorkflowNode[]
   // 当前节点ID
@@ -55,7 +53,13 @@ const props = defineProps<{
   readonly?: boolean
   // 审批类型：'distribution' = 下发审批(我们审批下级), 'submission' = 上报审批(下级提交给我们审批)
   approvalType?: 'distribution' | 'submission'
-}>()
+}>(), {
+  currentNodeId: '',
+  rejectionReason: '',
+  allowCustomApprover: false,
+  readonly: false,
+  approvalType: 'submission'
+})
 
 const emit = defineEmits<{
   // 添加节点
@@ -85,14 +89,27 @@ const showTemplateDialog = ref(false)
 const showManageTemplateDialog = ref(false)
 const setAsDefaultTemplate = ref(false)
 
+interface TemplateViewStep {
+  id: string
+  stepName: string
+  autoApprove: boolean
+}
+
+interface TemplateViewItem {
+  id: string
+  name: string
+  description?: string
+  isDefault: boolean
+  steps: TemplateViewStep[]
+}
+
 // 审批模板
-const templates = ref<(ApprovalTemplate | ApprovalFlowTemplate)[]>([])
+const templates = ref<TemplateViewItem[]>([])
 const selectedTemplateId = ref<string | null>(null)
 
 // 新建模板表单
 const newTemplateName = ref('')
 const newTemplateDesc = ref('')
-const _templateFormRef = ref<FormInstance>()
 
 // 模拟组织人员数据
 const organizationUsers = ref([
@@ -102,11 +119,6 @@ const organizationUsers = ref([
   { id: 'user-004', name: '赵处长', org: '教务处', role: 'functional_dept' },
   { id: 'user-005', name: '钱处长', org: '人事处', role: 'functional_dept' }
 ])
-
-// 当前激活的步骤索引
-const _activeStepIndex = computed(() => {
-  return props.nodes.findIndex(n => n.status === 'current')
-})
 
 // 是否有驳回
 const hasRejection = computed(() => {
@@ -133,12 +145,6 @@ const formatTime = (date?: Date) => {
   if (!date) {return ''}
   const d = new Date(date)
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-// 获取用户信息
-const _getUserInfo = (userId?: string) => {
-  if (!userId) {return null}
-  return organizationUsers.value.find(u => u.id === userId)
 }
 
 // 检查节点是否可编辑
@@ -183,13 +189,6 @@ const applyTemplate = () => {
   }
 }
 
-// 打开新建模板对话框
-const openNewTemplateDialog = () => {
-  newTemplateName.value = ''
-  newTemplateDesc.value = ''
-  showManageTemplateDialog.value = true
-}
-
 // 保存为模板
 const saveAsTemplate = async () => {
   if (!newTemplateName.value) {
@@ -212,10 +211,32 @@ const saveAsTemplate = async () => {
   ElMessage.success('模板保存成功')
 }
 
-// 删除模板
-const _deleteTemplate = (templateId: string) => {
-  templates.value = templates.value.filter(t => t.id !== templateId)
-  ElMessage.success('模板已删除')
+const toTemplateViewItem = (template: ApprovalTemplate | ApprovalFlowTemplate): TemplateViewItem => {
+  if ('flowName' in template) {
+    return {
+      id: String(template.id),
+      name: template.flowName,
+      description: template.description ?? template.steps.map(step => step.stepName).join(' → '),
+      isDefault: template.id === 1,
+      steps: template.steps.map(step => ({
+        id: String(step.id),
+        stepName: step.stepName,
+        autoApprove: false
+      }))
+    }
+  }
+
+  return {
+    id: String(template.id),
+    name: template.name,
+    description: template.description,
+    isDefault: template.isDefault,
+    steps: template.steps.map(step => ({
+      id: String(step.id),
+      stepName: step.stepName,
+      autoApprove: step.autoApprove
+    }))
+  }
 }
 
 // 加载模板列表（从后端API获取）
@@ -224,24 +245,7 @@ const loadTemplates = async () => {
   try {
     const response = await approvalApi.getFlowTemplates()
     if (response.code === 200 && response.data) {
-      // 将后端返回的数据转换为前端需要的格式
-      templates.value = response.data.map((flow: ApprovalFlowTemplate) => ({
-        id: String(flow.id),
-        name: flow.flowName,
-        description: flow.steps.map(s => s.stepName).join(' → ') || '暂无步骤',
-        isDefault: flow.id === 1, // 假设第一个是默认
-        steps: flow.steps.map((s, index) => ({
-          id: String(s.id),
-          stepOrder: index,
-          stepName: s.stepName,
-          requiredRole: 'strategic_dept',
-          allowCustomApprover: true,
-          autoApprove: s.stepName.includes('自动') || s.stepName.includes('提交')
-        })),
-        applicableRoles: ['strategic_dept', 'functional_dept', 'secondary_college'],
-        createdAt: flow.createdAt,
-        updatedAt: flow.updatedAt
-      }))
+      templates.value = response.data.map((flow: ApprovalFlowTemplate) => toTemplateViewItem(flow))
     } else {
       ElMessage.error(response.message || '加载模板失败')
     }

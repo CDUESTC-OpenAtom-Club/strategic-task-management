@@ -4,29 +4,30 @@ import { Plus, View, Download, Delete as _Delete, ArrowDown as _ArrowDown, Promo
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
-import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/5-shared/types'
-import { IndicatorStatus } from '@/5-shared/types/entities'
+import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
 import {
   getProgressStatus,
   getProgressColor as _getProgressColor,
   getStatusTagType as _getStatusTagType
-} from '@/5-shared/lib/utils'
-import type { StatusAuditEntry as _StatusAuditEntry } from '@/5-shared/types'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import { ApprovalProgressDrawer } from '@/3-features/approval'
-import { useDataValidator } from '@/5-shared/lib/validation/dataValidator'
-import { normalizePlanStatus } from '@/3-features/task/lib/planStatus'
+} from '@/shared/lib/utils'
+import type { StatusAuditEntry as _StatusAuditEntry } from '@/shared/types'
+import { useOrgStore } from '@/features/organization/model/store'
+import { usePlanStore } from '@/features/plan/model/store'
+import { ApprovalProgressDrawer } from '@/features/approval'
+import { useDataValidator } from '@/shared/lib/validation/dataValidator'
+import { normalizePlanStatus } from '@/features/task/lib/planStatus'
+import { logger } from '@/shared/lib/utils/logger'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
   MILESTONE_STATUS_VALUES,
   PROGRESS_APPROVAL_STATUS_VALUES,
   type ProgressApprovalStatusValue
-} from '@/5-shared/config/validationRules'
+} from '@/shared/config/validationRules'
 
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
@@ -41,7 +42,7 @@ const vFocus = {
 }
 
 // 获取操作类型配置（与 AuditLogDrawer 保持一致）
-const getActionConfig = (action: StatusAuditEntry['action']) => {
+const getActionConfig = (action: _StatusAuditEntry['action']) => {
   const configs = {
     submit: { icon: Upload, label: '提交进度', type: 'primary' },
     approve: { icon: Check, label: '审批通过', type: 'success' },
@@ -161,24 +162,24 @@ function isApprovalStatus(
   const planStatus = currentPlanStatus.value?.toLowerCase() || 'draft'
 
   // Plan 状态映射: DRAFT -> draft, PENDING -> pending, ACTIVE -> approved/active, REJECTED -> rejected
-  let effectiveStatus: ProgressApprovalStatusValue = 'draft'
+  let effectiveStatus: ProgressApprovalStatusValue = 'DRAFT'
   switch (planStatus) {
     case 'active':
-      effectiveStatus = 'approved'
+      effectiveStatus = 'APPROVED'
       break
     case 'pending':
-      effectiveStatus = 'pending'
+      effectiveStatus = 'PENDING'
       break
     case 'rejected':
-      effectiveStatus = 'rejected'
+      effectiveStatus = 'REJECTED'
       break
     case 'completed':
     case 'archived':
-      effectiveStatus = 'approved'
+      effectiveStatus = 'APPROVED'
       break
     case 'draft':
     default:
-      effectiveStatus = 'draft'
+      effectiveStatus = 'DRAFT'
   }
 
   if (Array.isArray(targetStatus)) {
@@ -277,7 +278,7 @@ const availableOwnerDepts = computed(() => {
 // 初始化来源部门筛选（默认选中第一个）
 const initOwnerDeptFilter = () => {
   if (isSecondaryCollege.value && availableOwnerDepts.value.length > 0 && !filterOwnerDept.value) {
-    filterOwnerDept.value = availableOwnerDepts.value[0]
+    filterOwnerDept.value = availableOwnerDepts.value[0] ?? ''
   }
 }
 
@@ -288,7 +289,7 @@ const resetFilters = () => {
   filterDept.value = ''
   // 学院重置时恢复默认来源部门
   if (isSecondaryCollege.value && availableOwnerDepts.value.length > 0) {
-    filterOwnerDept.value = availableOwnerDepts.value[0]
+    filterOwnerDept.value = availableOwnerDepts.value[0] ?? ''
   } else {
     filterOwnerDept.value = ''
   }
@@ -296,6 +297,21 @@ const resetFilters = () => {
 
 // 职能部门列表（从数据库动态获取）
 const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartmentNames())
+
+const currentViewingOrgId = computed(() => {
+  const viewingDept = effectiveViewingDept.value || authStore.userDepartment || ''
+  if (!viewingDept) {
+    return null
+  }
+
+  const matchedDepartment = orgStore.getDepartmentByName(viewingDept)
+  const matchedOrgId = Number(matchedDepartment?.id ?? NaN)
+  if (Number.isFinite(matchedOrgId) && matchedOrgId > 0) {
+    return matchedOrgId
+  }
+
+  return null
+})
 
 const resolvePlanYear = (plan: any): number | null => {
   const explicitYear = plan?.cycle?.year ?? plan?.year
@@ -322,11 +338,17 @@ const currentUserPlan = computed(() => {
     return null
   }
 
-  // 从 Plan Store 中查找目标部门为当前用户部门的 Plan
+  const viewingOrgId = currentViewingOrgId.value
+
+  // 优先按目标组织 ID 匹配，兼容“战略发展部创建、目标部门接收”的计划。
+  // 名称匹配只作为兜底，避免 targetOrgName 缺失或格式不一致时误判“未找到计划”。
   return planStore.plans.find((p: any) => {
     const targetOrgName = p.targetOrgName || ''
+    const targetOrgId = Number(p.targetOrgId ?? p.orgId ?? NaN)
     const cycleYear = resolvePlanYear(p)
-    return targetOrgName === userDept && cycleYear === timeContext.currentYear
+    const matchesOrgId = viewingOrgId !== null && Number.isFinite(targetOrgId) && targetOrgId === viewingOrgId
+    const matchesOrgName = targetOrgName === userDept
+    return cycleYear === timeContext.currentYear && (matchesOrgId || matchesOrgName)
   }) || null
 })
 
@@ -489,14 +511,14 @@ const approvalIndicators = computed(() => {
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   if (isStrategicDept.value) {
     return list.filter(i => 
-      isApprovalStatus(i, 'pending') || 
+      isApprovalStatus(i, 'PENDING') || 
       (i.statusAudit && i.statusAudit.length > 0)
     )
   } else {
     // 使用安全的状态获取，过滤掉 draft 和 none 状态
     return list.filter(i => {
       const safeStatus = getSafeApprovalStatus(i.progressApprovalStatus)
-      return safeStatus !== 'none' && safeStatus !== 'draft'
+      return safeStatus !== 'NONE' && safeStatus !== 'DRAFT'
     })
   }
 })
@@ -528,14 +550,40 @@ const _pendingApprovalCount = computed(() => {
   return list.filter(i => isApprovalStatus(i, 'PENDING')).length
 })
 
+interface TaskListItem {
+  id: number
+  title: string
+  desc: string
+  createTime: string
+  cycle: string
+}
+
+function getPlanIndicatorIds(plan: unknown): number[] {
+  if (!plan || typeof plan !== 'object') {
+    return []
+  }
+
+  const candidate = (plan as { indicatorIds?: unknown }).indicatorIds
+  if (!Array.isArray(candidate)) {
+    return []
+  }
+
+  return candidate.map(id => Number(id)).filter(id => Number.isFinite(id))
+}
+
 // 从 Store 获取任务列表
-const taskList = computed(() => strategicStore.tasks.map(t => ({
-  id: Number(t.id),
-  title: t.title,
-  desc: t.desc,
-  createTime: t.createTime,
-  cycle: t.cycle
-})))
+const taskList = computed<TaskListItem[]>(() =>
+  strategicStore.tasks.map(task => {
+    const item = task as unknown as Record<string, unknown>
+    return {
+      id: Number(item.id ?? 0),
+      title: String(item.title ?? '暂无任务'),
+      desc: String(item.desc ?? ''),
+      createTime: String(item.createTime ?? ''),
+      cycle: String(item.cycle ?? '')
+    }
+  })
+)
 
 // 当前选中的任务
 const _currentTask = computed(() => taskList.value[currentTaskIndex.value] || {
@@ -600,8 +648,9 @@ const indicators = computed(() => {
   // 根据 Plan 筛选指标（优先级高于角色过滤）
   // 如果存在当前用户的 Plan，只显示该 Plan 包含的指标
   const plan = currentUserPlan.value
-  if (plan && plan.indicatorIds && plan.indicatorIds.length > 0) {
-    list = list.filter(i => plan.indicatorIds.includes(Number(i.id)))
+  const planIndicatorIds = getPlanIndicatorIds(plan)
+  if (planIndicatorIds.length > 0) {
+    list = list.filter(i => planIndicatorIds.includes(Number(i.id)))
   }
 
   // 根据当前角色过滤数据
@@ -667,7 +716,7 @@ const overallStatus = computed(() => {
 })
 
 // 计算单元格合并信息
-const getSpanMethod = ({ row, column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
+const getSpanMethod = ({ row, column: _column, rowIndex, columnIndex }: { row: any; column: any; rowIndex: number; columnIndex: number }) => {
   const dataList = indicators.value
 
   // 只有战略任务列（第0列）需要合并
@@ -899,7 +948,13 @@ const newRow = ref({
   type2: '基础性' as '发展性' | '基础性',
   weight: '',
   remark: '',
-  milestones: [] as Milestone[]
+  milestones: [] as Array<{
+    id: number
+    name: string
+    targetProgress: number
+    deadline: string
+    status: 'pending' | 'completed' | 'overdue'
+  }>
 })
 
 // 获取任务选项列表（从 Store 中的 tasks 获取）
@@ -1085,7 +1140,7 @@ const _calculateMilestoneStatus = (indicator: StrategicIndicator): 'success' | '
   })
 
   const hasUpcomingMilestone = indicator.milestones.some(milestone => {
-    const status = safeGet(milestone, 'status', 'pending')
+    const status = String(safeGet(milestone, 'status', 'pending'))
     const deadline = safeGet(milestone, 'deadline', '')
     
     if (status === 'completed') {return false}
@@ -1281,7 +1336,7 @@ interface MilestoneTooltipItem {
  * @requirement 2.4 - Milestone data validation with complete fields
  */
 const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipItem[] => {
-  const milestones = indicator.milestones || []
+  const milestones = sortMilestonesByProgress(indicator.milestones || [])
   
   return milestones.map((m, index) => {
     // 验证里程碑数据完整性
@@ -1324,6 +1379,9 @@ const getMilestonesTooltip = (indicator: StrategicIndicator): MilestoneTooltipIt
     }
   })
 }
+
+const getSortedMilestones = (milestones?: StrategicIndicator['milestones']) =>
+  sortMilestonesByProgress(milestones || [])
 
 const _selectDepartment = (dept: string) => {
   selectedDepartment.value = dept
@@ -1474,7 +1532,7 @@ const nearestMilestone = computed(() => {
   const _now = new Date()
   const pendingMilestones = currentReportIndicator.value.milestones
     .filter(m => {
-      const status = safeGet(m, 'status', 'pending')
+      const status = String(safeGet(m, 'status', 'pending'))
       return status !== 'completed'
     })
     .map(m => {
@@ -1796,93 +1854,6 @@ const handleWithdrawAllProgressApprovals = () => {
 // ============================================================================
 
 /**
- * 获取生命周期状态的显示文本
- * @param status - 指标生命周期状态
- * @returns 中文显示文本
- */
-const getLifecycleStatusText = (status: IndicatorStatus | string): string => {
-  const statusMap: Record<string, string> = {
-    DRAFT: '草稿',
-    PENDING: '草稿', // 兼容历史状态值，按草稿展示
-    PENDING_REVIEW: '待审核',
-    DISTRIBUTED: '已下发',
-    ACTIVE: '已下发',  // Legacy ACTIVE status treated as DISTRIBUTED
-    ARCHIVED: '已归档'
-  }
-  return statusMap[String(status || '').toUpperCase()] || '未知状态'
-}
-
-/**
- * 获取生命周期状态的标签类型
- * @param status - 指标生命周期状态
- * @returns Element Plus tag type
- */
-const getLifecycleStatusType = (
-  status: IndicatorStatus | string
-): 'success' | 'info' | 'warning' | 'danger' => {
-  const typeMap: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
-    DRAFT: 'info',
-    PENDING: 'info', // 兼容历史状态值，按草稿样式展示
-    PENDING_REVIEW: 'warning',
-    DISTRIBUTED: 'success',
-    ACTIVE: 'success',  // Legacy ACTIVE status treated as DISTRIBUTED
-    ARCHIVED: 'info'
-  }
-  return typeMap[String(status || '').toUpperCase()] || 'info'
-}
-
-/**
- * 获取审批状态的显示文本
- * @param status - 进度审批状态
- * @returns 中文显示文本
- */
-const getApprovalStatusText = (status: ProgressApprovalStatusValue): string => {
-  const statusMap: Record<ProgressApprovalStatusValue, string> = {
-    NONE: '无',
-    DRAFT: '草稿',
-    PENDING: '待审批',
-    APPROVED: '已通过',
-    REJECTED: '已驳回'
-  }
-  return statusMap[status] || '未知'
-}
-
-/**
- * 获取审批状态的标签类型
- * @param status - 进度审批状态
- * @returns Element Plus badge type
- */
-const getApprovalStatusType = (status: ProgressApprovalStatusValue): 'success' | 'info' | 'warning' | 'danger' => {
-  const typeMap: Record<ProgressApprovalStatusValue, 'success' | 'info' | 'warning' | 'danger'> = {
-    NONE: 'info',
-    DRAFT: 'info',
-    PENDING: 'warning',
-    APPROVED: 'success',
-    REJECTED: 'danger'
-  }
-  return typeMap[status] || 'info'
-}
-
-/**
- * 判断是否显示审批状态徽章
- * @requirement: Plan-centric status - 使用 Plan 状态判断
- * @param _indicator - 指标对象（保留参数兼容性）
- * @returns 是否显示徽章
- */
-const showApprovalBadge = (_indicator: StrategicIndicator): boolean => {
-  // @requirement: Plan-centric - 只有 Plan 已下发时才显示徽章
-  if (!isPlanDistributed.value) {
-    return false
-  }
-
-  // 获取基于 Plan 状态的审批状态
-  const effectiveStatus = isApprovalStatus(_indicator, ['pending', 'approved', 'rejected'])
-
-  // 有审批状态时显示徽章
-  return effectiveStatus
-}
-
-/**
  * 战略部"撤回下发"按钮展示条件
  * @requirement: Plan-centric status - 使用 Plan 状态判断
  * 仅在 Plan 处于已下发态时显示，避免草稿/待填报数据出现错误操作
@@ -1903,10 +1874,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
         <p class="page-desc">管理和查看所有战略考核指标</p>
       </div>
       <div class="page-actions">
-        <el-button v-if="canEdit" type="primary" @click="addNewRow">
-          <el-icon><Plus /></el-icon>
-          新增指标
-        </el-button>
         <el-button>
           <el-icon><Download /></el-icon>
           导出
@@ -2211,10 +2178,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               </el-alert>
 
               <el-empty :description="shouldShowPlanWarning ? '' : '暂无指标数据'">
-                <el-button v-if="canEdit && !shouldShowPlanWarning" type="primary" @click="addNewRow">
-                  <el-icon><Plus /></el-icon>
-                  新增指标
-                </el-button>
               </el-empty>
             </template>
           </div>
@@ -2307,7 +2270,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           <h4>里程碑节点</h4>
           <el-timeline style="margin-top: 20px; padding-left: 5px;">
             <el-timeline-item
-              v-for="(milestone, index) in currentDetail.milestones"
+              v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
               :key="index"
               :timestamp="milestone.deadline"
               :type="milestone.status === 'completed' ? 'success' : milestone.status === 'overdue' ? 'danger' : 'primary'"

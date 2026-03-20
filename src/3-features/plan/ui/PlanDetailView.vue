@@ -13,10 +13,10 @@ import {
   ElSkeleton
 } from 'element-plus'
 import { ArrowLeft, Edit, Upload, Document } from '@element-plus/icons-vue'
-import type { Plan, Task as _Task, Indicator as _Indicator } from '@/5-shared/types'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { Plan, Task as _Task, Indicator as _Indicator } from '@/shared/types'
+import { usePlanStore } from '@/features/plan/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 详情页

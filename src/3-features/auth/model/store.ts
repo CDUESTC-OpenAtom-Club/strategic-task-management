@@ -7,13 +7,13 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { User, UserRole } from '@/5-shared/types'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { tokenManager, TokenRefreshError } from '@/5-shared/lib/utils/tokenManager'
-import { parseLoginResponse, mapBackendUser } from '@/5-shared/lib/utils/authHelpers'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
-import { orgApi } from '@/3-features/organization/api'
+import { apiClient as api } from '@/shared/api/client'
+import type { User, UserRole } from '@/shared/types'
+import { logger } from '@/shared/lib/utils/logger'
+import { tokenManager, TokenRefreshError } from '@/shared/lib/utils/tokenManager'
+import { parseLoginResponse, mapBackendUser } from '@/shared/lib/utils/authHelpers'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 
 export const useAuthStore = defineStore('auth', () => {
   // ============ State ============
@@ -89,10 +89,22 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      const organizations = await orgApi.getAllOrgs()
+      if (token.value) {
+        const response = await api.get('/organizations', {
+          headers: {
+            Authorization: `Bearer ${token.value}`
+          }
+        })
 
-      if (Array.isArray(organizations) && organizations.length > 0) {
-        const matchedOrg = organizations.find((org: Record<string, unknown>) => {
+        const organizations =
+          response &&
+          typeof response === 'object' &&
+          'data' in response &&
+          Array.isArray(response.data)
+            ? (response.data as Array<Record<string, unknown>>)
+            : []
+
+        const matchedOrg = organizations.find(org => {
           const candidateId = org.id ?? org.orgId
           return String(candidateId) === String(orgId)
         })
@@ -100,18 +112,38 @@ export const useAuthStore = defineStore('auth', () => {
         if (matchedOrg) {
           return {
             ...userData,
-            orgType: matchedOrg.orgType || matchedOrg.type || userData.orgType,
-            orgName: matchedOrg.orgName || matchedOrg.name || userData.orgName
+            orgType: (matchedOrg.orgType as string | undefined) || userData.orgType,
+            orgName:
+              (matchedOrg.orgName as string | undefined) ||
+              (matchedOrg.name as string | undefined) ||
+              userData.orgName
+          }
+        }
+      }
+
+      const savedUser = localStorage.getItem('currentUser')
+      if (savedUser) {
+        const parsedUser = JSON.parse(savedUser) as {
+          department?: string
+          role?: string
+          orgId?: string | number
+        }
+
+        if (
+          String(parsedUser.orgId ?? '') === String(orgId) &&
+          (parsedUser.department || parsedUser.role)
+        ) {
+          return {
+            ...userData,
+            orgName: parsedUser.department || userData.orgName,
+            department: parsedUser.department || userData.department,
+            orgType: parsedUser.role || userData.orgType,
+            role: parsedUser.role || userData.role
           }
         }
       }
     } catch (error) {
-      const errorCode = (error as { code?: number }).code
-      if (errorCode === 403) {
-        logger.info('ℹ️ [Auth] 当前账号无组织列表权限，直接使用登录响应中的组织信息')
-      } else {
-        logger.warn('⚠️ [Auth] 补全组织信息失败，将使用登录响应中的原始用户数据:', error)
-      }
+      logger.debug('ℹ️ [Auth] 读取本地缓存组织信息失败，继续使用登录响应原始数据:', error)
     }
 
     return userData
@@ -126,7 +158,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.post('/auth/login', credentials)
       logger.debug('📦 [Auth] 登录响应:', response)
 
-      const parseResult = parseLoginResponse(response)
+      const parseResult = parseLoginResponse(response as Record<string, unknown>)
 
       if (parseResult.success && parseResult.data) {
         const { token: loginToken, user: userData, refreshToken } = parseResult.data
@@ -157,7 +189,7 @@ export const useAuthStore = defineStore('auth', () => {
         logger.debug('✅[Auth] Token设置完成，准备加载数据')
 
         // 登录成功后，触发数据重新加载
-        import('@/3-features/task/model/strategic')
+        import('@/features/task/model/strategic')
           .then(({ useStrategicStore }) => {
             const strategicStore = useStrategicStore()
             const timeContext = useTimeContextStore()
@@ -223,8 +255,13 @@ export const useAuthStore = defineStore('auth', () => {
         force: true
       })
 
-      if (response.success && response.data) {
-        const enrichedUserData = await enrichUserWithOrganization(response.data)
+      const authResponse = response as {
+        success?: boolean
+        data?: Record<string, unknown>
+      }
+
+      if (authResponse.success && authResponse.data) {
+        const enrichedUserData = await enrichUserWithOrganization(authResponse.data)
         const mappedUser = mapBackendUser(enrichedUserData)
         user.value = mappedUser
         persistUser(mappedUser)
@@ -279,12 +316,17 @@ export const useAuthStore = defineStore('auth', () => {
     if (memoryToken && savedUser) {
       try {
         const parsedUser = JSON.parse(savedUser)
-        if (parsedUser && parsedUser.role) {
+        if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
           user.value = parsedUser
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
           return
+        }
+
+        if (!tokenManager.hasValidToken()) {
+          logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
+          tokenManager.clearAccessToken()
         }
       } catch (e) {
         logger.error('[Auth] 解析用户信息失败:', e)

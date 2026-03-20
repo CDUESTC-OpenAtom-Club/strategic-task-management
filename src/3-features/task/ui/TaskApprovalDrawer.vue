@@ -44,9 +44,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
-import { approvalApi } from '@/3-features/approval/api/approval'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { getMyPendingTasks, decideTask } from '@/features/workflow/api'
+import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
+import type { WorkflowTaskResponse } from '@/features/workflow/api'
 
 interface PendingApprovalInstance {
   id: number
@@ -94,9 +95,24 @@ const formatTime = (raw?: string | null) => {
 const loadPendingApprovals = async () => {
   loading.value = true
   try {
-    const userId = authStore.user?.id || 1
-    const response = await approvalApi.getPendingApprovals(userId)
-    pendingApprovals.value = (response.data || []) as unknown as PendingApprovalInstance[]
+    const userId = authStore.user?.userId || 1
+    const response = await getMyPendingTasks(1)
+    if (response.success && response.data) {
+      const pageResult = response.data as unknown as { items: WorkflowTaskResponse[] }
+      // Convert to PendingApprovalInstance format
+      pendingApprovals.value = pageResult.items.map(task => ({
+        id: Number(task.taskId),
+        title: task.taskName,
+        entityType: 'TASK',
+        entityId: 0,
+        status: task.status,
+        requesterId: task.assigneeId,
+        startedAt: task.createdTime,
+        createdAt: task.createdTime
+      }))
+    } else {
+      pendingApprovals.value = []
+    }
     logger.info('[TaskApprovalDrawer] Pending approvals loaded', {
       userId,
       count: pendingApprovals.value.length
@@ -116,17 +132,15 @@ const handleApprove = async (instance: PendingApprovalInstance) => {
       cancelButtonText: '取消',
       inputType: 'textarea'
     })
-    const userId = authStore.user?.id || 1
     const loadingInstance = ElLoading.service({ lock: true, text: '正在审批...' })
     try {
-      const response = await approvalApi.approve(instance.id, { userId, comment: value || '审批通过' })
-      if (response.success) {
-        ElMessage.success(`审批通过成功（实例ID: ${instance.id}）`)
-        await loadPendingApprovals()
-        emit('refresh')
-      } else {
-        ElMessage.error(response.message || '审批失败')
-      }
+      await decideTask(String(instance.id), {
+        approved: true,
+        comment: value || '审批通过'
+      })
+      ElMessage.success(`审批通过成功（实例ID: ${instance.id}）`)
+      await loadPendingApprovals()
+      emit('refresh')
     } finally {
       loadingInstance.close()
     }
@@ -148,17 +162,15 @@ const handleReject = async (instance: PendingApprovalInstance) => {
         return true
       }
     })
-    const userId = authStore.user?.id || 1
     const loadingInstance = ElLoading.service({ lock: true, text: '正在驳回...' })
     try {
-      const response = await approvalApi.reject(instance.id, { userId, comment: value })
-      if (response.success) {
-        ElMessage.success(`已驳回（实例ID: ${instance.id}）`)
-        await loadPendingApprovals()
-        emit('refresh')
-      } else {
-        ElMessage.error(response.message || '驳回失败')
-      }
+      await decideTask(String(instance.id), {
+        approved: false,
+        comment: value || ''
+      })
+      ElMessage.success(`已驳回（实例ID: ${instance.id}）`)
+      await loadPendingApprovals()
+      emit('refresh')
     } finally {
       loadingInstance.close()
     }

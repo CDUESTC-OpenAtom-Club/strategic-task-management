@@ -7,7 +7,7 @@
  * @deprecated 此文件已废弃，请使用后端API获取真实数据
  * @see src/api/fallback.ts 降级机制已禁用
  */
-import type { StrategicIndicator, Milestone, DashboardData, DepartmentProgress } from '@/5-shared/types'
+import type { StrategicIndicator, Milestone, DashboardData, DepartmentProgress } from '@/shared/types'
 
 // ============ 工具函数 ============
 

@@ -6,6 +6,66 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { fileURLToPath, URL } from 'node:url'
 import { mockApiPlugin } from './src/5-shared/api/mocks/mockApiPlugin'
 
+const prebundleEntries = [
+  'index.html',
+  'src/1-app/layouts/AppLayout.vue',
+  'src/3-features/auth/ui/LoginView.vue',
+  'src/3-features/task/ui/StrategicTaskView.vue'
+]
+
+const prebundleIncludes = [
+  'vue',
+  'vue-router',
+  'pinia',
+  '@element-plus/icons-vue',
+  'element-plus/es',
+  'element-plus/es/components/base/style/css',
+  'element-plus/es/components/alert/style/css',
+  'element-plus/es/components/avatar/style/css',
+  'element-plus/es/components/badge/style/css',
+  'element-plus/es/components/breadcrumb/style/css',
+  'element-plus/es/components/breadcrumb-item/style/css',
+  'element-plus/es/components/button/style/css',
+  'element-plus/es/components/button-group/style/css',
+  'element-plus/es/components/card/style/css',
+  'element-plus/es/components/checkbox/style/css',
+  'element-plus/es/components/col/style/css',
+  'element-plus/es/components/date-picker/style/css',
+  'element-plus/es/components/descriptions/style/css',
+  'element-plus/es/components/descriptions-item/style/css',
+  'element-plus/es/components/dialog/style/css',
+  'element-plus/es/components/divider/style/css',
+  'element-plus/es/components/drawer/style/css',
+  'element-plus/es/components/dropdown/style/css',
+  'element-plus/es/components/dropdown-item/style/css',
+  'element-plus/es/components/dropdown-menu/style/css',
+  'element-plus/es/components/empty/style/css',
+  'element-plus/es/components/form/style/css',
+  'element-plus/es/components/form-item/style/css',
+  'element-plus/es/components/icon/style/css',
+  'element-plus/es/components/input/style/css',
+  'element-plus/es/components/input-number/style/css',
+  'element-plus/es/components/loading/style/css',
+  'element-plus/es/components/option/style/css',
+  'element-plus/es/components/pagination/style/css',
+  'element-plus/es/components/popover/style/css',
+  'element-plus/es/components/progress/style/css',
+  'element-plus/es/components/radio/style/css',
+  'element-plus/es/components/radio-group/style/css',
+  'element-plus/es/components/row/style/css',
+  'element-plus/es/components/select/style/css',
+  'element-plus/es/components/skeleton/style/css',
+  'element-plus/es/components/skeleton-item/style/css',
+  'element-plus/es/components/step/style/css',
+  'element-plus/es/components/steps/style/css',
+  'element-plus/es/components/table/style/css',
+  'element-plus/es/components/table-column/style/css',
+  'element-plus/es/components/tag/style/css',
+  'element-plus/es/components/timeline/style/css',
+  'element-plus/es/components/timeline-item/style/css',
+  'element-plus/es/components/tooltip/style/css'
+]
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
@@ -60,15 +120,18 @@ export default defineConfig(({ mode }) => {
       })
     ],
     resolve: {
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@/1-app': fileURLToPath(new URL('./src/1-app', import.meta.url)),
-        '@/2-pages': fileURLToPath(new URL('./src/2-pages', import.meta.url)),
-        '@/3-features': fileURLToPath(new URL('./src/3-features', import.meta.url)),
-        '@/4-entities': fileURLToPath(new URL('./src/4-entities', import.meta.url)),
-        '@/5-shared': fileURLToPath(new URL('./src/5-shared', import.meta.url)),
-        '@/6-processes': fileURLToPath(new URL('./src/6-processes', import.meta.url))
-      }
+      alias: [
+        { find: /^@\/app\//, replacement: `${fileURLToPath(new URL('./src/1-app', import.meta.url))}/` },
+        { find: /^@\/features\//, replacement: `${fileURLToPath(new URL('./src/3-features', import.meta.url))}/` },
+        { find: /^@\/entities\//, replacement: `${fileURLToPath(new URL('./src/4-entities', import.meta.url))}/` },
+        { find: /^@\/shared\//, replacement: `${fileURLToPath(new URL('./src/5-shared', import.meta.url))}/` },
+        { find: /^@\/processes\//, replacement: `${fileURLToPath(new URL('./src/6-processes', import.meta.url))}/` },
+        { find: /^@\//, replacement: `${fileURLToPath(new URL('./src', import.meta.url))}/` }
+      ]
+    },
+    optimizeDeps: {
+      entries: prebundleEntries,
+      include: prebundleIncludes
     },
     server: {
       port: Number(env.VITE_DEV_SERVER_PORT) || 3500,
@@ -90,7 +153,7 @@ export default defineConfig(({ mode }) => {
                 proxy.on('proxyReq', (proxyReq, req, _res) => {
                   // 防止后端将本地开发域名(如 127.0.0.1:3500)判定为非法 CORS Origin 导致 403。
                   // 统一将 Origin 重写为后端目标域名，保证本地联调稳定。
-                  const targetOrigin = options.target
+                  const targetOrigin = options.target ? String(options.target) : ''
                   if (targetOrigin) {
                     proxyReq.setHeader('origin', targetOrigin)
                   } else {
@@ -135,77 +198,6 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          // 优化代码分割策略
-          manualChunks(id) {
-            // node_modules 包分组
-            if (id.includes('node_modules')) {
-              // Vue 核心库
-              if (id.includes('vue') || id.includes('pinia') || id.includes('@vue')) {
-                return 'vue-core'
-              }
-              // Vue Router
-              if (id.includes('vue-router')) {
-                return 'vue-router'
-              }
-              // Element Plus
-              if (id.includes('element-plus') || id.includes('@element-plus')) {
-                return 'element-plus'
-              }
-              // ECharts 相关
-              if (id.includes('echarts') || id.includes('vue-echarts')) {
-                return 'echarts'
-              }
-              // 工具库
-              if (id.includes('axios') || id.includes('lodash-es') || id.includes('dayjs')) {
-                return 'utils'
-              }
-              // Excel 处理
-              if (id.includes('xlsx')) {
-                return 'xlsx'
-              }
-              // PDF 生成
-              if (id.includes('jspdf') || id.includes('html2canvas')) {
-                return 'pdf'
-              }
-              // 其他第三方库
-              return 'vendor'
-            }
-
-            // 业务代码分组
-            // shared/ui 组件
-            if (id.includes('/src/5-shared/ui/')) {
-              return 'shared-ui'
-            }
-            // shared/lib 工具
-            if (id.includes('/src/5-shared/lib/')) {
-              return 'shared-lib'
-            }
-            // features 模块
-            if (id.includes('/src/3-features/')) {
-              if (id.includes('/3-features/dashboard/')) {
-                return 'feature-dashboard'
-              }
-              if (id.includes('/3-features/admin/')) {
-                return 'feature-admin'
-              }
-              if (id.includes('/3-features/auth/')) {
-                return 'feature-auth'
-              }
-              if (id.includes('/3-features/plan/')) {
-                return 'feature-plan'
-              }
-              if (id.includes('/3-features/task/')) {
-                return 'feature-task'
-              }
-              if (id.includes('/3-features/indicator/')) {
-                return 'feature-indicator'
-              }
-              if (id.includes('/3-features/approval/')) {
-                return 'feature-approval'
-              }
-              return 'features'
-            }
-          },
           // 文件命名策略
           chunkFileNames: 'assets/js/[name]-[hash].js',
           entryFileNames: 'assets/js/[name]-[hash].js',

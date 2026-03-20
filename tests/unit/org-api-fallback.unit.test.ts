@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { cacheManager } from '@/5-shared/lib/utils/cache'
+import { cacheManager } from '@/shared/lib/utils/cache'
 
 const apiGetMock = vi.fn()
 
-vi.mock('@/5-shared/api/client', () => ({
+vi.mock('@/shared/api/client', () => ({
   apiClient: {
     get: apiGetMock
   }
@@ -31,7 +31,7 @@ describe('orgApi.getAllDepartments fallback', () => {
         ]
       })
 
-    const { orgApi } = await import('@/3-features/organization/api/org')
+    const { orgApi } = await import('@/features/organization/api/org')
     const result = await orgApi.getAllDepartments()
 
     expect(apiGetMock).toHaveBeenNthCalledWith(1, '/organizations')

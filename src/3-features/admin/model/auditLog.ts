@@ -8,14 +8,19 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export interface AuditLog {
-  id: string
+  id?: string
   entityType: string
   entityId: string
+  entityName?: string
   action: string
-  userId: string
-  userName: string
+  userId?: string
+  userName?: string
+  operator?: string
+  operatorName?: string
   timestamp: string
   details?: Record<string, unknown>
+  dataBefore?: Record<string, unknown>
+  dataAfter?: Record<string, unknown>
 }
 
 export const useAuditLogStore = defineStore('auditLog', () => {
@@ -37,6 +42,13 @@ export const useAuditLogStore = defineStore('auditLog', () => {
       loading.value = false
     }
   }
+
+  async function logAction(entry: Omit<AuditLog, 'timestamp'> & { timestamp?: string }) {
+    logs.value.unshift({
+      ...entry,
+      timestamp: entry.timestamp ?? new Date().toISOString()
+    })
+  }
   
   function clearLogs() {
     logs.value = []
@@ -46,6 +58,7 @@ export const useAuditLogStore = defineStore('auditLog', () => {
     logs,
     loading,
     fetchLogs,
+    logAction,
     clearLogs
   }
 })

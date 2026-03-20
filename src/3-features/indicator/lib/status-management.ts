@@ -8,12 +8,12 @@
  * Provides safe accessors, validation, and UI display mapping.
  */
 
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import {
   IndicatorStatus,
   ProgressApprovalStatus,
   WorkflowStatus
-} from '@/4-entities/indicator/model/types'
+} from '@/entities/indicator/model/types'
 
 /**
  * Safe status value extraction with fallback mechanism

@@ -6,7 +6,7 @@
  * warnings 和细粒度 process/acknowledge 能力在前端走兼容降级。
  */
 
-import { apiClient } from '@/5-shared/api/client'
+import { apiClient } from '@/shared/api/client'
 
 /**
  * 预警事件

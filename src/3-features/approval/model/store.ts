@@ -3,14 +3,21 @@
  *
  * Migrated from stores/approval.ts
  * Multi-level approval workflow state management
+ * Now using new /api/v1/workflows API
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { ApprovalInstance, ApprovalHistory } from './types'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
 import { ElMessage } from 'element-plus'
+import {
+  getMyPendingTasks,
+  getWorkflowInstanceDetail,
+  decideTask
+} from '@/features/workflow/api'
+import type { WorkflowTaskResponse, WorkflowInstanceDetailResponse } from '@/features/workflow/api'
 
 export const useApprovalStore = defineStore('approval', () => {
   // ============ State ============
@@ -66,7 +73,7 @@ export const useApprovalStore = defineStore('approval', () => {
   // Check if user has approvals pending
   const hasPendingForCurrentUser = computed(() => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       return false
@@ -84,7 +91,7 @@ export const useApprovalStore = defineStore('approval', () => {
    */
   const loadPendingApprovals = async () => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       logger.warn('[Approval Store] No user ID found')
@@ -97,12 +104,31 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading pending approvals for user:', userId)
 
-      // 动态导入 API
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.getPendingApprovals(userId)
+      // Use new workflow API
+      const response = await getMyPendingTasks(1)
 
       if (response.success && response.data) {
-        pendingApprovals.value = response.data as unknown as ApprovalInstance[]
+        const pageResult = response.data as unknown as { items: WorkflowTaskResponse[]; total: number }
+        // Convert WorkflowTaskResponse to ApprovalInstance format
+        pendingApprovals.value = pageResult.items.map(task => ({
+          instanceId: Number(task.taskId),
+          entityType: 'TASK',
+          entityId: 0,
+          status: task.status === 'PENDING' ? 'PENDING' : 'APPROVED',
+          currentStepName: task.taskName,
+          currentStepOrder: 0,
+          applicant: { id: userId, name: task.assigneeName || 'Unknown' },
+          pendingApprovers: task.assigneeId ? [task.assigneeId] : [],
+          approvedApprovers: [],
+          rejectedApprovers: [],
+          submitterDeptId: 0,
+          directSupervisorId: 0,
+          level2SupervisorId: 0,
+          superiorDeptId: 0,
+          initiatedBy: userId,
+          initiatedAt: task.createdTime || new Date().toISOString(),
+          completedAt: undefined
+        } as unknown as ApprovalInstance))
         logger.info('[Approval Store] Loaded', pendingApprovals.value.length, 'pending approvals')
       } else {
         pendingApprovals.value = []
@@ -127,11 +153,35 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading approval detail:', instanceId)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.getApprovalInstance(instanceId)
+      // Use new workflow API
+      const response = await getWorkflowInstanceDetail(String(instanceId))
 
       if (response.success && response.data) {
-        currentApproval.value = response.data
+        const detail = response.data as unknown as WorkflowInstanceDetailResponse
+        // Convert to ApprovalInstance format
+        currentApproval.value = {
+          instanceId: Number(detail.instanceId),
+          entityType: detail.businessEntityType || 'TASK',
+          entityId: detail.businessEntityId || 0,
+          status: detail.status as ApprovalInstance['status'],
+          currentStepName: detail.tasks[0]?.taskName || '',
+          currentStepOrder: 0,
+          applicant: { id: detail.starterId || 0, name: detail.starterName || 'Unknown' },
+          pendingApprovers: detail.tasks
+            .filter(t => t.status === 'PENDING')
+            .map(t => t.assigneeId || 0),
+          approvedApprovers: detail.tasks
+            .filter(t => t.status === 'COMPLETED')
+            .map(t => t.assigneeId || 0),
+          rejectedApprovers: [],
+          submitterDeptId: 0,
+          directSupervisorId: 0,
+          level2SupervisorId: 0,
+          superiorDeptId: 0,
+          initiatedBy: detail.starterId || 0,
+          initiatedAt: detail.startTime || '',
+          completedAt: detail.endTime || undefined
+        } as unknown as ApprovalInstance
         logger.info('[Approval Store] Loaded approval detail')
       }
     } catch (err) {
@@ -148,7 +198,7 @@ export const useApprovalStore = defineStore('approval', () => {
    */
   const approve = async (instanceId: number, comment?: string) => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       ElMessage.error('用户未登录')
@@ -161,21 +211,19 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Approving:', instanceId)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.approve(instanceId, { userId, comment })
+      // Use new workflow API
+      await decideTask(String(instanceId), {
+        approved: true,
+        comment
+      })
 
-      if (response.success && response.data) {
-        currentApproval.value = response.data
-        ElMessage.success('审批通过')
+      ElMessage.success('审批通过')
 
-        // Remove from pending list
-        pendingApprovals.value = pendingApprovals.value.filter(a => a.instanceId !== instanceId)
+      // Remove from pending list
+      pendingApprovals.value = pendingApprovals.value.filter(a => a.instanceId !== instanceId)
 
-        logger.info('[Approval Store] Approval successful')
-        return response.data
-      } else {
-        throw new Error(response.message || '审批失败')
-      }
+      logger.info('[Approval Store] Approval successful')
+      return true
     } catch (err) {
       error.value = err instanceof Error ? err.message : '审批失败'
       logger.error('[Approval Store] Failed to approve:', err)
@@ -191,7 +239,7 @@ export const useApprovalStore = defineStore('approval', () => {
    */
   const reject = async (instanceId: number, reason: string) => {
     const authStore = useAuthStore()
-    const userId = authStore.user?.id
+    const userId = authStore.user?.userId
 
     if (!userId) {
       ElMessage.error('用户未登录')
@@ -209,21 +257,19 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Rejecting:', instanceId, 'reason:', reason)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.reject(instanceId, { userId, comment: reason, reason })
+      // Use new workflow API
+      await decideTask(String(instanceId), {
+        approved: false,
+        comment: reason
+      })
 
-      if (response.success && response.data) {
-        currentApproval.value = response.data
-        ElMessage.success('已驳回')
+      ElMessage.success('已驳回')
 
-        // Remove from pending list
-        pendingApprovals.value = pendingApprovals.value.filter(a => a.instanceId !== instanceId)
+      // Remove from pending list
+      pendingApprovals.value = pendingApprovals.value.filter(a => a.instanceId !== instanceId)
 
-        logger.info('[Approval Store] Rejection successful')
-        return response.data
-      } else {
-        throw new Error(response.message || '驳回失败')
-      }
+      logger.info('[Approval Store] Rejection successful')
+      return true
     } catch (err) {
       error.value = err instanceof Error ? err.message : '驳回失败'
       logger.error('[Approval Store] Failed to reject:', err)
@@ -244,11 +290,18 @@ export const useApprovalStore = defineStore('approval', () => {
     try {
       logger.info('[Approval Store] Loading history for:', instanceId)
 
-      const { default: approvalApi } = await import('@/3-features/approval/api/approval')
-      const response = await approvalApi.getApprovalHistory(instanceId)
+      // Use new workflow API - get detail includes history
+      const response = await getWorkflowInstanceDetail(String(instanceId))
 
       if (response.success && response.data) {
-        approvalHistory.value = response.data
+        const detail = response.data as unknown as WorkflowInstanceDetailResponse
+        // Convert history items to ApprovalHistory format
+        approvalHistory.value = detail.history.map(h => ({
+          action: h.action,
+          actor: h.operatorName || 'Unknown',
+          comment: h.comment || '',
+          timestamp: h.operateTime || ''
+        })) as unknown as ApprovalHistory[]
         logger.info('[Approval Store] Loaded approval history')
       }
     } catch (err) {

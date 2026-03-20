@@ -52,9 +52,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { validateEmail, validatePhone, getRoleLabel } from '@/5-shared/lib/utils'
-import type { User as _User, UserRole } from '@/5-shared/types'
+import { useAuthStore } from '@/features/auth/model/store'
+import { validateEmail, validatePhone, getRoleLabel } from '@/shared/lib/utils'
+import type { User as _User, UserRole } from '@/shared/types'
 
 const formRef = ref<FormInstance>()
 const authStore = useAuthStore()

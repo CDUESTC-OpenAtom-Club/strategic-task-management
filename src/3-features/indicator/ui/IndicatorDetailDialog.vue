@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch as _watch } from 'vue'
 import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-plus/icons-vue'
-import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/5-shared/types'
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuditLogStore } from '@/3-features/admin/model/auditLog'
-import MilestoneTimeline from '@/5-shared/ui/form/indicator/MilestoneTimeline.vue'
-import ApprovalHistory from '@/3-features/approval/ui/ApprovalHistory.vue'
+import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/shared/types'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuditLogStore } from '@/features/admin/model/auditLog'
+import MilestoneTimeline from '@/shared/ui/form/indicator/MilestoneTimeline.vue'
+import ApprovalHistory from '@/features/approval/ui/ApprovalHistory.vue'
 
 const props = defineProps<{
   indicatorId: string
@@ -55,7 +55,15 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
 
 // 获取操作日志
 const auditLogs = computed<AuditLogItem[]>(() =>
-  auditLogStore.getEntityHistory('indicator', props.indicatorId)
+  auditLogStore.logs
+    .filter(log => log.entityType === 'indicator' && log.entityId === props.indicatorId)
+    .map(log => ({
+      id: log.id ?? `${log.entityType}-${log.entityId}-${log.timestamp}`,
+      action: log.action,
+      operatorName: log.operatorName ?? log.userName ?? '未知用户',
+      operateTime: new Date(log.timestamp),
+      changes: []
+    }))
 )
 
 const dialogVisible = computed({

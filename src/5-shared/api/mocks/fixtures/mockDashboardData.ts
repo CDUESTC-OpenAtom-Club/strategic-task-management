@@ -1,4 +1,4 @@
-import type { Indicator, StrategicTask, Milestone } from '@/5-shared/types/entities'
+import type { Indicator, StrategicTask, Milestone } from '@/shared/types/entities'
 import { mockIndicators } from './mockIndicators'
 import { mockStrategicTasks } from './mockStrategicTasks'
 import { mockMilestones } from './mockMilestones'

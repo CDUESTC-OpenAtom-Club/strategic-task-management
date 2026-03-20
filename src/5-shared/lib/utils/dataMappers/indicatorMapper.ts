@@ -9,7 +9,7 @@
  * @module utils/dataMappers
  */
 
-import type { StrategicIndicator } from '@/5-shared/types'
+import type { StrategicIndicator } from '@/shared/types'
 
 /**
  * 前端字段名 -> 后端字段名 映射
@@ -58,8 +58,6 @@ const FRONTEND_TO_BACKEND: Record<string, string> = {
   unit: 'unit',
   // 负责人
   responsiblePerson: 'responsiblePerson',
-  // 下发状态（后端 distribution_status 字段）
-  distributionStatus: 'distributionStatus',
   // 审计日志（同步到后端持久化）
   statusAudit: 'statusAudit',
   // 里程碑
@@ -92,7 +90,6 @@ const BACKEND_TO_FRONTEND: Record<string, string> = {
   actualValue: 'actualValue',
   unit: 'unit',
   responsiblePerson: 'responsiblePerson',
-  distributionStatus: 'distributionStatus',
   statusAudit: 'statusAudit'
 }
 
@@ -123,7 +120,6 @@ const BACKEND_FIELDS = [
   'unit',
   'responsiblePerson',
   'taskContent',
-  'distributionStatus',
   'statusAudit',
   'milestones'
 ]

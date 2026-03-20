@@ -4,8 +4,8 @@
  * Internal helper functions for dashboard feature.
  */
 
-import type { ComparisonItem } from '@/5-shared/types'
-import { getProgressStatus } from '@/5-shared/lib/utils/colors'
+import type { ComparisonItem, StrategicIndicator } from '@/shared/types'
+import { getProgressStatus } from '@/shared/lib/utils/colors'
 import { ALERT_THRESHOLDS, COLLEGE_SUFFIXES } from '../model/constants'
 
 /**

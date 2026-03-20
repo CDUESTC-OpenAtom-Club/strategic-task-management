@@ -18,9 +18,9 @@ import {
   ElMessage,
   type FormInstance
 } from 'element-plus'
-import type { Indicator } from '@/4-entities/indicator/model/types'
+import type { Indicator } from '@/entities/indicator/model/types'
 import { distributeRequestSchema } from '../model/schema'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 interface Props {
   modelValue: boolean

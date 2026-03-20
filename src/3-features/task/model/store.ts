@@ -8,8 +8,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { StrategicTask, TaskCreateRequest, TaskUpdateRequest } from './types'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { logger } from '@/shared/lib/utils/logger'
 import { ElMessage } from 'element-plus'
 
 export const useTaskStore = defineStore('task', () => {
@@ -46,7 +46,7 @@ export const useTaskStore = defineStore('task', () => {
       )
 
       // 动态导�?API
-      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
+      const { default: strategicApi } = await import('@/features/task/api/strategicApi')
       const response = await strategicApi.getTasksByYear(year)
 
       if (response.success && response.data) {
@@ -158,7 +158,7 @@ export const useTaskStore = defineStore('task', () => {
     logger.info('[Task Store] Creating new strategic task', { request })
 
     try {
-      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
+      const { default: strategicApi } = await import('@/features/task/api/strategicApi')
       const response = await strategicApi.createTask(request)
 
       if (response.success && response.data) {
@@ -186,7 +186,7 @@ export const useTaskStore = defineStore('task', () => {
     logger.info('[Task Store] Updating strategic task', { taskId, request })
 
     try {
-      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
+      const { default: strategicApi } = await import('@/features/task/api/strategicApi')
       const response = await strategicApi.updateTask(taskId, request)
 
       if (response.success && response.data) {
@@ -214,7 +214,7 @@ export const useTaskStore = defineStore('task', () => {
     logger.info('[Task Store] Deleting strategic task', { taskId })
 
     try {
-      const { default: strategicApi } = await import('@/3-features/task/api/strategicApi')
+      const { default: strategicApi } = await import('@/features/task/api/strategicApi')
       const response = await strategicApi.deleteTask(taskId)
 
       if (response.success) {

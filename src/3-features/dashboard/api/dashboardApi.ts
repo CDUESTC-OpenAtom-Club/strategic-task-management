@@ -10,10 +10,10 @@
  * @module features/dashboard/api
  */
 
-import { apiClient } from '@/5-shared/api/client'
-import { buildQueryKey, fetchWithCache } from '@/5-shared/lib/utils/cache'
-import { logger } from '@/5-shared/lib/utils/logger'
-import type { DashboardData, DepartmentProgress, AlertSummary } from '@/5-shared/types'
+import { apiClient } from '@/shared/api/client'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import { logger } from '@/shared/lib/utils/logger'
+import type { DashboardData, DepartmentProgress, AlertSummary } from '@/shared/types'
 
 /**
  * API endpoints for dashboard functionality

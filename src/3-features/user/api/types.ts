@@ -4,7 +4,7 @@
  * Common type definitions for User API operations.
  */
 
-import type { User, UserRole } from '@/5-shared/types'
+import type { User, UserRole } from '@/shared/types'
 
 /**
  * API response wrapper

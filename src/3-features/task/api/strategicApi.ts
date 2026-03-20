@@ -5,10 +5,16 @@
  *
  * **Validates: Requirements 2.4, 2.6**
  */
-import { apiClient } from '@/5-shared/lib/api'
-import { withRetry } from '@/5-shared/lib/api/wrappers'
-import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/5-shared/lib/utils/cache'
-import { logger } from '@/5-shared/lib/utils/logger'
+import { apiClient } from '@/shared/api/client'
+import { withRetry } from '@/shared/api'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
+import { logger } from '@/shared/lib/utils/logger'
+import {
+  getMyPendingTasks,
+  getWorkflowInstanceDetail,
+  approveTask as workflowApproveTask,
+  rejectTask as workflowRejectTask
+} from '@/features/workflow/api'
 /* eslint-disable no-restricted-syntax -- Backend types use strategic_task terminology */
 import type {
   ApiResponse,
@@ -17,10 +23,10 @@ import type {
   CreateStrategicTaskRequest,
   UpdateStrategicTaskRequest,
   PendingApproval
-} from '@/5-shared/types'
+} from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
 // 导入统一的 IndicatorVO 接口，避免重复定义
-import type { IndicatorVO, AssessmentCycle as AssessmentCycleVO } from '@/5-shared/types/backend-aligned'
+import type { IndicatorVO, AssessmentCycle as AssessmentCycleVO } from '@/shared/types/backend-aligned'
 
 interface StrategicTaskVO {
   taskId?: number
@@ -450,9 +456,11 @@ export const strategicApi = {
     logger.info('[API] Creating backend task for indicator binding', { request })
 
     try {
-      return await withRetry(() =>
+      const response = await withRetry(() =>
         apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
       )
+      invalidateTaskCaches(response.data?.taskId ?? response.data?.id)
+      return response
     } catch (error) {
       logger.error('[API] Failed to create backend task for indicator binding', { error, request })
       throw error
@@ -496,7 +504,7 @@ export default strategicApi
 /**
  * 审批通过
  * @param instanceId 审批实例ID
- * @param approverId 审批人ID
+ * @param approverId 审批人ID (unused, taken from JWT)
  * @param comment 审批意见（可选）
  */
 async function approvePlan(
@@ -504,30 +512,51 @@ async function approvePlan(
   approverId: number,
   comment?: string
 ): Promise<ApiResponse<string>> {
-  logger.info('[API] Approving plan', { instanceId, approverId })
+  logger.info('[API] Approving plan', { instanceId })
 
   try {
-    const response = await withRetry(() =>
-      apiClient.post<ApiResponse<string>>(
-        `/approval/instances/${instanceId}/approve?userId=${approverId}${
-          comment ? `&comment=${encodeURIComponent(comment)}` : ''
-        }`,
-        { comment }
-      )
-    )
-
+    await workflowApproveTask(String(instanceId), { comment })
     logger.info('[API] Successfully approved plan', { instanceId })
-    return response
+    return { success: true, message: '审批通过', data: String(instanceId) }
   } catch (error) {
-    logger.error('[API] Failed to approve plan', { error, instanceId, approverId })
-    throw error
+    logger.warn('[API] Direct task approval failed, trying workflow instance resolution', {
+      instanceId,
+      approverId,
+      error
+    })
+
+    const detailResponse = await getWorkflowInstanceDetail(String(instanceId))
+    const detail = detailResponse.data as unknown as {
+      tasks?: Array<{
+        taskId: string
+        status?: string
+        assigneeId?: number
+      }>
+    }
+
+    const pendingTask = detail.tasks?.find(task =>
+      String(task.status || '').toUpperCase() === 'PENDING' &&
+      Number(task.assigneeId) === Number(approverId)
+    ) || detail.tasks?.find(task => String(task.status || '').toUpperCase() === 'PENDING')
+
+    if (!pendingTask?.taskId) {
+      logger.error('[API] Failed to resolve pending task for plan approval', { instanceId, approverId, detail })
+      throw error
+    }
+
+    await workflowApproveTask(String(pendingTask.taskId), { comment })
+    logger.info('[API] Successfully approved plan via resolved task', {
+      instanceId,
+      taskId: pendingTask.taskId
+    })
+    return { success: true, message: '审批通过', data: String(pendingTask.taskId) }
   }
 }
 
 /**
  * 审批拒绝
  * @param instanceId 审批实例ID
- * @param approverId 审批人ID
+ * @param approverId 审批人ID (unused, taken from JWT)
  * @param comment 拒绝原因（必填）
  */
 async function rejectPlan(
@@ -535,59 +564,98 @@ async function rejectPlan(
   approverId: number,
   comment: string
 ): Promise<ApiResponse<string>> {
-  logger.info('[API] Rejecting plan', { instanceId, approverId })
+  logger.info('[API] Rejecting plan', { instanceId })
 
   try {
-    const response = await withRetry(() =>
-      apiClient.post<ApiResponse<string>>(
-        `/approval/instances/${instanceId}/reject?userId=${approverId}&comment=${encodeURIComponent(
-          comment
-        )}`,
-        { comment }
-      )
-    )
-
+    await workflowRejectTask(String(instanceId), { reason: comment })
     logger.info('[API] Successfully rejected plan', { instanceId })
-    return response
+    return { success: true, message: '审批拒绝', data: String(instanceId) }
   } catch (error) {
-    logger.error('[API] Failed to reject plan', { error, instanceId, approverId })
-    throw error
+    logger.warn('[API] Direct task rejection failed, trying workflow instance resolution', {
+      instanceId,
+      approverId,
+      error
+    })
+
+    const detailResponse = await getWorkflowInstanceDetail(String(instanceId))
+    const detail = detailResponse.data as unknown as {
+      tasks?: Array<{
+        taskId: string
+        status?: string
+        assigneeId?: number
+      }>
+    }
+
+    const pendingTask = detail.tasks?.find(task =>
+      String(task.status || '').toUpperCase() === 'PENDING' &&
+      Number(task.assigneeId) === Number(approverId)
+    ) || detail.tasks?.find(task => String(task.status || '').toUpperCase() === 'PENDING')
+
+    if (!pendingTask?.taskId) {
+      logger.error('[API] Failed to resolve pending task for plan rejection', { instanceId, approverId, detail })
+      throw error
+    }
+
+    await workflowRejectTask(String(pendingTask.taskId), { reason: comment })
+    logger.info('[API] Successfully rejected plan via resolved task', {
+      instanceId,
+      taskId: pendingTask.taskId
+    })
+    return { success: true, message: '审批拒绝', data: String(pendingTask.taskId) }
   }
 }
 
 /**
  * 获取用户待审批列表
- * @param userId 用户ID
+ * @param userId 用户ID (unused, taken from JWT)
  */
-async function getPendingApprovals(userId: number): Promise<ApiResponse<PendingApproval[]>> {
-  logger.info('[API] Getting pending approvals', { userId })
+async function getPendingApprovals(_userId: number): Promise<ApiResponse<PendingApproval[]>> {
+  logger.info('[API] Getting pending approvals')
 
   try {
-    const response = await withRetry(() =>
-      apiClient.get<ApiResponse<PendingApproval[]>>('/approval/instances/my-pending', { userId })
-    )
-
-    logger.info('[API] Successfully got pending approvals', { count: response.data?.length || 0 })
-    return response
+    const response = await getMyPendingTasks(1)
+    if (response.success && response.data) {
+      const pageResult = response.data as unknown as { items: { taskId: string; taskName: string; status: string }[] }
+      logger.info('[API] Successfully got pending approvals', { count: pageResult.items.length })
+      return {
+        ...response,
+        data: pageResult.items.map(item => ({
+          instanceId: Number(item.taskId),
+          title: item.taskName,
+          entityType: 'TASK',
+          status: item.status
+        })) as unknown as PendingApproval[]
+      }
+    }
+    return { ...response, data: [] as unknown as PendingApproval[] }
   } catch (error) {
-    logger.error('[API] Failed to get pending approvals', { error, userId })
+    logger.error('[API] Failed to get pending approvals', { error })
     throw error
   }
 }
 
 /**
  * 获取计划审批状态
- * @param planId 计划ID
+ * @param instanceId 审批实例ID
  */
 async function getPlanApprovalStatus(instanceId: number): Promise<ApiResponse<unknown>> {
   logger.info('[API] Getting plan approval status', { instanceId })
 
   try {
-    const response = await withRetry(() =>
-      apiClient.get<ApiResponse<unknown>>(`/approval/instances/${instanceId}`)
-    )
-
-    logger.info('[API] Successfully got plan approval status', { instanceId })
+    const response = await getWorkflowInstanceDetail(String(instanceId))
+    if (response.success) {
+      logger.info('[API] Successfully got plan approval status', { instanceId })
+      return {
+        ...response,
+        data: {
+          status: (response.data as unknown as { status: string }).status,
+          stepInstances: (response.data as unknown as { tasks: { stepIndex: number; stepName: string }[] }).tasks.map((t, i) => ({
+            stepIndex: i,
+            stepName: t.stepName
+          }))
+        }
+      }
+    }
     return response
   } catch (error) {
     logger.error('[API] Failed to get plan approval status', { error, instanceId })
@@ -597,21 +665,21 @@ async function getPlanApprovalStatus(instanceId: number): Promise<ApiResponse<un
 
 /**
  * 获取待审批数量
- * @param userId 用户ID
+ * @param userId 用户ID (unused, taken from JWT)
  */
-async function countPendingApprovals(userId: number): Promise<ApiResponse<number>> {
-  logger.info('[API] Counting pending approvals', { userId })
+async function countPendingApprovals(_userId: number): Promise<ApiResponse<number>> {
+  logger.info('[API] Counting pending approvals')
 
   try {
-    const response = await withRetry(() =>
-      apiClient.get<ApiResponse<PendingApproval[]>>('/approval/instances/my-pending', { userId })
-    )
-
-    const count = response.data?.length || 0
-    logger.info('[API] Successfully counted pending approvals', { count })
-    return { ...response, data: count }
+    const response = await getMyPendingTasks(1)
+    if (response.success && response.data) {
+      const pageResult = response.data as unknown as { total: number }
+      logger.info('[API] Successfully counted pending approvals', { count: pageResult.total })
+      return { ...response, data: pageResult.total }
+    }
+    return { ...response, data: 0 }
   } catch (error) {
-    logger.error('[API] Failed to count pending approvals', { error, userId })
+    logger.error('[API] Failed to count pending approvals', { error })
     throw error
   }
 }
@@ -624,22 +692,14 @@ async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> 
   logger.info('[API] Getting current step', { instanceId })
 
   try {
-    const response = await withRetry(() =>
-      apiClient.get<ApiResponse<{
-        currentStepIndex?: number
-        stepInstances?: Array<{ stepIndex?: number; stepName?: string }>
-        title?: string
-      }>>(`/approval/instances/${instanceId}`)
-    )
-
-    const currentStepIndex = response.data?.currentStepIndex
-    const stepName =
-      response.data?.stepInstances?.find(step => step.stepIndex === currentStepIndex)?.stepName ||
-      response.data?.title ||
-      '未知步骤'
-
-    logger.info('[API] Successfully got current step', { instanceId, stepName })
-    return { ...response, data: stepName }
+    const response = await getWorkflowInstanceDetail(String(instanceId))
+    if (response.success && response.data) {
+      const detail = response.data as unknown as { tasks: { taskName: string }[]; history: { taskName: string }[] }
+      const stepName = detail.tasks[0]?.taskName || detail.history[0]?.taskName || '未知步骤'
+      logger.info('[API] Successfully got current step', { instanceId, stepName })
+      return { ...response, data: stepName }
+    }
+    return response
   } catch (error) {
     logger.error('[API] Failed to get current step', { error, instanceId })
     throw error
@@ -668,40 +728,54 @@ async function getApprovalTimeline(
   logger.info('[API] Getting approval timeline', { instanceId })
 
   try {
-    const response = await withRetry(() =>
-      apiClient.get<ApiResponse<{
-        currentStepIndex?: number
-        stepInstances?: Array<{
-          stepIndex?: number
-          stepName?: string
-          status?: string
-          approverName?: string
-          approvedAt?: string
+    const response = await getWorkflowInstanceDetail(String(instanceId))
+    if (response.success && response.data) {
+      const detail = response.data as unknown as {
+        tasks: Array<{
+          taskName: string
+          status: string
+          assigneeName?: string
+        }>
+        history: Array<{
+          taskName: string
+          action: string
+          operatorName?: string
+          operateTime?: string
           comment?: string
         }>
-      }>>(`/approval/instances/${instanceId}`)
-    )
+      }
 
-    const timeline =
-      response.data?.stepInstances
-        ?.map(step => ({
-          stepIndex: step.stepIndex ?? 0,
-          stepName: step.stepName || '未知步骤',
-          status: step.status || 'PENDING',
-          approverName: step.approverName,
-          approvedAt: step.approvedAt ?? null,
-          comment: step.comment ?? null
-        }))
-        .sort((a, b) => a.stepIndex - b.stepIndex) ?? []
+      // Build timeline from tasks and history
+      const timeline = detail.tasks.map((task, index) => ({
+        stepIndex: index,
+        stepName: task.taskName || '未知步骤',
+        status: task.status || 'PENDING',
+        approverName: task.assigneeName,
+        approvedAt: null,
+        comment: null
+      }))
 
-    return {
-      ...response,
-      data: {
-        instanceId,
-        currentStepIndex: response.data?.currentStepIndex,
-        timeline
+      return {
+        ...response,
+        data: {
+          instanceId,
+          currentStepIndex: 0,
+          timeline
+        }
       }
     }
+    return response as unknown as ApiResponse<{
+      instanceId: number
+      currentStepIndex?: number
+      timeline: Array<{
+        stepIndex: number
+        stepName: string
+        status: string
+        approverName?: string
+        approvedAt?: string | null
+        comment?: string | null
+      }>
+    }>
   } catch (error) {
     logger.error('[API] Failed to get approval timeline', { error, instanceId })
     throw error

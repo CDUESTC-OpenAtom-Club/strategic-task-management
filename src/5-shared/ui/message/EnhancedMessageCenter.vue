@@ -31,7 +31,7 @@ import {
   WarnTriangleFilled,
   CircleClose as _CircleClose
 } from '@element-plus/icons-vue'
-import type { Message, MessageType, AlertLevel } from '@/5-shared/types'
+import type { Message, MessageType, AlertLevel } from '@/shared/types'
 
 /**
  * 增强型消息中心组件

@@ -1,0 +1,145 @@
+/**
+ * Workflow Feature - Type Definitions
+ *
+ * Types for the new workflow API (/api/v1/workflows)
+ */
+
+// ============================================================
+// Workflow Types
+// ============================================================
+
+export interface WorkflowDefinitionResponse {
+  definitionId: string
+  definitionName: string
+  description?: string
+  category?: string
+  version?: string
+  isActive: boolean
+  createTime?: string
+}
+
+export interface ApproverCandidateResponse {
+  userId: number
+  username?: string
+  realName?: string
+  orgId?: number
+  orgName?: string
+}
+
+export interface WorkflowStepPreviewResponse {
+  stepDefId: number
+  stepOrder: number
+  stepName: string
+  stepType?: string
+  roleId?: number
+  selectable: boolean
+  candidateApprovers: ApproverCandidateResponse[]
+}
+
+export interface WorkflowDefinitionPreviewResponse {
+  workflowCode: string
+  workflowName: string
+  entityType?: string
+  steps: WorkflowStepPreviewResponse[]
+}
+
+export interface WorkflowInstanceResponse {
+  instanceId: string
+  definitionId?: string
+  status: string
+  businessEntityId?: number
+  starterId?: number
+  startTime?: string
+  endTime?: string
+  currentTaskId?: string
+  currentStepName?: string
+  currentApproverId?: number
+  currentApproverName?: string
+  canWithdraw?: boolean
+}
+
+export interface WorkflowTaskResponse {
+  taskId: string
+  taskName: string
+  taskKey: string
+  status: string
+  assigneeId?: number
+  assigneeName?: string
+  createdTime?: string
+}
+
+export interface WorkflowHistoryItem {
+  historyId: string
+  taskId: string
+  taskName: string
+  operatorId?: number
+  operatorName?: string
+  action: string
+  comment?: string
+  operateTime?: string
+}
+
+export interface WorkflowInstanceDetailResponse {
+  instanceId: string
+  definitionId?: string
+  definitionName?: string
+  status: string
+  businessEntityId?: number
+  businessEntityType?: string
+  starterId?: number
+  starterName?: string
+  startTime?: string
+  endTime?: string
+  currentTaskId?: string
+  currentStepName?: string
+  currentApproverId?: number
+  currentApproverName?: string
+  canWithdraw?: boolean
+  tasks: WorkflowTaskResponse[]
+  history: WorkflowHistoryItem[]
+}
+
+// ============================================================
+// Request Types
+// ============================================================
+
+export interface StartWorkflowRequest {
+  workflowCode: string
+  businessEntityId: number
+  businessEntityType?: string
+  variables?: Record<string, unknown>
+}
+
+export interface StartInstanceRequest {
+  businessEntityId: number
+  businessEntityType?: string
+  variables?: Record<string, unknown>
+}
+
+export interface ApprovalRequest {
+  comment?: string
+}
+
+export interface RejectionRequest {
+  reason: string
+}
+
+export interface ReassignRequest {
+  targetUserId: number
+}
+
+export interface WorkflowTaskDecisionRequest {
+  approved: boolean
+  comment?: string
+}
+
+// ============================================================
+// Page Result
+// ============================================================
+
+export interface PageResult<T> {
+  items: T[]
+  total: number
+  pageNum: number
+  pageSize: number
+}

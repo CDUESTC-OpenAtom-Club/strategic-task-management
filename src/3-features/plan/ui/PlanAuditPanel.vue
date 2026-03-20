@@ -22,10 +22,10 @@ import {
   Warning as _Warning,
   CircleCheck as _CircleCheck
 } from '@element-plus/icons-vue'
-import type { PlanFill, PlanFillStatus, IndicatorFill as _IndicatorFill } from '@/5-shared/types'
-import { usePlanStore } from '@/3-features/plan/model/store'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { PlanFill, PlanFillStatus, IndicatorFill as _IndicatorFill } from '@/shared/types'
+import { usePlanStore } from '@/features/plan/model/store'
+import { useAuthStore } from '@/features/auth/model/store'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Plan 审核面板组件

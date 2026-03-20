@@ -4,9 +4,9 @@
  * Read-only API operations for dashboard data.
  */
 
-import { apiClient } from '@/5-shared/api/client'
-import { logger } from '@/5-shared/lib/utils/logger'
-import type { DashboardData, DepartmentProgress, AlertSummary } from '@/5-shared/types'
+import { apiClient } from '@/shared/api/client'
+import { logger } from '@/shared/lib/utils/logger'
+import type { DashboardData, DepartmentProgress, AlertSummary } from '@/shared/types'
 
 /**
  * Get dashboard overview data

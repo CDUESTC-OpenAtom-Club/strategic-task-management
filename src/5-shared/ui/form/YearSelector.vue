@@ -5,7 +5,7 @@
  */
 import { computed } from 'vue'
 import { Calendar, Lock, Edit } from '@element-plus/icons-vue'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
 
 const timeContext = useTimeContextStore()
 

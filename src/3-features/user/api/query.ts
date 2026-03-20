@@ -4,8 +4,8 @@
  * Read-only API operations for user management.
  */
 
-import api from '@/5-shared/api'
-import type { User, UserRole } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import type { User, UserRole } from '@/shared/types'
 
 /**
  * User list query parameters

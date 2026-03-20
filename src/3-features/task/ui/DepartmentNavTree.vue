@@ -6,7 +6,7 @@
  */
 import { ref, computed, watch as _watch } from 'vue'
 import { OfficeBuilding, School, FolderOpened, Folder, Promotion as _Promotion } from '@element-plus/icons-vue'
-import { useOrgStore } from '@/3-features/organization/model/store'
+import { useOrgStore } from '@/features/organization/model/store'
 
 const orgStore = useOrgStore()
 

@@ -1,5 +1,5 @@
-import api from '@/5-shared/api'
-import type { ApiResponse, User } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import type { ApiResponse, User } from '@/shared/types'
 
 /**
  * 用户密码相关API

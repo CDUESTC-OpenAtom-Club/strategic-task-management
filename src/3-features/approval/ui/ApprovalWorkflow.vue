@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Check, Close, Loading, Clock } from '@element-plus/icons-vue'
-import type { WorkflowNode } from '@/5-shared/types'
+import type { WorkflowNode } from '@/shared/types'
 
 const props = defineProps<{
   nodes: WorkflowNode[]

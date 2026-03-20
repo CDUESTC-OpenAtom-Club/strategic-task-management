@@ -16,15 +16,15 @@ import type {
   SourcePieData,
   OrgLevel,
   UserRole as _UserRole
-} from '@/5-shared/types'
-import { useStrategicStore } from '@/3-features/task/model/strategic'
-import { useAuthStore } from '@/3-features/auth/model/store'
-import { useTimeContextStore } from '@/5-shared/lib/timeContext'
-import { getProgressStatus, isSecondaryCollege } from '@/5-shared/lib/utils/colors'
-import { useOrgStore } from '@/3-features/organization/model/store'
-import { logger } from '@/5-shared/lib/utils/logger'
-import { alertApi, type AlertStats, type AlertEvent } from '@/5-shared/api/monitoringApi'
-import { dashboardApi } from '@/3-features/dashboard/api/dashboardApi'
+} from '@/shared/types'
+import { useStrategicStore } from '@/features/task/model/strategic'
+import { useAuthStore } from '@/features/auth/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { getProgressStatus, isSecondaryCollege } from '@/shared/lib/utils/colors'
+import { useOrgStore } from '@/features/organization/model/store'
+import { logger } from '@/shared/lib/utils/logger'
+import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitoringApi'
+import { dashboardApi } from '@/features/dashboard/api/dashboardApi'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State

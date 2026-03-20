@@ -4,8 +4,8 @@
  * Write operations for user management.
  */
 
-import api from '@/5-shared/api'
-import type { User } from '@/5-shared/types'
+import { apiClient as api } from '@/shared/api/client'
+import type { User } from '@/shared/types'
 
 /**
  * Create user input

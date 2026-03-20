@@ -13,7 +13,7 @@ import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosErr
 import { ElMessage } from 'element-plus'
 import { handleApiError } from './errorHandler'
 import { logger } from '../utils/logger'
-import { adaptV1Path } from '@/5-shared/api/v1PathAdapter'
+import { adaptV1Path } from '@/shared/api/v1PathAdapter'
 
 /**
  * Interceptor configuration

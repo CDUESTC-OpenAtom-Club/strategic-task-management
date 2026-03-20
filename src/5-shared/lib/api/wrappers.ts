@@ -6,8 +6,8 @@
  */
 
 // import { apiClient } from './client' // Commented - not currently used
-import type { RetryConfig } from '@/5-shared/api/retry'
-import { logger } from '@/5-shared/lib/utils/logger'
+import type { RetryConfig } from '@/shared/api/retry'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * Execute an async function with retry logic
@@ -21,7 +21,7 @@ import { logger } from '@/5-shared/lib/utils/logger'
  *
  * @example
  * ```typescript
- * import { withRetry } from '@/5-shared/lib/api'
+ * import { withRetry } from '@/shared/api'
  *
  * const result = await withRetry(async () => {
  *   return apiClient.post('/critical-endpoint', data)

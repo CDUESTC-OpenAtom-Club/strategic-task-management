@@ -2,7 +2,7 @@
  * 统一的模拟指标数据 - 与后端实体类型对齐
  * 使用当前系统类型，基于 src/mock/fixtures/ 中的旧数据结构重新生成
  */
-import type { Indicator, DashboardData, DepartmentProgress } from '@/5-shared/types/entities'
+import type { Indicator, DashboardData, DepartmentProgress } from '@/shared/types/entities'
 import {
   indicators2023,
   indicators2024,
