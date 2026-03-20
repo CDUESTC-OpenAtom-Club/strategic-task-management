@@ -269,16 +269,11 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       })
     }
 
-    // ========================================================================
-    // 401 AUTH ERROR HANDLING WITH AUTO REFRESH
-    // ========================================================================
-    if (error.response?.status === 401) {
-      logger.warn('🔒 [API Auth] 401 未授权')
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
+    const isLoginRequest = originalRequest?.url?.includes('/auth/login')
+    const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
 
-      const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
-      const isLoginRequest = originalRequest?.url?.includes('/auth/login')
-      const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
-
+    const tryRefreshAndRetry = async (): Promise<never> => {
       // 登录和刷新请求失败，直接返回错误（不尝试刷新）
       if (isLoginRequest || isRefreshRequest) {
         logger.debug('🔒 [API Auth] 登录/刷新请求失败，不尝试刷新')
@@ -286,40 +281,41 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       }
 
       // 防止重复刷新（如果已经尝试过刷新但仍然失败）
-      if (originalRequest._retry) {
+      if (originalRequest?._retry) {
         logger.warn('🔒 [API Auth] Token 刷新后仍然失败，跳转登录')
         tokenManager.clearAccessToken()
         clearPersistedAuthState()
         redirectToLogin()
-
         return Promise.reject(error)
       }
 
-      // 标记为已重试，防止无限循环
+      if (!originalRequest) {
+        return Promise.reject(error)
+      }
+
       originalRequest._retry = true
 
       try {
         logger.debug('🔄 [API Auth] 尝试刷新 Token...')
-
-        // 刷新 Token
         const newToken = await tokenManager.refreshAccessToken()
-
         logger.debug('✅ [API Auth] Token 刷新成功，重试原请求')
-
-        // 更新原请求的 Authorization 头
         originalRequest.headers.Authorization = `Bearer ${newToken}`
-
-        // 重新发起原请求
         return axios.request(originalRequest)
       } catch (refreshError) {
         logger.error('❌ [API Auth] Token 刷新失败:', refreshError)
-
         tokenManager.clearAccessToken()
         clearPersistedAuthState()
         redirectToLogin()
-
         return Promise.reject(refreshError)
       }
+    }
+
+    // ========================================================================
+    // 401 AUTH ERROR HANDLING WITH AUTO REFRESH
+    // ========================================================================
+    if (error.response?.status === 401) {
+      logger.warn('🔒 [API Auth] 401 未授权')
+      return tryRefreshAndRetry()
     }
 
     // ========================================================================
@@ -339,6 +335,16 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
 
       // 检查是否是健康检查发起的请求（通过请求头标记）
       const isHealthCheckRequest = error.config?.headers?.['X-Health-Check'] === 'true'
+
+      // 某些受保护接口在 access token 过期时会返回 403。
+      // 对于非登录/刷新、非健康检查请求，优先尝试刷新一次 token 后重放请求。
+      if (!isHealthCheck && !isHealthCheckRequest && !isLoginRequest && !isRefreshRequest) {
+        const currentToken = tokenManager.getAccessToken()
+        if (currentToken && tokenManager.isTokenExpiring(0)) {
+          logger.warn('🔄 [API Auth] 403 可能由 access token 过期引起，尝试刷新后重试')
+          return tryRefreshAndRetry()
+        }
+      }
 
       if (!isHealthCheck && !isHealthCheckRequest) {
         const { ElMessage } = await import('element-plus')
