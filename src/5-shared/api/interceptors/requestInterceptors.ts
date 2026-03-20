@@ -169,10 +169,17 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
 
     if (isSensitive && isWriteOperation) {
       const timestamp = Date.now()
-      const signature = await generateSignature(config.data, timestamp)
-      config.headers['X-Timestamp'] = timestamp.toString()
-      config.headers['X-Signature'] = signature
-      logger.debug('🔏 [API Security] 签名已添加')
+      try {
+        const signature = await generateSignature(config.data, timestamp)
+        config.headers['X-Timestamp'] = timestamp.toString()
+        config.headers['X-Signature'] = signature
+        logger.debug('🔏 [API Security] 签名已添加')
+      } catch (error) {
+        logger.warn('⚠️ [API Security] 签名生成失败，降级为无签名请求继续发送', {
+          url: config.url,
+          error
+        })
+      }
     }
 
     // ========================================================================

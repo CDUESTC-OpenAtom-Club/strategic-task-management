@@ -327,11 +327,7 @@ export function createResponseErrorInterceptor(config: ResponseInterceptorConfig
       // 不要为健康检查请求显示错误通知（403是预期的）
       const isHealthCheck =
         error.config?.url?.includes('/actuator/health') ||
-        error.config?.url?.includes('/auth/health') ||
-        error.config?.url?.includes('/orgs') ||
-        error.config?.url?.includes('/indicators') ||
-        error.config?.url?.includes('/tasks') ||
-        error.config?.url?.includes('/milestones')
+        error.config?.url?.includes('/auth/health')
 
       // 检查是否是健康检查发起的请求（通过请求头标记）
       const isHealthCheckRequest = error.config?.headers?.['X-Health-Check'] === 'true'
