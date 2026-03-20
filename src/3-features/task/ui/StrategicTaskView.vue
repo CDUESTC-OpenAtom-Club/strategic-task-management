@@ -713,11 +713,6 @@ const approvalSetupDialogVisible = ref(false)
 const approvalPreviewLoading = ref(false)
 const approvalSubmitting = ref(false)
 const approvalWorkflowPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
-const selectedWorkflowApprovers = ref<Record<string, number>>({})
-
-const selectableApprovalSteps = computed(() => {
-  return (approvalWorkflowPreview.value?.steps || []).filter(step => step.selectable)
-})
 
 const hasApprovalPreview = computed(() => {
   return (approvalWorkflowPreview.value?.steps?.length || 0) > 0
@@ -1053,7 +1048,6 @@ const distributeButtonDisabled = computed(() => {
 
 const resetApprovalSetupDialog = () => {
   approvalWorkflowPreview.value = null
-  selectedWorkflowApprovers.value = {}
 }
 
 const openApprovalSetupDialog = async () => {
@@ -1073,33 +1067,21 @@ const openApprovalSetupDialog = async () => {
     }
 
     approvalWorkflowPreview.value = response.data
-    selectedWorkflowApprovers.value = {}
-
-    for (const step of response.data.steps || []) {
-      if (!step.selectable) {
-        continue
-      }
-
-      const defaultCandidate = step.candidateApprovers?.[0]
-      if (defaultCandidate?.userId) {
-        selectedWorkflowApprovers.value[String(step.stepDefId)] = Number(defaultCandidate.userId)
-      }
-    }
   } catch (error) {
     approvalSetupDialogVisible.value = false
     resetApprovalSetupDialog()
     logger.error('[StrategicTaskView] Failed to load workflow preview:', error)
     const message = error instanceof Error ? error.message : '加载审批流程失败'
     if (message.includes('Workflow definition not found')) {
-      ElMessage.error('当前环境未配置审批流程定义，无法选择审批人')
+      ElMessage.error('当前环境未配置审批流程定义，无法发起审批')
       return
     }
     if (message.includes('No available approver candidates')) {
-      ElMessage.error('当前审批节点未配置可用审批人，无法发起审批')
+      ElMessage.error('当前审批节点未匹配到可用审批人，无法发起审批')
       return
     }
     if (message.includes('missing role assignment')) {
-      ElMessage.error('当前审批流程配置不完整，无法选择审批人')
+      ElMessage.error('当前审批流程配置不完整，无法发起审批')
       return
     }
     ElMessage.error(message)
@@ -1126,24 +1108,10 @@ const confirmPlanApprovalSubmission = async () => {
     return
   }
 
-  const selectedApprovers = selectableApprovalSteps.value.map(step => ({
-    stepDefId: Number(step.stepDefId),
-    approverId: Number(selectedWorkflowApprovers.value[String(step.stepDefId)] || 0)
-  }))
-
-  const missingStep = selectableApprovalSteps.value.find(
-    step => !Number(selectedWorkflowApprovers.value[String(step.stepDefId)])
-  )
-  if (missingStep) {
-    ElMessage.warning(`请先选择“${missingStep.stepName}”的审批人`)
-    return
-  }
-
   approvalSubmitting.value = true
   try {
     await planStore.submitPlanForApproval(planId, {
-      workflowCode: preview.workflowCode || PLAN_APPROVAL_WORKFLOW_CODE,
-      selectedApprovers
+      workflowCode: preview.workflowCode || PLAN_APPROVAL_WORKFLOW_CODE
     })
     await planStore.loadPlanDetails(planId, { force: true, background: true })
     await loadPendingPlanApprovalCount()
@@ -1161,7 +1129,7 @@ const handleDistributeOrWithdraw = () => {
   const status = currentPlanStatus.value
 
   if (status === 'DRAFT' || status === 'RETURNED' || !status) {
-    // 草稿/退回状态：选择审批人后发起整体计划审批
+    // 草稿/退回状态：确认流程后发起整体计划审批
     void openApprovalSetupDialog()
   } else {
     // 待审批/已下发状态：撤回
@@ -1719,7 +1687,7 @@ const newRow = ref({
   name: '',
   type1: '定量' as '定性' | '定量',
   type2: '基础性' as '发展性' | '基础性',
-  weight: null as number | null,
+  weight: 0,
   remark: '',
   milestones: [] as Milestone[]
 })
@@ -1898,7 +1866,9 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
   } catch (error) {
     console.error('[saveIndicatorEdit] Error details:', error)
     logger.error('[StrategicTaskView] Failed to save indicator:', error)
-    // 错误已经在Store中显示，这里不需要再显示
+    const message =
+      error instanceof Error && error.message ? error.message : '保存失败，请稍后重试'
+    ElMessage.error(message)
   } finally {
     isSavingIndicatorEdit.value = false
   }
@@ -1929,7 +1899,14 @@ const handleGlobalClick = (event: MouseEvent) => {
   // 检查点击是否在 el-input 内
   const isInInput = target.closest('.el-input') || target.closest('.el-textarea')
 
-  // 如果点击不在编辑组件内，则优先保存当前编辑值
+  const blurManagedFields = new Set(['taskContent', 'name', 'remark', 'weight', 'progress'])
+
+  // 这些字段已经在组件自身的 blur 事件里保存，避免点击捕获阶段再触发一次。
+  if (blurManagedFields.has(editingIndicatorField.value)) {
+    return
+  }
+
+  // 仅对非 blur 驱动的编辑控件兜底
   if (!isInSelect && !isInInput) {
     const currentRow = indicators.value.find(
       item => String(item.id) === String(editingIndicatorId.value)
@@ -4582,7 +4559,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 
     <el-dialog
       v-model="approvalSetupDialogVisible"
-      title="选择审批人"
+      title="确认审批流程"
       width="640px"
       :close-on-click-modal="false"
       @close="handleCloseApprovalSetupDialog"
@@ -4592,7 +4569,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           type="info"
           :closable="false"
           show-icon
-          title="发起整体计划审批前，请先确认各审批节点的审批人。运行中的临时加签暂不在本次范围内。"
+          title="发起整体计划审批前，请确认流程节点。审批人将由后端根据流程角色和组织自动计算。"
           style="margin-bottom: 16px"
         />
 
@@ -4625,33 +4602,26 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
               <div class="approval-step-name">
                 {{ step.stepOrder }}. {{ step.stepName }}
               </div>
-              <el-tag :type="step.selectable ? 'warning' : 'info'" size="small">
-                {{ step.selectable ? '需确认审批人' : '系统自动分配' }}
+              <el-tag type="info" size="small">
+                系统自动分配
               </el-tag>
             </div>
 
-            <el-select
-              v-if="step.selectable"
-              v-model="selectedWorkflowApprovers[String(step.stepDefId)]"
-              placeholder="请选择审批人"
-              filterable
-              style="width: 100%"
-            >
-              <el-option
-                v-for="candidate in step.candidateApprovers || []"
-                :key="candidate.userId"
-                :label="candidate.realName || candidate.username || `用户 ${candidate.userId}`"
-                :value="candidate.userId"
-              >
-                <div class="approval-user-option">
-                  <span>{{ candidate.realName || candidate.username || `用户 ${candidate.userId}` }}</span>
-                  <span class="approval-user-org">{{ candidate.orgName || '未绑定部门' }}</span>
-                </div>
-              </el-option>
-            </el-select>
-
-            <div v-else class="approval-step-readonly">
-              系统将根据流程定义和角色自动确定审批人
+            <div class="approval-step-readonly">
+              <span>
+                {{ step.roleId ? `角色ID: ${step.roleId}` : '未返回角色ID' }}
+              </span>
+              <span v-if="(step.candidateApprovers || []).length > 0">
+                参考候选人：
+                {{
+                  (step.candidateApprovers || [])
+                    .map(candidate => candidate.realName || candidate.username || `用户 ${candidate.userId}`)
+                    .join('、')
+                }}
+              </span>
+              <span v-else>
+                系统将根据流程定义和角色自动确定审批人
+              </span>
             </div>
           </div>
         </div>

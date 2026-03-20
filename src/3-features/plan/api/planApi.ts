@@ -30,10 +30,6 @@ import { useAuthStore } from '@/features/auth/model/store'
 
 export interface SubmitPlanApprovalPayload {
   workflowCode: string
-  selectedApprovers: Array<{
-    stepDefId: number
-    approverId: number
-  }>
 }
 
 // ============================================================

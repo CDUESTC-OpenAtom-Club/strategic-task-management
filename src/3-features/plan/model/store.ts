@@ -390,10 +390,6 @@ export const usePlanStore = defineStore('plan', () => {
     planId: number | string,
     payload: {
       workflowCode: string
-      selectedApprovers: Array<{
-        stepDefId: number
-        approverId: number
-      }>
     }
   ) => {
     submitting.value = true

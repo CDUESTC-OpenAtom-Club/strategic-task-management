@@ -138,6 +138,23 @@ function normalizeIndicators(payload: BackendIndicatorListPayload | null | undef
   return rawItems.map(item => toStrategicIndicator(item))
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof (error as { message?: unknown }).message === 'string'
+  ) {
+    return (error as { message: string }).message
+  }
+
+  return '操作失败，请稍后重试'
+}
+
 function buildDepartmentResolver(departments: Department[]) {
   const idToName = new Map<string, string>()
   const aliasToCanonical = new Map<string, string>()
@@ -347,6 +364,7 @@ export const useStrategicStore = defineStore('strategic', () => {
         throw new Error(`指标 ${id} 尚未持久化，无法更新后端数据`)
       }
 
+      const index = indicators.value.findIndex(i => String(i.id) === String(id))
       const response = await indicatorApi.updateIndicator(id, data)
       console.log('[Strategic Store] Raw API response:', JSON.stringify(response))
       console.log('[Strategic Store] API response keys:', Object.keys(response))
@@ -357,7 +375,6 @@ export const useStrategicStore = defineStore('strategic', () => {
       // logger.debug(`[Strategic Store] API response:`, response)
 
       if (response.success) {
-        const index = indicators.value.findIndex(i => String(i.id) === String(id))
         if (index !== -1 && response.data) {
           const normalized = toStrategicIndicator(response.data)
           indicators.value[index] = {
@@ -375,7 +392,7 @@ export const useStrategicStore = defineStore('strategic', () => {
       console.error('[Strategic Store] updateIndicator error:', err)
       console.error('[Strategic Store] Error stack:', err instanceof Error ? err.stack : 'N/A')
       logger.error('[Strategic Store] Failed to update indicator:', err)
-      throw err
+      throw new Error(getErrorMessage(err))
     }
   }
 
