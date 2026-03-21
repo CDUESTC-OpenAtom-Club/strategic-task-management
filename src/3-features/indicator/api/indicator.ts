@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/api'
+import { withRetry } from '@/shared/lib/api/wrappers'
 import type {
   ApiResponse,
   IndicatorDistributionRequest,

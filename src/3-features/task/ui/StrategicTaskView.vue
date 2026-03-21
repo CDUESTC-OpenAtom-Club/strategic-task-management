@@ -179,6 +179,31 @@ const departmentIdNameMap = computed(() => {
   return map
 })
 
+const departmentAliasNameMap = computed(() => {
+  const map = new Map<string, string>()
+  orgStore.departments.forEach(dept => {
+    const canonical = String(dept.name || '').trim()
+    const id = String(dept.id || '').trim()
+    if (!canonical) {
+      return
+    }
+
+    map.set(canonical, canonical)
+    if (id) {
+      map.set(id, canonical)
+    }
+
+    canonical
+      .split('|')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .forEach(part => {
+        map.set(part, canonical)
+      })
+  })
+  return map
+})
+
 const departmentNameIdMap = computed(() => {
   const map = new Map<string, number>()
   orgStore.departments.forEach(dept => {
@@ -349,6 +374,15 @@ const buildTaskTypeMap = (tasks: Array<Record<string, unknown>>): Record<string,
   return map
 }
 
+const buildTaskIdSet = (tasks: Array<Record<string, unknown>>): string[] => {
+  return tasks
+    .map(task =>
+      normalizeTaskId((task as { taskId?: string | number; id?: string | number }).taskId) ||
+      normalizeTaskId((task as { id?: string | number }).id)
+    )
+    .filter(Boolean)
+}
+
 const loadBackendTaskTypeMap = async () => {
   taskTypeMapLoading.value = true
   try {
@@ -414,9 +448,11 @@ const loadCurrentPlanTaskScope = async () => {
           }
         }
         const planTaskMap = buildTaskTypeMap(response.data as Array<Record<string, unknown>>)
+        const planTaskIds = buildTaskIdSet(response.data as Array<Record<string, unknown>>)
         return {
           taskTypeMap: planTaskMap,
-          taskIdSet: Object.keys(planTaskMap)
+          // 计划范围判断只依赖 task 主键，不应被 taskType 缺失误伤。
+          taskIdSet: planTaskIds
         }
       }
     })
@@ -455,7 +491,7 @@ const normalizeDepartmentName = (value?: string | null): string => {
     return ''
   }
 
-  return departmentIdNameMap.value.get(trimmed) || trimmed
+  return departmentAliasNameMap.value.get(trimmed) || departmentIdNameMap.value.get(trimmed) || trimmed
 }
 
 const milestoneMap = ref<Record<string, Array<Record<string, unknown>>>>({})
@@ -534,26 +570,7 @@ const normalizedIndicators = computed(() =>
   })
 )
 
-const getCurrentScopeIndicatorsForMilestones = () => {
-  const list = strategicStore.indicators.filter(i => !i.year || i.year === timeContext.currentYear)
-  const normalized = list.map(i => ({
-    ...i,
-    ownerDept: normalizeDepartmentName(i.ownerDept),
-    responsibleDept: normalizeDepartmentName(i.responsibleDept)
-  }))
-
-  if (selectedDepartment.value) {
-    return normalized.filter(
-      i =>
-        i.ownerDept === '战略发展部' &&
-        i.responsibleDept === selectedDepartment.value &&
-        i.isStrategic === true &&
-        isIndicatorInCurrentPlanScope(i)
-    )
-  }
-
-  return normalized.filter(i => i.ownerDept === '战略发展部' && i.isStrategic === true && isIndicatorInCurrentPlanScope(i))
-}
+const getCurrentScopeIndicatorsForMilestones = () => indicators.value
 
 const loadMilestonesForCurrentScope = async () => {
   const dept = selectedDepartment.value
@@ -634,7 +651,8 @@ watch(
     selectedDepartment,
     () => strategicStore.indicators.length,
     () => orgStore.departments.length,
-    () => timeContext.currentYear
+    () => timeContext.currentYear,
+    () => Array.from(currentPlanTaskIdSet.value).sort().join(',')
   ],
   () => {
     if (isBootstrappingPage.value) {

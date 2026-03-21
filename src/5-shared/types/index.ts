@@ -528,6 +528,8 @@ export interface Plan {
   createdAt?: string
   updatedAt?: string
   createdBy?: string
+  createdByOrgId?: number
+  createdByName?: string
   description?: string
   // 前端辅助字段
   totalIndicators?: number // 总指标数
@@ -544,6 +546,7 @@ export interface Plan {
   canEdit?: boolean
   canResubmit?: boolean
   submittedBy?: number
+  submittedByName?: string
   submittedAt?: string
   lastRejectReason?: string
   workflowHistory?: Array<{

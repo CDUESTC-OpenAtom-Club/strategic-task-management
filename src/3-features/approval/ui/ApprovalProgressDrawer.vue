@@ -17,6 +17,7 @@ import { Document, User, Timer, Right } from '@element-plus/icons-vue'
 import type { StrategicIndicator, Plan } from '@/shared/types'
 import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
+import { getUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
 import { logger } from '@/shared/lib/utils/logger'
 import ApprovalHistory from './ApprovalHistory.vue'
@@ -68,6 +69,68 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>()
 const authStore = useAuthStore()
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
+const submitterNameCache = ref<Record<string, string>>({})
+
+function normalizeDisplayName(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function parsePositiveUserId(value: unknown): number | null {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null
+  }
+  return numericValue
+}
+
+function getFallbackSubmitterValue(): string {
+  return normalizeDisplayName(props.plan?.createdBy) || props.departmentName || '当前提交人'
+}
+
+async function ensureSubmitterNameLoaded(userIdValue: unknown): Promise<void> {
+  const userId = parsePositiveUserId(userIdValue)
+  if (!userId) {
+    return
+  }
+
+  const cacheKey = String(userId)
+  if (submitterNameCache.value[cacheKey]) {
+    return
+  }
+
+  try {
+    const user = await getUserById(userId)
+    const realName = normalizeDisplayName(user.realName)
+    const username = normalizeDisplayName(user.username)
+    submitterNameCache.value = {
+      ...submitterNameCache.value,
+      [cacheKey]: realName || username || cacheKey
+    }
+  } catch (error) {
+    logger.warn('[ApprovalProgressDrawer] 提交人名称解析失败:', { userId, error })
+  }
+}
+
+const planSubmitterName = computed(() => {
+  const explicitName =
+    normalizeDisplayName(props.plan?.submittedByName) ||
+    normalizeDisplayName(props.plan?.createdByName)
+  if (explicitName) {
+    return explicitName
+  }
+
+  const submittedById = parsePositiveUserId(props.plan?.submittedBy)
+  if (submittedById) {
+    return submitterNameCache.value[String(submittedById)] || String(submittedById)
+  }
+
+  const createdById = parsePositiveUserId(props.plan?.createdBy)
+  if (createdById) {
+    return submitterNameCache.value[String(createdById)] || String(createdById)
+  }
+
+  return getFallbackSubmitterValue()
+})
 
 // ============ 状态 ============
 const activeTab = ref('workflow')
@@ -245,7 +308,7 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
       instanceId: currentPlanTaskId.value,
       instanceNo: String(props.plan.workflowInstanceId || '待回填'),
       title: String(props.plan.name || props.planName || props.departmentName || '当前计划'),
-      submitterName: props.plan.createdBy || '当前提交人',
+      submitterName: planSubmitterName.value,
       currentStepName: String(props.plan.currentStepName || '审批中'),
       createdAt: props.plan.submittedAt || props.plan.createdAt,
       entityId: props.plan.id,
@@ -280,7 +343,7 @@ const currentPlanApprovalSummary = computed(() => {
       key: props.plan.name || props.planName || props.departmentName || 'current-plan',
       planName: props.plan.name || props.planName || `${props.departmentName || '当前部门'}计划`,
       currentStepName: props.plan.currentStepName || '审批中',
-      submitterName: props.plan.createdBy || '未知',
+      submitterName: planSubmitterName.value,
       createdAt: props.plan.submittedAt || props.plan.createdAt,
       count: 1
     }
@@ -319,7 +382,7 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
       id: 'submit',
       name: '提交审批',
       status: 'completed',
-      operatorName: props.plan.createdBy || props.departmentName || '提交人',
+      operatorName: planSubmitterName.value,
       operateTime: props.plan.submittedAt ? new Date(props.plan.submittedAt) : undefined,
       comment: '已发起计划审批'
     }]
@@ -728,9 +791,24 @@ watch(() => props.modelValue, (val) => {
   if (val) {
     // 打开时重置到工作流标签页
     activeTab.value = props.showPlanApprovals ? 'pending-plans' : 'workflow'
+    void ensureSubmitterNameLoaded(props.plan?.submittedBy)
+    void ensureSubmitterNameLoaded(props.plan?.createdBy)
     void loadPendingPlanApprovals()
   }
 })
+
+watch(
+  () => [props.plan?.submittedBy, props.plan?.createdBy],
+  ([submittedBy, createdBy]) => {
+    if (!props.modelValue) {
+      return
+    }
+
+    void ensureSubmitterNameLoaded(submittedBy)
+    void ensureSubmitterNameLoaded(createdBy)
+  },
+  { immediate: true }
+)
 </script>
 
 <template>

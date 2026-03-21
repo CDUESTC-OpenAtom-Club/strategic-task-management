@@ -6,7 +6,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/api'
+import { withRetry } from '@/shared/lib/api/wrappers'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { logger } from '@/shared/lib/utils/logger'
 import {

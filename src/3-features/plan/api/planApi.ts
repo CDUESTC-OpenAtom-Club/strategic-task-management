@@ -8,7 +8,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/api'
+import { withRetry } from '@/shared/lib/api/wrappers'
 import { USE_MOCK } from '@/shared/config/api'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import type {
@@ -197,6 +197,8 @@ function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
     createdAt: raw.createTime ?? raw.createdAt,
     updatedAt: raw.updatedAt,
     createdBy: raw.createdByOrgId != null ? String(raw.createdByOrgId) : raw.createdBy,
+    ...('createdByOrgId' in raw ? { createdByOrgId: Number(raw.createdByOrgId) || undefined } : {}),
+    ...('createdByName' in raw ? { createdByName: raw.createdByName } : {}),
     description: raw.description,
     totalIndicators: raw.indicatorCount,
     completedIndicators: raw.completionPercentage,
@@ -217,6 +219,7 @@ function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
     ...('canEdit' in raw ? { canEdit: Boolean(raw.canEdit) } : {}),
     ...('canResubmit' in raw ? { canResubmit: Boolean(raw.canResubmit) } : {}),
     ...('submittedBy' in raw ? { submittedBy: Number(raw.submittedBy) || undefined } : {}),
+    ...('submittedByName' in raw ? { submittedByName: raw.submittedByName } : {}),
     ...('submittedAt' in raw ? { submittedAt: raw.submittedAt } : {}),
     ...('lastRejectReason' in raw ? { lastRejectReason: raw.lastRejectReason } : {}),
     ...('workflowHistory' in raw && Array.isArray(raw.workflowHistory) ? { workflowHistory: raw.workflowHistory } : {})

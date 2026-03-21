@@ -168,15 +168,23 @@ const defaultBgImages: BgImage[] = [
   }
 ]
 
-// Preload background images
-const preloadImages = () => {
-  defaultBgImages.forEach((img) => {
-    const match = img.background.match(/url\((.*?)\)/)
-    if (match) {
-      const imgEl = new Image()
-      imgEl.src = match[1]
-    }
-  })
+// Preload background images and wait for completion
+const preloadImages = (): Promise<void[]> => {
+  const tasks = defaultBgImages.map(
+    (img) =>
+      new Promise<void>((resolve) => {
+        const match = img.background.match(/url\((.*?)\)/)
+        if (!match) {
+          resolve()
+          return
+        }
+        const imgEl = new Image()
+        imgEl.onload = () => resolve()
+        imgEl.onerror = () => resolve()
+        imgEl.src = match[1]
+      })
+  )
+  return Promise.all(tasks)
 }
 
 const startBgRotation = () => {
@@ -247,9 +255,9 @@ const handleForgotPassword = () => {
 }
 
 // Lifecycle
-onMounted(() => {
+onMounted(async () => {
   bgImages.value = defaultBgImages
-  preloadImages() // 预加载所有图片
+  await preloadImages() // 等待所有图片加载完成后再启动轮播
   startBgRotation()
   updateTime()
   timeInterval = setInterval(updateTime, 1000)
