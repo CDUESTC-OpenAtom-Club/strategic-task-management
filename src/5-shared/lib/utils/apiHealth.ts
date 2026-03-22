@@ -26,10 +26,15 @@ async function probeEndpoint(url: string, timeout: number) {
   return healthApi.get(url, {
     timeout,
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    // 401/403/404 在健康检查里属于“有响应”的状态，不应该走异常分支制造噪音。
+    // 健康检查只需要确认服务可达，2xx-4xx都认为服务正常
     validateStatus: status => status >= 200 && status < 500
   })
 }
+
+/**
+ * 优先使用公开的健康检查端点，避免403错误
+ */
+const PREFERRED_HEALTH_ENDPOINTS = ['/auth/health', '/actuator/health']
 
 export interface HealthCheckResult {
   service: string
@@ -45,6 +50,28 @@ export interface HealthCheckResult {
 export async function checkBackendHealth(): Promise<HealthCheckResult> {
   logger.debug('🏥 [Health Check] 检查后端服务健康状态...')
 
+  // 优先尝试公开的健康检查端点，避免403错误
+  for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
+    try {
+      logger.debug(`🔍 [Health Check] 尝试公开端点: ${endpoint}`)
+      const response = await probeEndpoint(endpoint, 5000)
+
+      if (response.status >= 200 && response.status < 300) {
+        logger.debug(`✅ [Health Check] 后端服务正常 (${endpoint})`)
+        return {
+          service: 'Backend API',
+          status: 'success',
+          message: '后端服务运行正常',
+          details: response.data,
+          timestamp: new Date()
+        }
+      }
+    } catch (error) {
+      logger.debug(`⚠️ [Health Check] 端点 ${endpoint} 不可用，尝试下一个`)
+    }
+  }
+
+  // 如果公开端点都失败，尝试业务端点
   try {
     const response = await probeEndpoint('/organizations', 10000)
 

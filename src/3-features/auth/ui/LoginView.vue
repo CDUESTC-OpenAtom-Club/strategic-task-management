@@ -148,7 +148,7 @@ const defaultBgImages: BgImage[] = [
   },
   {
     id: 2,
-    background: 'url(https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=1920&q=80) center/cover no-repeat',
+    background: 'url(https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1920&q=80) center/cover no-repeat',
     label: 'University Library'
   },
   {

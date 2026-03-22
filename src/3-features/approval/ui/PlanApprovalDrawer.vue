@@ -31,6 +31,19 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
+const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
+const currentUserPermissionCodes = computed(() => {
+  const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
+  if (!Array.isArray(permissions)) {
+    return []
+  }
+  return permissions
+    .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
+    .filter(Boolean)
+})
+const canApprovePlan = computed(() =>
+  currentUserPermissionCodes.value.includes(PLAN_DISPATCH_APPROVE_PERMISSION)
+)
 
 // 计算 drawer 可见性
 const drawerVisible = computed({
@@ -83,6 +96,11 @@ const loadPendingApprovals = async () => {
 
 // 审批通过
 const handleApprove = async (instance: PendingPlanApproval) => {
+  if (!canApprovePlan.value) {
+    ElMessage.warning(`当前账号缺少审批权限：${PLAN_DISPATCH_APPROVE_PERMISSION}`)
+    return
+  }
+
   try {
     const { value } = await ElMessageBox.prompt(
       `确认审批通过计划"${instance.planName || '年度计划'}"？`,
@@ -124,6 +142,11 @@ const handleApprove = async (instance: PendingPlanApproval) => {
 
 // 审批拒绝
 const handleReject = async (instance: PendingPlanApproval) => {
+  if (!canApprovePlan.value) {
+    ElMessage.warning(`当前账号缺少审批权限：${PLAN_DISPATCH_APPROVE_PERMISSION}`)
+    return
+  }
+
   try {
     const { value } = await ElMessageBox.prompt(
       `确认拒绝计划"${instance.planName || '年度计划'}"？`,
@@ -240,6 +263,14 @@ watch(
         :image-size="120"
       />
 
+      <el-alert
+        v-if="!loading && pendingApprovals.length > 0 && !canApprovePlan"
+        type="warning"
+        :closable="false"
+        title="当前账号缺少计划审批按钮权限，仅可查看待办列表。"
+        style="margin-bottom: 16px"
+      />
+
       <!-- 待审批列表 -->
       <div v-else class="approval-list">
         <div v-for="instance in pendingApprovals" :key="instance.instanceId" class="approval-card">
@@ -275,7 +306,7 @@ watch(
           </div>
 
           <!-- 操作按钮 -->
-          <div class="card-actions">
+          <div v-if="canApprovePlan" class="card-actions">
             <el-button type="success" size="default" :icon="Check" @click="handleApprove(instance)">
               审批通过
             </el-button>

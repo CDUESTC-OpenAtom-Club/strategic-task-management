@@ -839,79 +839,7 @@ const getMyCollegeIndicators = (college: string) => {
   })
 }
 
-// 批量审批：针对学院下所有待审批的子指标
-const _handleBatchApprove = (college: string) => {
-  const childIndicators = getMyCollegeIndicators(college)
-  const pendingIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'pending')
-  
-  if (pendingIndicators.length === 0) {
-    ElMessage.warning('没有待审批的子指标')
-    return
-  }
-  
-  ElMessageBox.confirm(
-    `确认批量审批通过【${college}】的 ${pendingIndicators.length} 个待审批指标？`,
-    '批量审批确认',
-    {
-      confirmButtonText: '全部通过',
-      cancelButtonText: '取消',
-      type: 'success'
-    }
-  ).then(() => {
-    // 为每个待审批指标添加审计日志并更新状态
-    pendingIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.user?.userId || 'admin',
-        operatorName: authStore.user?.name || '管理员',
-        operatorDept: currentDept.value,
-        action: 'approve',
-        comment: '批量审批通过'
-      })
-        strategicStore.updateIndicator(indicator.id.toString(), {
-          progressApprovalStatus: 'APPROVED'
-        })
-    })
-    ElMessage.success(`已批量审批通过 ${pendingIndicators.length} 个指标`)
-  })
-}
-
-// 批量打回：针对学院下所有待审批的子指标
-const _handleBatchReject = (college: string) => {
-  const childIndicators = getMyCollegeIndicators(college)
-  const pendingIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'pending')
-  
-  if (pendingIndicators.length === 0) {
-    ElMessage.warning('没有待审批的子指标')
-    return
-  }
-  
-  ElMessageBox.prompt(
-    `请输入打回原因（将打回【${college}】的 ${pendingIndicators.length} 个待审批指标）`,
-    '批量打回确认',
-    {
-      confirmButtonText: '全部打回',
-      cancelButtonText: '取消',
-      type: 'warning',
-      inputType: 'textarea',
-      inputPlaceholder: '请输入打回原因（选填）'
-    }
-  ).then(({ value }) => {
-    // 为每个待审批指标添加审计日志并更新状态
-    pendingIndicators.forEach(indicator => {
-      strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-        operator: authStore.user?.userId || 'admin',
-        operatorName: authStore.user?.name || '管理员',
-        operatorDept: currentDept.value,
-        action: 'reject',
-        comment: value || '批量打回重新提交'
-      })
-        strategicStore.updateIndicator(indicator.id.toString(), {
-          progressApprovalStatus: 'REJECTED'
-        })
-    })
-    ElMessage.success(`已批量打回 ${pendingIndicators.length} 个指标`)
-  })
-}
+// 进度审批已统一迁移到真实工作流待办抽屉，避免前端直接改写审批状态。
 
 // 批量撤销：针对学院下所有已下发、待审批或已通过的子指标，撤销后可编辑删除
 const handleBatchWithdraw = async (college: string) => {
@@ -1141,43 +1069,7 @@ const _handleDistributeOrWithdraw = (command: string) => {
   }
 }
 
-// 审批通过（保留给单个指标，但现在已移至批量操作）
-const _handleApprove = (indicator: StrategicIndicator) => {
-  ElMessageBox.confirm('确认通过该学院的进度提交？', '审批确认', {
-    confirmButtonText: '通过',
-    cancelButtonText: '取消',
-    type: 'success'
-  }).then(() => {
-    strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-      operator: authStore.user?.userId || 'admin',
-      operatorName: authStore.user?.name || '管理员',
-      operatorDept: currentDept.value,
-      action: 'approve',
-      comment: '审批通过'
-    })
-    ElMessage.success('审批通过')
-  })
-}
-
-// 打回（保留给单个指标，但现在已移至批量操作）
-const _handleReject = (indicator: StrategicIndicator) => {
-  ElMessageBox.prompt('请输入打回原因', '打回确认', {
-    confirmButtonText: '确认打回',
-    cancelButtonText: '取消',
-    type: 'warning',
-    inputType: 'textarea',
-    inputPlaceholder: '请输入打回原因（选填）'
-  }).then(({ value }) => {
-    strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-    operator: authStore.user?.userId || 'admin',
-      operatorName: authStore.user?.name || '管理员',
-      operatorDept: currentDept.value,
-      action: 'reject',
-      comment: value || '打回重新提交'
-    })
-    ElMessage.success('已打回，等待下级部门重新提交')
-  })
-}
+// 单条指标进度审批也统一由工作流待办处理。
 
 // 查看详情
 const handleViewDetail = (indicator: StrategicIndicator) => {

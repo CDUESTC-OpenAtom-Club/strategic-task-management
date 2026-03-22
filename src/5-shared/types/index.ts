@@ -582,6 +582,7 @@ export interface IndicatorFill {
   id: string | number
   indicator_id: string | number
   plan_fill_id: string | number // 关联到某次整体填报
+  report_id?: string | number
   fill_date: string // 填报日期
   progress: number // 当前进度百分比
   content: string // 填报说明/批注
@@ -596,6 +597,12 @@ export interface IndicatorFill {
   audit_comment?: string // 审核意见
   audited_by?: string // 审核人ID
   audited_at?: string // 审核时间
+  workflowInstanceId?: string | number
+  currentTaskId?: string | number
+  workflowStatus?: string
+  currentStepName?: string
+  currentApproverId?: number
+  currentApproverName?: string
 
   // 关联的里程碑（如果有）
   milestone_id?: string | number

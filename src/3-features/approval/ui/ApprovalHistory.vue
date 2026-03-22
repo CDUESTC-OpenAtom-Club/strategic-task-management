@@ -66,7 +66,7 @@ const formatTime = (date: Date) => {
 <template>
   <div class="approval-history">
     <!-- 审批类型标识 -->
-    <div v-if="approvalType" class="history-header-type">
+    <div v-if="approvalType && sortedHistory.length > 0" class="history-header-type">
       <ElTag :type="approvalTypeTagType" size="small">
         {{ approvalTypeLabel }}
       </ElTag>

@@ -1,20 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import {
   ElCard,
-  ElButton,
   ElSelect,
   ElOption,
-  ElTag,
   ElAvatar,
   ElIcon,
   ElEmpty,
-  ElSkeleton,
-  ElDialog,
-  ElForm,
-  ElFormItem,
-  ElInput,
-  ElSwitch,
   ElMessage
 } from 'element-plus'
 import {
@@ -22,12 +14,9 @@ import {
   Close,
   Loading,
   Clock,
-  Edit,
-  Setting,
-  CirclePlus
+  Edit
 } from '@element-plus/icons-vue'
-import type { WorkflowNode, ApprovalTemplate, ApprovalTemplateStep } from '@/shared/types'
-import { approvalApi, type ApprovalFlowTemplate } from '../api/approval'
+import type { WorkflowNode } from '@/shared/types'
 
 /**
  * 自定义审批流程组件
@@ -73,43 +62,8 @@ const emit = defineEmits<{
 }>()
 
 // ============ 状态 ============
-const loading = ref(false)
-
-// 审批类型标签
-const approvalTypeLabel = computed(() => {
-  return props.approvalType === 'distribution' ? '下发审批' : '上报审批'
-})
-
-const approvalTypeTagType = computed(() => {
-  return props.approvalType === 'distribution' ? 'primary' : 'success'
-})
 const editingNode = ref<string | null>(null)
 const customApprovers = ref<Record<string, string>>({})
-const showTemplateDialog = ref(false)
-const showManageTemplateDialog = ref(false)
-const setAsDefaultTemplate = ref(false)
-
-interface TemplateViewStep {
-  id: string
-  stepName: string
-  autoApprove: boolean
-}
-
-interface TemplateViewItem {
-  id: string
-  name: string
-  description?: string
-  isDefault: boolean
-  steps: TemplateViewStep[]
-}
-
-// 审批模板
-const templates = ref<TemplateViewItem[]>([])
-const selectedTemplateId = ref<string | null>(null)
-
-// 新建模板表单
-const newTemplateName = ref('')
-const newTemplateDesc = ref('')
 
 // 模拟组织人员数据
 const organizationUsers = ref([
@@ -175,131 +129,13 @@ const cancelEdit = (nodeId: string) => {
   editingNode.value = null
 }
 
-// 打开模板管理对话框
-const openTemplateDialog = () => {
-  showTemplateDialog.value = true
-}
-
-// 应用模板
-const applyTemplate = () => {
-  if (selectedTemplateId.value) {
-    emit('applyTemplate', selectedTemplateId.value)
-    showTemplateDialog.value = false
-    ElMessage.success('模板已应用')
-  }
-}
-
-// 保存为模板
-const saveAsTemplate = async () => {
-  if (!newTemplateName.value) {
-    ElMessage.warning('请输入模板名称')
-    return
-  }
-
-  const steps: ApprovalTemplateStep[] = props.nodes.map((node, index) => ({
-    id: `step-${Date.now()}-${index}`,
-    stepOrder: index,
-    stepName: node.name,
-    requiredRole: 'strategic_dept', // 默认值，实际应根据业务逻辑获取
-    allowCustomApprover: true,
-    autoApprove: false
-  }))
-
-  emit('saveTemplate', newTemplateName.value, steps)
-  showManageTemplateDialog.value = false
-  showTemplateDialog.value = false
-  ElMessage.success('模板保存成功')
-}
-
-const toTemplateViewItem = (template: ApprovalTemplate | ApprovalFlowTemplate): TemplateViewItem => {
-  if ('flowName' in template) {
-    return {
-      id: String(template.id),
-      name: template.flowName,
-      description: template.description ?? template.steps.map(step => step.stepName).join(' → '),
-      isDefault: template.id === 1,
-      steps: template.steps.map(step => ({
-        id: String(step.id),
-        stepName: step.stepName,
-        autoApprove: false
-      }))
-    }
-  }
-
-  return {
-    id: String(template.id),
-    name: template.name,
-    description: template.description,
-    isDefault: template.isDefault,
-    steps: template.steps.map(step => ({
-      id: String(step.id),
-      stepName: step.stepName,
-      autoApprove: step.autoApprove
-    }))
-  }
-}
-
-// 加载模板列表（从后端API获取）
-const loadTemplates = async () => {
-  loading.value = true
-  try {
-    const response = await approvalApi.getFlowTemplates()
-    if (response.code === 200 && response.data) {
-      templates.value = response.data.map((flow: ApprovalFlowTemplate) => toTemplateViewItem(flow))
-    } else {
-      ElMessage.error(response.message || '加载模板失败')
-    }
-  } catch (error) {
-    console.error('加载模板失败:', error)
-    ElMessage.error('加载模板失败，请稍后重试')
-  } finally {
-    loading.value = false
-  }
-}
-
-// ============ 生命周期 ============
-onMounted(() => {
-  loadTemplates()
-})
 </script>
 
 <template>
   <div class="custom-approval-flow">
-    <!-- 头部操作区 -->
-    <div class="flow-header">
-      <div class="header-left">
-        <h3 class="flow-title">审批流程</h3>
-        <p class="flow-desc">
-          <ElTag v-if="approvalType" :type="approvalTypeTagType" size="small" style="margin-right: 8px;">
-            {{ approvalTypeLabel }}
-          </ElTag>
-          <span v-if="!readonly">配置审批流程，支持自定义审批人</span>
-          <span v-else>查看审批流程详情</span>
-        </p>
-      </div>
-      <div v-if="!readonly" class="header-actions">
-        <ElButton
-          :icon="Setting"
-          size="small"
-          @click="openTemplateDialog"
-        >
-          应用模板
-        </ElButton>
-      </div>
-    </div>
-
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-container">
-      <ElSkeleton :rows="3" animated />
-    </div>
-
     <!-- 空状态 -->
-    <div v-else-if="nodes.length === 0" class="empty-container">
-      <el-empty description="暂无审批流程">
-        <ElButton type="primary" :icon="CirclePlus" @click="$emit('addNode')">
-          添加审批节点
-        </ElButton>
-      </el-empty>
+    <div v-if="nodes.length === 0" class="empty-container">
+      <el-empty description="暂无审批流程" />
     </div>
 
     <!-- 审批流程展示 -->
@@ -436,128 +272,12 @@ onMounted(() => {
         class="rejection-alert"
       />
     </div>
-
-    <!-- 模板选择对话框 -->
-    <ElDialog
-      v-model="showTemplateDialog"
-      title="选择审批模板"
-      width="600px"
-    >
-      <div class="template-list">
-        <div
-          v-for="template in templates"
-          :key="template.id"
-          :class="['template-item', { 'is-selected': selectedTemplateId === template.id }]"
-          @click="selectedTemplateId = template.id"
-        >
-          <div class="template-info">
-            <div class="template-header">
-              <h4 class="template-name">{{ template.name }}</h4>
-              <ElTag v-if="template.isDefault" type="success" size="small" effect="light">
-                默认
-              </ElTag>
-            </div>
-            <p class="template-desc">{{ template.description }}</p>
-            <div class="template-steps">
-              <ElTag
-                v-for="(step, index) in template.steps"
-                :key="step.id"
-                size="small"
-                :type="step.autoApprove ? 'info' : 'warning'"
-                effect="plain"
-              >
-                {{ index + 1 }}. {{ step.stepName }}
-              </ElTag>
-            </div>
-          </div>
-          <div v-if="selectedTemplateId === template.id" class="template-selected">
-            <el-icon><Check /></el-icon>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <ElButton @click="showTemplateDialog = false">取消</ElButton>
-        <ElButton type="primary" :disabled="!selectedTemplateId" @click="applyTemplate">
-          应用模板
-        </ElButton>
-      </template>
-    </ElDialog>
-
-    <!-- 新建模板对话框 -->
-    <ElDialog
-      v-model="showManageTemplateDialog"
-      title="保存审批模板"
-      width="500px"
-    >
-      <ElForm>
-        <ElFormItem label="模板名称" required>
-          <ElInput
-            v-model="newTemplateName"
-            placeholder="请输入模板名称"
-            maxlength="50"
-            show-word-limit
-          />
-        </ElFormItem>
-        <ElFormItem label="模板描述">
-          <ElInput
-            v-model="newTemplateDesc"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入模板描述（可选）"
-            maxlength="200"
-            show-word-limit
-          />
-        </ElFormItem>
-        <ElFormItem label="设为默认">
-          <ElSwitch v-model="setAsDefaultTemplate" active-text="是" inactive-text="否" />
-        </ElFormItem>
-      </ElForm>
-
-      <template #footer>
-        <ElButton @click="showManageTemplateDialog = false">取消</ElButton>
-        <ElButton type="primary" @click="saveAsTemplate">保存</ElButton>
-      </template>
-    </ElDialog>
   </div>
 </template>
 
 <style scoped>
 .custom-approval-flow {
-  padding: 16px 0;
-}
-
-/* 头部 */
-.flow-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--el-border-color-light);
-}
-
-.flow-title {
-  margin: 0 0 4px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.flow-desc {
-  margin: 0;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* 加载和空状态 */
-.loading-container {
-  padding: 20px;
+  padding: 8px 0 16px;
 }
 
 .empty-container {

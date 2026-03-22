@@ -1026,23 +1026,21 @@ const reportForm = ref({
   attachments: [] as string[]
 })
 
-// 计算离当前最近的里程碑（未完成且截止日期最近的）
+// 计算离当前进度最近的里程碑目标
+// 优先返回“当前进度尚未达到的最近一个里程碑”；
+// 若当前进度已超过所有里程碑，则回退到最后一个里程碑。
 // @requirement 2.4 - Milestone data validation with complete fields
 const nearestMilestone = computed(() => {
   if (!currentReportIndicator.value?.milestones?.length) {
     return null
   }
 
-  const _now = new Date()
-  const pendingMilestones = currentReportIndicator.value.milestones
-    .filter(m => {
-      const status = safeGet(m, 'status', 'pending')
-      return status !== 'completed'
-    })
+  const currentProgress = Number(currentReportIndicator.value.progress || 0)
+  const normalizedMilestones = currentReportIndicator.value.milestones
     .map(m => {
       const deadline = safeGet(m, 'deadline', '')
       const name = safeGet(m, 'name', '未命名里程碑')
-      const targetProgress = safeGet(m, 'targetProgress', 0)
+      const targetProgress = Number(safeGet(m, 'targetProgress', 0))
       const id = safeGet(m, 'id', '')
       const status = safeGet(m, 'status', 'pending')
 
@@ -1051,15 +1049,18 @@ const nearestMilestone = computed(() => {
         name,
         targetProgress,
         deadline,
-        status,
-        deadlineDate: deadline ? new Date(deadline) : new Date(0)
+        status
       }
     })
-    .filter(m => !isNaN(m.deadlineDate.getTime())) // 过滤掉无效日期
-    .sort((a, b) => a.deadlineDate.getTime() - b.deadlineDate.getTime())
+    .filter(m => Number.isFinite(m.targetProgress))
+    .sort((a, b) => a.targetProgress - b.targetProgress)
 
-  // 返回最近的未完成里程碑
-  return pendingMilestones[0] || null
+  const nextMilestone = normalizedMilestones.find(m => m.targetProgress >= currentProgress)
+  if (nextMilestone) {
+    return nextMilestone
+  }
+
+  return normalizedMilestones[normalizedMilestones.length - 1] || null
 })
 
 // 格式化里程碑日期

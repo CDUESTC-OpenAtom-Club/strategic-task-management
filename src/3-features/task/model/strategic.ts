@@ -724,6 +724,40 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
+  function patchIndicator(id: string, patch: Partial<StrategicIndicator> & { taskId?: string | number }) {
+    const index = indicators.value.findIndex(item => String(item.id) === String(id))
+    if (index === -1) {
+      return
+    }
+
+    indicators.value[index] = {
+      ...indicators.value[index],
+      ...patch
+    }
+  }
+
+  function patchIndicatorsByTaskId(
+    taskId: string | number,
+    patch: Partial<StrategicIndicator> & { taskId?: string | number }
+  ) {
+    const normalizedTaskId = String(taskId).trim()
+    if (!normalizedTaskId) {
+      return
+    }
+
+    indicators.value = indicators.value.map(item => {
+      const itemTaskId = String((item as StrategicIndicator & { taskId?: string | number }).taskId ?? '').trim()
+      if (itemTaskId !== normalizedTaskId) {
+        return item
+      }
+
+      return {
+        ...item,
+        ...patch
+      }
+    })
+  }
+
   function clearError() {
     error.value = null
     loadingState.value.error = null
@@ -743,6 +777,8 @@ export const useStrategicStore = defineStore('strategic', () => {
     addIndicator,
     addDraftIndicator,
     replaceIndicatorId,
+    patchIndicator,
+    patchIndicatorsByTaskId,
     updateIndicator,
     deleteIndicator,
     withdrawIndicator,

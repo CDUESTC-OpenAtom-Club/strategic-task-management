@@ -55,9 +55,6 @@ const PERMISSION_ROLE_MAP: Record<PermissionCode, string[]> = {
   [PermissionCode.INDICATOR_VIEW]: ['strategic_dept', 'functional_dept', 'secondary_college'],
   [PermissionCode.INDICATOR_FILL]: ['strategic_dept', 'functional_dept', 'secondary_college'],
   [PermissionCode.INDICATOR_EDIT]: ['strategic_dept', 'functional_dept'],
-  [PermissionCode.AUDIT_VIEW]: ['strategic_dept', 'functional_dept'],
-  [PermissionCode.AUDIT_APPROVE]: ['strategic_dept', 'functional_dept'],
-  [PermissionCode.AUDIT_REJECT]: ['strategic_dept', 'functional_dept'],
   [PermissionCode.TASK_CREATE]: ['strategic_dept', 'functional_dept'],
   [PermissionCode.TASK_EDIT]: ['strategic_dept', 'functional_dept'],
   [PermissionCode.TASK_DELETE]: ['strategic_dept']
@@ -158,11 +155,9 @@ export function usePermission(): UsePermissionReturn {
   }
 
   const canAuditPlanFill = (planFill: PlanFill): boolean => {
-    if (!hasPermission(PermissionCode.AUDIT_APPROVE)) {
-      return false
-    }
-
-    return canAccessOrg(planFill.org_id)
+    void planFill
+    // 审批按钮现已由工作流待办 + 后端权限码统一控制，不再从前端角色兜底推导。
+    return false
   }
 
   const canViewPlanFill = (planFill: PlanFill): boolean => {

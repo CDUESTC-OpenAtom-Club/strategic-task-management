@@ -12,6 +12,7 @@ import type { User, UserRole } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/shared/lib/utils/tokenManager'
 import { parseLoginResponse, mapBackendUser } from '@/shared/lib/utils/authHelpers'
+import { getUserPermissions } from '@/features/auth/api/query'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 
@@ -42,6 +43,69 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('access_token')
     localStorage.removeItem('accessToken')
+  }
+
+  const normalizePermissionCodes = (value: unknown): string[] => {
+    if (!Array.isArray(value)) {
+      return []
+    }
+
+    return [...new Set(
+      value
+        .map(item => (typeof item === 'string' ? item.trim() : ''))
+        .filter(Boolean)
+    )]
+  }
+
+  const fetchPermissionCodes = async (fallbackPermissions?: unknown): Promise<string[]> => {
+    try {
+      const response = await getUserPermissions()
+      if (response.success && Array.isArray(response.data)) {
+        return normalizePermissionCodes(response.data)
+      }
+    } catch (error) {
+      logger.warn('[Auth] 获取当前用户权限列表失败，回退到已有权限数据:', error)
+    }
+
+    return normalizePermissionCodes(fallbackPermissions)
+  }
+
+  const attachPermissionCodes = async (
+    userData: Record<string, unknown>
+  ): Promise<Record<string, unknown>> => {
+    const permissions = await fetchPermissionCodes(userData.permissions)
+    return {
+      ...userData,
+      permissions
+    }
+  }
+
+  const restorePersistedUser = (savedUser: string): User | null => {
+    try {
+      const parsedUser = JSON.parse(savedUser) as User & { permissions?: unknown }
+      if (!parsedUser) {
+        return null
+      }
+
+      parsedUser.permissions = normalizePermissionCodes(parsedUser.permissions)
+      return parsedUser
+    } catch (error) {
+      logger.error('[Auth] 解析用户信息失败:', error)
+      return null
+    }
+  }
+
+  const refreshCurrentUserPermissions = async () => {
+    if (!user.value || !token.value || !tokenManager.hasValidToken()) {
+      return
+    }
+
+    const permissions = await fetchPermissionCodes(user.value.permissions)
+    user.value = {
+      ...user.value,
+      permissions
+    }
+    persistUser(user.value)
   }
 
   // ============ Getters ============
@@ -181,7 +245,8 @@ export const useAuthStore = defineStore('auth', () => {
         }
 
         const enrichedUserData = await enrichUserWithOrganization(userData)
-        const mappedUser = mapBackendUser(enrichedUserData)
+        const userWithPermissions = await attachPermissionCodes(enrichedUserData)
+        const mappedUser = mapBackendUser(userWithPermissions)
         logger.debug('?[Auth] 映射后的用户:', mappedUser)
 
         user.value = mappedUser
@@ -269,7 +334,8 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (authResponse.success && authResponse.data) {
         const enrichedUserData = await enrichUserWithOrganization(authResponse.data)
-        const mappedUser = mapBackendUser(enrichedUserData)
+        const userWithPermissions = await attachPermissionCodes(enrichedUserData)
+        const mappedUser = mapBackendUser(userWithPermissions)
         user.value = mappedUser
         persistUser(mappedUser)
       } else {
@@ -286,6 +352,14 @@ export const useAuthStore = defineStore('auth', () => {
       return false
     }
 
+    const explicitPermissionCode = `${resource}:${action}`
+    const userPermissionCodes = normalizePermissionCodes(
+      (user.value as User & { permissions?: unknown }).permissions
+    )
+    if (userPermissionCodes.includes(explicitPermissionCode)) {
+      return true
+    }
+
     const permissions = {
       strategic_dept: [
         'strategic_tasks:create',
@@ -295,24 +369,20 @@ export const useAuthStore = defineStore('auth', () => {
         'indicators:create',
         'indicators:read',
         'indicators:update',
-        'indicators:delete',
-        'approvals:read',
-        'approvals:approve'
+        'indicators:delete'
       ],
       functional_dept: [
         'indicators:read',
         'indicators:update',
         'reports:create',
         'reports:read',
-        'reports:update',
-        'approvals:read',
-        'approvals:approve'
+        'reports:update'
       ],
       secondary_college: ['reports:create', 'reports:read', 'reports:update']
     }
 
     const rolePermissions = permissions[user.value.role] || []
-    return rolePermissions.includes(`${resource}:${action}`)
+    return rolePermissions.includes(explicitPermissionCode)
   }
 
   const initializeAuth = async () => {
@@ -321,22 +391,19 @@ export const useAuthStore = defineStore('auth', () => {
     clearLegacyAccessTokenStorage()
 
     if (memoryToken && savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser)
-        if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
+      const parsedUser = restorePersistedUser(savedUser)
+      if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
           user.value = parsedUser
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
+          void refreshCurrentUserPermissions()
           return
-        }
+      }
 
-        if (!tokenManager.hasValidToken()) {
-          logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
-          tokenManager.clearAccessToken()
-        }
-      } catch (e) {
-        logger.error('[Auth] 解析用户信息失败:', e)
+      if (!tokenManager.hasValidToken()) {
+        logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
+        tokenManager.clearAccessToken()
       }
     }
 
@@ -346,12 +413,13 @@ export const useAuthStore = defineStore('auth', () => {
 
       try {
         const newToken = await tokenManager.refreshAccessToken()
-        const parsedUser = JSON.parse(savedUser)
+        const parsedUser = restorePersistedUser(savedUser)
         if (parsedUser && parsedUser.role) {
           user.value = parsedUser
           token.value = newToken
           persistUser(parsedUser)
           logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
+          void refreshCurrentUserPermissions()
         } else {
           logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
           logout()

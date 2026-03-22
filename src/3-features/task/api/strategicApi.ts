@@ -448,8 +448,7 @@ export const strategicApi = {
     try {
       return await withRetry(() =>
         apiClient.put<ApiResponse<StrategicTaskVO>>(`/tasks/${taskId}/name`, {
-          taskId: Number(taskId),
-          taskName
+          name: taskName
         })
       )
     } catch (error) {

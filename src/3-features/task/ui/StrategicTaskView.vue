@@ -32,7 +32,12 @@ import { logger } from '@/shared/lib/utils/logger'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import strategicApi, { approvalApi as taskApprovalApi } from '@/features/task/api/strategicApi'
-import { getWorkflowDefinitionPreviewByCode, startWorkflow } from '@/features/workflow/api'
+import {
+  getWorkflowDefinitionPreviewByCode,
+  startWorkflow,
+  approveTask,
+  rejectTask
+} from '@/features/workflow/api'
 import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import {
   getStatusText as _getStatusText,
@@ -45,6 +50,14 @@ import { ApprovalProgressDrawer } from '@/features/approval'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
 import { indicatorApi } from '@/features/indicator/api'
 import { usePlanStore } from '@/features/plan/model/store'
+import { indicatorFillApi } from '@/features/plan/api/planApi'
+import {
+  canCurrentUserHandleIndicatorWorkflow,
+  getIndicatorWorkflowStatusLabel,
+  getIndicatorWorkflowTagType,
+  resolveLatestIndicatorWorkflowSnapshot,
+  type IndicatorWorkflowSnapshot
+} from '@/features/plan/lib/indicatorWorkflow'
 import type { WorkflowDefinitionPreviewResponse } from '@/features/workflow/api/types'
 
 // 使用共享 Store
@@ -53,6 +66,16 @@ const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
 const planStore = usePlanStore()
+const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
+const currentUserPermissionCodes = computed(() => {
+  const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
+  if (!Array.isArray(permissions)) {
+    return []
+  }
+  return permissions
+    .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
+    .filter(Boolean)
+})
 
 // 获取操作类型配置（与 AuditLogDrawer 保持一致）
 const getActionConfig = (action: string) => {
@@ -827,10 +850,25 @@ const ensurePersistedTaskIdForIndicator = async (
   return persistedTaskId
 }
 
-const refreshIndicatorsAfterTaskMutation = async () => {
-  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-  await loadBackendTaskTypeMap()
-  await loadCurrentPlanTaskScope()
+const registerTaskLocally = (taskId: string | number, taskType: 'BASIC' | 'DEVELOPMENT') => {
+  const normalizedTaskId = String(taskId).trim()
+  if (!normalizedTaskId) {
+    return
+  }
+
+  backendTaskTypeMap.value = {
+    ...backendTaskTypeMap.value,
+    [normalizedTaskId]: taskType
+  }
+
+  currentPlanTaskTypeMap.value = {
+    ...currentPlanTaskTypeMap.value,
+    [normalizedTaskId]: taskType
+  }
+
+  const nextTaskIds = new Set(currentPlanTaskIdSet.value)
+  nextTaskIds.add(normalizedTaskId)
+  currentPlanTaskIdSet.value = nextTaskIds
 }
 
 const persistTaskContentEdit = async (row: StrategicIndicator, taskName: string) => {
@@ -842,10 +880,13 @@ const persistTaskContentEdit = async (row: StrategicIndicator, taskName: string)
   const existingTaskId = getIndicatorTaskId(row)
   if (existingTaskId) {
     await strategicApi.updateTaskName(existingTaskId, trimmedTaskName)
-    await refreshIndicatorsAfterTaskMutation()
+    strategicStore.patchIndicatorsByTaskId(existingTaskId, {
+      taskContent: trimmedTaskName
+    })
     return
   }
 
+  const taskType = getTaskTypeForPersistence(row.type2)
   const persistedTaskId = await ensurePersistedTaskIdForIndicator({
     taskContent: trimmedTaskName,
     type2: row.type2,
@@ -857,7 +898,11 @@ const persistTaskContentEdit = async (row: StrategicIndicator, taskName: string)
   await strategicStore.updateIndicator(row.id.toString(), {
     taskId: persistedTaskId
   })
-  await refreshIndicatorsAfterTaskMutation()
+  strategicStore.patchIndicator(row.id.toString(), {
+    taskId: String(persistedTaskId),
+    taskContent: trimmedTaskName
+  })
+  registerTaskLocally(persistedTaskId, taskType)
 }
 
 // 判断 Plan 是否已下发（已审批通过，不能撤回）
@@ -1039,6 +1084,29 @@ const distributeButtonIcon = computed(() => {
   return RefreshLeft
 })
 
+const distributeButtonDisabledReason = computed(() => {
+  if (isReadOnly.value) {
+    return '历史快照为只读状态'
+  }
+
+  const status = currentPlanStatus.value
+  const isSubmittingStatus = status === 'DRAFT' || status === 'RETURNED' || !status
+
+  if (isSubmittingStatus && departmentTotalWeight.value !== 100) {
+    return `基础性任务指标权重合计必须为100%，当前为${departmentTotalWeight.value}`
+  }
+
+  if (status === 'PENDING' && !canWithdrawPlan.value) {
+    return '当前审批进度不支持撤回'
+  }
+
+  if (status && status !== 'DRAFT' && status !== 'RETURNED' && status !== 'PENDING') {
+    return '当前状态不可操作'
+  }
+
+  return ''
+})
+
 // 下发/撤回按钮是否禁用
 // 基于 Plan 状态：
 // - 只读状态：禁用
@@ -1046,22 +1114,7 @@ const distributeButtonIcon = computed(() => {
 // - 待审批状态：检查是否在第一个节点
 // - 已下发状态：禁用（不可撤回）
 const distributeButtonDisabled = computed(() => {
-  if (isReadOnly.value) return true
-
-  const status = currentPlanStatus.value
-
-  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
-    // 草稿/退回状态：启用提交
-    return false
-  }
-
-  if (status === 'PENDING') {
-    // 待审批状态：只有第一个节点是待审批时才能撤回
-    return !canWithdrawPlan.value
-  }
-
-  // 已下发状态：禁用
-  return true
+  return Boolean(distributeButtonDisabledReason.value)
 })
 
 const resetApprovalSetupDialog = () => {
@@ -1114,6 +1167,10 @@ const handleCloseApprovalSetupDialog = () => {
 }
 
 const confirmPlanApprovalSubmission = async () => {
+  if (!ensurePlanCanDistribute()) {
+    return
+  }
+
   const planId = Number(currentPlan.value?.id ?? NaN)
   if (!Number.isFinite(planId) || planId <= 0) {
     ElMessage.warning('当前计划不存在，无法发起审批')
@@ -1144,6 +1201,13 @@ const confirmPlanApprovalSubmission = async () => {
 
 // 下发/撤回按钮点击处理
 const handleDistributeOrWithdraw = () => {
+  if (distributeButtonDisabled.value) {
+    if (distributeButtonDisabledReason.value) {
+      ElMessage.warning(distributeButtonDisabledReason.value)
+    }
+    return
+  }
+
   const status = currentPlanStatus.value
 
   if (status === 'DRAFT' || status === 'RETURNED' || !status) {
@@ -1166,6 +1230,130 @@ const currentIndicator = computed(() => {
   const list = indicators.value
   return list[currentIndicatorIndex.value] || null
 })
+
+const indicatorWorkflowCache = ref<Record<string, IndicatorWorkflowSnapshot | null>>({})
+const currentIndicatorWorkflowLoading = ref(false)
+
+const currentIndicatorWorkflow = computed(() => {
+  const indicatorId = currentIndicator.value?.id
+  if (indicatorId === undefined || indicatorId === null) {
+    return null
+  }
+  return indicatorWorkflowCache.value[String(indicatorId)] ?? null
+})
+
+const canCurrentUserHandleCurrentIndicatorWorkflow = computed(() =>
+  canCurrentUserHandleIndicatorWorkflow(
+    currentIndicatorWorkflow.value,
+    currentUserId.value,
+    currentUserPermissionCodes.value
+  )
+)
+
+const loadIndicatorWorkflowSnapshot = async (
+  indicatorId: number | string,
+  options: { force?: boolean } = {}
+) => {
+  const cacheKey = String(indicatorId)
+  if (!options.force && cacheKey in indicatorWorkflowCache.value) {
+    return indicatorWorkflowCache.value[cacheKey]
+  }
+
+  try {
+    const response = await indicatorFillApi.getIndicatorFillHistory(indicatorId)
+    const fills = Array.isArray(response.data) ? response.data : []
+    const snapshot = resolveLatestIndicatorWorkflowSnapshot(fills)
+    indicatorWorkflowCache.value = {
+      ...indicatorWorkflowCache.value,
+      [cacheKey]: snapshot
+    }
+    return snapshot
+  } catch (error) {
+    logger.warn('[StrategicTaskView] 加载指标工作流快照失败:', { indicatorId, error })
+    indicatorWorkflowCache.value = {
+      ...indicatorWorkflowCache.value,
+      [cacheKey]: null
+    }
+    return null
+  }
+}
+
+const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => {
+  await loadIndicatorWorkflowSnapshot(indicatorId, { force: true })
+  const planId = currentPlan.value?.id
+  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+  if (planId !== undefined && planId !== null && planId !== '') {
+    await planStore.loadPlanDetails(planId, { force: true, background: true })
+  }
+  await loadPendingPlanApprovalCount()
+}
+
+const handleApproveCurrentIndicatorWorkflow = async () => {
+  const indicator = currentIndicator.value
+  const snapshot = currentIndicatorWorkflow.value
+  if (!indicator || !snapshot?.currentTaskId) {
+    ElMessage.warning('当前指标没有可审批的工作流任务')
+    return
+  }
+  if (!canCurrentUserHandleCurrentIndicatorWorkflow.value) {
+    ElMessage.warning('当前审批节点不是你，或当前账号缺少报告审批权限')
+    return
+  }
+
+  try {
+    const { value } = await ElMessageBox.prompt('请输入审批意见（可选）', '审批通过', {
+      confirmButtonText: '确认通过',
+      cancelButtonText: '取消',
+      inputType: 'textarea'
+    })
+    const loading = ElLoading.service({ lock: true, text: '正在审批...' })
+    try {
+      await approveTask(String(snapshot.currentTaskId), {
+        comment: value || '审批通过'
+      })
+      ElMessage.success('审批通过成功')
+      await refreshIndicatorWorkflowContext(indicator.id)
+    } finally {
+      loading.close()
+    }
+  } catch {
+    // user cancelled
+  }
+}
+
+const handleRejectCurrentIndicatorWorkflow = async () => {
+  const indicator = currentIndicator.value
+  const snapshot = currentIndicatorWorkflow.value
+  if (!indicator || !snapshot?.currentTaskId) {
+    ElMessage.warning('当前指标没有可审批的工作流任务')
+    return
+  }
+  if (!canCurrentUserHandleCurrentIndicatorWorkflow.value) {
+    ElMessage.warning('当前审批节点不是你，或当前账号缺少报告审批权限')
+    return
+  }
+
+  try {
+    const { value } = await ElMessageBox.prompt('请输入驳回原因', '审批驳回', {
+      confirmButtonText: '确认驳回',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputValidator: input => (String(input || '').trim() ? true : '请填写驳回原因')
+    })
+    const loading = ElLoading.service({ lock: true, text: '正在驳回...' })
+    try {
+      await rejectTask(String(snapshot.currentTaskId), {
+        reason: String(value).trim()
+      })
+      ElMessage.success('审批驳回成功')
+      await refreshIndicatorWorkflowContext(indicator.id)
+    } finally {
+      loading.close()
+    }
+  } catch {
+    // user cancelled
+  }
+}
 
 // 切换视图模式
 const _toggleViewMode = () => {
@@ -1268,6 +1456,22 @@ const indicators = computed(() => {
     return taskA.localeCompare(taskB)
   })
 })
+
+watch(
+  () => currentIndicator.value?.id,
+  async indicatorId => {
+    if (indicatorId === undefined || indicatorId === null) {
+      return
+    }
+    currentIndicatorWorkflowLoading.value = true
+    try {
+      await loadIndicatorWorkflowSnapshot(indicatorId)
+    } finally {
+      currentIndicatorWorkflowLoading.value = false
+    }
+  },
+  { immediate: true }
+)
 
 // 计算单元格合并信息
 const getSpanMethod = ({
@@ -2412,129 +2616,7 @@ const currentDistributeGroup = ref<{ taskContent: string; rows: StrategicIndicat
 const distributeTarget = ref<string[]>([])
 
 // ================== 进度审批相关 ==================
-
-// 审批弹窗状态
-const approvalDialogVisible = ref(false)
-const currentApprovalIndicator = ref<StrategicIndicator | null>(null)
-
-// 审批表单数据
-const approvalForm = ref({
-  action: 'approve' as 'approve' | 'reject',
-  comment: '',
-  rejectReason: ''
-})
-
-// 打开审批弹窗
-const _handleOpenApprovalDialog = (row: StrategicIndicator) => {
-  currentApprovalIndicator.value = row
-  approvalForm.value = {
-    action: 'approve',
-    comment: '',
-    rejectReason: ''
-  }
-  approvalDialogVisible.value = true
-}
-
-// 关闭审批弹窗
-const closeApprovalDialog = () => {
-  approvalDialogVisible.value = false
-  currentApprovalIndicator.value = null
-  approvalForm.value = {
-    action: 'approve',
-    comment: '',
-    rejectReason: ''
-  }
-}
-
-// 提交审批
-const submitApproval = () => {
-  if (!currentApprovalIndicator.value) {
-    return
-  }
-
-  const indicator = currentApprovalIndicator.value
-  const isApprove = approvalForm.value.action === 'approve'
-
-  // 驳回时必须填写原因
-  if (!isApprove && !approvalForm.value.rejectReason.trim()) {
-    ElMessage.warning('请填写驳回原因')
-    return
-  }
-
-  const actionText = isApprove ? '通过' : '驳回'
-  const pendingProgress = indicator.pendingProgress || 0
-  const currentProgress = indicator.progress || 0
-
-  ElMessageBox.confirm(
-    isApprove
-      ? `确认审批通过？\n\n指标：${indicator.name}\n进度将从 ${currentProgress}% 更新为 ${pendingProgress}%`
-      : `确认驳回该进度填报？\n\n指标：${indicator.name}\n驳回原因：${approvalForm.value.rejectReason}`,
-    `审批${actionText}确认`,
-    {
-      confirmButtonText: `确认${actionText}`,
-      cancelButtonText: '取消',
-      type: isApprove ? 'success' : 'warning'
-    }
-  )
-    .then(async () => {
-      try {
-        if (isApprove) {
-          // 审批通过：只需要更新审批状态，后端会自动处理进度复制和清空逻辑
-          await strategicStore.updateIndicator(indicator.id.toString(), {
-            progressApprovalStatus: 'APPROVED'
-          })
-
-          // 添加审计日志
-          strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-            operator: authStore.userName || 'unknown',
-            operatorName: authStore.userName || '未知用户',
-            operatorDept: authStore.userDepartment || '战略发展部',
-            action: 'approve',
-            comment: approvalForm.value.comment || '审批通过',
-            previousProgress: currentProgress,
-            newProgress: pendingProgress,
-            previousStatus: 'pending',
-            newStatus: 'distributed'
-          })
-
-          ElMessage.success('审批通过，进度已更新')
-
-          // 刷新指标数据以显示最新进度
-          const timeContext = useTimeContextStore()
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-        } else {
-          // 审批驳回：设置驳回状态，保留待审批数据供查看
-          await strategicStore.updateIndicator(indicator.id.toString(), {
-            progressApprovalStatus: 'REJECTED'
-          })
-
-          // 添加审计日志
-          strategicStore.addStatusAuditEntry(indicator.id.toString(), {
-            operator: authStore.userName || 'unknown',
-            operatorName: authStore.userName || '未知用户',
-            operatorDept: authStore.userDepartment || '战略发展部',
-            action: 'reject',
-            comment: approvalForm.value.rejectReason,
-            previousProgress: currentProgress,
-            newProgress: pendingProgress,
-            previousStatus: 'pending',
-            newStatus: 'distributed'
-          })
-
-          ElMessage.info('已驳回该进度填报')
-        }
-
-        closeApprovalDialog()
-        updateEditTime()
-      } catch (error) {
-        logger.error('审批操作失败:', error)
-        ElMessage.error('审批操作失败，请重试')
-      }
-    })
-    .catch(() => {
-      // 用户取消操作
-    })
-}
+// 旧的本地审批弹窗已停用，统一改为从真实工作流待办入口处理。
 
 // 查看详情
 const handleViewDetail = (row: StrategicIndicator) => {
@@ -3448,6 +3530,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             :type="distributeButtonType"
             size="small"
             :disabled="distributeButtonDisabled"
+            :title="distributeButtonDisabledReason"
             @click.stop="handleDistributeOrWithdraw"
           >
             <el-icon
@@ -3925,6 +4008,53 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                     <div v-if="currentIndicator.pendingRemark" class="pending-remark">
                       <span class="remark-label">填报备注：</span>
                       <span class="remark-text">{{ currentIndicator.pendingRemark }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="currentIndicatorWorkflowLoading" class="workflow-progress-card is-loading">
+                    <span class="workflow-progress-hint">正在加载该指标的审批流信息...</span>
+                  </div>
+
+                  <div v-else-if="currentIndicatorWorkflow" class="workflow-progress-card">
+                    <div class="workflow-progress-header">
+                      <span class="workflow-progress-title">报告审批流</span>
+                      <el-tag
+                        size="small"
+                        :type="getIndicatorWorkflowTagType(currentIndicatorWorkflow)"
+                      >
+                        {{ getIndicatorWorkflowStatusLabel(currentIndicatorWorkflow) }}
+                      </el-tag>
+                    </div>
+                    <div class="workflow-progress-grid">
+                      <div class="workflow-progress-item">
+                        <span class="workflow-progress-label">当前节点</span>
+                        <span class="workflow-progress-value">{{
+                          currentIndicatorWorkflow.currentStepName || '审批中'
+                        }}</span>
+                      </div>
+                      <div class="workflow-progress-item">
+                        <span class="workflow-progress-label">当前审批人</span>
+                        <span class="workflow-progress-value">{{
+                          currentIndicatorWorkflow.currentApproverName || '待分配'
+                        }}</span>
+                      </div>
+                    </div>
+                    <div
+                      v-if="canCurrentUserHandleCurrentIndicatorWorkflow"
+                      class="workflow-progress-actions"
+                    >
+                      <el-button size="small" type="success" @click="handleApproveCurrentIndicatorWorkflow">
+                        审批通过
+                      </el-button>
+                      <el-button size="small" type="danger" plain @click="handleRejectCurrentIndicatorWorkflow">
+                        审批驳回
+                      </el-button>
+                    </div>
+                    <div
+                      v-else-if="currentIndicatorWorkflow.currentApproverName"
+                      class="workflow-progress-hint"
+                    >
+                      当前节点审批人为 {{ currentIndicatorWorkflow.currentApproverName }}，你当前仅可查看。
                     </div>
                   </div>
                 </div>
@@ -4454,123 +4584,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       </template>
     </el-dialog>
 
-    <!-- 进度审批弹窗 -->
-    <el-dialog
-      v-model="approvalDialogVisible"
-      title="进度审批"
-      width="520px"
-      :close-on-click-modal="false"
-      @close="closeApprovalDialog"
-    >
-      <div v-if="currentApprovalIndicator" class="approval-dialog">
-        <!-- 指标信息 -->
-        <div class="approval-indicator-info">
-          <div class="info-row">
-            <span class="info-label">指标名称：</span>
-            <span class="info-value">{{ currentApprovalIndicator.name }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">责任部门：</span>
-            <span class="info-value">{{ currentApprovalIndicator.responsibleDept }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">当前进度：</span>
-            <span class="info-value">{{ currentApprovalIndicator.progress || 0 }}%</span>
-          </div>
-          <div class="info-row highlight-row">
-            <span class="info-label">申请进度：</span>
-            <span class="info-value highlight"
-              >{{ currentApprovalIndicator.pendingProgress || 0 }}%</span
-            >
-            <span class="progress-change">
-              ({{
-                (currentApprovalIndicator.pendingProgress || 0) -
-                  (currentApprovalIndicator.progress || 0) >
-                0
-                  ? '+'
-                  : ''
-              }}{{
-                (currentApprovalIndicator.pendingProgress || 0) -
-                (currentApprovalIndicator.progress || 0)
-              }}%)
-            </span>
-          </div>
-        </div>
-
-        <!-- 填报说明 -->
-        <div v-if="currentApprovalIndicator.pendingRemark" class="approval-remark">
-          <div class="remark-label">填报说明：</div>
-          <div class="remark-content">{{ currentApprovalIndicator.pendingRemark }}</div>
-        </div>
-
-        <el-divider />
-
-        <!-- 审批表单 -->
-        <el-form label-width="100px" class="approval-form">
-          <el-form-item label="审批结果" required>
-            <el-radio-group v-model="approvalForm.action">
-              <el-radio value="approve">
-                <span class="radio-label approve">通过</span>
-              </el-radio>
-              <el-radio value="reject">
-                <span class="radio-label reject">驳回</span>
-              </el-radio>
-            </el-radio-group>
-          </el-form-item>
-
-          <el-form-item v-if="approvalForm.action === 'approve'" label="审批意见">
-            <el-input
-              v-model="approvalForm.comment"
-              type="textarea"
-              :rows="3"
-              placeholder="可选，填写审批意见..."
-              maxlength="200"
-              show-word-limit
-            />
-          </el-form-item>
-
-          <el-form-item v-if="approvalForm.action === 'reject'" label="驳回原因" required>
-            <el-input
-              v-model="approvalForm.rejectReason"
-              type="textarea"
-              :rows="3"
-              placeholder="请填写驳回原因，以便填报人了解问题并重新填报..."
-              maxlength="500"
-              show-word-limit
-            />
-          </el-form-item>
-        </el-form>
-
-        <!-- 提示信息 -->
-        <div class="approval-tips">
-          <el-alert
-            v-if="approvalForm.action === 'approve'"
-            title="审批通过后，指标进度将更新为申请的进度值"
-            type="success"
-            :closable="false"
-            show-icon
-          />
-          <el-alert
-            v-else
-            title="驳回后，填报人可以重新填报进度"
-            type="warning"
-            :closable="false"
-            show-icon
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <el-button @click="closeApprovalDialog">取消</el-button>
-        <el-button
-          :type="approvalForm.action === 'approve' ? 'success' : 'warning'"
-          @click="submitApproval"
-        >
-          {{ approvalForm.action === 'approve' ? '确认通过' : '确认驳回' }}
-        </el-button>
-      </template>
-    </el-dialog>
-
     <!-- 审计日志抽屉 -->
     <AuditLogDrawer
       v-model="auditLogVisible"
@@ -4629,7 +4642,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
         <el-button
           type="primary"
           :loading="approvalSubmitting"
-          :disabled="approvalPreviewLoading || !hasApprovalPreview"
+          :disabled="
+            approvalPreviewLoading || !hasApprovalPreview || departmentTotalWeight !== 100
+          "
           @click="confirmPlanApprovalSubmission"
         >
           确认发起审批
@@ -6712,6 +6727,66 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
+}
+
+.workflow-progress-card {
+  padding: var(--spacing-lg);
+  background: rgba(24, 144, 255, 0.08);
+  border-radius: var(--radius-md);
+  border-left: 4px solid var(--color-primary);
+}
+
+.workflow-progress-card.is-loading {
+  border-left-color: var(--color-info);
+}
+
+.workflow-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.workflow-progress-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.workflow-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.workflow-progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workflow-progress-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.workflow-progress-value {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.workflow-progress-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.workflow-progress-hint {
+  margin-top: var(--spacing-md);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .remark-label {
