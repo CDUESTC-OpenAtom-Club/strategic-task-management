@@ -6,6 +6,7 @@
 
 import { apiClient as api } from '@/shared/api/client'
 import type { ApiResponse, StrategicTask } from '@/shared/types'
+import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 
 /**
  * Get tasks by year
@@ -95,7 +96,8 @@ export async function getTaskIndicators(taskId: number): Promise<ApiResponse<any
 /**
  * Get task milestones
  *
- * API: GET /api/v1/indicators/task/{taskId} + /api/v1/milestones/indicator/{indicatorId}
+ * API: GET /api/v1/indicators/task/{taskId} + GET /api/v1/milestones/by-indicators?ids=...
+ * 使用批量接口替代 N+1 请求
  *
  * @param taskId - Task ID
  * @returns Task milestones
@@ -118,20 +120,19 @@ export async function getTaskMilestones(taskId: number): Promise<ApiResponse<any
     return { ...indicatorsResponse, data: [] }
   }
 
-  const milestoneResults = await Promise.allSettled(
-    indicatorIds.map(indicatorId => api.get(`/milestones/indicator/${indicatorId}`))
-  )
-
-  const milestones = milestoneResults.flatMap(result => {
-    if (result.status !== 'fulfilled') {
-      return []
+  // 批量查询：1 个请求替代 N 个请求
+  try {
+    const batchResponse = await milestoneApi.getMilestonesByIndicatorIds(indicatorIds)
+    const allMilestones: any[] = []
+    if (batchResponse?.success && batchResponse.data) {
+      for (const milestones of Object.values(batchResponse.data)) {
+        if (Array.isArray(milestones)) {
+          allMilestones.push(...milestones)
+        }
+      }
     }
-    const response = result.value
-    return Array.isArray(response?.data) ? response.data : []
-  })
-
-  return {
-    ...indicatorsResponse,
-    data: milestones
+    return { ...indicatorsResponse, data: allMilestones }
+  } catch {
+    return { ...indicatorsResponse, data: [] }
   }
 }

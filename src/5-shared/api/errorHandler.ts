@@ -43,6 +43,20 @@ export function addRequestId(config: Record<string, unknown>): void {
 }
 
 /**
+ * 将未知值安全地转换为可读字符串
+ */
+export function stringifyMessage(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value === null || value === undefined) return ''
+  try {
+    const str = JSON.stringify(value)
+    return str && str !== '{}' && str !== '[]' ? str : String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+/**
  * 格式化错误消息
  */
 export function formatErrorMessage(error: unknown): string {
@@ -50,7 +64,7 @@ export function formatErrorMessage(error: unknown): string {
   if (isAxiosError(error)) {
     const serverMessage = error.response?.data?.message
     if (serverMessage) {
-      return serverMessage
+      return stringifyMessage(serverMessage)
     }
 
     // 网络错误

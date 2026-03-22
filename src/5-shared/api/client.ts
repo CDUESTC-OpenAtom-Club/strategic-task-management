@@ -155,9 +155,15 @@ export class ApiClient {
     // 使用后端返回的业务错误码（如果有），否则使用 HTTP 状态码
     const errorCode = responseData?.code !== undefined ? responseData.code : statusCode
 
+    // 确保 message 始终为 string 类型，避免 [object Object]
+    const rawMessage = responseData?.message || error.message || '请求失败'
+    const message = typeof rawMessage === 'string'
+      ? rawMessage
+      : (() => { try { return JSON.stringify(rawMessage) } catch { return String(rawMessage) } })()
+
     return {
       code: errorCode,
-      message: responseData?.message || error.message || '请求失败',
+      message,
       details: responseData || error.response?.data
     }
   }

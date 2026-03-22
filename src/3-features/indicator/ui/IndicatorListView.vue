@@ -220,6 +220,27 @@ const normalizedCurrentPlanStatus = computed(() => {
   return normalizePlanStatus(currentPlanStatus.value)
 })
 
+const PLAN_APPROVAL_WORKFLOW_CODE_FUNCDEPT = 'PLAN_APPROVAL_FUNCDEPT'
+const PLAN_APPROVAL_WORKFLOW_CODE_COLLEGE = 'PLAN_APPROVAL_COLLEGE'
+
+function getCurrentPlanId(): number | null {
+  const planId = Number(currentPlanDetails.value?.id ?? currentUserPlanId.value ?? NaN)
+  return Number.isFinite(planId) && planId > 0 ? planId : null
+}
+
+function resolvePlanApprovalWorkflowCode(): string {
+  return isSecondaryCollege.value
+    ? PLAN_APPROVAL_WORKFLOW_CODE_COLLEGE
+    : PLAN_APPROVAL_WORKFLOW_CODE_FUNCDEPT
+}
+
+async function refreshCurrentPlanDetails(planId: number): Promise<void> {
+  const latestPlan = await planStore.loadPlanDetails(planId, { force: true, background: true })
+  if (latestPlan) {
+    currentPlanDetails.value = latestPlan
+  }
+}
+
 // 判断计划是否处于草稿状态
 const isPlanDraft = computed(() => {
   return normalizedCurrentPlanStatus.value === 'DRAFT' || normalizedCurrentPlanStatus.value === null
@@ -1777,6 +1798,17 @@ const handleSubmitAll = () => {
     return
   }
 
+  const planId = getCurrentPlanId()
+  if (!planId) {
+    ElMessage.warning('当前部门还没有可提交审批的计划')
+    return
+  }
+
+  if (!['DRAFT', 'RETURNED', null].includes(normalizedCurrentPlanStatus.value)) {
+    ElMessage.warning('当前计划已进入审批流程，不能重复提交')
+    return
+  }
+
   // 检查是否所有指标都已填报
   if (!allIndicatorsFilled.value) {
     const unfilled = unfilledIndicatorsCount.value
@@ -1787,7 +1819,7 @@ const handleSubmitAll = () => {
   const indicatorNames = indicators.value.map(ind => ind.name).join('、')
 
   ElMessageBox.prompt(
-    `确认一键提交所有 ${indicators.value.length} 个指标？\n\n指标列表：${indicatorNames}\n\n注意：提交后将无法修改，需等待上级部门审批。\n\n请输入提交备注：`,
+    `确认提交当前计划下的全部 ${indicators.value.length} 个指标吗？\n\n指标列表：${indicatorNames}\n\n注意：该操作会发起整份计划的审批，提交后将无法修改，需等待上级部门审批。\n\n请输入提交备注：`,
     '一键提交确认',
     {
       confirmButtonText: '确定提交',
@@ -1801,32 +1833,16 @@ const handleSubmitAll = () => {
         return true
       }
     }
-  ).then(({ value: submitComment }) => {
-    indicators.value.forEach(row => {
-      // 提交：将状态改为 pending，使用当前进度数据
-      strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'PENDING',
-        // 如果有待提交的进度数据就用待提交的，否则用当前进度
-        progress: row.pendingProgress || row.progress || 0,
-        progressComment: row.pendingProgressComment || row.progressComment || ''
+  ).then(async ({ value: submitComment }) => {
+    try {
+      await planStore.submitPlanForApproval(planId, {
+        workflowCode: resolvePlanApprovalWorkflowCode()
       })
-
-      // 添加审计日志
-      strategicStore.addStatusAuditEntry(row.id.toString(), {
-        operator: authStore.userName || 'unknown',
-        operatorName: authStore.userName || '未知用户',
-        operatorDept: authStore.userDepartment || '未知部门',
-        action: 'submit',
-        comment: submitComment || '一键提交所有指标进度',
-        previousStatus: row.progressApprovalStatus,
-        newStatus: 'PENDING',
-        previousProgress: row.progress,
-        newProgress: row.pendingProgress || row.progress,
-        progressComment: row.pendingProgressComment || row.progressComment
-      })
-    })
-
-    ElMessage.success(`成功提交所有${indicators.value.length}项指标进度`)
+      await refreshCurrentPlanDetails(planId)
+      ElMessage.success(submitComment?.trim() ? `已提交计划审批：${submitComment.trim()}` : '已发起整份计划审批')
+    } catch (error) {
+      logger.error('[IndicatorListView] Failed to submit plan approval:', error)
+    }
   })
 }
 
@@ -1848,32 +1864,28 @@ const handleWithdrawProgressApproval = (row: StrategicIndicator) => {
     return
   }
 
+  const planId = getCurrentPlanId()
+  if (!planId) {
+    ElMessage.warning('当前计划不存在，无法撤回')
+    return
+  }
+
   ElMessageBox.confirm(
-    `确定要撤回指标 "${row.name}" 的进度审批吗？撤回后可以重新编辑填报内容。`,
-    '撤回进度审批',
+    `当前页面审批按整份计划处理，撤回指标 "${row.name}" 会一起撤回当前计划下的全部指标提交。确定继续吗？`,
+    '撤回计划审批',
     {
       confirmButtonText: '确定撤回',
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    // 撤回进度审批：将 progressApprovalStatus 改回 DRAFT
-    strategicStore.updateIndicator(row.id.toString(), {
-      progressApprovalStatus: 'DRAFT'
-    })
-
-    // 添加审计日志
-    strategicStore.addStatusAuditEntry(row.id.toString(), {
-      operator: authStore.userName || 'unknown',
-      operatorName: authStore.userName || '未知用户',
-      operatorDept: authStore.userDepartment || '未知部门',
-      action: 'revoke',
-      comment: '撤回进度审批',
-      previousStatus: 'pending',
-      newStatus: 'draft'
-    })
-
-    ElMessage.success('进度审批撤回成功')
+  ).then(async () => {
+    try {
+      await planStore.withdrawPlan(planId)
+      await refreshCurrentPlanDetails(planId)
+      ElMessage.success('计划审批撤回成功')
+    } catch (error) {
+      logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
+    }
   })
 }
 
@@ -1889,6 +1901,12 @@ const handleWithdrawAllProgressApprovals = () => {
     return
   }
 
+  const planId = getCurrentPlanId()
+  if (!planId) {
+    ElMessage.warning('当前计划不存在，无法撤回')
+    return
+  }
+
   const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))
   
   if (pendingRows.length === 0) {
@@ -1899,33 +1917,21 @@ const handleWithdrawAllProgressApprovals = () => {
   const indicatorNames = pendingRows.map(ind => ind.name).join('、')
 
   ElMessageBox.confirm(
-    `确认一键撤回所有 ${pendingRows.length} 个已提交的指标进度审批？\n\n${indicatorNames}\n\n撤回后可重新编辑填报内容。`,
-    '一键撤回进度审批',
+    `确认撤回当前计划下全部 ${pendingRows.length} 个已提交指标的审批吗？\n\n${indicatorNames}\n\n撤回后整份计划会回到草稿状态，可重新编辑后再提交。`,
+    '一键撤回计划审批',
     {
       confirmButtonText: '确定撤回',
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    pendingRows.forEach(row => {
-      // 撤回进度审批：将 progressApprovalStatus 改回 DRAFT，保留填报数据供修改
-      strategicStore.updateIndicator(row.id.toString(), {
-        progressApprovalStatus: 'DRAFT'
-      })
-
-      // 添加审计日志
-      strategicStore.addStatusAuditEntry(row.id.toString(), {
-        operator: authStore.userName || 'unknown',
-        operatorName: authStore.userName || '未知用户',
-        operatorDept: authStore.userDepartment || '未知部门',
-        action: 'revoke',
-        comment: '一键撤回所有指标进度审批',
-        previousStatus: 'pending',
-        newStatus: 'draft'
-      })
-    })
-
-    ElMessage.success(`成功撤回${pendingRows.length}项指标进度审批`)
+  ).then(async () => {
+    try {
+      await planStore.withdrawPlan(planId)
+      await refreshCurrentPlanDetails(planId)
+      ElMessage.success('已撤回当前计划审批')
+    } catch (error) {
+      logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
+    }
   })
 }
 

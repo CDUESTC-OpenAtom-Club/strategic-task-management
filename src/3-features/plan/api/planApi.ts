@@ -718,7 +718,7 @@ async function resolveIndicatorReportContext(
 async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
   const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(`/reports/plan/${planId}`)
   if (!hasApiData(response)) {
-    throw new Error(response.message || '加载计划报告失败')
+    throw new Error(typeof response.message === 'string' ? response.message || '加载计划报告失败' : '加载计划报告失败')
   }
 
   return Array.isArray(response.data) ? response.data : []
@@ -727,7 +727,7 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
   const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse>>(`/reports/${reportId}`)
   if (!hasApiData(response) || !response.data) {
-    throw new Error(response.message || '加载报告详情失败')
+    throw new Error(typeof response.message === 'string' ? response.message || '加载报告详情失败' : '加载报告详情失败')
   }
   return response.data
 }
@@ -1608,7 +1608,7 @@ export const indicatorFillApi = {
           )
           .then(response => {
             if (!hasApiData(response) || !response.data) {
-              throw new Error(response.message || '保存指标填报失败')
+              throw new Error(typeof response.message === 'string' ? response.message || '保存指标填报失败' : '保存指标填报失败')
             }
             return response.data
           })
@@ -1762,7 +1762,7 @@ export const indicatorFillApi = {
     )
 
     if (!hasApiData(response) || !response.data) {
-      throw new Error(response.message || '提交指标填报失败')
+      throw new Error(typeof response.message === 'string' ? response.message || '提交指标填报失败' : '提交指标填报失败')
     }
 
     const reportDetail = await loadPlanReportById(response.data.id).catch(() => response.data)

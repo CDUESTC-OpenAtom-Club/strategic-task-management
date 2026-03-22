@@ -3295,7 +3295,10 @@ const loadPendingPlanApprovalCount = async () => {
       pendingPlanApprovalCount.value = response.data
     }
   } catch (error) {
-    logger.error('[StrategicTaskView] 加载待审批计划数量失败:', error)
+    const msg = error instanceof Error ? error.message
+      : (error && typeof error === 'object' && 'message' in error) ? String((error as { message: unknown }).message)
+      : '未知错误'
+    logger.error('[StrategicTaskView] 加载待审批计划数量失败:', msg)
   }
 }
 
@@ -4583,14 +4586,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       @close="handleCloseApprovalSetupDialog"
     >
       <div v-loading="approvalPreviewLoading" class="approval-setup-dialog">
-        <el-alert
-          type="info"
-          :closable="false"
-          show-icon
-          title="发起整体计划审批前，请确认流程节点。审批人将由后端根据流程角色和组织自动计算。"
-          style="margin-bottom: 16px"
-        />
-
         <div v-if="currentPlan" class="approval-setup-summary">
           <div class="summary-row">
             <span class="summary-label">当前计划：</span>
@@ -4625,22 +4620,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
               </el-tag>
             </div>
 
-            <div class="approval-step-readonly">
-              <span>
-                {{ step.roleId ? `角色ID: ${step.roleId}` : '未返回角色ID' }}
-              </span>
-              <span v-if="(step.candidateApprovers || []).length > 0">
-                参考候选人：
-                {{
-                  (step.candidateApprovers || [])
-                    .map(candidate => candidate.realName || candidate.username || `用户 ${candidate.userId}`)
-                    .join('、')
-                }}
-              </span>
-              <span v-else>
-                系统将根据流程定义和角色自动确定审批人
-              </span>
-            </div>
           </div>
         </div>
       </div>

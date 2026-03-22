@@ -229,26 +229,26 @@ async function hydrateIndicatorMilestones(list: StrategicIndicator[]): Promise<S
     return list
   }
 
-  const results = await Promise.allSettled(
-    indicatorsWithoutMilestones.map(async indicator => {
-      const response = await milestoneApi.getMilestonesByIndicator(String(indicator.id))
-      const rawMilestones =
-        response && response.success && Array.isArray(response.data)
-          ? response.data
-          : []
-      return {
-        indicatorId: String(indicator.id),
-        milestones: normalizeMilestones(rawMilestones)
-      }
-    })
-  )
+  // 批量查询：1 个请求替代 N 个请求，消除 N+1 问题
+  const indicatorIds = indicatorsWithoutMilestones
+    .map(i => Number(i.id))
+    .filter(id => Number.isFinite(id))
 
   const milestoneMap = new Map<string, StrategicIndicator['milestones']>()
-  results.forEach(result => {
-    if (result.status === 'fulfilled') {
-      milestoneMap.set(result.value.indicatorId, result.value.milestones || [])
+
+  if (indicatorIds.length > 0) {
+    try {
+      const response = await milestoneApi.getMilestonesByIndicatorIds(indicatorIds)
+      if (response?.success && response.data) {
+        // response.data 是 Record<number, Milestone[]>
+        for (const [idStr, rawMilestones] of Object.entries(response.data)) {
+          milestoneMap.set(idStr, normalizeMilestones(rawMilestones))
+        }
+      }
+    } catch (err) {
+      logger.warn('[Strategic Store] Batch milestones fetch failed, falling back to empty', err)
     }
-  })
+  }
 
   return list.map(indicator => ({
     ...indicator,

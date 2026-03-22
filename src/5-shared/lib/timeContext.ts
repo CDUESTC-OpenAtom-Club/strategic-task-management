@@ -9,6 +9,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { apiClient } from '@/shared/api/client'
 import { logger } from '@/shared/lib/utils/logger'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
 import type { AssessmentCycle as AssessmentCycleVO } from '@/shared/types/backend-aligned'
 
 export const useTimeContextStore = defineStore('timeContext', () => {
@@ -83,11 +84,19 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   async function fetchAvailableYears() {
     loading.value = true
     try {
-      const response = await apiClient.get<{
+      const response = await fetchWithCache<{
         success?: boolean
         data?: AssessmentCycleVO[]
         message?: string
-      }>('/cycles/list')
+      }>({
+        key: buildQueryKey('cycle', 'list'),
+        policy: { ttlMs: 10 * 60 * 1000, scope: 'memory', staleWhileRevalidate: true, dedupeWindowMs: 1000, tags: ['cycles.list'] },
+        fetcher: () => apiClient.get<{
+          success?: boolean
+          data?: AssessmentCycleVO[]
+          message?: string
+        }>('/cycles/list')
+      })
 
       const years = Array.isArray(response.data)
         ? response.data

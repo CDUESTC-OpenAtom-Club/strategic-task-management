@@ -209,18 +209,26 @@ function calculateProgress(milestones: { status: string }[]): number {
 
 export const strategicApi = {
   /**
-   * 获取所有考核周期
+   * 获取所有考核周期（带内存缓存，TTL 10 分钟）
    */
   async getAllCycles(): Promise<ApiResponse<AssessmentCycleVO[]>> {
-    return apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
+    return fetchWithCache<ApiResponse<AssessmentCycleVO[]>>({
+      key: buildQueryKey('cycle', 'list'),
+      policy: { ttlMs: 10 * 60 * 1000, scope: 'memory', staleWhileRevalidate: true, dedupeWindowMs: 1000, tags: ['cycles.list'] },
+      fetcher: () => apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
+    })
   },
 
   /**
-   * 获取所有可用的年份（从周期表）
+   * 获取所有可用的年份（从周期表，带内存缓存）
    */
   async getAvailableYears(): Promise<ApiResponse<number[]>> {
     try {
-      const response = await apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
+      const response = await fetchWithCache<ApiResponse<AssessmentCycleVO[]>>({
+        key: buildQueryKey('cycle', 'list'),
+        policy: { ttlMs: 10 * 60 * 1000, scope: 'memory', staleWhileRevalidate: true, dedupeWindowMs: 1000, tags: ['cycles.list'] },
+        fetcher: () => apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
+      })
       if (!response.success || !response.data) {
         return {
           ...response,
@@ -679,7 +687,10 @@ async function countPendingApprovals(_userId: number): Promise<ApiResponse<numbe
     }
     return { ...response, data: 0 }
   } catch (error) {
-    logger.error('[API] Failed to count pending approvals', { error })
+    const msg = error instanceof Error ? error.message
+      : (error && typeof error === 'object' && 'message' in error) ? String((error as { message: unknown }).message)
+      : '未知错误'
+    logger.error('[API] Failed to count pending approvals', msg)
     throw error
   }
 }

@@ -89,12 +89,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      if (token.value) {
-        const response = await api.get('/organizations', {
-          headers: {
-            Authorization: `Bearer ${token.value}`
-          }
-        })
+      if (token.value && tokenManager.hasValidToken()) {
+        const response = await api.get('/organizations')
 
         const organizations =
           response &&
@@ -143,6 +139,17 @@ export const useAuthStore = defineStore('auth', () => {
         }
       }
     } catch (error) {
+      const status = Number(
+        (error as { code?: number; response?: { status?: number } }).code ??
+        (error as { response?: { status?: number } }).response?.status ??
+        NaN
+      )
+
+      if (status === 401 || status === 403) {
+        logger.debug('ℹ️ [Auth] 当前未取得组织接口访问权限，跳过组织信息补全')
+        return userData
+      }
+
       logger.debug('ℹ️ [Auth] 读取本地缓存组织信息失败，继续使用登录响应原始数据:', error)
     }
 
