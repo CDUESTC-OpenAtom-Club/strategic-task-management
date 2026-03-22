@@ -80,7 +80,7 @@ cp .env.example .env
 npm run dev
 ```
 
-访问 http://localhost:3000 即可使用系统。
+访问 http://localhost:3500 即可使用系统。
 
 > **注意**: 需要先启动后端服务 (sism-backend)，前端才能正常工作。
 

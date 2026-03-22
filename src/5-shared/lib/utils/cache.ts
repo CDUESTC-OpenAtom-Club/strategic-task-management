@@ -240,6 +240,20 @@ function createUrlPatternPolicyMap(): Map<string, CachePolicy> {
     dedupeWindowMs: 1000,
     tags: ['org.list']
   })
+  map.set('/cycles/list', {
+    ttlMs: 10 * 60 * 1000,
+    scope: 'memory',
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['cycles.list']
+  })
+  map.set('/cycles', {
+    ttlMs: 5 * 60 * 1000,
+    scope: 'memory',
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['cycles.list']
+  })
   map.set('/plans', {
     ttlMs: 2 * 60 * 1000,
     scope: 'memory',

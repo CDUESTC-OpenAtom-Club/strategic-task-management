@@ -195,7 +195,7 @@ function normalizeResponse(response: AxiosResponse): AxiosResponse {
         }
       }
     } else {
-      throw new Error(data.message || 'Request failed')
+      throw new Error(typeof data.message === 'string' ? data.message : 'Request failed')
     }
   }
 

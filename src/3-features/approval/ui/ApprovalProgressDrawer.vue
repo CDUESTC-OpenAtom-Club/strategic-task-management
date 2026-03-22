@@ -17,7 +17,10 @@ import { Document, User, Timer, Right } from '@element-plus/icons-vue'
 import type { StrategicIndicator, Plan } from '@/shared/types'
 import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
+import { getUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
+import { usePlanStore } from '@/features/plan/model/store'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
 import ApprovalHistory from './ApprovalHistory.vue'
 import CustomApprovalFlow from './CustomApprovalFlow.vue'
@@ -67,7 +70,109 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 const authStore = useAuthStore()
+const planStore = usePlanStore()
+const timeContext = useTimeContextStore()
+const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
+const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
+const currentUserPermissionCodes = computed(() => {
+  const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
+  if (!Array.isArray(permissions)) {
+    return []
+  }
+  return permissions
+    .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
+    .filter(Boolean)
+})
+const submitterNameCache = ref<Record<string, string>>({})
+
+function normalizeDisplayName(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function parsePositiveUserId(value: unknown): number | null {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null
+  }
+  return numericValue
+}
+
+function getFallbackSubmitterValue(): string {
+  const createdBy = normalizeDisplayName(props.plan?.createdBy)
+  if (createdBy && !parsePositiveUserId(createdBy)) {
+    return createdBy
+  }
+
+  return props.departmentName || '当前提交人'
+}
+
+function cacheSubmitterName(userIdValue: unknown, nameValue: unknown): boolean {
+  const userId = parsePositiveUserId(userIdValue)
+  const displayName = normalizeDisplayName(nameValue)
+  if (!userId || !displayName) {
+    return false
+  }
+
+  const cacheKey = String(userId)
+  if (submitterNameCache.value[cacheKey] === displayName) {
+    return true
+  }
+
+  submitterNameCache.value = {
+    ...submitterNameCache.value,
+    [cacheKey]: displayName
+  }
+
+  return true
+}
+
+async function ensureSubmitterNameLoaded(userIdValue: unknown, fallbackName?: string): Promise<void> {
+  const userId = parsePositiveUserId(userIdValue)
+  if (!userId) {
+    return
+  }
+
+  const cacheKey = String(userId)
+  if (submitterNameCache.value[cacheKey]) {
+    return
+  }
+
+  try {
+    const user = await getUserById(userId)
+    const realName = normalizeDisplayName(user.realName)
+    const username = normalizeDisplayName(user.username)
+    submitterNameCache.value = {
+      ...submitterNameCache.value,
+      [cacheKey]: realName || username || cacheKey
+    }
+  } catch (error) {
+    const fallbackDisplayName = normalizeDisplayName(fallbackName) || getFallbackSubmitterValue()
+    cacheSubmitterName(userId, fallbackDisplayName)
+    logger.warn('[ApprovalProgressDrawer] 提交人名称解析失败:', { userId, error })
+  }
+}
+
+const planSubmitterName = computed(() => {
+  const explicitName =
+    normalizeDisplayName(props.plan?.submittedByName) ||
+    normalizeDisplayName(props.plan?.createdByName)
+  if (explicitName) {
+    return explicitName
+  }
+
+  const submittedById = parsePositiveUserId(props.plan?.submittedBy)
+  if (submittedById) {
+    return submitterNameCache.value[String(submittedById)] || String(submittedById)
+  }
+
+  const createdById = parsePositiveUserId(props.plan?.createdBy)
+  if (createdById) {
+    return submitterNameCache.value[String(createdById)] || String(createdById)
+  }
+
+  return getFallbackSubmitterValue()
+})
 
 // ============ 状态 ============
 const activeTab = ref('workflow')
@@ -140,8 +245,34 @@ const currentPlanEntityIds = computed(() => {
   return new Set<number>()
 })
 
+const scopedDepartmentPlan = computed(() => {
+  if (props.plan || !props.departmentName) {
+    return null
+  }
+
+  return planStore.getPlanByTargetOrgAndYear(props.departmentName, timeContext.currentYear) || null
+})
+
+const scopedPlanEntityIds = computed(() => {
+  const entityIds = new Set<number>()
+
+  currentPlanEntityIds.value.forEach(entityId => {
+    entityIds.add(entityId)
+  })
+
+  const departmentPlanId = Number(scopedDepartmentPlan.value?.id ?? NaN)
+  if (Number.isFinite(departmentPlanId) && departmentPlanId > 0) {
+    entityIds.add(departmentPlanId)
+  }
+
+  return entityIds
+})
+
 const scopedPlanApprovals = computed(() => {
-  if (currentPlanEntityIds.value.size === 0) {
+  if (scopedPlanEntityIds.value.size === 0) {
+    if (props.departmentName || props.planName) {
+      return []
+    }
     return pendingPlanApprovals.value
   }
 
@@ -151,11 +282,11 @@ const scopedPlanApprovals = computed(() => {
   })
 
   if (withEntityId.length === 0) {
-    return pendingPlanApprovals.value
+    return []
   }
 
   return withEntityId.filter(instance =>
-    currentPlanEntityIds.value.has(Number(instance.entityId))
+    scopedPlanEntityIds.value.has(Number(instance.entityId))
   )
 })
 
@@ -178,18 +309,32 @@ const isPlanPendingApproval = computed(() => {
   return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(planWorkflowStatus.value)
 })
 
+const isPlanCompletedApproval = computed(() => {
+  return ['DISTRIBUTED', 'APPROVED'].includes(planWorkflowStatus.value)
+})
+
+const requiredPlanApprovalPermissionCode = computed(() => {
+  return props.approvalType === 'distribution'
+    ? PLAN_DISPATCH_APPROVE_PERMISSION
+    : PLAN_REPORT_APPROVE_PERMISSION
+})
+
+const hasPlanApprovalPermission = computed(() => {
+  return currentUserPermissionCodes.value.includes(requiredPlanApprovalPermissionCode.value)
+})
+
 const canCurrentUserHandlePlanApproval = computed(() => {
-  if (!hasPlanWorkflowData.value || !isPlanPendingApproval.value) {
+  if (!hasPlanWorkflowData.value || !isPlanPendingApproval.value || !hasPlanApprovalPermission.value) {
     return false
   }
 
   const currentApproverId = Number(props.plan?.currentApproverId ?? 0)
   if (!Number.isFinite(currentApproverId) || currentApproverId <= 0) {
-    return true
+    return false
   }
 
   if (!Number.isFinite(currentUserId.value) || currentUserId.value <= 0) {
-    return true
+    return false
   }
 
   return currentApproverId === currentUserId.value
@@ -239,13 +384,29 @@ const planWorkflowHistory = computed<ApprovalHistoryItem[]>(() => {
   }))
 })
 
+function getPlanWorkflowNodeName(item: ApprovalHistoryItem): string {
+  const explicitStepName = normalizeDisplayName(item.stepName)
+  if (explicitStepName) {
+    return explicitStepName
+  }
+
+  if (item.action === 'submit') {
+    return '填报人提交'
+  }
+  if (item.action === 'reject') {
+    return '审批驳回'
+  }
+
+  return '审批节点'
+}
+
 const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   if (hasPlanWorkflowData.value && props.plan) {
     return [{
       instanceId: currentPlanTaskId.value,
       instanceNo: String(props.plan.workflowInstanceId || '待回填'),
       title: String(props.plan.name || props.planName || props.departmentName || '当前计划'),
-      submitterName: props.plan.createdBy || '当前提交人',
+      submitterName: planSubmitterName.value,
       currentStepName: String(props.plan.currentStepName || '审批中'),
       createdAt: props.plan.submittedAt || props.plan.createdAt,
       entityId: props.plan.id,
@@ -280,7 +441,7 @@ const currentPlanApprovalSummary = computed(() => {
       key: props.plan.name || props.planName || props.departmentName || 'current-plan',
       planName: props.plan.name || props.planName || `${props.departmentName || '当前部门'}计划`,
       currentStepName: props.plan.currentStepName || '审批中',
-      submitterName: props.plan.createdBy || '未知',
+      submitterName: planSubmitterName.value,
       createdAt: props.plan.submittedAt || props.plan.createdAt,
       count: 1
     }
@@ -314,45 +475,57 @@ const currentPlanApprovalSummary = computed(() => {
 
 // ============ 审批流程节点数据 ============
 const workflowNodes = computed<WorkflowNode[]>(() => {
+  if (props.showPlanApprovals && !hasPlanWorkflowData.value) {
+    return []
+  }
+
   if (hasPlanWorkflowData.value && props.plan) {
-    const nodes: WorkflowNode[] = [{
-      id: 'submit',
-      name: '提交审批',
-      status: 'completed',
-      operatorName: props.plan.createdBy || props.departmentName || '提交人',
-      operateTime: props.plan.submittedAt ? new Date(props.plan.submittedAt) : undefined,
-      comment: '已发起计划审批'
-    }]
+    const nodes: WorkflowNode[] = []
+    const nodeIndexByName = new Map<string, number>()
 
     for (const item of planWorkflowHistory.value) {
-      nodes.push({
+      const nodeName = getPlanWorkflowNodeName(item)
+      const existingIndex = nodeIndexByName.get(nodeName)
+      const nextNode: WorkflowNode = {
         id: `history-${item.id}`,
-        name: item.action === 'approve' ? '审批通过' : item.action === 'reject' ? '审批驳回' : '流程操作',
+        name: nodeName,
         status: item.action === 'reject' ? 'rejected' : 'completed',
         operatorName: item.operatorName,
         operateTime: item.operateTime,
         comment: item.comment
-      })
+      }
+
+      if (existingIndex === undefined) {
+        nodeIndexByName.set(nodeName, nodes.length)
+        nodes.push(nextNode)
+      } else {
+        nodes[existingIndex] = {
+          ...nodes[existingIndex],
+          ...nextNode
+        }
+      }
     }
 
     const workflowStatus = planWorkflowStatus.value
+    const currentStepName = normalizeDisplayName(props.plan.currentStepName) || '当前审批节点'
     if (workflowStatus === 'PENDING' || workflowStatus === 'IN_REVIEW' || workflowStatus === 'SUBMITTED') {
-      nodes.push({
+      const existingIndex = nodeIndexByName.get(currentStepName)
+      const currentNode: WorkflowNode = {
         id: 'current',
-        name: props.plan.currentStepName || '当前审批节点',
+        name: currentStepName,
         status: 'current',
         operatorName: props.plan.currentApproverName || '待分配',
         comment: props.plan.canWithdraw ? '当前仍可撤回' : '当前不可撤回'
-      })
-    }
+      }
 
-    if (workflowStatus === 'DISTRIBUTED' || workflowStatus === 'APPROVED') {
-      nodes.push({
-        id: 'finish',
-        name: '审批完成',
-        status: 'completed',
-        operatorName: props.plan.currentApproverName || '系统'
-      })
+      if (existingIndex === undefined) {
+        nodes.push(currentNode)
+      } else {
+        nodes[existingIndex] = {
+          ...nodes[existingIndex],
+          ...currentNode
+        }
+      }
     }
 
     return nodes
@@ -419,6 +592,10 @@ function getStrategicStatus(approvalStatus?: string): WorkflowNode['status'] {
 
 // ============ 审批历史数据 ============
 const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
+  if (props.showPlanApprovals) {
+    return planWorkflowHistory.value
+  }
+
   if (planWorkflowHistory.value.length > 0) {
     return planWorkflowHistory.value
   }
@@ -486,6 +663,10 @@ async function loadPendingPlanApprovals() {
 
   planApprovalsLoading.value = true
   try {
+    if (props.departmentName) {
+      await planStore.loadPlans()
+    }
+
     const userId = authStore.user?.userId || 1
     const response = await approvalApi.getPendingApprovals(userId)
     if (response.success && Array.isArray(response.data)) {
@@ -507,7 +688,17 @@ async function loadPendingPlanApprovals() {
 }
 
 async function handleApprovePlanBatch() {
+  if (!hasPlanApprovalPermission.value) {
+    ElMessage.warning(`当前账号缺少审批权限：${requiredPlanApprovalPermissionCode.value}`)
+    return
+  }
+
   if (currentPlanTaskId.value) {
+    if (!canCurrentUserHandlePlanApproval.value) {
+      ElMessage.warning('当前审批节点不是你，无法执行审批通过')
+      return
+    }
+
     try {
       const { value } = await ElMessageBox.prompt(
         `确认通过“${props.plan.name || props.planName || '当前计划'}”的审批？`,
@@ -582,7 +773,17 @@ async function handleApprovePlanBatch() {
 }
 
 async function handleRejectPlanBatch() {
+  if (!hasPlanApprovalPermission.value) {
+    ElMessage.warning(`当前账号缺少审批权限：${requiredPlanApprovalPermissionCode.value}`)
+    return
+  }
+
   if (currentPlanTaskId.value) {
+    if (!canCurrentUserHandlePlanApproval.value) {
+      ElMessage.warning('当前审批节点不是你，无法执行审批驳回')
+      return
+    }
+
     try {
       const { value } = await ElMessageBox.prompt(
         `确认驳回“${props.plan.name || props.planName || '当前计划'}”的审批？`,
@@ -723,14 +924,58 @@ const hasDisplayableApprovalContent = computed(() => {
   return hasApprovalData.value
 })
 
+const hasWorkflowTabContent = computed(() => {
+  if (props.showPlanApprovals) {
+    return true
+  }
+  return hasPlanWorkflowData.value || hasApprovalData.value
+})
+
+const showPlanPendingCard = computed(() => {
+  return Boolean(currentPlanApprovalSummary.value && (!hasPlanWorkflowData.value || isPlanPendingApproval.value))
+})
+
+const showPlanHistoryCard = computed(() => {
+  return Boolean(props.showPlanApprovals && currentPlanApprovalSummary.value && isPlanCompletedApproval.value)
+})
+
+const showArchivedPlanWorkflowEmptyState = computed(() => {
+  return Boolean(props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value)
+})
+
 // ============ 监听 ============
 watch(() => props.modelValue, (val) => {
   if (val) {
     // 打开时重置到工作流标签页
-    activeTab.value = props.showPlanApprovals ? 'pending-plans' : 'workflow'
+    activeTab.value = props.showPlanApprovals
+      ? (isPlanPendingApproval.value ? 'pending-plans' : 'history')
+      : hasWorkflowTabContent.value
+        ? 'workflow'
+        : 'history'
+    cacheSubmitterName(props.plan?.submittedBy, props.plan?.submittedByName)
+    cacheSubmitterName(props.plan?.createdBy, props.plan?.createdByName)
+    if (!normalizeDisplayName(props.plan?.submittedByName)) {
+      void ensureSubmitterNameLoaded(props.plan?.submittedBy, props.plan?.createdByName)
+    }
     void loadPendingPlanApprovals()
   }
 })
+
+watch(
+  () => [props.plan?.submittedBy, props.plan?.submittedByName, props.plan?.createdBy, props.plan?.createdByName],
+  ([submittedBy, submittedByName, createdBy, createdByName]) => {
+    if (!props.modelValue) {
+      return
+    }
+
+    cacheSubmitterName(submittedBy, submittedByName)
+    cacheSubmitterName(createdBy, createdByName)
+    if (!normalizeDisplayName(submittedByName)) {
+      void ensureSubmitterNameLoaded(submittedBy, normalizeDisplayName(createdByName))
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -780,12 +1025,12 @@ watch(() => props.modelValue, (val) => {
         >
           <div v-loading="planApprovalsLoading" class="plan-approval-pane">
             <ElEmpty
-              v-if="!planApprovalsLoading && !currentPlanApprovalSummary"
+              v-if="!planApprovalsLoading && !showPlanPendingCard"
               description="暂无待审批的计划"
               :image-size="120"
             />
             <div v-else class="approval-list">
-              <div v-if="currentPlanApprovalSummary" :key="currentPlanApprovalSummary.key" class="approval-card">
+              <div v-if="showPlanPendingCard && currentPlanApprovalSummary" :key="currentPlanApprovalSummary.key" class="approval-card">
                 <div class="card-header">
                   <div class="plan-info">
                     <el-icon class="plan-icon"><Document /></el-icon>
@@ -849,8 +1094,20 @@ watch(() => props.modelValue, (val) => {
                     审批驳回
                   </ElButton>
                   <template v-if="!hasPlanWorkflowData">
-                    <ElButton type="success" @click="handleApprovePlanBatch">一键通过</ElButton>
-                    <ElButton type="danger" @click="handleRejectPlanBatch">一键驳回</ElButton>
+                    <ElButton
+                      v-if="hasPlanApprovalPermission"
+                      type="success"
+                      @click="handleApprovePlanBatch"
+                    >
+                      一键通过
+                    </ElButton>
+                    <ElButton
+                      v-if="hasPlanApprovalPermission"
+                      type="danger"
+                      @click="handleRejectPlanBatch"
+                    >
+                      一键驳回
+                    </ElButton>
                   </template>
                 </div>
               </div>
@@ -859,8 +1116,12 @@ watch(() => props.modelValue, (val) => {
         </ElTabPane>
 
         <!-- 审批流程视图（使用CustomApprovalFlow组件） -->
-        <ElTabPane name="workflow" label="审批流程">
-          <ElEmpty v-if="!hasApprovalData && !hasPlanWorkflowData" description="暂无审批数据" :image-size="120" />
+        <ElTabPane v-if="hasWorkflowTabContent" name="workflow" label="审批流程">
+          <ElEmpty
+            v-if="showArchivedPlanWorkflowEmptyState || (!hasApprovalData && !hasPlanWorkflowData)"
+            description="暂无审批数据"
+            :image-size="120"
+          />
           <template v-else>
             <ElAlert
               v-if="rejectionReason"
@@ -879,6 +1140,14 @@ watch(() => props.modelValue, (val) => {
               style="margin-bottom: 16px"
             />
             <ElAlert
+              v-if="hasPlanWorkflowData && isPlanPendingApproval && !hasPlanApprovalPermission"
+              type="warning"
+              :title="`当前账号缺少权限码 ${requiredPlanApprovalPermissionCode}，仅可查看审批进度和历史。`"
+              show-icon
+              :closable="false"
+              style="margin-bottom: 16px"
+            />
+            <ElAlert
               v-if="hasPlanWorkflowData && isPlanPendingApproval && !canCurrentUserHandlePlanApproval && plan?.currentApproverName"
               type="warning"
               :title="`当前节点审批人为 ${plan.currentApproverName}，你当前仅可查看审批进度和历史。`"
@@ -886,47 +1155,6 @@ watch(() => props.modelValue, (val) => {
               :closable="false"
               style="margin-bottom: 16px"
             />
-
-            <div v-if="hasPlanWorkflowData && plan" class="current-indicator">
-              <div class="indicator-info">
-                <span class="indicator-name">{{ plan.name || planName || '当前计划' }}</span>
-                <ElTag :type="planWorkflowStatusTag.type" size="small">
-                  {{ planWorkflowStatusTag.label }}
-                </ElTag>
-              </div>
-              <div class="pending-progress">
-                <span class="progress-label">当前节点：</span>
-                <span class="progress-value">{{ plan.currentStepName || '待发起审批' }}</span>
-                <span class="progress-change">
-                  审批人：{{ plan.currentApproverName || '待分配' }}
-                </span>
-              </div>
-            </div>
-
-            <div v-else-if="currentIndicator" class="current-indicator">
-              <div class="indicator-info">
-                <span class="indicator-name">{{ currentIndicator.indicatorDesc || '未命名指标' }}</span>
-                <ElTag
-                  :type="currentIndicator.progressApprovalStatus === 'approved' ? 'success' :
-                         currentIndicator.progressApprovalStatus === 'rejected' ? 'danger' :
-                         currentIndicator.progressApprovalStatus === 'pending' ? 'warning' : 'info'"
-                  size="small"
-                >
-                  {{ currentIndicator.progressApprovalStatus === 'approved' ? '已通过' :
-                     currentIndicator.progressApprovalStatus === 'rejected' ? '已驳回' :
-                     currentIndicator.progressApprovalStatus === 'pending' ? '待审批' : '未提交' }}
-                </ElTag>
-              </div>
-              <div v-if="currentIndicator.pendingProgress !== undefined" class="pending-progress">
-                <span class="progress-label">申请进度：</span>
-                <span class="progress-value">{{ currentIndicator.pendingProgress }}%</span>
-                <span v-if="currentIndicator.progress" class="progress-change">
-                  (当前: {{ currentIndicator.progress }}%,
-                  变更: {{ currentIndicator.pendingProgress - currentIndicator.progress > 0 ? '+' : '' }}
-                  {{ currentIndicator.pendingProgress - currentIndicator.progress }}%)
-                </span>
-              </div>
-            </div>
 
             <CustomApprovalFlow
               :nodes="workflowNodes"
@@ -945,7 +1173,49 @@ watch(() => props.modelValue, (val) => {
         <!-- 历史记录视图 -->
         <ElTabPane name="history" label="审批历史">
           <ElEmpty v-if="!hasApprovalData && !hasPlanWorkflowData" description="暂无审批历史" :image-size="120" />
-          <ApprovalHistory v-else :history="approvalHistory" :approval-type="approvalType" />
+          <template v-else>
+            <div v-if="showPlanHistoryCard && currentPlanApprovalSummary" class="approval-list" style="margin-bottom: 16px">
+              <div :key="`${currentPlanApprovalSummary.key}-history`" class="approval-card">
+                <div class="card-header">
+                  <div class="plan-info">
+                    <el-icon class="plan-icon"><Document /></el-icon>
+                    <div class="info-text">
+                      <div class="plan-name">{{ currentPlanApprovalSummary.planName }}</div>
+                      <div class="plan-year">已完成，详情可查看完整审批流程</div>
+                    </div>
+                  </div>
+                  <ElTag :type="planWorkflowStatusTag.type" size="small">
+                    {{ planWorkflowStatusTag.label }}
+                  </ElTag>
+                </div>
+                <div class="submit-info">
+                  <div class="info-row">
+                    <el-icon><User /></el-icon>
+                    <span class="label">提交人：</span>
+                    <span class="value">{{ currentPlanApprovalSummary.submitterName }}</span>
+                  </div>
+                  <div class="info-row">
+                    <el-icon><Timer /></el-icon>
+                    <span class="label">提交时间：</span>
+                    <span class="value">{{ formatTime(currentPlanApprovalSummary.createdAt) }}</span>
+                  </div>
+                  <div class="info-row">
+                    <el-icon><Right /></el-icon>
+                    <span class="label">最终步骤：</span>
+                    <span class="value">{{ currentPlanApprovalSummary.currentStepName }}</span>
+                  </div>
+                </div>
+                <div class="card-actions">
+                  <ElButton @click="openPlanApprovalDetails">查看详情</ElButton>
+                </div>
+              </div>
+            </div>
+            <ApprovalHistory
+              v-if="!showPlanHistoryCard"
+              :history="approvalHistory"
+              :approval-type="approvalType"
+            />
+          </template>
         </ElTabPane>
       </ElTabs>
     </div>
@@ -958,7 +1228,9 @@ watch(() => props.modelValue, (val) => {
     >
       <div class="plan-detail-summary">
         <div class="summary-title">{{ currentPlanApprovalSummary?.planName || '当前计划' }}</div>
-        <div class="summary-subtitle">待审批实例 {{ currentPlanApprovalItems.length }} 条</div>
+        <div class="summary-subtitle">
+          {{ isPlanPendingApproval ? '待审批实例' : '历史审批实例' }} {{ currentPlanApprovalItems.length }} 条
+        </div>
       </div>
 
       <div v-if="currentPlanApprovalItems.length > 0" class="plan-detail-list">

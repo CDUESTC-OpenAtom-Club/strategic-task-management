@@ -37,9 +37,5 @@ export async function validateToken(): Promise<ApiResponse<{ valid: boolean }>> 
  * @returns User permissions list
  */
 export async function getUserPermissions(): Promise<ApiResponse<string[]>> {
-  return Promise.resolve({
-    success: true,
-    data: [],
-    message: '当前 OpenAPI 未提供权限查询接口，返回空权限列表'
-  } as unknown as ApiResponse<string[]>)
+  return api.get('/auth/permissions')
 }

@@ -103,6 +103,20 @@ export const milestoneApi = {
   },
 
   /**
+   * 批量获取多个指标的里程碑，按指标ID分组返回
+   * 将 N 个请求合并为 1 个请求，消除 N+1 问题
+   */
+  async getMilestonesByIndicatorIds(
+    indicatorIds: number[]
+  ): Promise<ApiResponse<Record<number, Milestone[]>>> {
+    if (indicatorIds.length === 0) {
+      return { success: true, data: {}, message: '', timestamp: new Date().toISOString(), code: 200 }
+    }
+    const ids = indicatorIds.join(',')
+    return apiClient.get<ApiResponse<Record<number, Milestone[]>>>(`/milestones/by-indicators?ids=${ids}`)
+  },
+
+  /**
    * 获取指标的下一个待填报里程碑（补录规则）
    * 返回最早的未配对里程碑
    */

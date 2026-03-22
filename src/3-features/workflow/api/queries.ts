@@ -117,6 +117,18 @@ export async function getWorkflowInstanceDetail(
 }
 
 /**
+ * Get latest workflow instance detail by business entity.
+ *
+ * API: GET /api/v1/workflows/instances/entity/{entityType}/{entityId}
+ */
+export async function getWorkflowInstanceDetailByBusiness(
+  entityType: string,
+  entityId: number | string
+): Promise<ApiResponse<WorkflowInstanceDetailResponse>> {
+  return apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}`)
+}
+
+/**
  * Get my pending workflow tasks
  *
  * API: GET /api/v1/workflows/my-tasks

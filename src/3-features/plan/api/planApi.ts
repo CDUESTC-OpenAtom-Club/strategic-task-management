@@ -8,7 +8,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/api'
+import { withRetry } from '@/shared/lib/api/wrappers'
 import { USE_MOCK } from '@/shared/config/api'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import type {
@@ -25,7 +25,13 @@ import type {
   AuditForm,
   Attachment
 } from '@/shared/types'
-import { getMyPendingTasks, approveTask, rejectTask } from '@/features/workflow/api'
+import {
+  getMyPendingTasks,
+  approveTask,
+  rejectTask,
+  getWorkflowInstanceDetail,
+  getWorkflowInstanceDetailByBusiness
+} from '@/features/workflow/api'
 import { useAuthStore } from '@/features/auth/model/store'
 
 export interface SubmitPlanApprovalPayload {
@@ -197,6 +203,8 @@ function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
     createdAt: raw.createTime ?? raw.createdAt,
     updatedAt: raw.updatedAt,
     createdBy: raw.createdByOrgId != null ? String(raw.createdByOrgId) : raw.createdBy,
+    ...('createdByOrgId' in raw ? { createdByOrgId: Number(raw.createdByOrgId) || undefined } : {}),
+    ...('createdByName' in raw ? { createdByName: raw.createdByName } : {}),
     description: raw.description,
     totalIndicators: raw.indicatorCount,
     completedIndicators: raw.completionPercentage,
@@ -217,6 +225,7 @@ function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
     ...('canEdit' in raw ? { canEdit: Boolean(raw.canEdit) } : {}),
     ...('canResubmit' in raw ? { canResubmit: Boolean(raw.canResubmit) } : {}),
     ...('submittedBy' in raw ? { submittedBy: Number(raw.submittedBy) || undefined } : {}),
+    ...('submittedByName' in raw ? { submittedByName: raw.submittedByName } : {}),
     ...('submittedAt' in raw ? { submittedAt: raw.submittedAt } : {}),
     ...('lastRejectReason' in raw ? { lastRejectReason: raw.lastRejectReason } : {}),
     ...('workflowHistory' in raw && Array.isArray(raw.workflowHistory) ? { workflowHistory: raw.workflowHistory } : {})
@@ -546,6 +555,7 @@ interface PlanReportSimpleResponse {
   reportMonth?: string
   reportOrgId?: number
   reportOrgType?: 'FUNC_DEPT' | 'COLLEGE'
+  auditInstanceId?: number | null
   title?: string | null
   content?: string | null
   summary?: string | null
@@ -560,6 +570,12 @@ interface PlanReportSimpleResponse {
   rejectionReason?: string | null
   createdAt?: string | null
   updatedAt?: string | null
+  workflowInstanceId?: number | null
+  currentTaskId?: number | null
+  workflowStatus?: string | null
+  currentStepName?: string | null
+  currentApproverId?: number | null
+  currentApproverName?: string | null
 }
 
 interface IndicatorReportContext {
@@ -599,6 +615,7 @@ function mapPlanReportToIndicatorFill(
     id: report.id,
     indicator_id: context.indicatorId,
     plan_fill_id: report.planId ?? 0,
+    report_id: report.id,
     fill_date: fillDate,
     progress: Number.isFinite(normalizedProgress) ? normalizedProgress : 0,
     content:
@@ -614,8 +631,69 @@ function mapPlanReportToIndicatorFill(
     status: convertReportStatusToFillStatus(report.status),
     audit_comment: report.rejectionReason || undefined,
     audited_by: report.approvedBy != null ? String(report.approvedBy) : undefined,
-    audited_at: report.approvedAt || undefined
+    audited_at: report.approvedAt || undefined,
+    workflowInstanceId: report.workflowInstanceId ?? report.auditInstanceId ?? undefined,
+    currentTaskId: report.currentTaskId ?? undefined,
+    workflowStatus: report.workflowStatus ?? undefined,
+    currentStepName: report.currentStepName ?? undefined,
+    currentApproverId: report.currentApproverId ?? undefined,
+    currentApproverName: report.currentApproverName ?? undefined
   }
+}
+
+async function enrichPlanReportWorkflow(
+  report: PlanReportSimpleResponse
+): Promise<PlanReportSimpleResponse> {
+  if (!report?.id) {
+    return report
+  }
+
+  const auditInstanceId = Number(report.auditInstanceId ?? NaN)
+
+  try {
+    if (Number.isFinite(auditInstanceId) && auditInstanceId > 0) {
+      const workflowResponse = await getWorkflowInstanceDetail(String(auditInstanceId))
+      if (hasApiData(workflowResponse) && workflowResponse.data) {
+        return {
+          ...report,
+          workflowInstanceId: Number(workflowResponse.data.instanceId) || auditInstanceId,
+          currentTaskId: Number(workflowResponse.data.currentTaskId) || undefined,
+          workflowStatus: workflowResponse.data.status,
+          currentStepName: workflowResponse.data.currentStepName ?? undefined,
+          currentApproverId: workflowResponse.data.currentApproverId ?? undefined,
+          currentApproverName: workflowResponse.data.currentApproverName ?? undefined
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[planApi] load workflow detail by auditInstanceId failed', {
+      reportId: report.id,
+      auditInstanceId,
+      error
+    })
+  }
+
+  try {
+    const workflowResponse = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', report.id)
+    if (hasApiData(workflowResponse) && workflowResponse.data) {
+      return {
+        ...report,
+        workflowInstanceId: Number(workflowResponse.data.instanceId) || undefined,
+        currentTaskId: Number(workflowResponse.data.currentTaskId) || undefined,
+        workflowStatus: workflowResponse.data.status,
+        currentStepName: workflowResponse.data.currentStepName ?? undefined,
+        currentApproverId: workflowResponse.data.currentApproverId ?? undefined,
+        currentApproverName: workflowResponse.data.currentApproverName ?? undefined
+      }
+    }
+  } catch (error) {
+    console.warn('[planApi] load workflow detail by business entity failed', {
+      reportId: report.id,
+      error
+    })
+  }
+
+  return report
 }
 
 function mapRoleToReportOrgType(
@@ -715,18 +793,19 @@ async function resolveIndicatorReportContext(
 async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
   const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(`/reports/plan/${planId}`)
   if (!hasApiData(response)) {
-    throw new Error(response.message || '加载计划报告失败')
+    throw new Error(typeof response.message === 'string' ? response.message || '加载计划报告失败' : '加载计划报告失败')
   }
 
-  return Array.isArray(response.data) ? response.data : []
+  const reports = Array.isArray(response.data) ? response.data : []
+  return Promise.all(reports.map(report => enrichPlanReportWorkflow(report)))
 }
 
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
   const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse>>(`/reports/${reportId}`)
   if (!hasApiData(response) || !response.data) {
-    throw new Error(response.message || '加载报告详情失败')
+    throw new Error(typeof response.message === 'string' ? response.message || '加载报告详情失败' : '加载报告详情失败')
   }
-  return response.data
+  return enrichPlanReportWorkflow(response.data)
 }
 
 function normalizePlanCollection(
@@ -1605,7 +1684,7 @@ export const indicatorFillApi = {
           )
           .then(response => {
             if (!hasApiData(response) || !response.data) {
-              throw new Error(response.message || '保存指标填报失败')
+              throw new Error(typeof response.message === 'string' ? response.message || '保存指标填报失败' : '保存指标填报失败')
             }
             return response.data
           })
@@ -1759,7 +1838,7 @@ export const indicatorFillApi = {
     )
 
     if (!hasApiData(response) || !response.data) {
-      throw new Error(response.message || '提交指标填报失败')
+      throw new Error(typeof response.message === 'string' ? response.message || '提交指标填报失败' : '提交指标填报失败')
     }
 
     const reportDetail = await loadPlanReportById(response.data.id).catch(() => response.data)

@@ -8,16 +8,18 @@
  * **Validates: Requirements 3.1 - Application Layout**
  */
 
-import { watch, onMounted, onUnmounted } from 'vue'
+import { watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Aim, Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { ApprovalProgressDrawer, useApprovalCenter } from '@/features/approval'
+import { usePlanStore } from '@/features/plan/model/store'
 import YearSelector from '@/shared/ui/form/YearSelector.vue'
 import { useNavigation } from '@/shared/lib/layout'
 import { useAppLayout, useDepartmentSwitcher, useNotificationCenter } from './lib'
 import { initApprovalNotifications } from '@/features/approval/lib/approvalNotifications'
 import { disconnectWebSocket } from '@/shared/api/websocket'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
 
 const router = useRouter()
 
@@ -28,11 +30,20 @@ const isDev = import.meta.env.DEV
 const { currentUser, isStrategicDept, strategicDeptName, handleLogout } = useAppLayout()
 
 const { viewingDept, viewingRole, viewingDeptName, deptOptions } = useDepartmentSwitcher()
+const planStore = usePlanStore()
+const timeContext = useTimeContextStore()
 
 const { tabs, activeTab, handleTabClick } = useNavigation(viewingRole)
 
 const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
 const { approvalCenterVisible, closeApprovalCenter } = useApprovalCenter()
+
+const approvalCenterPlan = computed(() => {
+  if (!viewingDept.value) {
+    return null
+  }
+  return planStore.getPlanByTargetOrgAndYear(viewingDept.value, timeContext.currentYear) || null
+})
 
 /**
  * Initialize approval notifications on mount
@@ -60,6 +71,14 @@ watch(viewingDept, (newDept, oldDept) => {
   if (firstTab) {
     router.push(firstTab.path)
   }
+})
+
+watch(approvalCenterVisible, isVisible => {
+  if (!isVisible) {
+    return
+  }
+
+  void planStore.loadPlans()
 })
 
 /**
@@ -224,6 +243,9 @@ const handleDropdownCommand = async (command: string) => {
 
     <ApprovalProgressDrawer
       :model-value="approvalCenterVisible"
+      :plan="approvalCenterPlan"
+      :department-name="viewingDept"
+      :plan-name="approvalCenterPlan?.name || viewingDeptName"
       :show-plan-approvals="true"
       :show-approval-section="true"
       approval-type="submission"

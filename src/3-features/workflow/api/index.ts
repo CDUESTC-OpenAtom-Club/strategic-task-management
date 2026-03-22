@@ -12,6 +12,7 @@ export {
   getWorkflowDefinitionsByEntityType,
   getWorkflowInstances,
   getWorkflowInstanceDetail,
+  getWorkflowInstanceDetailByBusiness,
   getMyPendingTasks,
   getMyApprovedInstances,
   getMyAppliedInstances,

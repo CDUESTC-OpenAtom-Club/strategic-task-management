@@ -39,18 +39,14 @@ export const PERMISSIONS = {
     'indicators:create',
     'indicators:read',
     'indicators:update',
-    'indicators:delete',
-    'approvals:read',
-    'approvals:approve'
+    'indicators:delete'
   ],
   FUNCTIONAL_DEPT: [
     'indicators:read',
     'indicators:update',
     'reports:create',
     'reports:read',
-    'reports:update',
-    'approvals:read',
-    'approvals:approve'
+    'reports:update'
   ],
   SECONDARY_COLLEGE: [
     'reports:create',

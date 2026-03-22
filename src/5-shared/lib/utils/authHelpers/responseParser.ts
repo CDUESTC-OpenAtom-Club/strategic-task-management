@@ -96,8 +96,12 @@ export function mapBackendUser(userData: Record<string, unknown>): User {
     role: mappedRole || 'secondary_college', // 默认角色
     department: userData.orgName || userData.department || '',
     createdAt: new Date(),
-    updatedAt: new Date()
-  }
+    updatedAt: new Date(),
+    userId: Number(userData.userId || userData.id || 0),
+    orgId: Number(userData.orgId || 0),
+    realName: userData.realName || userData.name || userData.username || '',
+    permissions: Array.isArray(userData.permissions) ? userData.permissions : []
+  } as User
 }
 
 /**

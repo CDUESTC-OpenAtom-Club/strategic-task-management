@@ -129,8 +129,10 @@ export const usePlanStore = defineStore('plan', () => {
         logger.warn('[Plan Store] No plans loaded')
         return []
       } catch (err) {
-        error.value = err instanceof Error ? err.message : '加载计划失败'
-        logger.error('[Plan Store] Failed to load plans:', err)
+        error.value = err instanceof Error ? err.message
+          : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message)
+          : '加载计划失败'
+        logger.error('[Plan Store] Failed to load plans:', error.value)
         ElMessage.error('加载计划失败')
         return []
       } finally {

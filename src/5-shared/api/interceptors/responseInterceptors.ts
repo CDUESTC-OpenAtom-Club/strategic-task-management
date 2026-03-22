@@ -17,7 +17,7 @@ import type { AxiosError } from 'axios'
 import { logger } from '@/shared/lib/utils/logger'
 import { recordApiLatency } from '@/shared/lib/utils/performance'
 import { cacheManager } from '@/shared/lib/utils/cache'
-import { transformError, toExtendedError } from '@/shared/api/errorHandler'
+import { transformError, toExtendedError, stringifyMessage } from '@/shared/api/errorHandler'
 import { tokenManager } from '@/shared/lib/utils/tokenManager'
 import { clearPersistedAuthState, redirectToLogin } from '@/shared/lib/utils/authSession'
 import type { ExtendedErrorInfo } from '@/shared/types/error'
@@ -140,8 +140,8 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
         }
       }
 
-      logger.error('❌ [API Business Error] success=false code:', data.code, 'message:', data.message)
-      throw new Error(data.message || 'Request failed')
+      logger.error('❌ [API Business Error] success=false code:', data.code, 'message:', stringifyMessage(data.message))
+      throw new Error(stringifyMessage(data.message) || 'Request failed')
     }
 
     // 格式2: { code, data, message }
@@ -166,8 +166,8 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
         }
       }
 
-      logger.error('❌ [API Business Error] code:', data.code, 'message:', data.message)
-      throw new Error(data.message || 'Request failed')
+      logger.error('❌ [API Business Error] code:', data.code, 'message:', stringifyMessage(data.message))
+      throw new Error(stringifyMessage(data.message) || 'Request failed')
     }
 
     // 格式3: 直接返回数据

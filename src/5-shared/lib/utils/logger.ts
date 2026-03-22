@@ -202,20 +202,29 @@ function createLogger(): ExtendedLogger {
     const timestamp = new Date().toISOString()
     const prefix = `[${timestamp}] [${level.toUpperCase()}]`
 
+    // 将非原始类型参数序列化为 JSON 字符串，
+    // 避免 webview/error-capture 将对象渲染为 [object Object]
+    const safeArgs = filteredArgs.map((arg) =>
+      arg === null ? 'null'
+        : arg === undefined ? 'undefined'
+        : typeof arg === 'object' ? (() => { try { return JSON.stringify(arg) } catch { return String(arg) } })()
+        : arg
+    )
+
     // 根据级别调用对应的 console 方法
     /* eslint-disable no-console */
     switch (level) {
       case 'debug':
-        console.debug(prefix, message, ...filteredArgs)
+        console.debug(prefix, message, ...safeArgs)
         break
       case 'info':
-        console.info(prefix, message, ...filteredArgs)
+        console.info(prefix, message, ...safeArgs)
         break
       case 'warn':
-        console.warn(prefix, message, ...filteredArgs)
+        console.warn(prefix, message, ...safeArgs)
         break
       case 'error':
-        console.error(prefix, message, ...filteredArgs)
+        console.error(prefix, message, ...safeArgs)
         break
     }
     /* eslint-enable no-console */
