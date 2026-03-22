@@ -257,26 +257,27 @@ function isApprovalStatus(
   _indicator: StrategicIndicator,
   targetStatus: ProgressApprovalStatusValue | ProgressApprovalStatusValue[]
 ): boolean {
-  // @requirement: Plan-centric - 使用 Plan 的状态作为所有指标的状态
-  const planStatus = currentPlanStatus.value?.toLowerCase() || 'draft'
-
-  // Plan 状态映射: DRAFT -> draft, PENDING -> pending, ACTIVE -> approved/active, REJECTED -> rejected
+  // @requirement: Plan-centric - 使用 Plan 的状态作为当前页面的提交态来源。
+  // 对职能部门/学院页面来说，DISTRIBUTED 代表“已下发，待本部门填写并提交”，
+  // 不能误判为已经审批通过或不可再次填报。
+  const planStatus = normalizedCurrentPlanStatus.value
   let effectiveStatus: ProgressApprovalStatusValue = 'DRAFT'
+
   switch (planStatus) {
+    case 'PENDING':
+      effectiveStatus = 'PENDING'
+      break
+    case 'RETURNED':
+      effectiveStatus = 'REJECTED'
+      break
+    case 'DISTRIBUTED':
+    case 'DRAFT':
+    case null:
+      effectiveStatus = 'DRAFT'
+      break
     case 'active':
       effectiveStatus = 'APPROVED'
       break
-    case 'pending':
-      effectiveStatus = 'PENDING'
-      break
-    case 'rejected':
-      effectiveStatus = 'REJECTED'
-      break
-    case 'completed':
-    case 'archived':
-      effectiveStatus = 'APPROVED'
-      break
-    case 'draft':
     default:
       effectiveStatus = 'DRAFT'
   }
@@ -2160,8 +2161,8 @@ const handleSubmitAll = () => {
     return
   }
 
-  if (!['DRAFT', 'RETURNED', null].includes(normalizedCurrentPlanStatus.value)) {
-    ElMessage.warning('当前计划已进入审批流程，不能重复提交')
+  if (!['DRAFT', 'RETURNED', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
+    ElMessage.warning('当前计划正在审批中，不能重复提交')
     return
   }
 
@@ -2593,27 +2594,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                       </el-button>
 
                       <el-button v-if="canEdit" link type="danger" size="small" @click="handleDeleteIndicator(row)">删除</el-button>
-                    </div>
-
-                    <div v-if="isIndicatorWorkflowLoading(row)" class="workflow-inline workflow-inline-muted">
-                      正在加载审批流...
-                    </div>
-
-                    <div v-else-if="getIndicatorWorkflowSnapshot(row)" class="workflow-inline">
-                      <div class="workflow-inline-summary">
-                        <el-tag
-                          size="small"
-                          :type="getIndicatorWorkflowTagType(getIndicatorWorkflowSnapshot(row))"
-                        >
-                          {{ getIndicatorWorkflowStatusLabel(getIndicatorWorkflowSnapshot(row)) }}
-                        </el-tag>
-                        <span class="workflow-inline-text">
-                          {{ getIndicatorWorkflowSnapshot(row)?.currentStepName || '审批中' }}
-                        </span>
-                      </div>
-                      <div class="workflow-inline-text">
-                        审批人：{{ getIndicatorWorkflowSnapshot(row)?.currentApproverName || '待分配' }}
-                      </div>
                     </div>
 
                     <div v-if="canHandleIndicatorWorkflow(row)" class="workflow-inline-actions">
@@ -3238,34 +3218,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.workflow-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: rgba(24, 144, 255, 0.08);
-}
-
-.workflow-inline-muted {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.workflow-inline-summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.workflow-inline-text {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
 }
 
 .workflow-inline-actions {
