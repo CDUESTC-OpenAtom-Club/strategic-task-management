@@ -10,14 +10,15 @@
       <el-empty v-if="!loading && pendingApprovals.length === 0" description="暂无待审批任务" />
 
       <div v-else class="approval-list">
-        <div v-for="instance in pendingApprovals" :key="instance.id" class="approval-card">
+        <div v-for="instance in pendingApprovals" :key="instance.taskId" class="approval-card">
           <div class="approval-header">
             <div class="approval-title">{{ instance.title || `${instance.entityType} #${instance.entityId}` }}</div>
             <el-tag type="warning" size="small">{{ instance.status }}</el-tag>
           </div>
 
           <div class="approval-meta">
-            <div>实例ID: {{ instance.id }}</div>
+            <div>任务ID: {{ instance.taskId }}</div>
+            <div>实例ID: {{ instance.workflowInstanceId || '-' }}</div>
             <div>实体类型: {{ instance.entityType }}</div>
             <div>实体ID: {{ instance.entityId }}</div>
             <div>发起人ID: {{ instance.requesterId }}</div>
@@ -70,6 +71,8 @@ const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
 
 interface PendingApprovalInstance {
   id: number
+  taskId: number
+  workflowInstanceId?: number | null
   title?: string | null
   entityType: string
   entityId: number
@@ -147,7 +150,11 @@ const loadPendingApprovals = async () => {
       const details = await Promise.all(
         pageResult.items.map(async task => {
           try {
-            const detailResponse = await getWorkflowInstanceDetail(String(task.taskId))
+            const workflowInstanceId = Number(task.instanceId ?? 0)
+            if (!Number.isFinite(workflowInstanceId) || workflowInstanceId <= 0) {
+              return null
+            }
+            const detailResponse = await getWorkflowInstanceDetail(String(workflowInstanceId))
             if (detailResponse.success && detailResponse.data) {
               return detailResponse.data as WorkflowInstanceDetailResponse
             }
@@ -175,10 +182,12 @@ const loadPendingApprovals = async () => {
         )
 
         return {
-          id: Number(task.taskId),
+          id: Number(task.instanceId ?? task.taskId),
+          taskId: Number(task.taskId),
+          workflowInstanceId: Number(task.instanceId ?? 0) || null,
           title: task.taskName,
-          entityType: detail?.businessEntityType || 'TASK',
-          entityId: Number(detail?.businessEntityId ?? 0),
+          entityType: detail?.businessEntityType || task.entityType || 'TASK',
+          entityId: Number(detail?.businessEntityId ?? task.entityId ?? 0),
           status: task.status,
           requesterId: detail?.starterId ?? task.assigneeId,
           startedAt: detail?.startTime ?? task.createdTime,
@@ -222,11 +231,11 @@ const handleApprove = async (instance: PendingApprovalInstance) => {
     })
     const loadingInstance = ElLoading.service({ lock: true, text: '正在审批...' })
     try {
-      await decideTask(String(instance.id), {
+      await decideTask(String(instance.taskId), {
         approved: true,
         comment: value || '审批通过'
       })
-      ElMessage.success(`审批通过成功（实例ID: ${instance.id}）`)
+      ElMessage.success(`审批通过成功（任务ID: ${instance.taskId}）`)
       await loadPendingApprovals()
       emit('refresh')
     } finally {
@@ -260,11 +269,11 @@ const handleReject = async (instance: PendingApprovalInstance) => {
     })
     const loadingInstance = ElLoading.service({ lock: true, text: '正在驳回...' })
     try {
-      await decideTask(String(instance.id), {
+      await decideTask(String(instance.taskId), {
         approved: false,
         comment: value || ''
       })
-      ElMessage.success(`已驳回（实例ID: ${instance.id}）`)
+      ElMessage.success(`已驳回（任务ID: ${instance.taskId}）`)
       await loadPendingApprovals()
       emit('refresh')
     } finally {

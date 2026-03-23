@@ -111,9 +111,9 @@ export const useApprovalStore = defineStore('approval', () => {
         const pageResult = response.data as unknown as { items: WorkflowTaskResponse[]; total: number }
         // Convert WorkflowTaskResponse to ApprovalInstance format
         pendingApprovals.value = pageResult.items.map(task => ({
-          instanceId: Number(task.taskId),
-          entityType: 'TASK',
-          entityId: 0,
+          instanceId: Number(task.instanceId ?? task.taskId),
+          entityType: task.entityType || 'TASK',
+          entityId: task.entityId || 0,
           status: task.status === 'PENDING' ? 'PENDING' : 'APPROVED',
           currentStepName: task.taskName,
           currentStepOrder: 0,
