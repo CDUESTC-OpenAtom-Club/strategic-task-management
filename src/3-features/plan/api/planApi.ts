@@ -1669,6 +1669,7 @@ export const indicatorFillApi = {
 
     const upsertPayload = {
       title: context.indicatorName,
+      indicatorId: context.indicatorId,
       content: form.content,
       summary: form.content,
       progress: form.progress,

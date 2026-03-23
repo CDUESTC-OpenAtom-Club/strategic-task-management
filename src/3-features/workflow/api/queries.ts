@@ -9,6 +9,7 @@ import type { ApiResponse } from '@/shared/types'
 import type {
   WorkflowDefinitionResponse,
   WorkflowDefinitionPreviewResponse,
+  WorkflowHistoryCardResponse,
   WorkflowInstanceResponse,
   WorkflowTaskResponse,
   WorkflowInstanceDetailResponse,
@@ -126,6 +127,18 @@ export async function getWorkflowInstanceDetailByBusiness(
   entityId: number | string
 ): Promise<ApiResponse<WorkflowInstanceDetailResponse>> {
   return apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}`)
+}
+
+/**
+ * Get all completed workflow history cards by business entity.
+ *
+ * API: GET /api/v1/workflows/instances/entity/{entityType}/{entityId}/list
+ */
+export async function getWorkflowInstanceHistoryByBusiness(
+  entityType: string,
+  entityId: number | string
+): Promise<ApiResponse<WorkflowHistoryCardResponse[]>> {
+  return apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}/list`)
 }
 
 /**
