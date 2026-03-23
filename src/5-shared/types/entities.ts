@@ -24,8 +24,8 @@
 export const TaskType = {
   QUALITATIVE: '定性',
   QUANTITATIVE: '定量'
-} as const;
-export type TaskType = typeof TaskType[keyof typeof TaskType];
+} as const
+export type TaskType = (typeof TaskType)[keyof typeof TaskType]
 
 /**
  * 里程碑状态枚举
@@ -35,8 +35,8 @@ export const MilestoneStatus = {
   PENDING: 'pending',
   COMPLETED: 'completed',
   OVERDUE: 'overdue'
-} as const;
-export type MilestoneStatus = typeof MilestoneStatus[keyof typeof MilestoneStatus];
+} as const
+export type MilestoneStatus = (typeof MilestoneStatus)[keyof typeof MilestoneStatus]
 
 /**
  * 进度审批状态枚举
@@ -48,8 +48,9 @@ export const ProgressApprovalStatus = {
   PENDING: 'PENDING',
   APPROVED: 'APPROVED',
   REJECTED: 'REJECTED'
-} as const;
-export type ProgressApprovalStatus = typeof ProgressApprovalStatus[keyof typeof ProgressApprovalStatus];
+} as const
+export type ProgressApprovalStatus =
+  (typeof ProgressApprovalStatus)[keyof typeof ProgressApprovalStatus]
 
 /**
  * 审计操作类型枚举
@@ -63,21 +64,21 @@ export const AuditAction = {
   UPDATE: 'update',
   DISTRIBUTE: 'distribute',
   WITHDRAW: 'withdraw'
-} as const;
-export type AuditAction = typeof AuditAction[keyof typeof AuditAction];
+} as const
+export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction]
 
 /**
  * 指标状态枚举（生命周期状态）
  * @requirement 后端 IndicatorStatus 枚举
  */
 export const IndicatorStatus = {
-  DRAFT: 'DRAFT',                   // 草稿
+  DRAFT: 'DRAFT', // 草稿
   PENDING_REVIEW: 'PENDING_REVIEW', // 待审核（指标定义审核）
-  DISTRIBUTED: 'DISTRIBUTED',       // 已下发
-  ACTIVE: 'ACTIVE',                 // 已下发（遗留状态，等同于 DISTRIBUTED）
-  ARCHIVED: 'ARCHIVED'              // 已归档
-} as const;
-export type IndicatorStatus = typeof IndicatorStatus[keyof typeof IndicatorStatus];
+  DISTRIBUTED: 'DISTRIBUTED', // 已下发
+  ACTIVE: 'ACTIVE', // 已下发（遗留状态，等同于 DISTRIBUTED）
+  ARCHIVED: 'ARCHIVED' // 已归档
+} as const
+export type IndicatorStatus = (typeof IndicatorStatus)[keyof typeof IndicatorStatus]
 
 /**
  * 用户角色枚举
@@ -87,8 +88,8 @@ export const UserRole = {
   STRATEGIC_DEPT: 'strategic_dept',
   FUNCTIONAL_DEPT: 'functional_dept',
   SECONDARY_COLLEGE: 'secondary_college'
-} as const;
-export type UserRole = typeof UserRole[keyof typeof UserRole];
+} as const
+export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 
 // ============================================================================
 // 核心实体类型定义
@@ -243,6 +244,8 @@ export interface User {
   passwordHash: string
   /** 角色 (后端: role) */
   role: UserRole
+  /** 后端真实角色编码列表 (如 ROLE_APPROVER / ROLE_VICE_PRESIDENT) */
+  roles?: string[]
   /** 部门 (后端: department) */
   department: string
   /** 邮箱 (后端: email) */

@@ -97,6 +97,14 @@ const currentUserPermissionCodes = computed(() => {
     .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
     .filter(Boolean)
 })
+const currentUserRoleCodes = computed(() => {
+  const roles = (authStore.user as { roles?: unknown[] } | null)?.roles
+  if (!Array.isArray(roles)) {
+    return []
+  }
+
+  return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
+})
 const submitterNameCache = ref<Record<string, string>>({})
 
 function normalizeDisplayName(value: unknown): string {
@@ -140,7 +148,10 @@ function cacheSubmitterName(userIdValue: unknown, nameValue: unknown): boolean {
   return true
 }
 
-async function ensureSubmitterNameLoaded(userIdValue: unknown, fallbackName?: string): Promise<void> {
+async function ensureSubmitterNameLoaded(
+  userIdValue: unknown,
+  fallbackName?: string
+): Promise<void> {
   const userId = parsePositiveUserId(userIdValue)
   if (!userId) {
     return
@@ -220,40 +231,36 @@ const currentIndicator = computed(() => {
     return props.indicators.find(i => i.id === props.indicatorId)
   }
   // 如果没有指定ID，返回第一个有待审批状态的指标
-  return props.indicators.find(i =>
-    i.progressApprovalStatus &&
-    ['pending', 'approved', 'rejected'].includes(i.progressApprovalStatus)
-  ) || props.indicators[0]
+  return (
+    props.indicators.find(
+      i =>
+        i.progressApprovalStatus &&
+        ['pending', 'approved', 'rejected'].includes(i.progressApprovalStatus)
+    ) || props.indicators[0]
+  )
 })
 
 // 是否有审批数据
 const hasApprovalData = computed(() => {
-  return props.indicators.length > 0 &&
-    props.indicators.some(i =>
-      i.progressApprovalStatus &&
-      i.progressApprovalStatus !== 'none'
-    )
+  return (
+    props.indicators.length > 0 &&
+    props.indicators.some(i => i.progressApprovalStatus && i.progressApprovalStatus !== 'none')
+  )
 })
 
 // 待审批数量
 const pendingCount = computed(() => {
-  return props.indicators.filter(i =>
-    i.progressApprovalStatus === 'pending'
-  ).length
+  return props.indicators.filter(i => i.progressApprovalStatus === 'pending').length
 })
 
 // 已通过数量
 const approvedCount = computed(() => {
-  return props.indicators.filter(i =>
-    i.progressApprovalStatus === 'approved'
-  ).length
+  return props.indicators.filter(i => i.progressApprovalStatus === 'approved').length
 })
 
 // 已驳回数量
 const rejectedCount = computed(() => {
-  return props.indicators.filter(i =>
-    i.progressApprovalStatus === 'rejected'
-  ).length
+  return props.indicators.filter(i => i.progressApprovalStatus === 'rejected').length
 })
 
 const currentPlanEntityIds = computed(() => {
@@ -308,9 +315,7 @@ const scopedPlanApprovals = computed(() => {
     return []
   }
 
-  return withEntityId.filter(instance =>
-    scopedPlanEntityIds.value.has(Number(instance.entityId))
-  )
+  return withEntityId.filter(instance => scopedPlanEntityIds.value.has(Number(instance.entityId)))
 })
 
 const scopedPendingPlanCount = computed(() => scopedPlanApprovals.value.length)
@@ -322,32 +327,38 @@ const activePlanWorkflow = computed(() => {
   const detail = planWorkflowDetail.value
   return {
     ...props.plan,
-    workflowInstanceId: Number(detail?.instanceId || props.plan.workflowInstanceId || 0) || undefined,
+    workflowInstanceId:
+      Number(detail?.instanceId || props.plan.workflowInstanceId || 0) || undefined,
     workflowStatus: detail?.status || props.plan.workflowStatus || props.plan.status,
     currentTaskId: detail?.currentTaskId || props.plan.currentTaskId,
     currentStepName: detail?.currentStepName || props.plan.currentStepName,
     currentApproverId: detail?.currentApproverId ?? props.plan.currentApproverId,
     currentApproverName: detail?.currentApproverName || props.plan.currentApproverName,
-    canWithdraw: typeof detail?.canWithdraw === 'boolean' ? detail.canWithdraw : props.plan.canWithdraw,
+    canWithdraw:
+      typeof detail?.canWithdraw === 'boolean' ? detail.canWithdraw : props.plan.canWithdraw,
     workflowHistory: Array.isArray(detail?.history) ? detail.history : props.plan.workflowHistory
   }
 })
 
-const currentDetailWorkflow = computed(() => selectedHistoryInstanceDetail.value || planWorkflowDetail.value)
+const currentDetailWorkflow = computed(
+  () => selectedHistoryInstanceDetail.value || planWorkflowDetail.value
+)
 
 const hasPlanWorkflowData = computed(() => {
   return Boolean(
     activePlanWorkflow.value &&
-      (activePlanWorkflow.value.workflowInstanceId ||
-        activePlanWorkflow.value.workflowStatus ||
-        activePlanWorkflow.value.currentStepName ||
-        (Array.isArray(activePlanWorkflow.value.workflowHistory) &&
-          activePlanWorkflow.value.workflowHistory.length > 0))
+    (activePlanWorkflow.value.workflowInstanceId ||
+      activePlanWorkflow.value.workflowStatus ||
+      activePlanWorkflow.value.currentStepName ||
+      (Array.isArray(activePlanWorkflow.value.workflowHistory) &&
+        activePlanWorkflow.value.workflowHistory.length > 0))
   )
 })
 
 const planWorkflowStatus = computed(() => {
-  return String(activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || '').toUpperCase()
+  return String(
+    activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || ''
+  ).toUpperCase()
 })
 
 const isPlanPendingApproval = computed(() => {
@@ -374,40 +385,63 @@ const hasPlanApprovalPermission = computed(() => {
   )
 })
 
-function resolveExpectedApproverOrgId(): number | null {
+function resolveExpectedApproverRoleCodes(): string[] {
   const stepName = String(activePlanWorkflow.value?.currentStepName || '').trim()
   if (!stepName) {
-    return null
-  }
-
-  if (stepName.includes('职能部门终审')) {
-    const createdByOrgId = Number(activePlanWorkflow.value?.createdByOrgId ?? 0)
-    return Number.isFinite(createdByOrgId) && createdByOrgId > 0 ? createdByOrgId : null
+    return []
   }
 
   if (
     stepName.includes('职能部门审批') ||
-    stepName.includes('二级学院审批') ||
-    stepName.includes('学院院长')
+    stepName.includes('职能部门终审') ||
+    stepName.includes('二级学院审批')
   ) {
-    const targetOrgId = Number(activePlanWorkflow.value?.targetOrgId ?? 0)
-    return Number.isFinite(targetOrgId) && targetOrgId > 0 ? targetOrgId : null
+    return ['ROLE_APPROVER']
   }
 
-  if (
-    stepName.includes('战略发展部') ||
-    stepName.includes('分管校领导')
-  ) {
-    const createdByOrgId = Number(activePlanWorkflow.value?.createdByOrgId ?? 0)
-    return Number.isFinite(createdByOrgId) && createdByOrgId > 0 ? createdByOrgId : null
+  if (stepName.includes('战略发展部')) {
+    return ['ROLE_STRATEGY_DEPT_HEAD']
+  }
+
+  if (stepName.includes('分管校领导') || stepName.includes('学院院长')) {
+    return ['ROLE_VICE_PRESIDENT']
+  }
+
+  return []
+}
+
+function resolveExpectedApproverOrgId(): number | null {
+  const currentTaskId = String(activePlanWorkflow.value?.currentTaskId || '').trim()
+  if (currentTaskId && Array.isArray(planWorkflowDetail.value?.tasks)) {
+    const currentTask = planWorkflowDetail.value.tasks.find(
+      task => String(task.taskId || '').trim() === currentTaskId
+    )
+    const approverOrgId = Number(currentTask?.approverOrgId ?? 0)
+    if (Number.isFinite(approverOrgId) && approverOrgId > 0) {
+      return approverOrgId
+    }
   }
 
   return null
 }
 
 const canCurrentUserHandlePlanApproval = computed(() => {
-  if (!hasPlanWorkflowData.value || !isPlanPendingApproval.value || !hasPlanApprovalPermission.value) {
+  if (
+    !hasPlanWorkflowData.value ||
+    !isPlanPendingApproval.value ||
+    !hasPlanApprovalPermission.value
+  ) {
     return false
+  }
+
+  const expectedApproverRoleCodes = resolveExpectedApproverRoleCodes()
+  if (expectedApproverRoleCodes.length > 0) {
+    const hasExpectedRole = expectedApproverRoleCodes.some(roleCode =>
+      currentUserRoleCodes.value.includes(roleCode)
+    )
+    if (!hasExpectedRole) {
+      return false
+    }
   }
 
   const expectedApproverOrgId = resolveExpectedApproverOrgId()
@@ -420,16 +454,7 @@ const canCurrentUserHandlePlanApproval = computed(() => {
     return currentUserOrgId.value === expectedApproverOrgId
   }
 
-  const currentApproverId = Number(activePlanWorkflow.value?.currentApproverId ?? 0)
-  if (!Number.isFinite(currentApproverId) || currentApproverId <= 0) {
-    return false
-  }
-
-  if (!Number.isFinite(currentUserId.value) || currentUserId.value <= 0) {
-    return false
-  }
-
-  return currentApproverId === currentUserId.value
+  return false
 })
 
 const currentPlanTaskId = computed(() => {
@@ -451,7 +476,9 @@ const currentPlanInstanceId = computed(() => {
 })
 
 const planWorkflowStatusTag = computed(() => {
-  const rawStatus = String(activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || '').toUpperCase()
+  const rawStatus = String(
+    activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || ''
+  ).toUpperCase()
   if (rawStatus === 'DISTRIBUTED' || rawStatus === 'APPROVED') {
     return { label: '已通过', type: 'success' as const }
   }
@@ -469,15 +496,17 @@ const planWorkflowHistory = computed<ApprovalHistoryItem[]>(() => {
     return []
   }
 
-  return activePlanWorkflow.value.workflowHistory.map((item, index) => ({
-    id: String(item.taskId ?? index),
-    action: normalizeWorkflowAction(item.action),
-    operator: String(item.operatorId ?? index),
-    operatorName: String(item.operatorName || '系统'),
-    operateTime: new Date(item.operateTime || Date.now()),
-    stepName: typeof item.stepName === 'string' ? item.stepName : undefined,
-    comment: item.comment
-  }))
+  return activePlanWorkflow.value.workflowHistory
+    .filter(shouldDisplayWorkflowHistoryItem)
+    .map((item, index) => ({
+      id: String(item.taskId ?? index),
+      action: normalizeWorkflowAction(item.action),
+      operator: String(item.operatorId ?? index),
+      operatorName: String(item.operatorName || '系统'),
+      operateTime: new Date(item.operateTime || Date.now()),
+      stepName: typeof item.stepName === 'string' ? item.stepName : undefined,
+      comment: item.comment
+    }))
 })
 
 const planWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {
@@ -496,7 +525,9 @@ const planWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {
 })
 
 function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): WorkflowNode['status'] {
-  const normalizedStatus = String(task.status || '').trim().toUpperCase()
+  const normalizedStatus = String(task.status || '')
+    .trim()
+    .toUpperCase()
   if (normalizedStatus === 'COMPLETED') {
     return 'completed'
   }
@@ -511,32 +542,38 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
 
 const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   if (hasPlanWorkflowData.value && props.plan) {
-    return [{
-      instanceId: currentPlanInstanceId.value,
-      instanceNo: String(currentPlanInstanceId.value || '待回填'),
-      title: String(activePlanWorkflow.value?.name || props.planName || props.departmentName || '当前计划'),
-      submitterName: planSubmitterName.value,
-      currentStepName: String(activePlanWorkflow.value?.currentStepName || '审批中'),
-      createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
-      entityId: activePlanWorkflow.value?.id,
-      planName: activePlanWorkflow.value?.name
-    }]
+    return [
+      {
+        instanceId: currentPlanInstanceId.value,
+        instanceNo: String(currentPlanInstanceId.value || '待回填'),
+        title: String(
+          activePlanWorkflow.value?.name || props.planName || props.departmentName || '当前计划'
+        ),
+        submitterName: planSubmitterName.value,
+        currentStepName: String(activePlanWorkflow.value?.currentStepName || '审批中'),
+        createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
+        entityId: activePlanWorkflow.value?.id,
+        planName: activePlanWorkflow.value?.name
+      }
+    ]
   }
 
   return scopedPlanApprovals.value.map((instance, index) => ({
     instanceId: Number(instance.instanceId) || index,
     instanceNo:
-      String(instance.instanceNo || instance.flowInstanceNo || instance.processInstanceNo || '').trim() ||
-      `审批实例 ${index + 1}`,
-    title:
       String(
-        instance.entityTitle ||
+        instance.instanceNo || instance.flowInstanceNo || instance.processInstanceNo || ''
+      ).trim() || `审批实例 ${index + 1}`,
+    title: String(
+      instance.entityTitle ||
         instance.planName ||
         instance.title ||
         instance.entityName ||
         `${props.planName || props.departmentName || '当前计划'} - 审批实例 ${index + 1}`
-      ).trim(),
-    submitterName: String(instance.submitterName || instance.applicantName || instance.submitter || '未知'),
+    ).trim(),
+    submitterName: String(
+      instance.submitterName || instance.applicantName || instance.submitter || '未知'
+    ),
     currentStepName: String(instance.currentStepName || instance.currentStep || '审批中'),
     createdAt: typeof instance.createdAt === 'string' ? instance.createdAt : undefined,
     entityId: instance.entityId,
@@ -545,14 +582,20 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
 })
 
 function isSubmissionFlow(flowCode?: string): boolean {
-  return String(flowCode || '').toUpperCase().startsWith('PLAN_APPROVAL_')
+  return String(flowCode || '')
+    .toUpperCase()
+    .startsWith('PLAN_APPROVAL_')
 }
 
 function isDistributionFlow(flowCode?: string): boolean {
-  return String(flowCode || '').toUpperCase().startsWith('PLAN_DISPATCH_')
+  return String(flowCode || '')
+    .toUpperCase()
+    .startsWith('PLAN_DISPATCH_')
 }
 
-function resolveApprovalRouteTitle(card: Pick<WorkflowHistoryCardResponse, 'flowCode' | 'sourceOrgName' | 'targetOrgName'>): string {
+function resolveApprovalRouteTitle(
+  card: Pick<WorkflowHistoryCardResponse, 'flowCode' | 'sourceOrgName' | 'targetOrgName'>
+): string {
   const sourceOrgName = normalizeDisplayName(card.sourceOrgName) || '战略发展部'
   const targetOrgName = normalizeDisplayName(card.targetOrgName) || '目标部门'
 
@@ -567,7 +610,10 @@ function resolveApprovalRouteTitle(card: Pick<WorkflowHistoryCardResponse, 'flow
   return normalizeDisplayName(card.flowCode) || '审批流程'
 }
 
-function resolveHistoryStatusTag(status?: string): { label: string; type: 'success' | 'warning' | 'danger' | 'info' } {
+function resolveHistoryStatusTag(status?: string): {
+  label: string
+  type: 'success' | 'warning' | 'danger' | 'info'
+} {
   const normalized = String(status || '').toUpperCase()
   if (normalized === 'APPROVED') {
     return { label: '已通过', type: 'success' }
@@ -606,8 +652,12 @@ const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
 const currentPlanApprovalSummary = computed(() => {
   if (hasPlanWorkflowData.value && props.plan) {
     return {
-      key: activePlanWorkflow.value?.name || props.planName || props.departmentName || 'current-plan',
-      planName: activePlanWorkflow.value?.name || props.planName || `${props.departmentName || '当前部门'}计划`,
+      key:
+        activePlanWorkflow.value?.name || props.planName || props.departmentName || 'current-plan',
+      planName:
+        activePlanWorkflow.value?.name ||
+        props.planName ||
+        `${props.departmentName || '当前部门'}计划`,
       currentStepName: activePlanWorkflow.value?.currentStepName || '审批中',
       submitterName: planSubmitterName.value,
       createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
@@ -650,15 +700,27 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
   if (hasPlanWorkflowData.value && props.plan) {
     return planWorkflowTasks.value.map(task => ({
       id: String(task.taskId || task.taskKey || task.currentStepName || task.taskName),
-      name: normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || '审批节点',
+      name:
+        normalizeDisplayName(task.currentStepName) ||
+        normalizeDisplayName(task.taskName) ||
+        '审批节点',
       status: mapWorkflowTaskStatusToNodeStatus(task),
-      operatorName: normalizeDisplayName(task.assigneeName) || normalizeDisplayName(task.approverOrgName) || '待分配',
-      operateTime: task.approvedAt ? new Date(task.approvedAt) : task.createdTime ? new Date(task.createdTime) : undefined,
-      comment: typeof task.comment === 'string' && task.comment.trim()
-        ? task.comment
-        : String(task.taskId || '') === String(currentPlanTaskId.value || '') && activePlanWorkflow.value?.canWithdraw
-          ? '当前仍可撤回'
-          : undefined
+      operatorName:
+        normalizeDisplayName(task.assigneeName) ||
+        normalizeDisplayName(task.approverOrgName) ||
+        '待分配',
+      operateTime: task.approvedAt
+        ? new Date(task.approvedAt)
+        : task.createdTime
+          ? new Date(task.createdTime)
+          : undefined,
+      comment:
+        typeof task.comment === 'string' && task.comment.trim()
+          ? task.comment
+          : String(task.taskId || '') === String(currentPlanTaskId.value || '') &&
+              activePlanWorkflow.value?.canWithdraw
+            ? '当前仍可撤回'
+            : undefined
     }))
   }
 
@@ -819,7 +881,7 @@ async function loadPendingPlanApprovals() {
 }
 
 async function loadPlanWorkflowDetail() {
-  if (!props.modelValue || !props.showPlanApprovals || !props.plan) {
+  if (!props.showPlanApprovals || !props.plan) {
     planWorkflowDetail.value = null
     return
   }
@@ -851,7 +913,7 @@ async function loadPlanWorkflowDetail() {
 }
 
 async function loadPlanWorkflowHistoryCards() {
-  if (!props.modelValue || !props.showPlanApprovals || !props.plan) {
+  if (!props.showPlanApprovals || !props.plan) {
     planWorkflowHistoryCards.value = []
     return
   }
@@ -903,7 +965,11 @@ async function handleApprovePlanBatch() {
         }
       )
       const userId = authStore.user?.userId || authStore.user?.id || 1
-      const response = await approvalApi.approvePlan(currentPlanTaskId.value, userId, value || '审批通过')
+      const response = await approvalApi.approvePlan(
+        currentPlanTaskId.value,
+        userId,
+        value || '审批通过'
+      )
       if (!response.success) {
         ElMessage.error(response.message || '审批失败')
         return
@@ -1080,15 +1146,22 @@ async function loadSelectedHistoryInstanceDetail(instanceId?: number | string | 
 
   try {
     const response = await getWorkflowInstanceDetail(normalizedInstanceId)
-    selectedHistoryInstanceDetail.value = response.success ? response.data ?? null : null
+    selectedHistoryInstanceDetail.value = response.success ? (response.data ?? null) : null
   } catch (error) {
     selectedHistoryInstanceDetail.value = null
-    logger.warn('[ApprovalProgressDrawer] 加载历史审批实例详情失败:', { instanceId: normalizedInstanceId, error })
+    logger.warn('[ApprovalProgressDrawer] 加载历史审批实例详情失败:', {
+      instanceId: normalizedInstanceId,
+      error
+    })
   }
 }
 
 async function openPlanApprovalDetails(item?: PlanApprovalDetailItem) {
-  if (currentPlanApprovalItems.value.length === 0 && historicalPlanApprovalItems.value.length === 0 && !hasPlanWorkflowData.value) {
+  if (
+    currentPlanApprovalItems.value.length === 0 &&
+    historicalPlanApprovalItems.value.length === 0 &&
+    !hasPlanWorkflowData.value
+  ) {
     ElMessage.warning('当前计划暂无待审批实例')
     return
   }
@@ -1115,7 +1188,9 @@ function handleApplyTemplate(_templateId: string) {
 }
 
 function normalizeWorkflowAction(action?: string): ApprovalHistoryItem['action'] {
-  const normalized = String(action || '').trim().toUpperCase()
+  const normalized = String(action || '')
+    .trim()
+    .toUpperCase()
   if (normalized.includes('REJECT')) {
     return 'reject'
   }
@@ -1126,6 +1201,13 @@ function normalizeWorkflowAction(action?: string): ApprovalHistoryItem['action']
     return 'submit'
   }
   return 'approve'
+}
+
+function shouldDisplayWorkflowHistoryItem(item: { action?: string } | null | undefined): boolean {
+  const normalized = String(item?.action || '')
+    .trim()
+    .toUpperCase()
+  return !normalized.includes('START')
 }
 
 const detailDialogStatusTag = computed(() => {
@@ -1150,7 +1232,9 @@ const hasWorkflowTabContent = computed(() => {
 })
 
 const showPlanPendingCard = computed(() => {
-  return Boolean(currentPlanApprovalSummary.value && (!hasPlanWorkflowData.value || isPlanPendingApproval.value))
+  return Boolean(
+    currentPlanApprovalSummary.value && (!hasPlanWorkflowData.value || isPlanPendingApproval.value)
+  )
 })
 
 const showPlanHistoryCard = computed(() => {
@@ -1158,36 +1242,61 @@ const showPlanHistoryCard = computed(() => {
 })
 
 const showArchivedPlanWorkflowEmptyState = computed(() => {
-  return Boolean(props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value)
+  return Boolean(
+    props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value
+  )
 })
 
 // ============ 监听 ============
-watch(() => props.modelValue, (val) => {
-  if (val) {
-    // 打开时重置到工作流标签页
-    activeTab.value = props.showPlanApprovals
-      ? (isPlanPendingApproval.value ? 'pending-plans' : 'history')
-      : hasWorkflowTabContent.value
-        ? 'workflow'
-        : 'history'
-    cacheSubmitterName(props.plan?.submittedBy, props.plan?.submittedByName)
-    cacheSubmitterName(props.plan?.createdBy, props.plan?.createdByName)
-    if (!normalizeDisplayName(props.plan?.submittedByName)) {
-      void ensureSubmitterNameLoaded(props.plan?.submittedBy, props.plan?.createdByName)
+watch(
+  () => props.modelValue,
+  val => {
+    if (val) {
+      // 打开时重置到工作流标签页
+      activeTab.value = props.showPlanApprovals
+        ? isPlanPendingApproval.value
+          ? 'pending-plans'
+          : 'history'
+        : hasWorkflowTabContent.value
+          ? 'workflow'
+          : 'history'
+      cacheSubmitterName(props.plan?.submittedBy, props.plan?.submittedByName)
+      cacheSubmitterName(props.plan?.createdBy, props.plan?.createdByName)
+      if (!normalizeDisplayName(props.plan?.submittedByName)) {
+        void ensureSubmitterNameLoaded(props.plan?.submittedBy, props.plan?.createdByName)
+      }
+      void loadPendingPlanApprovals()
+      void loadPlanWorkflowDetail()
+      void loadPlanWorkflowHistoryCards()
+    } else {
+      selectedHistoryInstanceId.value = null
+      selectedHistoryInstanceDetail.value = null
     }
-    void loadPendingPlanApprovals()
-    void loadPlanWorkflowDetail()
-    void loadPlanWorkflowHistoryCards()
-  } else {
-    planWorkflowDetail.value = null
-    planWorkflowHistoryCards.value = []
-    selectedHistoryInstanceId.value = null
-    selectedHistoryInstanceDetail.value = null
   }
-})
+)
 
 watch(
-  () => [props.plan?.submittedBy, props.plan?.submittedByName, props.plan?.createdBy, props.plan?.createdByName],
+  () => [props.showPlanApprovals, props.plan?.id, props.plan?.workflowInstanceId],
+  ([showPlanApprovals, planId]) => {
+    if (!showPlanApprovals || !planId) {
+      planWorkflowDetail.value = null
+      planWorkflowHistoryCards.value = []
+      return
+    }
+
+    void loadPlanWorkflowDetail()
+    void loadPlanWorkflowHistoryCards()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [
+    props.plan?.submittedBy,
+    props.plan?.submittedByName,
+    props.plan?.createdBy,
+    props.plan?.createdByName
+  ],
   ([submittedBy, submittedByName, createdBy, createdByName]) => {
     if (!props.modelValue) {
       return
@@ -1255,18 +1364,29 @@ watch(
               :image-size="120"
             />
             <div v-else class="approval-list">
-              <div v-if="showPlanPendingCard && currentPlanApprovalSummary" :key="currentPlanApprovalSummary.key" class="approval-card">
+              <div
+                v-if="showPlanPendingCard && currentPlanApprovalSummary"
+                :key="currentPlanApprovalSummary.key"
+                class="approval-card"
+              >
                 <div class="card-header">
                   <div class="plan-info">
                     <el-icon class="plan-icon"><Document /></el-icon>
                     <div class="info-text">
                       <div class="plan-name">{{ currentPlanApprovalSummary.planName }}</div>
                       <div class="plan-year">
-                        {{ hasPlanWorkflowData ? '当前审批状态已接入' : `待审批实例 ${currentPlanApprovalSummary.count} 条` }}
+                        {{
+                          hasPlanWorkflowData
+                            ? '当前审批状态已接入'
+                            : `待审批实例 ${currentPlanApprovalSummary.count} 条`
+                        }}
                       </div>
                     </div>
                   </div>
-                  <ElTag :type="hasPlanWorkflowData ? planWorkflowStatusTag.type : 'warning'" size="small">
+                  <ElTag
+                    :type="hasPlanWorkflowData ? planWorkflowStatusTag.type : 'warning'"
+                    size="small"
+                  >
                     {{ hasPlanWorkflowData ? planWorkflowStatusTag.label : '待审批' }}
                   </ElTag>
                 </div>
@@ -1279,7 +1399,9 @@ watch(
                   <div class="info-row">
                     <el-icon><Timer /></el-icon>
                     <span class="label">提交时间：</span>
-                    <span class="value">{{ formatTime(currentPlanApprovalSummary.createdAt) }}</span>
+                    <span class="value">{{
+                      formatTime(currentPlanApprovalSummary.createdAt)
+                    }}</span>
                   </div>
                   <div class="info-row">
                     <el-icon><Right /></el-icon>
@@ -1294,7 +1416,9 @@ watch(
                   <div v-if="typeof activePlanWorkflow?.canWithdraw === 'boolean'" class="info-row">
                     <el-icon><Right /></el-icon>
                     <span class="label">当前操作：</span>
-                    <span class="value">{{ activePlanWorkflow.canWithdraw ? '提交方仍可撤回' : '审批流已锁定' }}</span>
+                    <span class="value">{{
+                      activePlanWorkflow.canWithdraw ? '提交方仍可撤回' : '审批流已锁定'
+                    }}</span>
                   </div>
                   <div v-if="activePlanWorkflow?.lastRejectReason" class="info-row">
                     <el-icon><Document /></el-icon>
@@ -1305,14 +1429,22 @@ watch(
                 <div class="card-actions">
                   <ElButton @click="openPlanApprovalDetails">查看详情</ElButton>
                   <ElButton
-                    v-if="hasPlanWorkflowData && isPlanPendingApproval && canCurrentUserHandlePlanApproval"
+                    v-if="
+                      hasPlanWorkflowData &&
+                      isPlanPendingApproval &&
+                      canCurrentUserHandlePlanApproval
+                    "
                     type="success"
                     @click="handleApprovePlanBatch"
                   >
                     审批通过
                   </ElButton>
                   <ElButton
-                    v-if="hasPlanWorkflowData && isPlanPendingApproval && canCurrentUserHandlePlanApproval"
+                    v-if="
+                      hasPlanWorkflowData &&
+                      isPlanPendingApproval &&
+                      canCurrentUserHandlePlanApproval
+                    "
                     type="danger"
                     @click="handleRejectPlanBatch"
                   >
@@ -1373,7 +1505,12 @@ watch(
               style="margin-bottom: 16px"
             />
             <ElAlert
-              v-if="hasPlanWorkflowData && isPlanPendingApproval && !canCurrentUserHandlePlanApproval && activePlanWorkflow?.currentApproverName"
+              v-if="
+                hasPlanWorkflowData &&
+                isPlanPendingApproval &&
+                !canCurrentUserHandlePlanApproval &&
+                activePlanWorkflow?.currentApproverName
+              "
               type="warning"
               :title="`当前节点审批人为 ${activePlanWorkflow.currentApproverName}，你当前仅可查看审批进度和历史。`"
               show-icon
@@ -1397,7 +1534,11 @@ watch(
 
         <!-- 历史记录视图 -->
         <ElTabPane name="history" label="审批历史">
-          <ElEmpty v-if="!hasApprovalData && !hasPlanWorkflowData" description="暂无审批历史" :image-size="120" />
+          <ElEmpty
+            v-if="!hasApprovalData && !hasPlanWorkflowData"
+            description="暂无审批历史"
+            :image-size="120"
+          />
           <template v-else>
             <div v-if="showPlanHistoryCard" class="approval-list" style="margin-bottom: 16px">
               <div
@@ -1465,28 +1606,48 @@ watch(
       <div class="plan-detail-summary">
         <div class="summary-title">
           {{
-            historicalPlanApprovalItems.find(item => String(item.instanceId) === selectedHistoryInstanceId)?.routeTitle ||
+            historicalPlanApprovalItems.find(
+              item => String(item.instanceId) === selectedHistoryInstanceId
+            )?.routeTitle ||
             currentPlanApprovalSummary?.planName ||
             '当前计划'
           }}
         </div>
         <div class="summary-subtitle">
-          {{ selectedHistoryInstanceId ? '当前查看审批实例' : (isPlanPendingApproval ? '待审批实例' : '历史审批实例') }}
+          {{
+            selectedHistoryInstanceId
+              ? '当前查看审批实例'
+              : isPlanPendingApproval
+                ? '待审批实例'
+                : '历史审批实例'
+          }}
           {{ selectedHistoryInstanceId ? '' : currentPlanApprovalItems.length }}
         </div>
       </div>
 
-      <div v-if="(selectedHistoryInstanceId ? historicalPlanApprovalItems : currentPlanApprovalItems).length > 0" class="plan-detail-list">
+      <div
+        v-if="
+          (selectedHistoryInstanceId ? historicalPlanApprovalItems : currentPlanApprovalItems)
+            .length > 0
+        "
+        class="plan-detail-list"
+      >
         <div
-          v-for="item in (selectedHistoryInstanceId
-            ? historicalPlanApprovalItems.filter(historyItem => String(historyItem.instanceId) === selectedHistoryInstanceId)
-            : currentPlanApprovalItems)"
+          v-for="item in selectedHistoryInstanceId
+            ? historicalPlanApprovalItems.filter(
+                historyItem => String(historyItem.instanceId) === selectedHistoryInstanceId
+              )
+            : currentPlanApprovalItems"
           :key="item.instanceId"
           class="plan-detail-item"
         >
           <div class="detail-item-header">
             <div class="detail-item-title">{{ item.routeTitle || item.title }}</div>
-            <ElTag :type="item.statusType || detailDialogStatusTag.type" effect="light" size="small">
+            <ElTag
+              :type="item.statusType || detailDialogStatusTag.type"
+              effect="light"
+              size="small"
+            >
               {{ item.statusLabel || detailDialogStatusTag.label }}
             </ElTag>
           </div>
@@ -1508,14 +1669,19 @@ watch(
               <span class="detail-value">{{ formatTime(item.createdAt) }}</span>
             </div>
             <div class="detail-meta-row">
-              <span class="detail-label">{{ selectedHistoryInstanceId ? '实例状态' : '当前步骤' }}：</span>
+              <span class="detail-label"
+                >{{ selectedHistoryInstanceId ? '实例状态' : '当前步骤' }}：</span
+              >
               <span class="detail-value">{{ item.currentStepName }}</span>
             </div>
             <div v-if="item.completedAt" class="detail-meta-row">
               <span class="detail-label">完成时间：</span>
               <span class="detail-value">{{ formatTime(item.completedAt) }}</span>
             </div>
-            <div v-if="currentDetailWorkflow?.currentApproverName && !selectedHistoryInstanceId" class="detail-meta-row">
+            <div
+              v-if="currentDetailWorkflow?.currentApproverName && !selectedHistoryInstanceId"
+              class="detail-meta-row"
+            >
               <span class="detail-label">当前审批人：</span>
               <span class="detail-value">{{ currentDetailWorkflow.currentApproverName }}</span>
             </div>
@@ -1528,20 +1694,28 @@ watch(
       </div>
       <ElEmpty v-else description="暂无审批实例详情" :image-size="100" />
 
-      <div v-if="(selectedHistoryInstanceDetail?.history?.length || planWorkflowHistory.length) > 0" class="plan-detail-history">
+      <div
+        v-if="(selectedHistoryInstanceDetail?.history?.length || planWorkflowHistory.length) > 0"
+        class="plan-detail-history"
+      >
         <div class="summary-title">审批历史</div>
         <ApprovalHistory
-          :history="selectedHistoryInstanceDetail?.history?.length
-            ? selectedHistoryInstanceDetail.history.map((historyItem, index) => ({
-              id: String(historyItem.taskId ?? index),
-              action: normalizeWorkflowAction(historyItem.action),
-              operator: String(historyItem.operatorId ?? index),
-              operatorName: String(historyItem.operatorName || '系统'),
-              operateTime: new Date(historyItem.operateTime || Date.now()),
-              stepName: typeof historyItem.taskName === 'string' ? historyItem.taskName : undefined,
-              comment: historyItem.comment
-            }))
-            : planWorkflowHistory"
+          :history="
+            selectedHistoryInstanceDetail?.history?.length
+              ? selectedHistoryInstanceDetail.history
+                  .filter(shouldDisplayWorkflowHistoryItem)
+                  .map((historyItem, index) => ({
+                    id: String(historyItem.taskId ?? index),
+                    action: normalizeWorkflowAction(historyItem.action),
+                    operator: String(historyItem.operatorId ?? index),
+                    operatorName: String(historyItem.operatorName || '系统'),
+                    operateTime: new Date(historyItem.operateTime || Date.now()),
+                    stepName:
+                      typeof historyItem.taskName === 'string' ? historyItem.taskName : undefined,
+                    comment: historyItem.comment
+                  }))
+              : planWorkflowHistory
+          "
           :approval-type="approvalType"
         />
       </div>

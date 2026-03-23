@@ -35,10 +35,7 @@ export interface ParseResult {
  * - COLLEGE, SECONDARY_COLLEGE, DIVISION, OTHER, academic, ACADEMIC → secondary_college
  * - admin/ADMIN → 按组织名称二次判定（在调用处处理）
  */
-export function mapOrgTypeToRole(
-  orgType: string,
-  orgName?: string
-): UserRole | null {
+export function mapOrgTypeToRole(orgType: string, orgName?: string): UserRole | null {
   const normalizedType = String(orgType || '').trim()
   const normalizedName = String(orgName || '').trim()
 
@@ -88,6 +85,9 @@ export function mapBackendUser(userData: Record<string, unknown>): User {
     userData.orgType || userData.role,
     userData.orgName || userData.department
   )
+  const roles = Array.isArray(userData.roles)
+    ? userData.roles.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
+    : []
 
   return {
     id: userData.userId?.toString() || userData.id?.toString() || '',
@@ -100,6 +100,7 @@ export function mapBackendUser(userData: Record<string, unknown>): User {
     userId: Number(userData.userId || userData.id || 0),
     orgId: Number(userData.orgId || 0),
     realName: userData.realName || userData.name || userData.username || '',
+    roles,
     permissions: Array.isArray(userData.permissions) ? userData.permissions : []
   } as User
 }
