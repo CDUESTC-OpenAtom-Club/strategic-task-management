@@ -64,9 +64,17 @@ export interface WorkflowTaskResponse {
   taskName: string
   taskKey: string
   status: string
+  currentStepName?: string
   assigneeId?: number
   assigneeName?: string
+  approverOrgId?: number
+  approverOrgName?: string
+  stepNo?: number
+  stepType?: string
+  comment?: string
+  approvedAt?: string
   createdTime?: string
+  startedAt?: string
 }
 
 export interface WorkflowHistoryItem {
@@ -78,6 +86,27 @@ export interface WorkflowHistoryItem {
   action: string
   comment?: string
   operateTime?: string
+}
+
+export interface WorkflowHistoryCardResponse {
+  instanceId: string
+  instanceNo?: string
+  roundNo?: number
+  entityType?: string
+  entityId?: number
+  planId?: number
+  planName?: string
+  flowCode?: string
+  flowName?: string
+  sourceOrgId?: number
+  sourceOrgName?: string
+  targetOrgId?: number
+  targetOrgName?: string
+  status: string
+  startedAt?: string
+  completedAt?: string
+  requesterId?: number
+  requesterName?: string
 }
 
 export interface WorkflowInstanceDetailResponse {
