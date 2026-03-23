@@ -4,7 +4,17 @@
  * 功能：接收战略任务 → 查看战略指标 → 拆分子指标 → 下发给学院 → 审批学院提交
  */
 import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { Plus, Promotion, Check, Close, View, Search, RefreshLeft, Timer, Delete } from '@element-plus/icons-vue'
+import {
+  Plus,
+  Promotion,
+  Check,
+  Close,
+  View,
+  Search,
+  RefreshLeft,
+  Timer,
+  Delete
+} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { StrategicIndicator } from '@/shared/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
@@ -18,8 +28,8 @@ import { logger } from '@/shared/lib/utils/logger'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
-  viewingRole?: string  // 角色类型
-  viewingDept?: string  // 部门名称
+  viewingRole?: string // 角色类型
+  viewingDept?: string // 部门名称
 }>()
 
 // Stores
@@ -29,7 +39,9 @@ const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
 
 // 当前用户部门（优先使用视角切换的部门）
-const currentDept = computed(() => props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || '')
+const currentDept = computed(
+  () => props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || ''
+)
 
 const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
   const raw = indicator as StrategicIndicator & { taskId?: string | number }
@@ -47,6 +59,19 @@ const getOrgIdByDeptName = (deptName: string): number | undefined => {
   }
   const id = Number(match.id)
   return Number.isFinite(id) && id > 0 ? id : undefined
+}
+
+const matchesDepartment = (value: string | string[] | undefined, deptName: string): boolean => {
+  const normalizedDeptName = String(deptName || '').trim()
+  if (!normalizedDeptName || !value) {
+    return false
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(dept => String(dept || '').trim() === normalizedDeptName)
+  }
+
+  return String(value).trim() === normalizedDeptName
 }
 
 // 判断是否为战略发展部（只能查看，不能编辑）
@@ -79,17 +104,24 @@ const searchKeyword = ref('')
 // 审计日志
 const auditLogVisible = ref(false)
 const currentAuditIndicator = ref<StrategicIndicator | null>(null)
+const addRowFormRef = ref<HTMLElement | null>(null)
 
 // 任务审批抽屉状态
 const taskApprovalVisible = ref(false)
 
 // 专门用于审批抽屉的指标列表（当前选中学院的所有子指标，只显示当前部门下发的）
 const approvalIndicators = computed(() => {
-  if (!selectedCollege.value) {return []}
+  if (!selectedCollege.value) {
+    return []
+  }
   // 只返回当前部门下发给该学院的指标
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
-    if (i.ownerDept !== currentDept.value) {return false}
+    if (i.isStrategic) {
+      return false
+    }
+    if (i.ownerDept !== currentDept.value) {
+      return false
+    }
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
     }
@@ -100,7 +132,9 @@ const approvalIndicators = computed(() => {
 // 待审批数量（用于按钮显示）- 基于 progressApprovalStatus === 'PENDING'
 // 注意：这是进度审批状态（progress approval），不是指标定义审核状态（lifecycle status）
 const pendingApprovalCount = computed(() => {
-  if (!selectedCollege.value) {return 0}
+  if (!selectedCollege.value) {
+    return 0
+  }
   // 统计当前部门下发给该学院的、进度待审批的指标数量
   return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'PENDING').length
 })
@@ -123,7 +157,9 @@ const handleApprovalRefresh = async () => {
 
 // 筛选后的学院列表（用于侧边栏搜索）
 const filteredColleges = computed(() => {
-  if (!searchKeyword.value) {return colleges.value}
+  if (!searchKeyword.value) {
+    return colleges.value
+  }
   const keyword = searchKeyword.value.toLowerCase()
   return colleges.value.filter(c => c.toLowerCase().includes(keyword))
 })
@@ -131,9 +167,13 @@ const filteredColleges = computed(() => {
 // 获取学院的子指标数量（只统计当前部门下发的）
 const getCollegeChildCount = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
+    if (i.isStrategic) {
+      return false
+    }
     // 只统计当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) {return false}
+    if (i.ownerDept !== currentDept.value) {
+      return false
+    }
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
@@ -144,33 +184,39 @@ const getCollegeChildCount = (college: string) => {
 
 // 获取选中学院的所有子指标（按父指标分组，只显示当前部门下发的）
 const collegeIndicators = computed(() => {
-  if (!selectedCollege.value) {return []}
-  
+  if (!selectedCollege.value) {
+    return []
+  }
+
   // 获取当前部门下发给该学院的子指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
+    if (i.isStrategic) {
+      return false
+    }
     // 只显示当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) {return false}
+    if (i.ownerDept !== currentDept.value) {
+      return false
+    }
     // 支持字符串或数组格式的 responsibleDept
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(selectedCollege.value!)
     }
     return i.responsibleDept === selectedCollege.value
   })
-  
+
   // 获取这些子指标的父指标
   const parentIds = new Set(childIndicators.map(c => c.parentIndicatorId).filter(Boolean))
-  const parentIndicators = strategicStore.indicators.filter(i =>
-    i.isStrategic && parentIds.has(i.id.toString())
+  const parentIndicators = strategicStore.indicators.filter(
+    i => i.isStrategic && parentIds.has(i.id.toString())
   )
-  
+
   return parentIndicators
 })
 
 // 获取指标的子指标（只显示当前部门下发的）
 const _getChildIndicators = (parentId: string) => {
-  return strategicStore.indicators.filter(i => 
-    i.parentIndicatorId === parentId && !i.isStrategic && i.ownerDept === currentDept.value
+  return strategicStore.indicators.filter(
+    i => i.parentIndicatorId === parentId && !i.isStrategic && i.ownerDept === currentDept.value
   )
 }
 
@@ -199,15 +245,15 @@ const selectParentDialogVisible = ref(false)
 // 新增指标列表（支持一次添加多个）
 interface NewIndicatorItem {
   id: string
-  parentIndicatorId: string  // 关联的父指标ID
-  parentIndicatorName: string  // 关联的父指标名称（用于显示）
-  taskContent: string  // 父指标所属的战略任务
-  type1: '定量' | '定性'  // 指标类型
-  name: string  // 指标内容
-  remark: string  // 备注
-  weight: number  // 权重
-  targetProgress: number  // 定量指标目标进度
-  milestones: { id: string; name: string; targetProgress: number; deadline: string }[]  // 里程碑
+  parentIndicatorId: string // 关联的父指标ID
+  parentIndicatorName: string // 关联的父指标名称（用于显示）
+  taskContent: string // 父指标所属的战略任务
+  type1: '定量' | '定性' // 指标类型
+  name: string // 指标内容
+  remark: string // 备注
+  weight: number // 权重
+  targetProgress: number // 定量指标目标进度
+  milestones: { id: string; name: string; targetProgress: number; deadline: string }[] // 里程碑
 }
 
 // 弹框中的新增指标列表
@@ -218,10 +264,20 @@ const _selectingParentForIndex = ref<number>(-1)
 
 // 计划和指标数据（用于选择关联指标弹框）
 const plansWithIndicators = computed(() => {
-  // 获取所有战略指标，按任务分组
-  const indicators = strategicStore.indicators.filter(i => i.isStrategic)
+  // 职能部门只允许关联当前部门已接收的战略指标；战略发展部只读视角保留全量查看
+  const indicators = strategicStore.indicators.filter(i => {
+    if (!i.isStrategic) {
+      return false
+    }
+
+    if (!isFunctionalDept.value) {
+      return true
+    }
+
+    return matchesDepartment(i.responsibleDept, currentDept.value)
+  })
   const taskMap = new Map<string, StrategicIndicator[]>()
-  
+
   indicators.forEach(indicator => {
     const taskContent = indicator.taskContent || '未分类'
     if (!taskMap.has(taskContent)) {
@@ -229,7 +285,7 @@ const plansWithIndicators = computed(() => {
     }
     taskMap.get(taskContent)!.push(indicator)
   })
-  
+
   return Array.from(taskMap.entries()).map(([taskContent, indicators]) => ({
     taskContent,
     type2: indicators[0]?.type2 || '发展性',
@@ -242,13 +298,13 @@ interface SelectParentTableRow {
   taskContent: string
   type2: '发展性' | '基础性'
   indicator: StrategicIndicator
-  isFirstOfTask: boolean  // 是否是该任务的第一行
-  taskRowSpan: number     // 任务单元格需要合并的行数
+  isFirstOfTask: boolean // 是否是该任务的第一行
+  taskRowSpan: number // 任务单元格需要合并的行数
 }
 
 const selectParentTableData = computed((): SelectParentTableRow[] => {
   const data: SelectParentTableRow[] = []
-  
+
   plansWithIndicators.value.forEach(task => {
     const taskIndicators = task.indicators
     taskIndicators.forEach((indicator, index) => {
@@ -261,12 +317,18 @@ const selectParentTableData = computed((): SelectParentTableRow[] => {
       })
     })
   })
-  
+
   return data
 })
 
 // 选择关联指标弹框 - 单元格合并方法
-const _selectParentSpanMethod = ({ row, columnIndex }: { row: SelectParentTableRow; columnIndex: number }) => {
+const _selectParentSpanMethod = ({
+  row,
+  columnIndex
+}: {
+  row: SelectParentTableRow
+  columnIndex: number
+}) => {
   // 第一列（战略任务）需要合并
   if (columnIndex === 0) {
     if (row.isFirstOfTask) {
@@ -288,7 +350,7 @@ const openAddIndicatorForm = () => {
       return
     }
   }
-  
+
   // 重置表单
   newIndicatorForm.value = {
     id: `new-${Date.now()}`,
@@ -303,6 +365,13 @@ const openAddIndicatorForm = () => {
     milestones: []
   }
   isAddingIndicator.value = true
+
+  nextTick(() => {
+    addRowFormRef.value?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    })
+  })
 }
 
 // 取消添加指标
@@ -344,12 +413,12 @@ const generateMonthlyMilestonesForForm = () => {
   const currentYear = timeContext.currentYear
   const indicatorName = newIndicatorForm.value.name || '指标完成'
   newIndicatorForm.value.milestones = []
-  
+
   for (let month = 1; month <= 12; month++) {
     const lastDay = new Date(currentYear, month, 0).getDate()
     const deadline = `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
     const progress = Math.round((month / 12) * 100)
-    
+
     newIndicatorForm.value.milestones.push({
       id: `ms-${Date.now()}-${month}`,
       name: indicatorName,
@@ -398,58 +467,70 @@ const saveNewIndicator = () => {
     ElMessage.warning('请填写指标内容')
     return
   }
-  
+
   if (!selectedCollege.value) {
     ElMessage.warning('请先选择学院')
     return
   }
-  
+
   // 创建子指标（状态为草稿）
-  const parentIndicator = strategicStore.indicators.find(i => i.id.toString() === newIndicatorForm.value.parentIndicatorId)
-  const parentTaskId = parentIndicator ? getIndicatorTaskId(parentIndicator as StrategicIndicator) : ''
-  
-    const newIndicator: StrategicIndicator = {
-      id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
-      name: newIndicatorForm.value.name,
-      isQualitative: newIndicatorForm.value.type1 === '定性',
-      type1: newIndicatorForm.value.type1,
-      type2: parentIndicator?.type2 || '发展性',
-      progress: 0,
-      createTime: new Date().toLocaleDateString('zh-CN'),
-      weight: newIndicatorForm.value.weight,
-      remark: newIndicatorForm.value.remark,
-      canWithdraw: false,
-      taskContent: newIndicatorForm.value.taskContent,
-      milestones: newIndicatorForm.value.type1 === '定性' ? newIndicatorForm.value.milestones.map(m => ({
-        id: m.id,
-        name: m.name,
-        targetProgress: m.targetProgress,
-        deadline: m.deadline,
-        status: 'pending' as const
-      })) : [],
-      targetValue: newIndicatorForm.value.type1 === '定量' ? newIndicatorForm.value.targetProgress : newIndicatorForm.value.milestones.length,
-      unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
-      responsibleDept: selectedCollege.value!,
-      responsiblePerson: '',
-      status: 'draft',
-      isStrategic: false,
-      ownerDept: currentDept.value,
-      parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
-      year: timeContext.currentYear,
-      statusAudit: []  // 空表示草稿状态
-    }
-    ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
-    // Step1: 只保存到前端临时状态，不调用后端 createIndicator
-    // Step2: 点击"下发"按钮时，再调用正式的下发接口
-    strategicStore.addDraftIndicator(newIndicator)
-  
+  const parentIndicator = strategicStore.indicators.find(
+    i => i.id.toString() === newIndicatorForm.value.parentIndicatorId
+  )
+  const parentTaskId = parentIndicator
+    ? getIndicatorTaskId(parentIndicator as StrategicIndicator)
+    : ''
+
+  const newIndicator: StrategicIndicator = {
+    id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
+    name: newIndicatorForm.value.name,
+    isQualitative: newIndicatorForm.value.type1 === '定性',
+    type1: newIndicatorForm.value.type1,
+    type2: parentIndicator?.type2 || '发展性',
+    progress: 0,
+    createTime: new Date().toLocaleDateString('zh-CN'),
+    weight: newIndicatorForm.value.weight,
+    remark: newIndicatorForm.value.remark,
+    canWithdraw: false,
+    taskContent: newIndicatorForm.value.taskContent,
+    milestones:
+      newIndicatorForm.value.type1 === '定性'
+        ? newIndicatorForm.value.milestones.map(m => ({
+            id: m.id,
+            name: m.name,
+            targetProgress: m.targetProgress,
+            deadline: m.deadline,
+            status: 'pending' as const
+          }))
+        : [],
+    targetValue:
+      newIndicatorForm.value.type1 === '定量'
+        ? newIndicatorForm.value.targetProgress
+        : newIndicatorForm.value.milestones.length,
+    unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
+    responsibleDept: selectedCollege.value!,
+    responsiblePerson: '',
+    status: 'draft',
+    isStrategic: false,
+    ownerDept: currentDept.value,
+    parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
+    year: timeContext.currentYear,
+    statusAudit: [] // 空表示草稿状态
+  }
+  ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
+  // Step1: 只保存到前端临时状态，不调用后端 createIndicator
+  // Step2: 点击"下发"按钮时，再调用正式的下发接口
+  strategicStore.addDraftIndicator(newIndicator)
+
   ElMessage.success('已添加指标（草稿状态）')
   cancelAddIndicator()
 }
 
 // 判断当前学院是否可以新增指标（没有已下发状态的指标）
 const _canAddIndicator = computed(() => {
-  if (!selectedCollege.value) {return false}
+  if (!selectedCollege.value) {
+    return false
+  }
   const status = getCollegeStatus(selectedCollege.value)
   return status.distributed === 0 && status.pending === 0 && status.approved === 0
 })
@@ -462,22 +543,22 @@ interface LocalMilestone {
   id: string
   name: string
   expectedDate: string
-  progress: number  // 0-100
+  progress: number // 0-100
 }
 
 // 新增子指标的临时存储（按父指标ID分组）
 interface NewChildIndicator {
   id: string
   name: string
-  college: string[]  // 改为数组支持多选
+  college: string[] // 改为数组支持多选
   targetValue: number
   unit: string
   weight: number
   remark: string
-  type1: '定量' | '定性'  // 指标类型
-  targetProgress: number  // 定量指标目标进度 0-100
-  milestones: LocalMilestone[]  // 定性指标里程碑列表
-  isNew: boolean  // 标记是否为新增的未保存行
+  type1: '定量' | '定性' // 指标类型
+  targetProgress: number // 定量指标目标进度 0-100
+  milestones: LocalMilestone[] // 定性指标里程碑列表
+  isNew: boolean // 标记是否为新增的未保存行
 }
 
 // 导出供模板使用
@@ -494,14 +575,20 @@ const editingNewChildId = ref<string | null>(null)
 // 验证并保存新增子指标（点击外部时调用）
 const validateAndSaveNewChild = (parentId: string, childId: string) => {
   const children = newChildIndicators[parentId]
-  if (!children) {return}
-  
+  if (!children) {
+    return
+  }
+
   const childIndex = children.findIndex(c => c.id === childId)
-  if (childIndex === -1) {return}
-  
+  if (childIndex === -1) {
+    return
+  }
+
   const child = children[childIndex]
-  if (!child) {return}
-  
+  if (!child) {
+    return
+  }
+
   // 如果名称和学院都为空，删除该行
   if (!child.name && (!child.college || child.college.length === 0)) {
     children.splice(childIndex, 1)
@@ -511,7 +598,7 @@ const validateAndSaveNewChild = (parentId: string, childId: string) => {
     editingNewChildId.value = null
     return
   }
-  
+
   // 数据有效，保持该行，退出编辑状态
   editingNewChildId.value = null
 }
@@ -528,42 +615,40 @@ const _addNewChildRow = (parentIndicatorId: string) => {
     ElMessage.warning('您没有权限添加子指标')
     return
   }
-  
+
   // 如果有正在编辑的新增子指标，先保存它
   if (editingNewChildId.value && addingParentId.value) {
     validateAndSaveNewChild(addingParentId.value, editingNewChildId.value)
   }
-  
+
   // 获取父指标信息
   const parentIndicator = collegeIndicators.value.find(i => i.id.toString() === parentIndicatorId)
-  
+
   if (!newChildIndicators[parentIndicatorId]) {
     newChildIndicators[parentIndicatorId] = []
   }
-  
+
   const newChildId = `new-${Date.now()}`
-  
+
   // 自动设置当前选中的学院
-  const defaultCollege = selectedCollege.value 
-    ? [selectedCollege.value] 
-    : []
-  
+  const defaultCollege = selectedCollege.value ? [selectedCollege.value] : []
+
   newChildIndicators[parentIndicatorId].push({
     id: newChildId,
-    name: parentIndicator?.name || '',  // 继承父指标名称
+    name: parentIndicator?.name || '', // 继承父指标名称
     college: defaultCollege,
     targetValue: 100,
     unit: '%',
     weight: 10,
-    remark: parentIndicator?.remark || '',  // 继承父指标备注
-    type1: '定性',  // 默认定性指标
-    targetProgress: 100,  // 定量指标默认目标进度100%
-    milestones: [],  // 定性指标里程碑列表
+    remark: parentIndicator?.remark || '', // 继承父指标备注
+    type1: '定性', // 默认定性指标
+    targetProgress: 100, // 定量指标默认目标进度100%
+    milestones: [], // 定性指标里程碑列表
     isNew: true
   })
-  
+
   addingParentId.value = parentIndicatorId
-  editingNewChildId.value = newChildId  // 设置当前编辑的新增子指标
+  editingNewChildId.value = newChildId // 设置当前编辑的新增子指标
 }
 
 // 删除临时子指标行
@@ -578,20 +663,18 @@ const removeNewChildRow = (parentId: string, index: number) => {
 
 // 删除已有子指标
 const removeChildIndicator = (child: StrategicIndicator) => {
-  ElMessageBox.confirm(
-    `确认删除子指标"${child.name}"？此操作不可恢复。`,
-    '删除确认',
-    {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    strategicStore.deleteIndicator(child.id.toString())
-    ElMessage.success('已删除子指标')
-  }).catch(() => {
-    // 取消删除
+  ElMessageBox.confirm(`确认删除子指标"${child.name}"？此操作不可恢复。`, '删除确认', {
+    confirmButtonText: '确认删除',
+    cancelButtonText: '取消',
+    type: 'warning'
   })
+    .then(() => {
+      strategicStore.deleteIndicator(child.id.toString())
+      ElMessage.success('已删除子指标')
+    })
+    .catch(() => {
+      // 取消删除
+    })
 }
 
 // 获取所有待下发的子指标数量
@@ -604,12 +687,12 @@ const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
   const parentId = parentIndicator.id.toString()
   const parentTaskId = getIndicatorTaskId(parentIndicator)
   const children = newChildIndicators[parentId] || []
-  
+
   if (children.length === 0) {
     ElMessage.warning('没有待下发的子指标')
     return
   }
-  
+
   // 验证所有子指标数据
   for (const child of children) {
     if (!child.name) {
@@ -621,57 +704,56 @@ const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
       return
     }
   }
-  
-  ElMessageBox.confirm(
-    `确认下发 ${children.length} 个子指标到对应学院？`,
-    '下发确认',
-    {
-      confirmButtonText: '确认下发',
-      cancelButtonText: '取消',
-      type: 'info'
-    }
-  ).then(() => {
+
+  ElMessageBox.confirm(`确认下发 ${children.length} 个子指标到对应学院？`, '下发确认', {
+    confirmButtonText: '确认下发',
+    cancelButtonText: '取消',
+    type: 'info'
+  }).then(() => {
     // 创建子指标
-      children.forEach(child => {
-        const newIndicator: StrategicIndicator = {
-          id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
-          name: child.name,
-          isQualitative: child.type1 === '定性',
-          type1: child.type1,
-          type2: parentIndicator.type2,
-          progress: 0,
-          createTime: new Date().toLocaleDateString('zh-CN'),
-          weight: child.weight,
-          remark: child.remark,
-          canWithdraw: false,
-          taskContent: parentIndicator.taskContent,
-          milestones: child.type1 === '定性' ? child.milestones.map(m => ({
-            id: m.id,
-            name: m.name,
-            targetProgress: m.progress,
-            deadline: m.expectedDate,
-            status: 'pending' as const
-          })) : [],
-          targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
-          unit: child.type1 === '定量' ? '%' : '个里程碑',
-          responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
-          responsiblePerson: '',
-          status: 'draft',
-          isStrategic: false,
-          ownerDept: currentDept.value,
-          parentIndicatorId: parentId,
-          year: timeContext.currentYear,
-          statusAudit: []  // 默认为空，状态为草稿
-        }
-        ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
-        // Step1: 只保存到前端临时状态，不调用后端
-        strategicStore.addDraftIndicator(newIndicator)
-      })
-    
+    children.forEach(child => {
+      const newIndicator: StrategicIndicator = {
+        id: `${Date.now()}-${child.college}-${Math.random().toString(36).substr(2, 9)}`,
+        name: child.name,
+        isQualitative: child.type1 === '定性',
+        type1: child.type1,
+        type2: parentIndicator.type2,
+        progress: 0,
+        createTime: new Date().toLocaleDateString('zh-CN'),
+        weight: child.weight,
+        remark: child.remark,
+        canWithdraw: false,
+        taskContent: parentIndicator.taskContent,
+        milestones:
+          child.type1 === '定性'
+            ? child.milestones.map(m => ({
+                id: m.id,
+                name: m.name,
+                targetProgress: m.progress,
+                deadline: m.expectedDate,
+                status: 'pending' as const
+              }))
+            : [],
+        targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
+        unit: child.type1 === '定量' ? '%' : '个里程碑',
+        responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
+        responsiblePerson: '',
+        status: 'draft',
+        isStrategic: false,
+        ownerDept: currentDept.value,
+        parentIndicatorId: parentId,
+        year: timeContext.currentYear,
+        statusAudit: [] // 默认为空，状态为草稿
+      }
+      ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
+      // Step1: 只保存到前端临时状态，不调用后端
+      strategicStore.addDraftIndicator(newIndicator)
+    })
+
     // 清空临时数据
     delete newChildIndicators[parentId]
     addingParentId.value = null
-    
+
     ElMessage.success(`已成功添加 ${children.length} 个子指标，请点击"下发子指标"按钮进行下发`)
   })
 }
@@ -695,14 +777,14 @@ const handleGlobalMousedown = (e: MouseEvent) => {
   const isInSelect = !!target.closest('.college-select-editing')
   const isInDropdown = !!target.closest('.el-select-dropdown')
   isInteractingWithCollegeSelect.value = isInSelect || isInDropdown
-  
+
   // 处理新增子指标行的点击外部保存
   if (editingNewChildId.value && addingParentId.value) {
     // 检查是否点击在新增子指标行内
     const isInNewChildRow = !!target.closest('.new-child-row')
     // 检查是否点击在下拉菜单内
     const isInPopper = !!target.closest('.el-popper') || !!target.closest('.el-select-dropdown')
-    
+
     if (!isInNewChildRow && !isInPopper) {
       // 点击在新增行外部，保存并退出编辑
       validateAndSaveNewChild(addingParentId.value, editingNewChildId.value)
@@ -721,31 +803,35 @@ onBeforeUnmount(() => {
 
 // 双击编辑子指标
 const handleChildDblClick = (child: StrategicIndicator, field: string) => {
-  if (!canEditChild.value) {return}
-  
+  if (!canEditChild.value) {
+    return
+  }
+
   // 检查状态：只有草稿状态才能编辑
   const status = getChildStatus(child)
   if (status !== 'draft') {
     ElMessage.warning('只有草稿状态的指标才能编辑，请先撤销下发')
     return
   }
-  
+
   editingChildId.value = child.id.toString()
   editingChildField.value = field
-  
+
   // 如果编辑学院字段，需要将字符串解析为数组
   if (field === 'responsibleDept') {
     editingChildValue.value = parseColleges(child.responsibleDept)
   } else {
     editingChildValue.value = child[field as keyof StrategicIndicator]
   }
-  
+
   // 自动聚焦到编辑元素
   nextTick(() => {
     const editingEl = document.querySelector('.editing-field') as HTMLElement
     if (editingEl) {
       // 处理不同类型的输入元素
-      const input = editingEl.querySelector('input, textarea') as HTMLInputElement | HTMLTextAreaElement
+      const input = editingEl.querySelector('input, textarea') as
+        | HTMLInputElement
+        | HTMLTextAreaElement
       if (input) {
         input.focus()
         // 如果是文本输入框，选中所有文本
@@ -759,10 +845,12 @@ const handleChildDblClick = (child: StrategicIndicator, field: string) => {
 
 // 保存子指标编辑
 const saveChildEdit = (child: StrategicIndicator, field: string) => {
-  if (editingChildId.value === null) {return}
-  
+  if (editingChildId.value === null) {
+    return
+  }
+
   let valueToSave = editingChildValue.value
-  
+
   // 如果是学院字段，需要验证至少有一个学院
   if (field === 'responsibleDept') {
     if (!Array.isArray(valueToSave) || valueToSave.length === 0) {
@@ -772,7 +860,7 @@ const saveChildEdit = (child: StrategicIndicator, field: string) => {
     // 将数组转换为逗号分隔的字符串
     valueToSave = valueToSave.join(',')
   }
-  
+
   // 如果是进度字段，需要验证范围
   if (field === 'progress') {
     const progressValue = Number(valueToSave)
@@ -782,13 +870,13 @@ const saveChildEdit = (child: StrategicIndicator, field: string) => {
     }
     valueToSave = progressValue
   }
-  
+
   const updates = {
     [field]: valueToSave
   } as Record<string, unknown>
-  
+
   strategicStore.updateIndicator(child.id.toString(), updates)
-  
+
   cancelChildEdit()
 }
 
@@ -811,8 +899,10 @@ const _handleCollegeSelectBlur = (child: StrategicIndicator) => {
       return
     }
     // 确认当前仍在编辑学院字段
-    if (editingChildId.value === child.id.toString() && 
-        editingChildField.value === 'responsibleDept') {
+    if (
+      editingChildId.value === child.id.toString() &&
+      editingChildField.value === 'responsibleDept'
+    ) {
       saveChildEdit(child, 'responsibleDept')
     }
   }, 100)
@@ -830,8 +920,12 @@ const cancelChildEdit = () => {
 // 辅助函数：获取当前部门下发给指定学院的子指标
 const getMyCollegeIndicators = (college: string) => {
   return strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
-    if (i.ownerDept !== currentDept.value) {return false}
+    if (i.isStrategic) {
+      return false
+    }
+    if (i.ownerDept !== currentDept.value) {
+      return false
+    }
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
@@ -847,14 +941,19 @@ const handleBatchWithdraw = async (college: string) => {
   const withdrawableIndicators = childIndicators.filter(i => {
     const status = getChildStatus(i as StrategicIndicator)
     // 进行中状态包含 distributed、active (legacy) 和 approved，都可以撤回
-    return status === 'distributed' || status === 'active' || status === 'pending' || status === 'approved'
+    return (
+      status === 'distributed' ||
+      status === 'active' ||
+      status === 'pending' ||
+      status === 'approved'
+    )
   })
-  
+
   if (withdrawableIndicators.length === 0) {
     ElMessage.warning('没有可撤销的子指标')
     return
   }
-  
+
   try {
     await ElMessageBox.confirm(
       `确认撤销【${college}】的 ${withdrawableIndicators.length} 个子指标？撤销后可重新编辑或删除。`,
@@ -908,13 +1007,15 @@ const handleBatchWithdraw = async (college: string) => {
 // 批量下发：针对学院下所有草稿状态的子指标
 const handleBatchDistribute = async (college: string) => {
   const childIndicators = getMyCollegeIndicators(college)
-  const draftIndicators = childIndicators.filter(i => getChildStatus(i as StrategicIndicator) === 'draft')
-  
+  const draftIndicators = childIndicators.filter(
+    i => getChildStatus(i as StrategicIndicator) === 'draft'
+  )
+
   if (draftIndicators.length === 0) {
     ElMessage.warning('没有可下发的子指标')
     return
   }
-  
+
   try {
     await ElMessageBox.confirm(
       `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
@@ -945,7 +1046,9 @@ const handleBatchDistribute = async (college: string) => {
       } else {
         // 临时 ID（本地草稿）：先调用 createIndicator 创建，再下发
         const indicatorTaskId = Number(getIndicatorTaskId(indicator as StrategicIndicator))
-        const parentIndicatorId = indicator.parentIndicatorId ? Number(indicator.parentIndicatorId) : undefined
+        const parentIndicatorId = indicator.parentIndicatorId
+          ? Number(indicator.parentIndicatorId)
+          : undefined
         const ownerOrgId = getOrgIdByDeptName(currentDept.value)
         const targetOrgId = getOrgIdByDeptName(college)
 
@@ -967,7 +1070,7 @@ const handleBatchDistribute = async (college: string) => {
           progress: indicator.progress || 0,
           year: indicator.year || new Date().getFullYear(),
           canWithdraw: false,
-          parentIndicatorId,
+          parentIndicatorId
         } as never)
         if (!createResp.success || !createResp.data) {
           throw new Error(createResp.message || '创建指标失败')
@@ -1010,15 +1113,21 @@ const handleBatchDistribute = async (college: string) => {
 const getCollegeStatus = (college: string) => {
   // 只统计当前部门下发给该学院的指标
   const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {return false}
-    if (i.ownerDept !== currentDept.value) {return false}
+    if (i.isStrategic) {
+      return false
+    }
+    if (i.ownerDept !== currentDept.value) {
+      return false
+    }
     if (Array.isArray(i.responsibleDept)) {
       return i.responsibleDept.includes(college)
     }
     return i.responsibleDept === college
   })
-  if (childIndicators.length === 0) {return { draft: 0, distributed: 0, pending: 0, approved: 0 }}
-  
+  if (childIndicators.length === 0) {
+    return { draft: 0, distributed: 0, pending: 0, approved: 0 }
+  }
+
   // 统计各状态数量
   const statusCounts = {
     draft: 0,
@@ -1026,42 +1135,54 @@ const getCollegeStatus = (college: string) => {
     pending: 0,
     approved: 0
   }
-  
+
   childIndicators.forEach(i => {
     const status = getChildStatus(i as StrategicIndicator) as keyof typeof statusCounts
     if (status in statusCounts) {
       statusCounts[status]++
     }
   })
-  
+
   return statusCounts
 }
 
 // 计算当前选中学院的整体状态（用于表头显示）
 // 状态定义：暂无指标、待下发、进行中、待审批
 const collegeOverallStatus = computed(() => {
-  if (!selectedCollege.value) {return { label: '暂无指标', type: 'info' }}
-  
+  if (!selectedCollege.value) {
+    return { label: '暂无指标', type: 'info' }
+  }
+
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
-  
-  if (total === 0) {return { label: '暂无指标', type: 'info' }}
-  
+
+  if (total === 0) {
+    return { label: '暂无指标', type: 'info' }
+  }
+
   // 优先级：待审批 > 待下发 > 进行中
   // 待审批：有学院提交的进度等待审批
-  if (status.pending > 0) {return { label: '待审批', type: 'warning' }}
+  if (status.pending > 0) {
+    return { label: '待审批', type: 'warning' }
+  }
   // 待下发：有草稿状态的指标
-  if (status.draft > 0) {return { label: '待下发', type: 'info' }}
+  if (status.draft > 0) {
+    return { label: '待下发', type: 'info' }
+  }
   // 进行中：已下发、active (legacy) 或已通过的指标（正在执行中）
-  if (status.distributed > 0 || status.approved > 0) {return { label: '进行中', type: 'success' }}
-  
+  if (status.distributed > 0 || status.approved > 0) {
+    return { label: '进行中', type: 'success' }
+  }
+
   return { label: '暂无指标', type: 'info' }
 })
 
 // 下发/撤销统一处理函数
 const _handleDistributeOrWithdraw = (command: string) => {
-  if (!selectedCollege.value) {return}
-  
+  if (!selectedCollege.value) {
+    return
+  }
+
   if (command === 'distribute') {
     handleBatchDistribute(selectedCollege.value)
   } else if (command === 'withdraw') {
@@ -1093,65 +1214,105 @@ const getChildStatus = (child: StrategicIndicator) => {
     APPROVED: 'approved',
     REJECTED: 'distributed'
   }
-  if (normalizedStatus) {return statusMap[normalizedStatus] ?? 'draft'}
+  if (normalizedStatus) {
+    return statusMap[normalizedStatus] ?? 'draft'
+  }
 
   // fallback：兼容本地 statusAudit 推导
   const audit = child.statusAudit || []
-  if (audit.length === 0) {return 'draft'}
+  if (audit.length === 0) {
+    return 'draft'
+  }
   const lastAudit = audit[audit.length - 1]
-  if (!lastAudit) {return 'draft'}
+  if (!lastAudit) {
+    return 'draft'
+  }
   const lastAction = lastAudit.action
-  if (lastAction === 'submit') {return 'pending'}
-  if (lastAction === 'approve') {return 'approved'}
-  if (lastAction === 'reject') {return 'distributed'}
-  if (lastAction === 'distribute') {return 'distributed'}
-  if (lastAction === 'withdraw') {return 'draft'}
+  if (lastAction === 'submit') {
+    return 'pending'
+  }
+  if (lastAction === 'approve') {
+    return 'approved'
+  }
+  if (lastAction === 'reject') {
+    return 'distributed'
+  }
+  if (lastAction === 'distribute') {
+    return 'distributed'
+  }
+  if (lastAction === 'withdraw') {
+    return 'draft'
+  }
   return 'draft'
 }
 
-  // 获取状态标签类型
-  const _getStatusTagType = (status: string) => {
-    switch (status) {
-      case 'draft': return 'info'            // 草稿 - 灰色 (Element Plus info 是灰色)
-      case 'distributed': return 'primary'   // 已下发 - 蓝色 (Element Plus primary 是蓝色)
-    case 'active': return 'primary'        // 已下发 (legacy) - 蓝色
-      case 'pending': return 'warning'       // 待审批 - 橙色
-      case 'approved': return 'success'      // 已通过 - 绿色
-      default: return 'info'
-    }
+// 获取状态标签类型
+const _getStatusTagType = (status: string) => {
+  switch (status) {
+    case 'draft':
+      return 'info' // 草稿 - 灰色 (Element Plus info 是灰色)
+    case 'distributed':
+      return 'primary' // 已下发 - 蓝色 (Element Plus primary 是蓝色)
+    case 'active':
+      return 'primary' // 已下发 (legacy) - 蓝色
+    case 'pending':
+      return 'warning' // 待审批 - 橙色
+    case 'approved':
+      return 'success' // 已通过 - 绿色
+    default:
+      return 'info'
   }
+}
 
 // 获取状态文本
 const _getStatusText = (status: string) => {
   switch (status) {
-    case 'draft': return '草稿'
-    case 'distributed': return '已下发'
-    case 'active': return '已下发'        // Legacy ACTIVE status
-    case 'pending': return '待审批'
-    case 'approved': return '已通过'
-    default: return '已下发'
+    case 'draft':
+      return '草稿'
+    case 'distributed':
+      return '已下发'
+    case 'active':
+      return '已下发' // Legacy ACTIVE status
+    case 'pending':
+      return '待审批'
+    case 'approved':
+      return '已通过'
+    default:
+      return '已下发'
   }
 }
 
 // 格式化学院显示（完整列表）
 const _formatColleges = (depts: string | string[] | undefined): string => {
-  if (!depts) {return '-'}
-  if (Array.isArray(depts)) {return depts.join('、')}
+  if (!depts) {
+    return '-'
+  }
+  if (Array.isArray(depts)) {
+    return depts.join('、')
+  }
   return depts.split(',').join('、')
 }
 
 // 格式化学院显示（简短版，超过2个显示+N）
 const _formatCollegesShort = (depts: string | string[] | undefined): string => {
-  if (!depts) {return '-'}
+  if (!depts) {
+    return '-'
+  }
   const arr = Array.isArray(depts) ? depts : depts.split(',')
-  if (arr.length <= 2) {return arr.join('、')}
+  if (arr.length <= 2) {
+    return arr.join('、')
+  }
   return `${arr.slice(0, 2).join('、')} +${arr.length - 2}`
 }
 
 // 解析学院字符串为数组（用于编辑时）
 const parseColleges = (depts: string | string[] | undefined): string[] => {
-  if (!depts) {return []}
-  if (Array.isArray(depts)) {return depts}
+  if (!depts) {
+    return []
+  }
+  if (Array.isArray(depts)) {
+    return depts
+  }
   return depts.split(',')
 }
 
@@ -1162,20 +1323,30 @@ const _getTaskTypeColor = (type2: string) => {
 
 // 获取指标类型颜色（定性/定量）
 const _getIndicatorTypeColor = (type1: string) => {
-  return type1 === '定性' ? 'var(--color-qualitative, #9333ea)' : 'var(--color-quantitative, #0891b2)'
+  return type1 === '定性'
+    ? 'var(--color-qualitative, #9333ea)'
+    : 'var(--color-quantitative, #0891b2)'
 }
 
 // 为已有子指标生成12个月里程碑（Milestone类型）
-const generateMonthlyMilestonesForExisting = (childName: string): { id: string; name: string; targetProgress: number; deadline: string; status: 'pending' }[] => {
+const generateMonthlyMilestonesForExisting = (
+  childName: string
+): { id: string; name: string; targetProgress: number; deadline: string; status: 'pending' }[] => {
   const currentYear = timeContext.currentYear
   const indicatorName = childName || '指标完成'
-  const milestones: { id: string; name: string; targetProgress: number; deadline: string; status: 'pending' }[] = []
-  
+  const milestones: {
+    id: string
+    name: string
+    targetProgress: number
+    deadline: string
+    status: 'pending'
+  }[] = []
+
   for (let month = 1; month <= 12; month++) {
     const lastDay = new Date(currentYear, month, 0).getDate()
     const deadline = `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
     const progress = Math.round((month / 12) * 100)
-    
+
     milestones.push({
       id: `ms-${Date.now()}-${month}`,
       name: `${indicatorName} - ${month}月`,
@@ -1192,12 +1363,12 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
   const currentYear = timeContext.currentYear
   const indicatorName = childName || '指标完成'
   const milestones: LocalMilestone[] = []
-  
+
   for (let month = 1; month <= 12; month++) {
     const lastDay = new Date(currentYear, month, 0).getDate()
     const expectedDate = `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
     const progress = Math.round((month / 12) * 100)
-    
+
     milestones.push({
       id: `ms-${Date.now()}-${month}`,
       name: `${indicatorName} - ${month}月`,
@@ -1211,17 +1382,25 @@ const generateMonthlyMilestonesLocal = (childName: string): LocalMilestone[] => 
 // 计算定量指标当月的目标进度
 const _getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndicator): number => {
   const milestones = child.milestones || []
-  if (milestones.length === 0) {return 100}
-  
-  const currentMonth = new Date().getMonth() + 1  // 1-12
+  if (milestones.length === 0) {
+    return 100
+  }
+
+  const currentMonth = new Date().getMonth() + 1 // 1-12
   const currentYear = timeContext.currentYear
-  
+
   // 查找当月的里程碑
   for (const ms of milestones) {
     // 兼容两种里程碑类型：Milestone (deadline, targetProgress) 和 LocalMilestone (expectedDate, progress)
-    const dateStr = ('deadline' in ms && ms.deadline) ? ms.deadline : ('expectedDate' in ms ? ms.expectedDate : '')
-    const progressVal = ('targetProgress' in ms && ms.targetProgress !== undefined) ? ms.targetProgress : ('progress' in ms ? ms.progress : 0)
-    
+    const dateStr =
+      'deadline' in ms && ms.deadline ? ms.deadline : 'expectedDate' in ms ? ms.expectedDate : ''
+    const progressVal =
+      'targetProgress' in ms && ms.targetProgress !== undefined
+        ? ms.targetProgress
+        : 'progress' in ms
+          ? ms.progress
+          : 0
+
     if (dateStr) {
       const deadline = new Date(dateStr)
       if (deadline.getFullYear() === currentYear && deadline.getMonth() + 1 === currentMonth) {
@@ -1229,16 +1408,22 @@ const _getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndi
       }
     }
   }
-  
+
   // 如果没找到当月里程碑，返回最近的一个里程碑进度
   const now = new Date()
   let closestProgress = 100
   let minDiff = Infinity
-  
+
   for (const ms of milestones) {
-    const dateStr = ('deadline' in ms && ms.deadline) ? ms.deadline : ('expectedDate' in ms ? ms.expectedDate : '')
-    const progressVal = ('targetProgress' in ms && ms.targetProgress !== undefined) ? ms.targetProgress : ('progress' in ms ? ms.progress : 0)
-    
+    const dateStr =
+      'deadline' in ms && ms.deadline ? ms.deadline : 'expectedDate' in ms ? ms.expectedDate : ''
+    const progressVal =
+      'targetProgress' in ms && ms.targetProgress !== undefined
+        ? ms.targetProgress
+        : 'progress' in ms
+          ? ms.progress
+          : 0
+
     if (dateStr) {
       const deadline = new Date(dateStr)
       const diff = Math.abs(deadline.getTime() - now.getTime())
@@ -1248,12 +1433,15 @@ const _getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndi
       }
     }
   }
-  
+
   return closestProgress
 }
 
 // 处理子指标类型变更
-const _handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, newType: '定量' | '定性') => {
+const _handleChildTypeChange = (
+  child: NewChildIndicator | StrategicIndicator,
+  newType: '定量' | '定性'
+) => {
   // 检查状态：只有草稿状态才能编辑
   if (!('isNew' in child && child.isNew)) {
     const status = getChildStatus(child as StrategicIndicator)
@@ -1262,7 +1450,7 @@ const _handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, n
       return
     }
   }
-  
+
   if ('isNew' in child && child.isNew) {
     // 新增的子指标 - 使用 LocalMilestone 类型
     child.type1 = newType
@@ -1277,10 +1465,9 @@ const _handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, n
   } else {
     // 已有的子指标 - 使用 Milestone 类型
     const indicator = child as StrategicIndicator
-    const newMilestones = newType === '定量' 
-      ? generateMonthlyMilestonesForExisting(indicator.name) 
-      : []
-    
+    const newMilestones =
+      newType === '定量' ? generateMonthlyMilestonesForExisting(indicator.name) : []
+
     const updates: Partial<StrategicIndicator> = {
       type1: newType,
       isQualitative: newType === '定性',
@@ -1289,7 +1476,7 @@ const _handleChildTypeChange = (child: NewChildIndicator | StrategicIndicator, n
     }
     strategicStore.updateIndicator(indicator.id.toString(), updates)
   }
-  
+
   ElMessage.success(`已切换为${newType}指标`)
 }
 
@@ -1318,7 +1505,9 @@ const openMilestonesDialog = (child: NewChildIndicator | StrategicIndicator) => 
 
 // 获取正在编辑的子指标名称
 const getEditingChildName = (): string => {
-  if (!editingMilestonesChild.value) {return ''}
+  if (!editingMilestonesChild.value) {
+    return ''
+  }
   if ('isNew' in editingMilestonesChild.value && editingMilestonesChild.value.isNew) {
     return editingMilestonesChild.value.name || '新增指标'
   }
@@ -1327,7 +1516,9 @@ const getEditingChildName = (): string => {
 
 // 获取正在编辑的子指标类型
 const getEditingChildType = (): string => {
-  if (!editingMilestonesChild.value) {return '定性'}
+  if (!editingMilestonesChild.value) {
+    return '定性'
+  }
   if ('isNew' in editingMilestonesChild.value && editingMilestonesChild.value.isNew) {
     return editingMilestonesChild.value.type1 || '定性'
   }
@@ -1338,9 +1529,10 @@ const getEditingChildType = (): string => {
 // 添加里程碑
 const addMilestone = () => {
   const autoName = getEditingChildType() === '定量' ? getEditingChildName() : ''
-  const lastProgress = editingMilestones.value.length > 0 
-    ? editingMilestones.value[editingMilestones.value.length - 1]?.progress ?? 0
-    : 0
+  const lastProgress =
+    editingMilestones.value.length > 0
+      ? (editingMilestones.value[editingMilestones.value.length - 1]?.progress ?? 0)
+      : 0
   editingMilestones.value.push({
     id: `ms-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     name: autoName,
@@ -1354,14 +1546,14 @@ const generateMonthlyMilestones = () => {
   const currentYear = new Date().getFullYear()
   const indicatorName = getEditingChildName() || '指标完成'
   editingMilestones.value = []
-  
+
   for (let month = 1; month <= 12; month++) {
     const lastDay = new Date(currentYear, month, 0).getDate()
     const deadline = `${currentYear}-${String(month).padStart(2, '0')}-${lastDay}`
     const progress = Math.round((month / 12) * 100)
-    
+
     editingMilestones.value.push({
-      id: `-${month}`,  // 使用负数字符串作为临时 ID，后端会识别为新里程碑
+      id: `-${month}`, // 使用负数字符串作为临时 ID，后端会识别为新里程碑
       name: `${indicatorName} - ${month}月`,
       expectedDate: deadline,
       progress: progress
@@ -1377,23 +1569,29 @@ const removeMilestone = (index: number) => {
 // 验证里程碑进度（后面的不能小于前面的）
 const validateMilestoneProgress = (index: number) => {
   const current = editingMilestones.value[index]
-  if (!current) {return}
-  
+  if (!current) {
+    return
+  }
+
   // 检查是否小于前一个里程碑的进度
   if (index > 0) {
     const prev = editingMilestones.value[index - 1]
     if (prev && current.progress < prev.progress) {
-      ElMessage.warning(`第 ${index + 1} 个里程碑的进度不能小于第 ${index} 个里程碑的进度 (${prev.progress}%)`)
+      ElMessage.warning(
+        `第 ${index + 1} 个里程碑的进度不能小于第 ${index} 个里程碑的进度 (${prev.progress}%)`
+      )
       current.progress = prev.progress
       return
     }
   }
-  
+
   // 检查是否大于后一个里程碑的进度
   if (index < editingMilestones.value.length - 1) {
     const next = editingMilestones.value[index + 1]
     if (next && current.progress > next.progress) {
-      ElMessage.warning(`第 ${index + 1} 个里程碑的进度不能大于第 ${index + 2} 个里程碑的进度 (${next.progress}%)`)
+      ElMessage.warning(
+        `第 ${index + 1} 个里程碑的进度不能大于第 ${index + 2} 个里程碑的进度 (${next.progress}%)`
+      )
       current.progress = next.progress
       return
     }
@@ -1402,8 +1600,10 @@ const validateMilestoneProgress = (index: number) => {
 
 // 保存里程碑
 const saveMilestones = async () => {
-  if (!editingMilestonesChild.value) {return}
-  
+  if (!editingMilestonesChild.value) {
+    return
+  }
+
   const child = editingMilestonesChild.value
   if ('isNew' in child && child.isNew) {
     child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
@@ -1423,22 +1623,26 @@ const saveMilestones = async () => {
           status: 'pending' as const
         }))
       }
-      
-      logger.info(`[IndicatorDistributionView] Saving ${editingMilestones.value.length} milestones for indicator ${indicator.id}`)
-      
+
+      logger.info(
+        `[IndicatorDistributionView] Saving ${editingMilestones.value.length} milestones for indicator ${indicator.id}`
+      )
+
       await strategicStore.updateIndicator(indicator.id.toString(), updates)
-      
+
       logger.info(`[IndicatorDistributionView] Reloading indicators after milestone update...`)
-      
+
       // 重新加载指标数据以获取后端更新后的里程碑
       await refreshDistributionData()
-      
+
       // 验证重新加载后的里程碑数量
       const reloadedIndicator = strategicStore.indicators.find(i => i.id === indicator.id)
       if (reloadedIndicator) {
-        logger.info(`[IndicatorDistributionView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`)
+        logger.info(
+          `[IndicatorDistributionView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`
+        )
       }
-      
+
       ElMessage.success('里程碑已更新')
       milestonesDialogVisible.value = false
       editingMilestonesChild.value = null
@@ -1474,7 +1678,10 @@ const getMilestonesTooltip = (child: StrategicIndicator | NewChildIndicator): Lo
 }
 
 // 判断里程碑是否已完成（指标当前进度 >= 里程碑目标进度）
-const isMilestoneCompleted = (child: StrategicIndicator | NewChildIndicator, milestoneProgress: number): boolean => {
+const isMilestoneCompleted = (
+  child: StrategicIndicator | NewChildIndicator,
+  milestoneProgress: number
+): boolean => {
   if ('isNew' in child && child.isNew) {
     return false // 新增的子指标还没有进度
   }
@@ -1486,41 +1693,45 @@ const isMilestoneCompleted = (child: StrategicIndicator | NewChildIndicator, mil
 
 // 表格行数据类型
 interface TableRowData {
-  type: 'child' | 'new-child' | 'indicator-only'  // indicator-only 表示没有子指标的父指标
+  type: 'child' | 'new-child' | 'indicator-only' // indicator-only 表示没有子指标的父指标
   taskTitle: string
-  indicator: StrategicIndicator  // 父指标
-  child?: StrategicIndicator | NewChildIndicator  // 子指标
+  indicator: StrategicIndicator // 父指标
+  child?: StrategicIndicator | NewChildIndicator // 子指标
   parentIndicatorId: string
-  rowIndex?: number  // 新增子指标的索引
+  rowIndex?: number // 新增子指标的索引
 }
 
 // ================== 学院视图数据 ==================
 
 // 学院视图表格数据
 const collegeTableData = computed(() => {
-  if (!selectedCollege.value) {return []}
-  
+  if (!selectedCollege.value) {
+    return []
+  }
+
   const data: TableRowData[] = []
   const indicators = collegeIndicators.value
-  
-  indicators.forEach((indicator) => {
+
+  indicators.forEach(indicator => {
     const indicatorId = indicator.id.toString()
-    
+
     // 获取下发给该学院的子指标（支持字符串或数组格式）
     const children = strategicStore.indicators.filter(i => {
-      if (i.parentIndicatorId !== indicatorId || i.isStrategic) {return false}
+      if (i.parentIndicatorId !== indicatorId || i.isStrategic) {
+        return false
+      }
       // 支持字符串或数组格式的 responsibleDept
       if (Array.isArray(i.responsibleDept)) {
         return i.responsibleDept.includes(selectedCollege.value!)
       }
       return i.responsibleDept === selectedCollege.value
     })
-    
+
     // 获取新增的子指标（只显示分配给当前学院的）
-    const newChildren = (newChildIndicators[indicatorId] || []).filter(
-      nc => nc.college.includes(selectedCollege.value!)
+    const newChildren = (newChildIndicators[indicatorId] || []).filter(nc =>
+      nc.college.includes(selectedCollege.value!)
     )
-    
+
     // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
     if (children.length === 0 && newChildren.length === 0) {
       data.push({
@@ -1540,11 +1751,13 @@ const collegeTableData = computed(() => {
           parentIndicatorId: indicatorId
         })
       })
-      
+
       // 添加新增的子指标行
       newChildren.forEach((newChild, newIdx) => {
         // 查找原始索引
-        const originalIdx = (newChildIndicators[indicatorId] || []).findIndex(nc => nc.id === newChild.id)
+        const originalIdx = (newChildIndicators[indicatorId] || []).findIndex(
+          nc => nc.id === newChild.id
+        )
         data.push({
           type: 'new-child',
           taskTitle: indicator.taskContent || '',
@@ -1556,7 +1769,7 @@ const collegeTableData = computed(() => {
       })
     }
   })
-  
+
   return data
 })
 
@@ -1625,16 +1838,16 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       <!-- 右侧：指标表格 -->
       <div class="distribution-panel">
         <!-- 学院模式：选中学院时显示 -->
-        <div v-if="selectedCollege" class="table-card card-base card-animate" style="animation-delay: 0.1s;">
+        <div
+          v-if="selectedCollege"
+          class="table-card card-base card-animate"
+          style="animation-delay: 0.1s"
+        >
           <!-- 表头 -->
           <div class="card-header">
             <div class="header-left">
               <span class="card-title">{{ selectedCollege }}</span>
-              <el-tag 
-                :type="collegeOverallStatus.type" 
-                size="default" 
-                style="margin-left: 12px;"
-              >
+              <el-tag :type="collegeOverallStatus.type" size="default" style="margin-left: 12px">
                 状态: {{ collegeOverallStatus.label }}
               </el-tag>
             </div>
@@ -1646,10 +1859,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
               -->
               <!-- 暂无指标：只显示添加指标按钮 -->
               <template v-if="collegeOverallStatus.label === '暂无指标'">
-                <el-button 
-                  type="primary"
-                  @click="openAddIndicatorForm"
-                >
+                <el-button type="primary" @click="openAddIndicatorForm">
                   <el-icon><Plus /></el-icon>
                   新增指标
                 </el-button>
@@ -1657,7 +1867,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
               <!-- 有指标时：审批按钮始终显示 -->
               <template v-else>
                 <!-- 审批按钮 - 始终显示 -->
-                <el-button 
+                <el-button
                   :type="pendingApprovalCount > 0 ? 'warning' : 'default'"
                   @click="handleOpenApproval"
                 >
@@ -1666,39 +1876,25 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-button>
                 <!-- 待下发状态：显示添加指标和下发按钮 -->
                 <template v-if="collegeOverallStatus.label === '待下发'">
-                  <el-button 
-                    type="primary"
-                    @click="openAddIndicatorForm"
-                  >
+                  <el-button type="primary" @click="openAddIndicatorForm">
                     <el-icon><Plus /></el-icon>
                     新增指标
                   </el-button>
-                  <el-button 
-                    type="success"
-                    @click="handleBatchDistribute(selectedCollege)"
-                  >
+                  <el-button type="success" @click="handleBatchDistribute(selectedCollege)">
                     <el-icon><Promotion /></el-icon>
                     下发 ({{ getCollegeStatus(selectedCollege).draft }})
                   </el-button>
                 </template>
                 <!-- 进行中状态：显示撤回按钮 -->
                 <template v-else-if="collegeOverallStatus.label === '进行中'">
-                  <el-button 
-                    type="warning"
-                    plain
-                    @click="handleBatchWithdraw(selectedCollege)"
-                  >
+                  <el-button type="warning" plain @click="handleBatchWithdraw(selectedCollege)">
                     <el-icon><RefreshLeft /></el-icon>
                     撤回
                   </el-button>
                 </template>
                 <!-- 待审批状态：显示撤回按钮 -->
                 <template v-else-if="collegeOverallStatus.label === '待审批'">
-                  <el-button 
-                    type="warning"
-                    plain
-                    @click="handleBatchWithdraw(selectedCollege)"
-                  >
+                  <el-button type="warning" plain @click="handleBatchWithdraw(selectedCollege)">
                     <el-icon><RefreshLeft /></el-icon>
                     撤回
                   </el-button>
@@ -1727,12 +1923,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     </template>
                     <!-- 已有子指标 -->
                     <template v-else-if="row.type === 'child'">
-                      <div 
+                      <div
                         class="child-name-cell"
                         @dblclick="handleChildDblClick(row.child, 'name')"
                       >
                         <el-input
-                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'name'"
+                          v-if="
+                            editingChildId === row.child?.id?.toString() &&
+                            editingChildField === 'name'
+                          "
                           v-model="editingChildValue"
                           type="textarea"
                           :rows="1"
@@ -1740,21 +1939,26 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'name')"
                         />
-                        <el-tooltip 
-                          v-else 
-                          :content="row.child?.type1 === '定性' ? '定性指标' : '定量指标'" 
+                        <el-tooltip
+                          v-else
+                          :content="row.child?.type1 === '定性' ? '定性指标' : '定量指标'"
                           placement="top"
                         >
-                          <span 
+                          <span
                             class="child-text"
-                            :class="row.child?.type1 === '定性' ? 'indicator-qualitative' : 'indicator-quantitative'"
-                          >{{ row.child?.name || '未命名' }}</span>
+                            :class="
+                              row.child?.type1 === '定性'
+                                ? 'indicator-qualitative'
+                                : 'indicator-quantitative'
+                            "
+                            >{{ row.child?.name || '未命名' }}</span
+                          >
                         </el-tooltip>
                       </div>
                     </template>
                     <!-- 新增子指标行 -->
                     <template v-else-if="row.type === 'new-child'">
-                      <div 
+                      <div
                         class="new-child-cell"
                         @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
                       >
@@ -1764,19 +1968,20 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           type="textarea"
                           :rows="1"
                           autosize
-                            placeholder="输入子指标名称"
-                            class="new-child-editing textarea-cell"
-                            @blur="validateAndSaveNewChild(row.parentIndicatorId, row.child.id)"
-                          />
-                        <el-tooltip 
-                          v-else 
-                          :content="row.child?.type1 === '定性' ? '定性指标' : '定量指标'" 
+                          placeholder="输入子指标名称"
+                          class="new-child-editing textarea-cell"
+                          @blur="validateAndSaveNewChild(row.parentIndicatorId, row.child.id)"
+                        />
+                        <el-tooltip
+                          v-else
+                          :content="row.child?.type1 === '定性' ? '定性指标' : '定量指标'"
                           placement="top"
                         >
-                          <span 
+                          <span
                             class="new-child-text"
                             :class="{ 'placeholder-text': !row.child.name }"
-                          >{{ row.child.name || '点击输入名称' }}</span>
+                            >{{ row.child.name || '点击输入名称' }}</span
+                          >
                         </el-tooltip>
                       </div>
                     </template>
@@ -1790,12 +1995,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                       <span class="remark-text">-</span>
                     </template>
                     <template v-else-if="row.type === 'child'">
-                      <div 
+                      <div
                         class="child-remark-cell"
                         @dblclick="handleChildDblClick(row.child, 'remark')"
                       >
                         <el-input
-                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'remark'"
+                          v-if="
+                            editingChildId === row.child?.id?.toString() &&
+                            editingChildField === 'remark'
+                          "
                           v-model="editingChildValue"
                           type="textarea"
                           :rows="1"
@@ -1807,7 +2015,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                       </div>
                     </template>
                     <template v-else-if="row.type === 'new-child'">
-                      <div 
+                      <div
                         class="new-child-cell"
                         @click="handleNewChildRowClick(row.child.id, row.parentIndicatorId)"
                       >
@@ -1820,11 +2028,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           placeholder="输入备注（选填）"
                           class="new-child-editing textarea-cell"
                         />
-                        <span 
-                          v-else 
+                        <span
+                          v-else
                           class="remark-text new-child-text"
                           :class="{ 'placeholder-text': !row.child.remark }"
-                        >{{ row.child.remark || '-' }}</span>
+                          >{{ row.child.remark || '-' }}</span
+                        >
                       </div>
                     </template>
                   </template>
@@ -1837,12 +2046,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                       <span class="weight-text">-</span>
                     </template>
                     <template v-else-if="row.type === 'child'">
-                      <div 
-                        class="weight-cell"
-                        @dblclick="handleChildDblClick(row.child, 'weight')"
-                      >
+                      <div class="weight-cell" @dblclick="handleChildDblClick(row.child, 'weight')">
                         <el-input-number
-                          v-if="editingChildId === row.child?.id?.toString() && editingChildField === 'weight'"
+                          v-if="
+                            editingChildId === row.child?.id?.toString() &&
+                            editingChildField === 'weight'
+                          "
                           v-model="editingChildValue"
                           :min="0"
                           :max="100"
@@ -1852,7 +2061,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field"
                           @blur="saveChildEdit(row.child, 'weight')"
                         />
-                        <span v-else class="weight-text editable">{{ row.child?.weight ?? '-' }}</span>
+                        <span v-else class="weight-text editable">{{
+                          row.child?.weight ?? '-'
+                        }}</span>
                       </div>
                     </template>
                     <template v-else-if="row.type === 'new-child'">
@@ -1877,10 +2088,16 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         :disabled="!row.child?.milestones?.length"
                       >
                         <template #reference>
-                          <div 
+                          <div
                             class="milestone-cell"
-                            :class="{ 'editable': canEditChild && getChildStatus(row.child) === 'draft' }"
-                            @dblclick="canEditChild && getChildStatus(row.child) === 'draft' && openMilestonesDialog(row.child)"
+                            :class="{
+                              editable: canEditChild && getChildStatus(row.child) === 'draft'
+                            }"
+                            @dblclick="
+                              canEditChild &&
+                              getChildStatus(row.child) === 'draft' &&
+                              openMilestonesDialog(row.child)
+                            "
                           >
                             <span class="milestone-count">
                               {{ row.child?.milestones?.length || 0 }} 个里程碑
@@ -1889,17 +2106,19 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         </template>
                         <div class="milestone-popover">
                           <div class="milestone-popover-title">里程碑列表</div>
-                          <div 
-                            v-for="(ms, idx) in getMilestonesTooltip(row.child)" 
+                          <div
+                            v-for="(ms, idx) in getMilestonesTooltip(row.child)"
                             :key="ms.id"
                             class="milestone-item"
-                            :class="{ 'milestone-completed': isMilestoneCompleted(row.child, ms.progress) }"
+                            :class="{
+                              'milestone-completed': isMilestoneCompleted(row.child, ms.progress)
+                            }"
                           >
                             <div class="milestone-item-header">
                               <span class="milestone-index">{{ idx + 1 }}.</span>
                               <span class="milestone-name">{{ ms.name || '未命名' }}</span>
-                              <el-icon 
-                                v-if="isMilestoneCompleted(row.child, ms.progress)" 
+                              <el-icon
+                                v-if="isMilestoneCompleted(row.child, ms.progress)"
                                 class="milestone-check-icon"
                               >
                                 <Check />
@@ -1924,7 +2143,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         :disabled="!row.child?.milestones?.length"
                       >
                         <template #reference>
-                          <div 
+                          <div
                             class="milestone-cell editable"
                             @dblclick.stop="openMilestonesDialog(row.child)"
                           >
@@ -1935,8 +2154,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         </template>
                         <div class="milestone-popover">
                           <div class="milestone-popover-title">里程碑列表</div>
-                          <div 
-                            v-for="(ms, idx) in getMilestonesTooltip(row.child)" 
+                          <div
+                            v-for="(ms, idx) in getMilestonesTooltip(row.child)"
                             :key="ms.id"
                             class="milestone-item"
                           >
@@ -1965,12 +2184,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                       <span class="progress-text">-</span>
                     </template>
                     <template v-else-if="row.type === 'child'">
-                      <div 
+                      <div
                         class="progress-cell"
                         @dblclick="handleChildDblClick(row.child, 'progress')"
                       >
                         <el-input-number
-                          v-if="editingChildId === row.child.id.toString() && editingChildField === 'progress'"
+                          v-if="
+                            editingChildId === row.child.id.toString() &&
+                            editingChildField === 'progress'
+                          "
                           v-model="editingChildValue"
                           :min="0"
                           :max="100"
@@ -1981,7 +2203,13 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           @keyup.enter="saveChildEdit(row.child, 'progress')"
                           @keyup.esc="cancelChildEdit"
                         />
-                        <span v-else class="progress-text" :class="{ editable: canEditChild && getChildStatus(row.child) === 'draft' }">
+                        <span
+                          v-else
+                          class="progress-text"
+                          :class="{
+                            editable: canEditChild && getChildStatus(row.child) === 'draft'
+                          }"
+                        >
                           {{ row.child?.progress || 0 }}%
                         </span>
                       </div>
@@ -2002,15 +2230,20 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     <!-- 子指标操作：查看 + 删除（仅草稿状态） -->
                     <template v-else-if="row.type === 'child'">
                       <div class="action-cell">
-                        <el-button link type="primary" size="small" @click="handleViewDetail(row.child)">
+                        <el-button
+                          link
+                          type="primary"
+                          size="small"
+                          @click="handleViewDetail(row.child)"
+                        >
                           <el-icon><View /></el-icon>查看
                         </el-button>
                         <!-- 只有草稿状态才能删除，已下发/待审批/已通过的不显示删除按钮 -->
-                        <el-button 
+                        <el-button
                           v-if="canEditChild && getChildStatus(row.child) === 'draft'"
-                          link 
-                          type="danger" 
-                          size="small" 
+                          link
+                          type="danger"
+                          size="small"
                           @click="removeChildIndicator(row.child)"
                         >
                           <el-icon><Close /></el-icon>删除
@@ -2020,10 +2253,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     <!-- 新增子指标操作：删除 -->
                     <template v-else-if="row.type === 'new-child'">
                       <div class="action-cell">
-                        <el-button 
-                          link 
-                          type="danger" 
-                          size="small" 
+                        <el-button
+                          link
+                          type="danger"
+                          size="small"
                           @click="removeNewChildRow(row.parentIndicatorId, row.rowIndex)"
                         >
                           <el-icon><Close /></el-icon>删除
@@ -2032,12 +2265,11 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     </template>
                   </template>
                 </el-table-column>
-
               </el-table>
             </div>
 
             <!-- 新增指标表单 -->
-            <div v-if="isAddingIndicator" class="add-row-form">
+            <div v-if="isAddingIndicator" ref="addRowFormRef" class="add-row-form">
               <h3 class="form-title">新增子指标</h3>
               <el-form label-width="180px" class="no-wrap-labels">
                 <el-row :gutter="16">
@@ -2048,12 +2280,14 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         filterable
                         placeholder="选择关联的核心指标"
                         style="width: 100%"
-                        @change="(val: string) => {
-                          const indicator = plansWithIndicators.value
-                            .flatMap(t => t.indicators)
-                            .find(i => i.id.toString() === val)
-                          if (indicator) selectParentIndicator(indicator)
-                        }"
+                        @change="
+                          (val: string) => {
+                            const indicator = plansWithIndicators.value
+                              .flatMap(t => t.indicators)
+                              .find(i => i.id.toString() === val)
+                            if (indicator) selectParentIndicator(indicator)
+                          }
+                        "
                       >
                         <el-option-group
                           v-for="task in plansWithIndicators"
@@ -2067,7 +2301,11 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                             :value="indicator.id.toString()"
                           >
                             <span>{{ indicator.name }}</span>
-                            <el-tag size="small" style="margin-left: 8px;" :type="indicator.type1 === '定量' ? 'primary' : 'warning'">
+                            <el-tag
+                              size="small"
+                              style="margin-left: 8px"
+                              :type="indicator.type1 === '定量' ? 'primary' : 'warning'"
+                            >
                               {{ indicator.type1 }}
                             </el-tag>
                           </el-option>
@@ -2077,10 +2315,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   </el-col>
                   <el-col :span="6">
                     <el-form-item label="指标类型">
-                      <el-select 
-                        v-model="newIndicatorForm.type1" 
-                        style="width: 100%" 
-                        @change="(val: string) => handleFormIndicatorTypeChange(val as '定量' | '定性')"
+                      <el-select
+                        v-model="newIndicatorForm.type1"
+                        style="width: 100%"
+                        @change="
+                          (val: string) => handleFormIndicatorTypeChange(val as '定量' | '定性')
+                        "
                       >
                         <el-option label="定性" value="定性" />
                         <el-option label="定量" value="定量" />
@@ -2089,13 +2329,13 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   </el-col>
                   <el-col :span="6">
                     <el-form-item label="权重">
-                      <el-input-number 
-                        v-model="newIndicatorForm.weight" 
-                        :min="0" 
+                      <el-input-number
+                        v-model="newIndicatorForm.weight"
+                        :min="0"
                         :max="100"
-                        placeholder="权重" 
-                        :controls="false" 
-                        style="width: 100%" 
+                        placeholder="权重"
+                        :controls="false"
+                        style="width: 100%"
                       />
                     </el-form-item>
                   </el-col>
@@ -2103,8 +2343,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 <el-row :gutter="16">
                   <el-col :span="24">
                     <el-form-item label="指标内容" required>
-                      <el-input 
-                        v-model="newIndicatorForm.name" 
+                      <el-input
+                        v-model="newIndicatorForm.name"
                         type="textarea"
                         :autosize="{ minRows: 2, maxRows: 10 }"
                         placeholder="输入指标内容"
@@ -2115,8 +2355,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 <el-row :gutter="16">
                   <el-col :span="24">
                     <el-form-item label="备注">
-                      <el-input 
-                        v-model="newIndicatorForm.remark" 
+                      <el-input
+                        v-model="newIndicatorForm.remark"
                         type="textarea"
                         :autosize="{ minRows: 2, maxRows: 10 }"
                         placeholder="输入备注内容（选填）"
@@ -2128,69 +2368,78 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   <el-col :span="24">
                     <el-form-item label="里程碑">
                       <div class="milestone-form-area">
-                        <el-button 
-                          v-if="newIndicatorForm.type1 === '定性'" 
-                          size="small" 
-                          type="primary" 
-                          plain 
+                        <el-button
+                          v-if="newIndicatorForm.type1 === '定性'"
+                          size="small"
+                          type="primary"
+                          plain
                           @click="addFormMilestone"
                         >
                           <el-icon><Plus /></el-icon> 添加里程碑
                         </el-button>
                         <div v-if="newIndicatorForm.milestones.length > 0" class="milestone-list">
-                          <div v-for="(ms, idx) in newIndicatorForm.milestones" :key="ms.id" class="milestone-form-item">
+                          <div
+                            v-for="(ms, idx) in newIndicatorForm.milestones"
+                            :key="ms.id"
+                            class="milestone-form-item"
+                          >
                             <span class="milestone-index">{{ idx + 1 }}.</span>
-                            <el-input v-model="ms.name" placeholder="里程碑名称" style="width: 160px" size="small" />
-                            <el-input-number 
-                              v-model="ms.targetProgress" 
-                              :min="0" 
-                              :max="100" 
-                              placeholder="目标进度%" 
-                              size="small" 
-                              style="width: 110px" 
+                            <el-input
+                              v-model="ms.name"
+                              placeholder="里程碑名称"
+                              style="width: 160px"
+                              size="small"
                             />
-                            <el-date-picker 
-                              v-model="ms.deadline" 
-                              type="date" 
-                              placeholder="截止日期" 
-                              size="small" 
-                              style="width: 130px" 
-                              value-format="YYYY-MM-DD" 
+                            <el-input-number
+                              v-model="ms.targetProgress"
+                              :min="0"
+                              :max="100"
+                              placeholder="目标进度%"
+                              size="small"
+                              style="width: 110px"
                             />
-                            <el-button type="danger" size="small" text @click="removeFormMilestone(idx)">
+                            <el-date-picker
+                              v-model="ms.deadline"
+                              type="date"
+                              placeholder="截止日期"
+                              size="small"
+                              style="width: 130px"
+                              value-format="YYYY-MM-DD"
+                            />
+                            <el-button
+                              type="danger"
+                              size="small"
+                              text
+                              @click="removeFormMilestone(idx)"
+                            >
                               <el-icon><Delete /></el-icon>
                             </el-button>
                           </div>
                         </div>
                         <span v-else class="milestone-hint">
-                          {{ newIndicatorForm.type1 === '定量' ? '选择定量后自动生成12月里程碑' : '暂无里程碑，点击添加' }}
+                          {{
+                            newIndicatorForm.type1 === '定量'
+                              ? '选择定量后自动生成12月里程碑'
+                              : '暂无里程碑，点击添加'
+                          }}
                         </span>
                       </div>
                     </el-form-item>
                   </el-col>
                 </el-row>
                 <el-row>
-                  <el-col :span="24" style="text-align: right;">
+                  <el-col :span="24" style="text-align: right">
                     <el-button type="primary" @click="saveNewIndicator">保存</el-button>
                     <el-button @click="cancelAddIndicator">取消</el-button>
                   </el-col>
                 </el-row>
               </el-form>
             </div>
-
-            <!-- 空状态 -->
-            <div v-if="collegeIndicators.length === 0" class="empty-state">
-              <el-empty description="该学院暂无子指标" />
-            </div>
           </div>
         </div>
 
         <!-- 空状态：未选择学院 -->
-        <el-empty 
-          v-else 
-          description="请选择左侧学院" 
-          class="empty-placeholder" 
-        />
+        <el-empty v-else description="请选择左侧学院" class="empty-placeholder" />
       </div>
     </div>
 
@@ -2235,70 +2484,59 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
         <!-- 操作按钮 -->
         <div class="milestone-actions">
-          <el-button 
-            size="small" 
-            type="primary" 
-            :icon="Plus" 
-            @click="addMilestone"
-          >
+          <el-button size="small" type="primary" :icon="Plus" @click="addMilestone">
             添加里程碑
           </el-button>
-          <el-button 
+          <el-button
             v-if="getEditingChildType() === '定量'"
-            size="small" 
-            type="success" 
+            size="small"
+            type="success"
             :icon="Timer"
             @click="generateMonthlyMilestones"
           >
             生成12个月里程碑
           </el-button>
-          <span class="milestone-count-hint">
-            当前共 {{ editingMilestones.length }} 个里程碑
-          </span>
+          <span class="milestone-count-hint"> 当前共 {{ editingMilestones.length }} 个里程碑 </span>
         </div>
 
         <!-- 里程碑列表 -->
         <div class="milestone-edit-list">
-          <el-empty 
-            v-if="editingMilestones.length === 0" 
+          <el-empty
+            v-if="editingMilestones.length === 0"
             description="暂无里程碑，点击上方按钮添加"
             :image-size="80"
           />
-          
+
           <!-- 里程碑编辑表单 -->
-          <div 
-            v-for="(ms, idx) in editingMilestones" 
-            :key="ms.id" 
-            class="milestone-edit-item"
-          >
+          <div v-for="(ms, idx) in editingMilestones" :key="ms.id" class="milestone-edit-item">
             <div class="milestone-index">{{ idx + 1 }}.</div>
             <div class="milestone-fields">
-              <el-input 
-                v-model="ms.name" 
-                placeholder="里程碑名称" 
+              <el-input
+                v-model="ms.name"
+                placeholder="里程碑名称"
                 size="small"
                 class="field-name"
               />
-              <el-input-number 
-                v-model="ms.progress" 
-                :min="0" 
-                :max="100" 
-                placeholder="目标进度%" 
+              <el-input-number
+                v-model="ms.progress"
+                :min="0"
+                :max="100"
+                placeholder="目标进度%"
                 size="small"
                 class="field-progress"
                 @change="validateMilestoneProgress(idx)"
               />
-              <el-date-picker 
-                v-model="ms.expectedDate" 
-                type="date" 
-                placeholder="截止日期" 
+              <el-date-picker
+                v-model="ms.expectedDate"
+                type="date"
+                placeholder="截止日期"
                 size="small"
                 value-format="YYYY-MM-DD"
                 class="field-date"
               />
-              <el-button 
-                type="danger" 
-                size="small" 
+              <el-button
+                type="danger"
+                size="small"
                 :icon="Delete"
                 circle
                 @click="removeMilestone(idx)"
@@ -2307,7 +2545,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           </div>
         </div>
       </div>
-      
+
       <template #footer>
         <el-button @click="milestonesDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="saveMilestones">保存</el-button>
@@ -2334,7 +2572,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
             <template #default="{ row }">
               <div class="indicator-select-row">
                 <div class="indicator-info">
-                  <el-tag size="small" :type="row.indicator.type1 === '定量' ? 'primary' : 'warning'">
+                  <el-tag
+                    size="small"
+                    :type="row.indicator.type1 === '定量' ? 'primary' : 'warning'"
+                  >
                     {{ row.indicator.type1 }}
                   </el-tag>
                   <span class="indicator-name">{{ row.indicator.name }}</span>
@@ -2351,23 +2592,16 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           <!-- 操作列 -->
           <el-table-column label="操作" width="80" align="center">
             <template #default="{ row }">
-              <el-button 
-                type="primary" 
-                size="small" 
-                @click="selectParentIndicator(row.indicator)"
-              >
+              <el-button type="primary" size="small" @click="selectParentIndicator(row.indicator)">
                 选择
               </el-button>
             </template>
           </el-table-column>
         </el-table>
-        
-        <el-empty 
-          v-if="selectParentTableData.length === 0" 
-          description="暂无核心指标数据" 
-        />
+
+        <el-empty v-if="selectParentTableData.length === 0" description="暂无核心指标数据" />
       </div>
-      
+
       <template #footer>
         <el-button @click="selectParentDialogVisible = false">取消</el-button>
       </template>
@@ -2828,7 +3062,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
 .add-btn-cell .add-icon {
   font-size: 18px;
-  color: var(--color-primary, #409EFF);
+  color: var(--color-primary, #409eff);
   opacity: 0.6;
   transition: all 0.2s ease;
 }
@@ -2888,7 +3122,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 /* 目标进度文本 */
 .target-progress-text {
   font-size: 12px;
-  color: var(--color-primary, #409EFF);
+  color: var(--color-primary, #409eff);
   font-weight: 500;
 }
 
@@ -3230,7 +3464,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
 /* 编辑状态的输入框样式 */
 .new-child-editing {
-  border-color: var(--color-primary, #409EFF);
+  border-color: var(--color-primary, #409eff);
 }
 
 /* 待下发状态标签样式（青色，区别于待审批的橙色） */
@@ -3253,12 +3487,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   .distribution-layout {
     flex-direction: column;
   }
-  
+
   .strategic-panel {
     width: 100%;
     max-height: 300px;
   }
-  
+
   .distribution-panel {
     flex: 1;
     min-height: 400px;
@@ -3508,6 +3742,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
    新增指标表单样式（复用战略任务界面样式）
    ======================================== */
 .add-row-form {
+  flex-shrink: 0;
   background: rgba(64, 158, 255, 0.08);
   padding: var(--spacing-lg);
   border-top: 1px solid var(--color-primary-light);
@@ -3605,7 +3840,6 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   color: var(--text-placeholder);
 }
 </style>
-
 
 <style>
 /* 全局样式：强制表单标签不换行 */
