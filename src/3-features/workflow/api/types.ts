@@ -60,6 +60,7 @@ export interface WorkflowInstanceResponse {
 
 export interface WorkflowTaskResponse {
   taskId: string
+  instanceId?: string
   taskName: string
   taskKey: string
   status: string

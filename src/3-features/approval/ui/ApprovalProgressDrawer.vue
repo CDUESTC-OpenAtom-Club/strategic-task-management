@@ -22,6 +22,11 @@ import { useAuthStore } from '@/features/auth/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
+import {
+  getWorkflowInstanceDetail,
+  getWorkflowInstanceDetailByBusiness
+} from '@/features/workflow/api/queries'
+import type { WorkflowInstanceDetailResponse } from '@/features/workflow/api/types'
 import ApprovalHistory from './ApprovalHistory.vue'
 import CustomApprovalFlow from './CustomApprovalFlow.vue'
 
@@ -74,7 +79,10 @@ const planStore = usePlanStore()
 const timeContext = useTimeContextStore()
 const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
 const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
-const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
+const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'
+const INDICATOR_REPORT_APPROVE_PERMISSION = 'BTN_INDICATOR_REPORT_APPROVE'
+const currentUserId = computed(() => Number(authStore.user?.userId ?? authStore.user?.id ?? 0))
+const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
 const currentUserPermissionCodes = computed(() => {
   const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
   if (!Array.isArray(permissions)) {
@@ -179,6 +187,7 @@ const activeTab = ref('workflow')
 const planApprovalsLoading = ref(false)
 const pendingPlanApprovals = ref<Record<string, any>[]>([])
 const planDetailDialogVisible = ref(false)
+const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
 
 interface PlanApprovalDetailItem {
   instanceId: number
@@ -291,18 +300,38 @@ const scopedPlanApprovals = computed(() => {
 })
 
 const scopedPendingPlanCount = computed(() => scopedPlanApprovals.value.length)
+const activePlanWorkflow = computed(() => {
+  if (!props.plan) {
+    return null
+  }
+
+  const detail = planWorkflowDetail.value
+  return {
+    ...props.plan,
+    workflowInstanceId: Number(detail?.instanceId || props.plan.workflowInstanceId || 0) || undefined,
+    workflowStatus: detail?.status || props.plan.workflowStatus || props.plan.status,
+    currentTaskId: detail?.currentTaskId || props.plan.currentTaskId,
+    currentStepName: detail?.currentStepName || props.plan.currentStepName,
+    currentApproverId: detail?.currentApproverId ?? props.plan.currentApproverId,
+    currentApproverName: detail?.currentApproverName || props.plan.currentApproverName,
+    canWithdraw: typeof detail?.canWithdraw === 'boolean' ? detail.canWithdraw : props.plan.canWithdraw,
+    workflowHistory: Array.isArray(detail?.history) ? detail.history : props.plan.workflowHistory
+  }
+})
+
 const hasPlanWorkflowData = computed(() => {
   return Boolean(
-    props.plan &&
-      (props.plan.workflowInstanceId ||
-        props.plan.workflowStatus ||
-        props.plan.currentStepName ||
-        (Array.isArray(props.plan.workflowHistory) && props.plan.workflowHistory.length > 0))
+    activePlanWorkflow.value &&
+      (activePlanWorkflow.value.workflowInstanceId ||
+        activePlanWorkflow.value.workflowStatus ||
+        activePlanWorkflow.value.currentStepName ||
+        (Array.isArray(activePlanWorkflow.value.workflowHistory) &&
+          activePlanWorkflow.value.workflowHistory.length > 0))
   )
 })
 
 const planWorkflowStatus = computed(() => {
-  return String(props.plan?.workflowStatus || props.plan?.status || '').toUpperCase()
+  return String(activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || '').toUpperCase()
 })
 
 const isPlanPendingApproval = computed(() => {
@@ -313,22 +342,69 @@ const isPlanCompletedApproval = computed(() => {
   return ['DISTRIBUTED', 'APPROVED'].includes(planWorkflowStatus.value)
 })
 
-const requiredPlanApprovalPermissionCode = computed(() => {
+const requiredPlanApprovalPermissionCodes = computed(() => {
   return props.approvalType === 'distribution'
-    ? PLAN_DISPATCH_APPROVE_PERMISSION
-    : PLAN_REPORT_APPROVE_PERMISSION
+    ? [PLAN_DISPATCH_APPROVE_PERMISSION, INDICATOR_DISPATCH_APPROVE_PERMISSION]
+    : [PLAN_REPORT_APPROVE_PERMISSION, INDICATOR_REPORT_APPROVE_PERMISSION]
+})
+
+const requiredPlanApprovalPermissionCode = computed(() => {
+  return requiredPlanApprovalPermissionCodes.value[0]
 })
 
 const hasPlanApprovalPermission = computed(() => {
-  return currentUserPermissionCodes.value.includes(requiredPlanApprovalPermissionCode.value)
+  return requiredPlanApprovalPermissionCodes.value.some(code =>
+    currentUserPermissionCodes.value.includes(code)
+  )
 })
+
+function resolveExpectedApproverOrgId(): number | null {
+  const stepName = String(activePlanWorkflow.value?.currentStepName || '').trim()
+  if (!stepName) {
+    return null
+  }
+
+  if (stepName.includes('职能部门终审')) {
+    const createdByOrgId = Number(activePlanWorkflow.value?.createdByOrgId ?? 0)
+    return Number.isFinite(createdByOrgId) && createdByOrgId > 0 ? createdByOrgId : null
+  }
+
+  if (
+    stepName.includes('职能部门审批') ||
+    stepName.includes('二级学院审批') ||
+    stepName.includes('学院院长')
+  ) {
+    const targetOrgId = Number(activePlanWorkflow.value?.targetOrgId ?? 0)
+    return Number.isFinite(targetOrgId) && targetOrgId > 0 ? targetOrgId : null
+  }
+
+  if (
+    stepName.includes('战略发展部') ||
+    stepName.includes('分管校领导')
+  ) {
+    const createdByOrgId = Number(activePlanWorkflow.value?.createdByOrgId ?? 0)
+    return Number.isFinite(createdByOrgId) && createdByOrgId > 0 ? createdByOrgId : null
+  }
+
+  return null
+}
 
 const canCurrentUserHandlePlanApproval = computed(() => {
   if (!hasPlanWorkflowData.value || !isPlanPendingApproval.value || !hasPlanApprovalPermission.value) {
     return false
   }
 
-  const currentApproverId = Number(props.plan?.currentApproverId ?? 0)
+  const expectedApproverOrgId = resolveExpectedApproverOrgId()
+  if (
+    Number.isFinite(currentUserOrgId.value) &&
+    currentUserOrgId.value > 0 &&
+    Number.isFinite(expectedApproverOrgId) &&
+    (expectedApproverOrgId as number) > 0
+  ) {
+    return currentUserOrgId.value === expectedApproverOrgId
+  }
+
+  const currentApproverId = Number(activePlanWorkflow.value?.currentApproverId ?? 0)
   if (!Number.isFinite(currentApproverId) || currentApproverId <= 0) {
     return false
   }
@@ -341,12 +417,16 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 })
 
 const currentPlanTaskId = computed(() => {
-  const rawTaskId = Number(props.plan?.currentTaskId ?? 0)
+  const rawTaskId = Number(activePlanWorkflow.value?.currentTaskId ?? 0)
   if (Number.isFinite(rawTaskId) && rawTaskId > 0) {
     return rawTaskId
   }
 
-  const rawInstanceId = Number(props.plan?.workflowInstanceId ?? 0)
+  return 0
+})
+
+const currentPlanInstanceId = computed(() => {
+  const rawInstanceId = Number(activePlanWorkflow.value?.workflowInstanceId ?? 0)
   if (Number.isFinite(rawInstanceId) && rawInstanceId > 0) {
     return rawInstanceId
   }
@@ -355,7 +435,7 @@ const currentPlanTaskId = computed(() => {
 })
 
 const planWorkflowStatusTag = computed(() => {
-  const rawStatus = String(props.plan?.workflowStatus || props.plan?.status || '').toUpperCase()
+  const rawStatus = String(activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || '').toUpperCase()
   if (rawStatus === 'DISTRIBUTED' || rawStatus === 'APPROVED') {
     return { label: '已通过', type: 'success' as const }
   }
@@ -369,11 +449,11 @@ const planWorkflowStatusTag = computed(() => {
 })
 
 const planWorkflowHistory = computed<ApprovalHistoryItem[]>(() => {
-  if (!Array.isArray(props.plan?.workflowHistory)) {
+  if (!Array.isArray(activePlanWorkflow.value?.workflowHistory)) {
     return []
   }
 
-  return props.plan.workflowHistory.map((item, index) => ({
+  return activePlanWorkflow.value.workflowHistory.map((item, index) => ({
     id: String(item.taskId ?? index),
     action: normalizeWorkflowAction(item.action),
     operator: String(item.operatorId ?? index),
@@ -403,14 +483,14 @@ function getPlanWorkflowNodeName(item: ApprovalHistoryItem): string {
 const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   if (hasPlanWorkflowData.value && props.plan) {
     return [{
-      instanceId: currentPlanTaskId.value,
-      instanceNo: String(props.plan.workflowInstanceId || '待回填'),
-      title: String(props.plan.name || props.planName || props.departmentName || '当前计划'),
+      instanceId: currentPlanInstanceId.value,
+      instanceNo: String(currentPlanInstanceId.value || '待回填'),
+      title: String(activePlanWorkflow.value?.name || props.planName || props.departmentName || '当前计划'),
       submitterName: planSubmitterName.value,
-      currentStepName: String(props.plan.currentStepName || '审批中'),
-      createdAt: props.plan.submittedAt || props.plan.createdAt,
-      entityId: props.plan.id,
-      planName: props.plan.name
+      currentStepName: String(activePlanWorkflow.value?.currentStepName || '审批中'),
+      createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
+      entityId: activePlanWorkflow.value?.id,
+      planName: activePlanWorkflow.value?.name
     }]
   }
 
@@ -438,11 +518,11 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
 const currentPlanApprovalSummary = computed(() => {
   if (hasPlanWorkflowData.value && props.plan) {
     return {
-      key: props.plan.name || props.planName || props.departmentName || 'current-plan',
-      planName: props.plan.name || props.planName || `${props.departmentName || '当前部门'}计划`,
-      currentStepName: props.plan.currentStepName || '审批中',
+      key: activePlanWorkflow.value?.name || props.planName || props.departmentName || 'current-plan',
+      planName: activePlanWorkflow.value?.name || props.planName || `${props.departmentName || '当前部门'}计划`,
+      currentStepName: activePlanWorkflow.value?.currentStepName || '审批中',
       submitterName: planSubmitterName.value,
-      createdAt: props.plan.submittedAt || props.plan.createdAt,
+      createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
       count: 1
     }
   }
@@ -507,15 +587,15 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
     }
 
     const workflowStatus = planWorkflowStatus.value
-    const currentStepName = normalizeDisplayName(props.plan.currentStepName) || '当前审批节点'
+    const currentStepName = normalizeDisplayName(activePlanWorkflow.value?.currentStepName) || '当前审批节点'
     if (workflowStatus === 'PENDING' || workflowStatus === 'IN_REVIEW' || workflowStatus === 'SUBMITTED') {
       const existingIndex = nodeIndexByName.get(currentStepName)
       const currentNode: WorkflowNode = {
         id: 'current',
         name: currentStepName,
         status: 'current',
-        operatorName: props.plan.currentApproverName || '待分配',
-        comment: props.plan.canWithdraw ? '当前仍可撤回' : '当前不可撤回'
+        operatorName: activePlanWorkflow.value?.currentApproverName || '待分配',
+        comment: activePlanWorkflow.value?.canWithdraw ? '当前仍可撤回' : '当前不可撤回'
       }
 
       if (existingIndex === undefined) {
@@ -633,8 +713,8 @@ const currentNodeId = computed(() => {
 
 // 驳回原因
 const rejectionReason = computed(() => {
-  if (props.plan?.lastRejectReason) {
-    return props.plan.lastRejectReason
+  if (activePlanWorkflow.value?.lastRejectReason) {
+    return activePlanWorkflow.value.lastRejectReason
   }
 
   const indicator = currentIndicator.value
@@ -667,7 +747,7 @@ async function loadPendingPlanApprovals() {
       await planStore.loadPlans()
     }
 
-    const userId = authStore.user?.userId || 1
+    const userId = authStore.user?.userId || authStore.user?.id || 1
     const response = await approvalApi.getPendingApprovals(userId)
     if (response.success && Array.isArray(response.data)) {
       pendingPlanApprovals.value = response.data
@@ -687,10 +767,46 @@ async function loadPendingPlanApprovals() {
   }
 }
 
+async function loadPlanWorkflowDetail() {
+  if (!props.modelValue || !props.showPlanApprovals || !props.plan) {
+    planWorkflowDetail.value = null
+    return
+  }
+
+  try {
+    const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+      if (response.success && response.data) {
+        planWorkflowDetail.value = response.data
+        return
+      }
+    }
+
+    const planId = Number(props.plan.id ?? 0)
+    if (Number.isFinite(planId) && planId > 0) {
+      const response = await getWorkflowInstanceDetailByBusiness('PLAN', planId)
+      if (response.success && response.data) {
+        planWorkflowDetail.value = response.data
+        return
+      }
+    }
+
+    planWorkflowDetail.value = null
+  } catch (error) {
+    planWorkflowDetail.value = null
+    logger.warn('[ApprovalProgressDrawer] 加载计划工作流详情失败:', error)
+  }
+}
+
 async function handleApprovePlanBatch() {
   if (!hasPlanApprovalPermission.value) {
     ElMessage.warning(`当前账号缺少审批权限：${requiredPlanApprovalPermissionCode.value}`)
     return
+  }
+
+  if (hasPlanWorkflowData.value && !currentPlanTaskId.value) {
+    await loadPlanWorkflowDetail()
   }
 
   if (currentPlanTaskId.value) {
@@ -710,12 +826,13 @@ async function handleApprovePlanBatch() {
           inputType: 'textarea'
         }
       )
-      const userId = authStore.user?.userId || 1
+      const userId = authStore.user?.userId || authStore.user?.id || 1
       const response = await approvalApi.approvePlan(currentPlanTaskId.value, userId, value || '审批通过')
       if (!response.success) {
         ElMessage.error(response.message || '审批失败')
         return
       }
+      await loadPlanWorkflowDetail()
       ElMessage.success('审批通过')
       emit('refresh')
       return
@@ -748,7 +865,7 @@ async function handleApprovePlanBatch() {
     })
 
     try {
-      const userId = authStore.user?.userId || 1
+      const userId = authStore.user?.userId || authStore.user?.id || 1
       for (const instance of scopedPlanApprovals.value) {
         const response = await approvalApi.approvePlan(
           instance.instanceId,
@@ -778,6 +895,10 @@ async function handleRejectPlanBatch() {
     return
   }
 
+  if (hasPlanWorkflowData.value && !currentPlanTaskId.value) {
+    await loadPlanWorkflowDetail()
+  }
+
   if (currentPlanTaskId.value) {
     if (!canCurrentUserHandlePlanApproval.value) {
       ElMessage.warning('当前审批节点不是你，无法执行审批驳回')
@@ -796,12 +917,13 @@ async function handleRejectPlanBatch() {
           inputValidator: val => (val && val.trim() ? true : '请输入驳回原因')
         }
       )
-      const userId = authStore.user?.userId || 1
+      const userId = authStore.user?.userId || authStore.user?.id || 1
       const response = await approvalApi.rejectPlan(currentPlanTaskId.value, userId, value)
       if (!response.success) {
         ElMessage.error(response.message || '驳回失败')
         return
       }
+      await loadPlanWorkflowDetail()
       ElMessage.success('审批已驳回')
       emit('refresh')
       return
@@ -835,7 +957,7 @@ async function handleRejectPlanBatch() {
     })
 
     try {
-      const userId = authStore.user?.userId || 1
+      const userId = authStore.user?.userId || authStore.user?.id || 1
       for (const instance of scopedPlanApprovals.value) {
         const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
         if (!response.success) {
@@ -958,6 +1080,9 @@ watch(() => props.modelValue, (val) => {
       void ensureSubmitterNameLoaded(props.plan?.submittedBy, props.plan?.createdByName)
     }
     void loadPendingPlanApprovals()
+    void loadPlanWorkflowDetail()
+  } else {
+    planWorkflowDetail.value = null
   }
 })
 
@@ -1061,20 +1186,20 @@ watch(
                     <span class="label">当前步骤：</span>
                     <span class="value">{{ currentPlanApprovalSummary.currentStepName }}</span>
                   </div>
-                  <div v-if="plan?.currentApproverName" class="info-row">
+                  <div v-if="activePlanWorkflow?.currentApproverName" class="info-row">
                     <el-icon><User /></el-icon>
                     <span class="label">当前审批人：</span>
-                    <span class="value">{{ plan.currentApproverName }}</span>
+                    <span class="value">{{ activePlanWorkflow.currentApproverName }}</span>
                   </div>
-                  <div v-if="typeof plan?.canWithdraw === 'boolean'" class="info-row">
+                  <div v-if="typeof activePlanWorkflow?.canWithdraw === 'boolean'" class="info-row">
                     <el-icon><Right /></el-icon>
                     <span class="label">当前操作：</span>
-                    <span class="value">{{ plan.canWithdraw ? '提交方仍可撤回' : '审批流已锁定' }}</span>
+                    <span class="value">{{ activePlanWorkflow.canWithdraw ? '提交方仍可撤回' : '审批流已锁定' }}</span>
                   </div>
-                  <div v-if="plan?.lastRejectReason" class="info-row">
+                  <div v-if="activePlanWorkflow?.lastRejectReason" class="info-row">
                     <el-icon><Document /></el-icon>
                     <span class="label">驳回原因：</span>
-                    <span class="value">{{ plan.lastRejectReason }}</span>
+                    <span class="value">{{ activePlanWorkflow.lastRejectReason }}</span>
                   </div>
                 </div>
                 <div class="card-actions">
@@ -1148,9 +1273,9 @@ watch(
               style="margin-bottom: 16px"
             />
             <ElAlert
-              v-if="hasPlanWorkflowData && isPlanPendingApproval && !canCurrentUserHandlePlanApproval && plan?.currentApproverName"
+              v-if="hasPlanWorkflowData && isPlanPendingApproval && !canCurrentUserHandlePlanApproval && activePlanWorkflow?.currentApproverName"
               type="warning"
-              :title="`当前节点审批人为 ${plan.currentApproverName}，你当前仅可查看审批进度和历史。`"
+              :title="`当前节点审批人为 ${activePlanWorkflow.currentApproverName}，你当前仅可查看审批进度和历史。`"
               show-icon
               :closable="false"
               style="margin-bottom: 16px"
@@ -1262,9 +1387,9 @@ watch(
               <span class="detail-label">当前步骤：</span>
               <span class="detail-value">{{ item.currentStepName }}</span>
             </div>
-            <div v-if="plan?.currentApproverName" class="detail-meta-row">
+            <div v-if="activePlanWorkflow?.currentApproverName" class="detail-meta-row">
               <span class="detail-label">当前审批人：</span>
-              <span class="detail-value">{{ plan.currentApproverName }}</span>
+              <span class="detail-value">{{ activePlanWorkflow.currentApproverName }}</span>
             </div>
             <div v-if="item.entityId" class="detail-meta-row">
               <span class="detail-label">关联实体ID：</span>

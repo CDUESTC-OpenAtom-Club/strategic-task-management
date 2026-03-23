@@ -351,6 +351,14 @@ const isPlanDistributed = computed(() => {
   return normalizedCurrentPlanStatus.value === 'DISTRIBUTED'
 })
 
+const canViewReceivedPlanContent = computed(() => {
+  if (isStrategicDept.value) {
+    return true
+  }
+
+  return ['DISTRIBUTED', 'PENDING', 'RETURNED'].includes(normalizedCurrentPlanStatus.value ?? '')
+})
+
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
 const canEdit = computed(() => {
   return authStore.userRole === 'strategic_dept' &&
@@ -627,7 +635,7 @@ const hasCurrentUserPlanData = computed(() => {
 })
 
 const hasCurrentUserPlan = computed(() => {
-  return hasCurrentUserPlanData.value && (isStrategicDept.value || isPlanDistributed.value)
+  return hasCurrentUserPlanData.value && canViewReceivedPlanContent.value
 })
 
 // 判断是否正在加载初始数据
@@ -669,8 +677,8 @@ const shouldShowPlanWarning = computed(() => {
 const planWarningMessage = computed(() => {
   const departmentName = effectiveViewingDept.value || authStore.userDepartment || '当前部门'
 
-  if (hasCurrentUserPlanData.value && !isPlanDistributed.value) {
-    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但上级 Plan 仍未处于“已下发”状态，因此本界面不应展示指标。请先完成下发后再查看。`
+  if (hasCurrentUserPlanData.value && !canViewReceivedPlanContent.value) {
+    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但当前仍未进入可查看阶段。请先完成上级下发后再查看。`
   }
 
   if (isSecondaryCollege.value) {
@@ -708,7 +716,7 @@ const approvalIndicators = computed(() => {
     list = list.filter(i => {
       // 非战略角色仅查看“接收部门=当前部门”的指标，避免与下发来源部门混淆
       // 且仅在计划已下发后才可见
-      return isPlanDistributed.value && i.responsibleDept === effectiveViewingDept.value
+      return canViewReceivedPlanContent.value && i.responsibleDept === effectiveViewingDept.value
     })
   }
 
@@ -747,7 +755,7 @@ const _pendingApprovalCount = computed(() => {
     list = list.filter(i => {
       // 非战略角色仅统计“接收部门=当前部门”的待审批数据
       // 且仅在计划已下发后才可见
-      return isPlanDistributed.value && i.responsibleDept === effectiveViewingDept.value
+      return canViewReceivedPlanContent.value && i.responsibleDept === effectiveViewingDept.value
     })
   }
 
@@ -755,6 +763,26 @@ const _pendingApprovalCount = computed(() => {
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
   return list.filter(i => isApprovalStatus(i, 'PENDING')).length
 })
+
+const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
+
+const approvalEntryButtonText = computed(() => {
+  const status = normalizedCurrentPlanStatus.value
+  if (status === 'PENDING') {
+    return '审批中'
+  }
+  if (status === 'RETURNED') {
+    return '查看退回'
+  }
+  if (status === 'DISTRIBUTED') {
+    return '查看审批'
+  }
+  return '审批进度'
+})
+
+const handleOpenApproval = () => {
+  approvalDrawerVisible.value = true
+}
 
 interface TaskListItem {
   id: number
@@ -864,7 +892,7 @@ const indicators = computed(() => {
   // 且仅在计划已下发后才可见
   if (!isStrategicDept.value && effectiveViewingDept.value) {
     list = list.filter(i => {
-      return isPlanDistributed.value && i.responsibleDept === effectiveViewingDept.value
+      return canViewReceivedPlanContent.value && i.responsibleDept === effectiveViewingDept.value
     })
   }
 
@@ -2211,42 +2239,6 @@ const handleSubmitAll = () => {
 // ============================================================================
 
 /**
- * 撤回单个指标的进度审批
- * 仅操作 progressApprovalStatus 字段，不影响指标生命周期状态
- */
-const handleWithdrawProgressApproval = (row: StrategicIndicator) => {
-  // 检查是否为待审批状态
-  if (!isApprovalStatus(row, 'PENDING')) {
-    ElMessage.warning('只能撤回待审批状态的进度')
-    return
-  }
-
-  const planId = getCurrentPlanId()
-  if (!planId) {
-    ElMessage.warning('当前计划不存在，无法撤回')
-    return
-  }
-
-  ElMessageBox.confirm(
-    `当前页面审批按整份计划处理，撤回指标 "${row.name}" 会一起撤回当前计划下的全部指标提交。确定继续吗？`,
-    '撤回计划审批',
-    {
-      confirmButtonText: '确定撤回',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(async () => {
-    try {
-      await planStore.withdrawPlan(planId)
-      await refreshCurrentPlanDetails(planId)
-      ElMessage.success('计划审批撤回成功')
-    } catch (error) {
-      logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
-    }
-  })
-}
-
-/**
  * 一键撤回所有已提交的指标进度审批
  * 仅操作 progressApprovalStatus 字段，不影响指标生命周期状态
  * @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
@@ -2405,16 +2397,30 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   </el-button>
                 </span>
               </el-tooltip>
-                        <!-- 审批进度按钮 -->
-                        <el-button 
-                          link
-                          type="primary"
-                          style="margin-left: 8px;"
-                          @click="approvalDrawerVisible = true"
-                        >
-                          <el-icon style="margin-right: 4px;"><View /></el-icon>
-                          审批进度
-                        </el-button>
+              <el-badge
+                v-if="pendingApprovalCount > 0"
+                :value="pendingApprovalCount"
+                class="approval-badge"
+              >
+                <el-button
+                  size="small"
+                  type="warning"
+                  style="margin-left: 8px;"
+                  @click="handleOpenApproval"
+                >
+                  <el-icon><Check /></el-icon>
+                  {{ approvalEntryButtonText }}
+                </el-button>
+              </el-badge>
+              <el-button
+                v-else
+                size="small"
+                style="margin-left: 8px;"
+                @click="handleOpenApproval"
+              >
+                <el-icon><Check /></el-icon>
+                {{ approvalEntryButtonText }}
+              </el-button>
             </template>
           </div>
         </div>
@@ -2564,21 +2570,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                         :disabled="isApprovalStatus(row, 'PENDING') || timeContext.isReadOnly"
                         @click="handleOpenReportDialog(row)"
                       >{{ isApprovalStatus(row, 'REJECTED') ? '重新填报' : (hasReportContent(row) ? '编辑' : '填报') }}</el-button>
-
-                      <!-- 职能部门/二级学院显示进度审批撤回按钮 -->
-                      <!-- 只有待审批状态的指标才显示撤回按钮 -->
-                      <!-- @requirement 2.1, 2.2, 3.3, 3.4 - 分离审批操作和生命周期操作 -->
-                      <el-button 
-                        v-if="!isStrategicDept && isApprovalStatus(row, 'PENDING')" 
-                        link 
-                        type="warning" 
-                        size="small" 
-                        :disabled="timeContext.isReadOnly"
-                        @click="handleWithdrawProgressApproval(row)"
-                      >
-                        <el-icon><RefreshLeft /></el-icon>
-                        撤回
-                      </el-button>
 
                       <!-- 战略发展部显示撤回下发按钮 -->
                       <el-button 
@@ -2924,8 +2915,11 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
     <ApprovalProgressDrawer
       v-model="approvalDrawerVisible"
       :indicators="approvalIndicators"
+      :plan="currentPlanDetails"
       :department-name="effectiveViewingDept || '当前部门'"
-      :show-approval-section="isStrategicDept"
+      :plan-name="currentPlanDetails?.taskName || currentPlanDetails?.name || effectiveViewingDept || '当前部门'"
+      :show-plan-approvals="true"
+      :show-approval-section="true"
       approval-type="submission"
     />
   </div>

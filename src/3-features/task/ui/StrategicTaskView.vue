@@ -35,6 +35,8 @@ import strategicApi, { approvalApi as taskApprovalApi } from '@/features/task/ap
 import {
   getWorkflowDefinitionPreviewByCode,
   startWorkflow,
+  getWorkflowInstanceDetail,
+  getWorkflowInstanceDetailByBusiness,
   approveTask,
   rejectTask
 } from '@/features/workflow/api'
@@ -1262,7 +1264,53 @@ const loadIndicatorWorkflowSnapshot = async (
   try {
     const response = await indicatorFillApi.getIndicatorFillHistory(indicatorId)
     const fills = Array.isArray(response.data) ? response.data : []
-    const snapshot = resolveLatestIndicatorWorkflowSnapshot(fills)
+    const baseSnapshot = resolveLatestIndicatorWorkflowSnapshot(fills)
+    let snapshot = baseSnapshot
+
+    if (baseSnapshot?.workflowInstanceId) {
+      try {
+        const workflowResponse = await getWorkflowInstanceDetail(String(baseSnapshot.workflowInstanceId))
+        if (workflowResponse.success && workflowResponse.data) {
+          snapshot = {
+            ...baseSnapshot,
+            workflowInstanceId: workflowResponse.data.instanceId || baseSnapshot.workflowInstanceId,
+            currentTaskId: workflowResponse.data.currentTaskId || baseSnapshot.currentTaskId,
+            workflowStatus: workflowResponse.data.status || baseSnapshot.workflowStatus,
+            currentStepName: workflowResponse.data.currentStepName || baseSnapshot.currentStepName,
+            currentApproverId: workflowResponse.data.currentApproverId ?? baseSnapshot.currentApproverId,
+            currentApproverName: workflowResponse.data.currentApproverName || baseSnapshot.currentApproverName
+          }
+        }
+      } catch (error) {
+        logger.warn('[StrategicTaskView] 按实例刷新指标工作流快照失败:', {
+          indicatorId,
+          workflowInstanceId: baseSnapshot.workflowInstanceId,
+          error
+        })
+      }
+    } else if (baseSnapshot?.reportId) {
+      try {
+        const workflowResponse = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', baseSnapshot.reportId)
+        if (workflowResponse.success && workflowResponse.data) {
+          snapshot = {
+            ...baseSnapshot,
+            workflowInstanceId: workflowResponse.data.instanceId || baseSnapshot.workflowInstanceId,
+            currentTaskId: workflowResponse.data.currentTaskId || baseSnapshot.currentTaskId,
+            workflowStatus: workflowResponse.data.status || baseSnapshot.workflowStatus,
+            currentStepName: workflowResponse.data.currentStepName || baseSnapshot.currentStepName,
+            currentApproverId: workflowResponse.data.currentApproverId ?? baseSnapshot.currentApproverId,
+            currentApproverName: workflowResponse.data.currentApproverName || baseSnapshot.currentApproverName
+          }
+        }
+      } catch (error) {
+        logger.warn('[StrategicTaskView] 按业务实体刷新指标工作流快照失败:', {
+          indicatorId,
+          reportId: baseSnapshot.reportId,
+          error
+        })
+      }
+    }
+
     indicatorWorkflowCache.value = {
       ...indicatorWorkflowCache.value,
       [cacheKey]: snapshot
