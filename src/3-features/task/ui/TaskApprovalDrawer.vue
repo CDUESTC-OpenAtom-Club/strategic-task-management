@@ -1,50 +1,47 @@
 <template>
-  <el-drawer
+  <BaseApprovalDrawer
     v-model="visible"
     title="任务审批"
-    direction="rtl"
-    size="640px"
-    :before-close="handleClose"
+    :subtitle="`待审批 ${pendingApprovals.length} 项`"
+    :loading="loading"
+    :show-empty="pendingApprovals.length === 0"
+    empty-description="暂无待审批任务"
   >
-    <div v-loading="loading" class="drawer-content">
-      <el-empty v-if="!loading && pendingApprovals.length === 0" description="暂无待审批任务" />
+    <div class="approval-list">
+      <div v-for="instance in pendingApprovals" :key="instance.taskId" class="approval-card">
+        <div class="approval-header">
+          <div class="approval-title">{{ instance.title || `${instance.entityType} #${instance.entityId}` }}</div>
+          <el-tag type="warning" size="small">{{ instance.status }}</el-tag>
+        </div>
 
-      <div v-else class="approval-list">
-        <div v-for="instance in pendingApprovals" :key="instance.taskId" class="approval-card">
-          <div class="approval-header">
-            <div class="approval-title">{{ instance.title || `${instance.entityType} #${instance.entityId}` }}</div>
-            <el-tag type="warning" size="small">{{ instance.status }}</el-tag>
-          </div>
+        <div class="approval-meta">
+          <div>任务ID: {{ instance.taskId }}</div>
+          <div>实例ID: {{ instance.workflowInstanceId || '-' }}</div>
+          <div>实体类型: {{ instance.entityType }}</div>
+          <div>实体ID: {{ instance.entityId }}</div>
+          <div>发起人ID: {{ instance.requesterId }}</div>
+          <div>发起时间: {{ formatTime(instance.startedAt || instance.createdAt) }}</div>
+        </div>
 
-          <div class="approval-meta">
-            <div>任务ID: {{ instance.taskId }}</div>
-            <div>实例ID: {{ instance.workflowInstanceId || '-' }}</div>
-            <div>实体类型: {{ instance.entityType }}</div>
-            <div>实体ID: {{ instance.entityId }}</div>
-            <div>发起人ID: {{ instance.requesterId }}</div>
-            <div>发起时间: {{ formatTime(instance.startedAt || instance.createdAt) }}</div>
-          </div>
+        <el-alert
+          v-if="instance.missingPermissionCode"
+          type="warning"
+          :closable="false"
+          :title="`当前账号缺少权限码 ${instance.missingPermissionCode}，仅可查看待办。`"
+          style="margin-bottom: 12px"
+        />
 
-          <el-alert
-            v-if="instance.missingPermissionCode"
-            type="warning"
-            :closable="false"
-            :title="`当前账号缺少权限码 ${instance.missingPermissionCode}，仅可查看待办。`"
-            style="margin-bottom: 12px"
-          />
+        <el-alert
+          v-else-if="!instance.canHandle && instance.currentApproverName"
+          type="warning"
+          :closable="false"
+          :title="`当前节点审批人为 ${instance.currentApproverName}，你当前仅可查看。`"
+          style="margin-bottom: 12px"
+        />
 
-          <el-alert
-            v-else-if="!instance.canHandle && instance.currentApproverName"
-            type="warning"
-            :closable="false"
-            :title="`当前节点审批人为 ${instance.currentApproverName}，你当前仅可查看。`"
-            style="margin-bottom: 12px"
-          />
-
-          <div v-if="instance.canHandle" class="approval-actions">
-            <el-button type="success" @click="handleApprove(instance)">通过</el-button>
-            <el-button type="danger" @click="handleReject(instance)">驳回</el-button>
-          </div>
+        <div v-if="instance.canHandle" class="approval-actions">
+          <el-button type="success" @click="handleApprove(instance)">通过</el-button>
+          <el-button type="danger" @click="handleReject(instance)">驳回</el-button>
         </div>
       </div>
     </div>
@@ -55,7 +52,7 @@
         <el-button @click="handleClose">关闭</el-button>
       </div>
     </template>
-  </el-drawer>
+  </BaseApprovalDrawer>
 </template>
 
 <script setup lang="ts">
@@ -63,6 +60,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { getMyPendingTasks, decideTask, getWorkflowInstanceDetail } from '@/features/workflow/api'
 import { useAuthStore } from '@/features/auth/model/store'
+import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import type { WorkflowTaskResponse, WorkflowInstanceDetailResponse } from '@/features/workflow/api'
 
@@ -301,11 +299,6 @@ watch(
 </script>
 
 <style scoped>
-.drawer-content {
-  padding: 16px;
-  min-height: 360px;
-}
-
 .approval-list {
   display: flex;
   flex-direction: column;

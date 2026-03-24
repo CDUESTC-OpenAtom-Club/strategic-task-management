@@ -10,5 +10,6 @@
 // Export layout components here
 export { default as PageHeader } from './PageHeader.vue'
 export type { PageHeaderProps, BreadcrumbItem } from './PageHeader.vue'
+export { default as BaseApprovalDrawer } from './BaseApprovalDrawer.vue'
 export { default as BreadcrumbNav } from './BreadcrumbNav.vue'
 export { default as TransitionWrapper } from './TransitionWrapper.vue'

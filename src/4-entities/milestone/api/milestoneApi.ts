@@ -14,6 +14,56 @@ import type {
 } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 
+type MilestoneMutationRequest = {
+  indicatorId: number
+  milestoneName: string
+  description?: string
+  targetProgress: number
+  dueDate: string | null
+  status: string
+  sortOrder: number
+  isPaired?: boolean
+  inheritedFrom?: number | null
+}
+
+type BatchMilestoneMutationItem = {
+  id?: number
+  milestoneName: string
+  description?: string
+  targetProgress: number
+  dueDate: string | null
+  status: string
+  sortOrder: number
+  isPaired?: boolean
+  inheritedFrom?: number | null
+}
+
+function normalizeDueDate(dueDate: string | null): string | null {
+  if (!dueDate) {
+    return null
+  }
+
+  const normalized = dueDate.trim()
+  if (!normalized) {
+    return null
+  }
+
+  // Backend DTO expects LocalDateTime, while UI commonly edits milestones as YYYY-MM-DD.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return `${normalized}T00:00:00`
+  }
+
+  return normalized
+}
+
+function normalizeMilestoneMutationRequest(request: MilestoneMutationRequest): MilestoneMutationRequest {
+  return {
+    ...request,
+    milestoneName: request.milestoneName.trim(),
+    dueDate: normalizeDueDate(request.dueDate)
+  }
+}
+
 /**
  * 重试辅助函数 - 使用指数退避策略
  *
@@ -54,18 +104,9 @@ export const milestoneApi = {
   /**
    * 创建新里程碑
    */
-  async createMilestone(request: {
-    indicatorId: number
-    milestoneName: string
-    description?: string
-    targetProgress: number
-    dueDate: string | null
-    status: string
-    sortOrder: number
-    isPaired?: boolean
-    inheritedFrom?: number | null
-  }): Promise<ApiResponse<Milestone>> {
-    return apiClient.post<ApiResponse<Milestone>>('/milestones', request)
+  async createMilestone(request: MilestoneMutationRequest): Promise<ApiResponse<Milestone>> {
+    const payload = normalizeMilestoneMutationRequest(request)
+    return apiClient.post<ApiResponse<Milestone>>('/milestones', payload)
   },
 
   /**
@@ -73,19 +114,10 @@ export const milestoneApi = {
    */
   async updateMilestone(
     milestoneId: string,
-    request: {
-      indicatorId: number
-      milestoneName: string
-      description?: string
-      targetProgress: number
-      dueDate: string | null
-      status: string
-      sortOrder: number
-      isPaired?: boolean
-      inheritedFrom?: number | null
-    }
+    request: MilestoneMutationRequest
   ): Promise<ApiResponse<Milestone>> {
-    return apiClient.put<ApiResponse<Milestone>>(`/milestones/${milestoneId}`, request)
+    const payload = normalizeMilestoneMutationRequest(request)
+    return apiClient.put<ApiResponse<Milestone>>(`/milestones/${milestoneId}`, payload)
   },
 
   /**
@@ -93,6 +125,22 @@ export const milestoneApi = {
    */
   async deleteMilestone(milestoneId: string): Promise<ApiResponse<void>> {
     return apiClient.delete<ApiResponse<void>>(`/milestones/${milestoneId}`)
+  },
+
+  /**
+   * 按指标整包保存里程碑，在单次请求中完成新增、修改、删除。
+   */
+  async saveMilestonesForIndicator(
+    indicatorId: string,
+    milestones: BatchMilestoneMutationItem[]
+  ): Promise<ApiResponse<Milestone[]>> {
+    const payload = {
+      milestones: milestones.map(item => ({
+        ...item,
+        dueDate: normalizeDueDate(item.dueDate)
+      }))
+    }
+    return apiClient.put<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}/batch`, payload)
   },
 
   /**

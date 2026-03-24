@@ -22,7 +22,7 @@ import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
 import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
-import TaskApprovalDrawer from '@/features/task/ui/TaskApprovalDrawer.vue'
+import { ApprovalProgressDrawer } from '@/features/approval'
 import { indicatorApi } from '@/features/indicator/api'
 import { logger } from '@/shared/lib/utils/logger'
 
@@ -1177,6 +1177,19 @@ const collegeOverallStatus = computed(() => {
   return { label: '暂无指标', type: 'info' }
 })
 
+// 计算当前选中学院的总权重
+const collegeTotalWeight = computed(() => {
+  if (!selectedCollege.value) {
+    return 0
+  }
+
+  const collegeIndicators = strategicStore.indicators.filter(
+    i => i.targetOrgName === selectedCollege.value && !i.isStrategic
+  )
+
+  return collegeIndicators.reduce((sum, i) => sum + Number(i.weight || 0), 0)
+})
+
 // 下发/撤销统一处理函数
 const _handleDistributeOrWithdraw = (command: string) => {
   if (!selectedCollege.value) {
@@ -1850,6 +1863,13 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
               <el-tag :type="collegeOverallStatus.type" size="default" style="margin-left: 12px">
                 状态: {{ collegeOverallStatus.label }}
               </el-tag>
+              <el-tag
+                :type="collegeTotalWeight === 100 ? 'success' : 'danger'"
+                size="default"
+                style="margin-left: 12px"
+              >
+                权重合计: {{ collegeTotalWeight }} / 100
+              </el-tag>
             </div>
             <div v-if="canEditChild" class="header-actions">
               <!-- 
@@ -1872,7 +1892,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   @click="handleOpenApproval"
                 >
                   <el-icon><Check /></el-icon>
-                  审批{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
+                  查看审批{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
                 </el-button>
                 <!-- 待下发状态：显示添加指标和下发按钮 -->
                 <template v-if="collegeOverallStatus.label === '待下发'">
@@ -1913,7 +1933,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 class="unified-table distribution-table"
               >
                 <!-- 子指标名称列 -->
-                <el-table-column label="子指标名称" min-width="180">
+                <el-table-column label="子指标名称" min-width="150">
                   <template #default="{ row }">
                     <!-- 没有子指标的父指标 -->
                     <template v-if="row.type === 'indicator-only'">
@@ -2178,7 +2198,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-table-column>
 
                 <!-- 进度列 -->
-                <el-table-column label="进度" width="80" align="center">
+                <el-table-column label="进度" width="100" align="center">
                   <template #default="{ row }">
                     <template v-if="row.type === 'indicator-only'">
                       <span class="progress-text">-</span>
@@ -2366,7 +2386,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-row>
                 <el-row :gutter="16">
                   <el-col :span="24">
-                    <el-form-item label="里程碑">
+                    <el-form-item label="里程碑" required>
                       <div class="milestone-form-area">
                         <el-button
                           v-if="newIndicatorForm.type1 === '定性'"
@@ -2450,10 +2470,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       @close="auditLogVisible = false"
     />
 
-    <!-- 任务审批抽屉 -->
-    <TaskApprovalDrawer
+    <!-- 任务审批进度抽屉 -->
+    <ApprovalProgressDrawer
       v-model="taskApprovalVisible"
+      :indicators="approvalIndicators"
+      :department-name="selectedCollege || currentDept || '当前部门'"
+      :plan-name="selectedCollege || currentDept || '当前部门'"
+      :show-plan-approvals="true"
       :show-approval-section="true"
+      approval-type="distribution"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"
     />

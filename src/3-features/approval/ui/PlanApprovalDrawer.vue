@@ -8,6 +8,7 @@ import { Check, Close, Document, User, Timer, Right } from '@element-plus/icons-
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { useAuthStore } from '@/features/auth/model/store'
+import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import type { PendingApproval } from '@/shared/types'
 
@@ -237,13 +238,17 @@ watch(
 </script>
 
 <template>
-  <el-drawer
+  <BaseApprovalDrawer
     v-model="drawerVisible"
     title="计划审批"
-    direction="rtl"
+    :subtitle="`待审批 ${pendingApprovals.length} 个计划`"
     size="600px"
-    :before-close="handleClose"
-    class="plan-approval-drawer"
+    :loading="loading"
+    :show-empty="pendingApprovals.length === 0"
+    empty-description="暂无待审批的计划"
+    custom-class="plan-approval-drawer"
+    content-padding="20px"
+    min-content-height="400px"
   >
     <template #header>
       <div class="drawer-header">
@@ -255,65 +260,52 @@ watch(
       </div>
     </template>
 
-    <div v-loading="loading" class="drawer-content">
-      <!-- 空状态 -->
-      <el-empty
-        v-if="!loading && pendingApprovals.length === 0"
-        description="暂无待审批的计划"
-        :image-size="120"
-      />
+    <el-alert
+      v-if="pendingApprovals.length > 0 && !canApprovePlan"
+      type="warning"
+      :closable="false"
+      title="当前账号缺少计划审批按钮权限，仅可查看待办列表。"
+      style="margin-bottom: 16px"
+    />
 
-      <el-alert
-        v-if="!loading && pendingApprovals.length > 0 && !canApprovePlan"
-        type="warning"
-        :closable="false"
-        title="当前账号缺少计划审批按钮权限，仅可查看待办列表。"
-        style="margin-bottom: 16px"
-      />
-
-      <!-- 待审批列表 -->
-      <div v-else class="approval-list">
-        <div v-for="instance in pendingApprovals" :key="instance.instanceId" class="approval-card">
-          <!-- 卡片头部 -->
-          <div class="card-header">
-            <div class="plan-info">
-              <el-icon class="plan-icon"><Document /></el-icon>
-              <div class="info-text">
-                <div class="plan-name">{{ instance.planName || '年度计划' }}</div>
-                <div class="plan-year">{{ instance.year || '2025' }}年度</div>
-              </div>
-            </div>
-            <el-tag type="warning" size="small">待审批</el-tag>
-          </div>
-
-          <!-- 提交信息 -->
-          <div class="submit-info">
-            <div class="info-row">
-              <el-icon><User /></el-icon>
-              <span class="label">提交人：</span>
-              <span class="value">{{ instance.submitterName || '未知' }}</span>
-            </div>
-            <div class="info-row">
-              <el-icon><Timer /></el-icon>
-              <span class="label">提交时间：</span>
-              <span class="value">{{ instance.createdAt ? formatTime(instance.createdAt) : '--' }}</span>
-            </div>
-            <div class="info-row">
-              <el-icon><Right /></el-icon>
-              <span class="label">当前步骤：</span>
-              <span class="value">{{ instance.currentStepName || '审批中' }}</span>
+    <div class="approval-list">
+      <div v-for="instance in pendingApprovals" :key="instance.instanceId" class="approval-card">
+        <div class="card-header">
+          <div class="plan-info">
+            <el-icon class="plan-icon"><Document /></el-icon>
+            <div class="info-text">
+              <div class="plan-name">{{ instance.planName || '年度计划' }}</div>
+              <div class="plan-year">{{ instance.year || '2025' }}年度</div>
             </div>
           </div>
+          <el-tag type="warning" size="small">待审批</el-tag>
+        </div>
 
-          <!-- 操作按钮 -->
-          <div v-if="canApprovePlan" class="card-actions">
-            <el-button type="success" size="default" :icon="Check" @click="handleApprove(instance)">
-              审批通过
-            </el-button>
-            <el-button type="danger" size="default" :icon="Close" @click="handleReject(instance)">
-              审批拒绝
-            </el-button>
+        <div class="submit-info">
+          <div class="info-row">
+            <el-icon><User /></el-icon>
+            <span class="label">提交人：</span>
+            <span class="value">{{ instance.submitterName || '未知' }}</span>
           </div>
+          <div class="info-row">
+            <el-icon><Timer /></el-icon>
+            <span class="label">提交时间：</span>
+            <span class="value">{{ instance.createdAt ? formatTime(instance.createdAt) : '--' }}</span>
+          </div>
+          <div class="info-row">
+            <el-icon><Right /></el-icon>
+            <span class="label">当前步骤：</span>
+            <span class="value">{{ instance.currentStepName || '审批中' }}</span>
+          </div>
+        </div>
+
+        <div v-if="canApprovePlan" class="card-actions">
+          <el-button type="success" size="default" :icon="Check" @click="handleApprove(instance)">
+            审批通过
+          </el-button>
+          <el-button type="danger" size="default" :icon="Close" @click="handleReject(instance)">
+            审批拒绝
+          </el-button>
         </div>
       </div>
     </div>
@@ -324,7 +316,7 @@ watch(
         <el-button @click="handleClose">关闭</el-button>
       </div>
     </template>
-  </el-drawer>
+  </BaseApprovalDrawer>
 </template>
 
 <style scoped>
@@ -355,11 +347,6 @@ watch(
   margin-top: 8px;
   font-size: 13px;
   color: #64748b;
-}
-
-.drawer-content {
-  padding: 20px;
-  min-height: 400px;
 }
 
 .approval-list {
