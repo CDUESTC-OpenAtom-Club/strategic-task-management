@@ -158,6 +158,8 @@ export interface Indicator {
   weight: number
   /** 进度百分比 (后端: progress) */
   progress: number
+  /** 填报进度 (后端: report_progress, 来自 plan_report_indicator 表) */
+  reportProgress?: number | null
   /** 目标值 (后端: target_value) */
   targetValue: number | null
   /** 实际值 (后端: actual_value) */
@@ -176,6 +178,8 @@ export interface Indicator {
   pendingProgress: number | null
   /** 待审批说明 (后端: pending_remark) */
   pendingRemark: string | null
+  /** 待审批附件 (后端: pending_attachments / pendingAttachments) */
+  pendingAttachments: string[]
   /** 状态审计日志 (后端: status_audit) */
   statusAudit: StatusAuditEntry[]
   /** 状态 (后端: status) */

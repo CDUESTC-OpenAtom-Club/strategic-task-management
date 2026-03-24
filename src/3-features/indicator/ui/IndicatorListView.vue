@@ -12,10 +12,7 @@ import {
   Close,
   Upload,
   Edit,
-  Refresh,
-  User,
-  ChatDotRound,
-  Right
+  Refresh
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
@@ -30,7 +27,6 @@ import {
   getProgressColor as _getProgressColor,
   getStatusTagType as _getStatusTagType
 } from '@/shared/lib/utils'
-import type { StatusAuditEntry as _StatusAuditEntry } from '@/shared/types'
 import { useOrgStore } from '@/features/organization/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
@@ -48,13 +44,13 @@ import {
   resolveLatestIndicatorWorkflowSnapshot,
   type IndicatorWorkflowSnapshot
 } from '@/features/plan/lib/indicatorWorkflow'
+import { filterIndicatorsForViewerRole } from '@/features/indicator/lib/scope'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
   MILESTONE_STATUS_VALUES,
   PROGRESS_APPROVAL_STATUS_VALUES,
   type ProgressApprovalStatusValue
 } from '@/shared/config/validationRules'
-import type { IndicatorFill } from '@/shared/types'
 
 interface PersistedIndicatorDraft {
   indicatorId: string
@@ -74,55 +70,6 @@ const vFocus = {
       el.focus()
     }
   }
-}
-
-// 获取操作类型配置（与 AuditLogDrawer 保持一致）
-const getActionConfig = (action: _StatusAuditEntry['action']) => {
-  const configs = {
-    submit: { icon: Upload, label: '提交进度', type: 'primary' },
-    approve: { icon: Check, label: '审批通过', type: 'success' },
-    reject: { icon: Close, label: '审批驳回', type: 'danger' },
-    revoke: { icon: Refresh, label: '撤回提交', type: 'warning' },
-    update: { icon: Edit, label: '更新进度', type: 'info' },
-    distribute: { icon: Promotion, label: '下发指标', type: 'primary' }
-  }
-  return configs[action] || configs.update
-}
-
-// 格式化时间
-const formatAuditTime = (timestamp: Date | string) => {
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// 格式化相对时间
-const formatRelativeTime = (timestamp: Date | string) => {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffMins < 1) {
-    return '刚刚'
-  }
-  if (diffMins < 60) {
-    return `${diffMins}分钟前`
-  }
-  if (diffHours < 24) {
-    return `${diffHours}小时前`
-  }
-  if (diffDays < 30) {
-    return `${diffDays}天前`
-  }
-  return formatAuditTime(timestamp)
 }
 
 // 使用共享 Store
@@ -292,9 +239,18 @@ function getSafeApprovalStatus(status: unknown): ProgressApprovalStatusValue {
  * @returns 是否匹配目标状态
  */
 function isApprovalStatus(
-  _indicator: StrategicIndicator,
+  indicator: StrategicIndicator,
   targetStatus: ProgressApprovalStatusValue | ProgressApprovalStatusValue[]
 ): boolean {
+  const indicatorStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
+  if (indicatorStatus !== 'NONE') {
+    if (Array.isArray(targetStatus)) {
+      return targetStatus.includes(indicatorStatus)
+    }
+
+    return indicatorStatus === targetStatus
+  }
+
   // @requirement: Plan-centric - 使用 Plan 的状态作为当前页面的提交态来源。
   // 对职能部门/学院页面来说，DISTRIBUTED 代表“已下发，待本部门填写并提交”，
   // 不能误判为已经审批通过或不可再次填报。
@@ -521,6 +477,21 @@ const currentViewingOrgId = computed(() => {
   return null
 })
 
+function filterIndicatorsForCurrentViewer(list: StrategicIndicator[]): StrategicIndicator[] {
+  const viewerRole = isStrategicDept.value
+    ? 'strategic_dept'
+    : isSecondaryCollege.value
+      ? 'secondary_college'
+      : 'functional_dept'
+
+  return filterIndicatorsForViewerRole(
+    list,
+    viewerRole,
+    currentViewingOrgId.value,
+    canViewReceivedPlanContent.value
+  )
+}
+
 const resolvePlanYear = (plan: any): number | null => {
   const explicitYear = plan?.cycle?.year ?? plan?.year
   if (explicitYear != null && explicitYear !== '') {
@@ -595,6 +566,50 @@ function getPlanIndicatorNumber(indicator: Record<string, unknown>, ...keys: str
     }
   }
   return 0
+}
+
+function getPlanIndicatorOptionalNumber(
+  indicator: Record<string, unknown>,
+  ...keys: string[]
+): number | undefined {
+  for (const key of keys) {
+    const value = indicator[key]
+    if (value === undefined || value === null || value === '') {
+      continue
+    }
+
+    const numericValue = Number(value)
+    if (Number.isFinite(numericValue)) {
+      return numericValue
+    }
+  }
+
+  return undefined
+}
+
+function getPlanIndicatorAttachments(indicator: Record<string, unknown>): string[] | undefined {
+  const rawValue = indicator.pendingAttachments
+  if (!Array.isArray(rawValue)) {
+    return undefined
+  }
+
+  const attachments = rawValue
+    .map(item => {
+      if (typeof item === 'string') {
+        return item.trim()
+      }
+      if (item && typeof item === 'object') {
+        const record = item as Record<string, unknown>
+        return (
+          getPlanIndicatorText(record, 'url', 'publicUrl', 'public_url', 'objectKey', 'object_key', 'name', 'originalName') ||
+          ''
+        )
+      }
+      return ''
+    })
+    .filter(Boolean)
+
+  return attachments
 }
 
 function normalizePlanMilestoneStatus(status: unknown): 'pending' | 'completed' | 'overdue' {
@@ -689,15 +704,25 @@ const currentPlanIndicators = computed(() => {
 
   // Plan 详情接口字段仍然偏瘦，这里优先复用 strategicStore 已标准化的数据，
   // 再用当前 plan 明细里的实时字段覆盖，避免任务名/里程碑被硬编码丢失。
-  return plan.indicators.map((ind: any) => {
+  const mappedIndicators = plan.indicators.map((ind: any) => {
     const source = ind && typeof ind === 'object' ? (ind as Record<string, unknown>) : {}
     const indicatorId = String(source.id ?? source.indicatorId ?? '')
     const storeIndicator = indicatorId ? storeIndicatorMap.get(indicatorId) : undefined
     const normalizedMilestones = normalizePlanMilestones(source.milestones)
-    const progress = getPlanIndicatorNumber(source, 'progress')
-    const weight = getPlanIndicatorNumber(source, 'weightPercent', 'weight')
+    const progress = getPlanIndicatorOptionalNumber(source, 'progress')
+    const weight = getPlanIndicatorOptionalNumber(source, 'weightPercent', 'weight')
+    const reportProgress = getPlanIndicatorOptionalNumber(source, 'reportProgress', 'report_progress')
+    const pendingProgress = getPlanIndicatorOptionalNumber(source, 'pendingProgress', 'pending_progress')
+    const pendingRemark = getPlanIndicatorText(source, 'pendingRemark', 'pending_remark')
+    const pendingAttachments = getPlanIndicatorAttachments(source)
+    const currentReportId = getPlanIndicatorOptionalNumber(source, 'currentReportId', 'current_report_id')
+    const sourceApprovalStatus = getPlanIndicatorText(
+      source,
+      'progressApprovalStatus',
+      'progress_approval_status'
+    )
 
-    return {
+    const normalizedIndicator = {
       ...(storeIndicator || {}),
       id: indicatorId || storeIndicator?.id || String(Date.now()),
       name: getPlanIndicatorText(source, 'indicatorName', 'name') || storeIndicator?.name || '',
@@ -709,8 +734,8 @@ const currentPlanIndicators = computed(() => {
         getPlanIndicatorText(source, 'indicatorDesc', 'description') ||
         (storeIndicator as StrategicIndicator & { description?: string })?.description ||
         '',
-      progress: progress || storeIndicator?.progress || 0,
-      weight: weight || storeIndicator?.weight || 0,
+      progress: progress ?? storeIndicator?.progress ?? 0,
+      weight: weight ?? storeIndicator?.weight ?? 0,
       type1:
         (getPlanIndicatorText(
           source,
@@ -741,6 +766,12 @@ const currentPlanIndicators = computed(() => {
         storeIndicator?.taskContent ||
         '',
       remark: getPlanIndicatorText(source, 'remark') || storeIndicator?.remark || '',
+      progressApprovalStatus: sourceApprovalStatus
+        ? getSafeApprovalStatus(sourceApprovalStatus)
+        : getSafeApprovalStatus(storeIndicator?.progressApprovalStatus),
+      pendingProgress: pendingProgress ?? storeIndicator?.pendingProgress ?? null,
+      pendingRemark: pendingRemark || storeIndicator?.pendingRemark || null,
+      pendingAttachments: pendingAttachments ?? storeIndicator?.pendingAttachments ?? [],
       milestones:
         normalizedMilestones.length > 0 ? normalizedMilestones : storeIndicator?.milestones || [],
       createdAt:
@@ -751,8 +782,63 @@ const currentPlanIndicators = computed(() => {
         getPlanIndicatorText(source, 'updatedAt') ||
         (storeIndicator as StrategicIndicator & { updatedAt?: string })?.updatedAt ||
         ''
-    } as StrategicIndicator
+    } as StrategicIndicator & {
+      reportProgress?: number | null
+      targetOrgId?: number
+      ownerOrgId?: number
+      targetOrgName?: string
+      ownerOrgName?: string
+    }
+
+    if (reportProgress !== undefined) {
+      normalizedIndicator.reportProgress = reportProgress
+    } else if (
+      (storeIndicator as StrategicIndicator & { reportProgress?: number | null } | undefined)
+        ?.reportProgress !== undefined
+    ) {
+      normalizedIndicator.reportProgress =
+        (storeIndicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
+    }
+
+    const targetOrgId =
+      getPlanIndicatorNumber(source, 'targetOrgId', 'target_org_id') ||
+      Number((storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0)
+    if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
+      normalizedIndicator.targetOrgId = targetOrgId
+    }
+
+    const ownerOrgId =
+      getPlanIndicatorNumber(source, 'ownerOrgId', 'owner_org_id') ||
+      Number((storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0)
+    if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
+      normalizedIndicator.ownerOrgId = ownerOrgId
+    }
+
+    if (currentReportId !== undefined) {
+      ;(normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId =
+        currentReportId
+    } else if (
+      (storeIndicator as StrategicIndicator & { currentReportId?: number | null } | undefined)
+        ?.currentReportId !== undefined
+    ) {
+      ;(normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId =
+        (storeIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId
+    }
+
+    const targetOrgName = getPlanIndicatorText(source, 'targetOrgName', 'target_org_name')
+    if (targetOrgName) {
+      normalizedIndicator.targetOrgName = targetOrgName
+    }
+
+    const ownerOrgName = getPlanIndicatorText(source, 'ownerOrgName', 'owner_org_name')
+    if (ownerOrgName) {
+      normalizedIndicator.ownerOrgName = ownerOrgName
+    }
+
+    return normalizedIndicator
   })
+
+  return filterIndicatorsForCurrentViewer(mappedIndicators)
 })
 
 // 判断当前是否存在可供当前页面展示的 Plan 数据
@@ -840,13 +926,7 @@ const approvalIndicators = computed(() => {
 
   // 根据当前角色过滤数据
   // 非战略部门只有在计划已下发（已下发状态）时才能看到指标
-  if (!isStrategicDept.value && effectiveViewingDept.value) {
-    list = list.filter(i => {
-      // 非战略角色仅查看“接收部门=当前部门”的指标，避免与下发来源部门混淆
-      // 且仅在计划已下发后才可见
-      return canViewReceivedPlanContent.value && i.responsibleDept === effectiveViewingDept.value
-    })
-  }
+  list = filterIndicatorsForCurrentViewer(list)
 
   // 审批人：返回待审批的指标 + 有历史记录的指标（确保历史记录能正常显示）
   // 填报人：返回所有有审批状态的指标（用于查看审批进度）
@@ -878,13 +958,7 @@ const _pendingApprovalCount = computed(() => {
 
   // 根据当前角色过滤数据
   // 非战略部门只有在计划已下发时才能看到指标
-  if (!isStrategicDept.value && effectiveViewingDept.value) {
-    list = list.filter(i => {
-      // 非战略角色仅统计“接收部门=当前部门”的待审批数据
-      // 且仅在计划已下发后才可见
-      return canViewReceivedPlanContent.value && i.responsibleDept === effectiveViewingDept.value
-    })
-  }
+  list = filterIndicatorsForCurrentViewer(list)
 
   // 只统计待审批状态的指标数量
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
@@ -1020,11 +1094,7 @@ const indicators = computed(() => {
   // 根据当前角色过滤数据
   // 如果不是战略发展部，只显示下发到当前部门（责任部门）的指标
   // 且仅在计划已下发后才可见
-  if (!isStrategicDept.value && effectiveViewingDept.value) {
-    list = list.filter(i => {
-      return canViewReceivedPlanContent.value && i.responsibleDept === effectiveViewingDept.value
-    })
-  }
+  list = filterIndicatorsForCurrentViewer(list)
 
   // 应用筛选条件
   if (filterType2.value) {
@@ -1058,43 +1128,7 @@ const indicators = computed(() => {
 const indicatorWorkflowCache = ref<Record<string, IndicatorWorkflowSnapshot | null>>({})
 const indicatorWorkflowLoadingMap = ref<Record<string, boolean>>({})
 const indicatorDraftHydratedMap = ref<Record<string, boolean>>({})
-
-function getLatestPendingFill(fills: IndicatorFill[]): IndicatorFill | null {
-  if (!Array.isArray(fills) || fills.length === 0) {
-    return null
-  }
-
-  const sortedFills = [...fills].sort((a, b) => {
-    const timeA = new Date(a.updated_at || a.created_at || a.fill_date || 0).getTime()
-    const timeB = new Date(b.updated_at || b.created_at || b.fill_date || 0).getTime()
-    return timeB - timeA
-  })
-
-  return (
-    sortedFills.find(fill => {
-      const normalizedStatus = String(fill.status || fill.workflowStatus || '')
-        .trim()
-        .toLowerCase()
-      return normalizedStatus !== 'approved'
-    }) || null
-  )
-}
-
-function mapFillStatusToApprovalStatus(fill: IndicatorFill | null): ProgressApprovalStatusValue {
-  const normalizedStatus = String(fill?.status || fill?.workflowStatus || '')
-    .trim()
-    .toLowerCase()
-  if (normalizedStatus === 'submitted') {
-    return 'PENDING'
-  }
-  if (normalizedStatus === 'rejected') {
-    return 'REJECTED'
-  }
-  if (normalizedStatus === 'approved') {
-    return 'NONE'
-  }
-  return 'DRAFT'
-}
+const indicatorDraftHydratingMap = ref<Record<string, boolean>>({})
 
 async function hydrateIndicatorDraftState(indicatorId: number | string): Promise<void> {
   const cacheKey = String(indicatorId)
@@ -1102,31 +1136,44 @@ async function hydrateIndicatorDraftState(indicatorId: number | string): Promise
     return
   }
 
-  indicatorDraftHydratedMap.value = {
-    ...indicatorDraftHydratedMap.value,
+  if (indicatorDraftHydratingMap.value[cacheKey]) {
+    return
+  }
+
+  indicatorDraftHydratingMap.value = {
+    ...indicatorDraftHydratingMap.value,
     [cacheKey]: true
   }
 
   try {
-    const response = await indicatorFillApi.getIndicatorFillHistory(indicatorId)
-    const fills = Array.isArray(response.data) ? response.data : []
-    const latestPendingFill = getLatestPendingFill(fills)
     const persistedDraft = readPersistedIndicatorDraft(indicatorId)
 
-    if (!latestPendingFill && !persistedDraft) {
+    if (!persistedDraft) {
+      indicatorDraftHydratedMap.value = {
+        ...indicatorDraftHydratedMap.value,
+        [cacheKey]: true
+      }
       return
     }
 
     strategicStore.patchIndicator(String(indicatorId), {
-      pendingProgress: persistedDraft?.progress ?? latestPendingFill?.progress,
-      pendingRemark: persistedDraft?.remark || latestPendingFill?.content,
-      pendingAttachments: persistedDraft?.attachments,
-      progressApprovalStatus: persistedDraft
-        ? 'DRAFT'
-        : mapFillStatusToApprovalStatus(latestPendingFill)
+      pendingProgress: persistedDraft.progress,
+      pendingRemark: persistedDraft.remark,
+      pendingAttachments: persistedDraft.attachments,
+      progressApprovalStatus: 'DRAFT'
     })
+
+    indicatorDraftHydratedMap.value = {
+      ...indicatorDraftHydratedMap.value,
+      [cacheKey]: true
+    }
   } catch (error) {
     logger.warn('[IndicatorListView] 加载指标最近填报草稿失败:', { indicatorId, error })
+  } finally {
+    indicatorDraftHydratingMap.value = {
+      ...indicatorDraftHydratingMap.value,
+      [cacheKey]: false
+    }
   }
 }
 
@@ -1188,6 +1235,28 @@ const canHandleIndicatorWorkflow = (indicator: StrategicIndicator | null | undef
     currentUserId.value,
     currentUserPermissionCodes.value
   )
+
+const getDisplayProgress = (indicator: StrategicIndicator): number => {
+  const progress = Number(indicator.progress)
+  return Number.isFinite(progress) ? progress : 0
+}
+
+const getDisplayedReportedProgress = (indicator: StrategicIndicator): number | null => {
+  const latestReportProgress = Number(
+    (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
+  )
+  if (Number.isFinite(latestReportProgress)) {
+    return latestReportProgress
+  }
+
+  return null
+}
+
+const shouldShowReportedProgress = (indicator: StrategicIndicator): boolean => {
+  const actualProgress = getDisplayProgress(indicator)
+  const reportedProgress = getDisplayedReportedProgress(indicator)
+  return reportedProgress !== null && reportedProgress !== actualProgress
+}
 
 watch(
   () => indicators.value.map(indicator => String(indicator.id)).join(','),
@@ -2093,6 +2162,7 @@ const _handleTableScroll = (e: Event) => {
 // 填报弹窗状态
 const reportDialogVisible = ref(false)
 const currentReportIndicator = ref<StrategicIndicator | null>(null)
+const isSavingReport = ref(false)
 
 // 填报表单数据
 const reportForm = ref({
@@ -2155,15 +2225,10 @@ const formatMilestoneDate = (deadline: string) => {
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
   const persistedDraft = readPersistedIndicatorDraft(row.id)
-  // 如果已有保存的填报数据，则加载之前的数据；否则使用当前进度
-  const hasPendingData =
-    persistedDraft !== null || (row.pendingProgress !== undefined && row.pendingProgress !== null)
   reportForm.value = {
-    newProgress: hasPendingData
-      ? (persistedDraft?.progress ?? row.pendingProgress ?? 0)
-      : row.progress || 0,
-    remark: persistedDraft?.remark || row.pendingRemark || '',
-    attachments: persistedDraft?.attachments || row.pendingAttachments || []
+    newProgress: row.pendingProgress ?? persistedDraft?.progress ?? row.progress ?? 0,
+    remark: row.pendingRemark ?? persistedDraft?.remark ?? '',
+    attachments: row.pendingAttachments ?? persistedDraft?.attachments ?? []
   }
   reportDialogVisible.value = true
 }
@@ -2188,9 +2253,9 @@ const submitProgressReport = async () => {
   const indicator = currentReportIndicator.value
   const currentProgress = indicator.progress || 0
 
-  // 验证：进度只能递增
-  if (reportForm.value.newProgress < currentProgress) {
-    ElMessage.warning(`进度只能递增，当前进度为 ${currentProgress}%，不能填报更低的进度`)
+  // 验证：填报进度必须严格大于真实进度
+  if (reportForm.value.newProgress <= currentProgress) {
+    ElMessage.warning(`填报进度必须大于真实进度，当前真实进度为 ${currentProgress}%`)
     return
   }
 
@@ -2207,6 +2272,8 @@ const submitProgressReport = async () => {
   }
 
   try {
+    isSavingReport.value = true
+
     await planStore.saveIndicatorFill({
       indicator_id: indicator.id,
       progress: reportForm.value.newProgress,
@@ -2245,6 +2312,8 @@ const submitProgressReport = async () => {
     ElMessage.error(
       error instanceof Error ? error.message || '保存失败，请稍后重试' : '保存失败，请稍后重试'
     )
+  } finally {
+    isSavingReport.value = false
   }
 }
 
@@ -2320,30 +2389,9 @@ const handleRejectIndicatorWorkflow = async (row: StrategicIndicator) => {
 }
 
 // 检查指标是否已有真实填报内容
-// 注意：不能仅凭 progressApprovalStatus === DRAFT 判断，否则首次未填报也会误显示为“编辑”。
-// @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
+// 业务要求：按钮文案只根据当前轮次的 pendingProgress 判断。
 const hasReportContent = (row: StrategicIndicator): boolean => {
-  if (row.pendingRemark && row.pendingRemark.trim()) {
-    return true
-  }
-
-  if (Array.isArray(row.pendingAttachments) && row.pendingAttachments.length > 0) {
-    return true
-  }
-
-  if (row.pendingProgress !== undefined && row.pendingProgress !== null) {
-    return true
-  }
-
-  if (Array.isArray(row.statusAudit) && row.statusAudit.length > 0) {
-    return true
-  }
-
-  if (isApprovalStatus(row, ['PENDING', 'REJECTED'])) {
-    return true
-  }
-
-  return false
+  return row.pendingProgress !== undefined && row.pendingProgress !== null
 }
 
 // 检查所有指标是否都已填报
@@ -2804,11 +2852,22 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   </el-popover>
                 </template>
               </el-table-column>
-              <el-table-column prop="progress" label="进度" width="120" align="center">
+              <el-table-column prop="progress" label="进度" width="150" align="center">
                 <template #default="{ row }">
-                  <span class="progress-number" :class="getProgressStatusClass(row)">{{
-                    row.progress || 0
-                  }}</span>
+                  <div class="progress-cell">
+                    <span class="progress-number" :class="getProgressStatusClass(row)">
+                      {{ getDisplayProgress(row) }}%
+                    </span>
+                    <!-- 显示当前汇报进度/最新填报进度 -->
+                    <el-tooltip content="填报进度" placement="top">
+                      <span
+                        v-if="shouldShowReportedProgress(row)"
+                        class="reported-progress"
+                      >
+                        ({{ getDisplayedReportedProgress(row) }}%)
+                      </span>
+                    </el-tooltip>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column
@@ -3015,23 +3074,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           <el-descriptions-item label="责任部门">{{
             currentDetail.responsibleDept || '未分配'
           }}</el-descriptions-item>
-          <el-descriptions-item v-if="getIndicatorWorkflowSnapshot(currentDetail)" label="审批状态">
-            <el-tag
-              size="small"
-              :type="getIndicatorWorkflowTagType(getIndicatorWorkflowSnapshot(currentDetail))"
-            >
-              {{ getIndicatorWorkflowStatusLabel(getIndicatorWorkflowSnapshot(currentDetail)) }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item v-if="getIndicatorWorkflowSnapshot(currentDetail)" label="当前节点">
-            {{ getIndicatorWorkflowSnapshot(currentDetail)?.currentStepName || '审批中' }}
-          </el-descriptions-item>
-          <el-descriptions-item
-            v-if="getIndicatorWorkflowSnapshot(currentDetail)"
-            label="当前审批人"
-          >
-            {{ getIndicatorWorkflowSnapshot(currentDetail)?.currentApproverName || '待分配' }}
-          </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
             currentDetail.createTime
           }}</el-descriptions-item>
@@ -3107,75 +3149,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           </el-timeline>
         </div>
 
-        <!-- 审计日志 -->
-        <div class="audit-log-section">
-          <div class="divider"></div>
-          <div class="audit-log-header">
-            <div class="audit-log-title">
-              <el-icon><ChatDotRound /></el-icon>
-              <h4>审计日志</h4>
-            </div>
-            <span
-              v-if="currentDetail.statusAudit && currentDetail.statusAudit.length > 0"
-              class="log-count"
-            >
-              共 {{ currentDetail.statusAudit.length }} 条记录
-            </span>
-          </div>
-
-          <!-- 审计日志时间线 -->
-          <div
-            v-if="currentDetail.statusAudit && currentDetail.statusAudit.length > 0"
-            class="audit-log-timeline"
-          >
-            <el-timeline>
-              <el-timeline-item
-                v-for="(log, index) in [...currentDetail.statusAudit].sort(
-                  (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-                )"
-                :key="log.id"
-                :timestamp="formatRelativeTime(log.timestamp)"
-                :type="getActionConfig(log.action).type"
-                :hollow="index !== 0"
-                placement="top"
-              >
-                <div class="log-card">
-                  <div class="log-header">
-                    <el-tag :type="getActionConfig(log.action).type" size="small" effect="dark">
-                      <div style="display: flex; align-items: center; gap: 4px">
-                        <el-icon><component :is="getActionConfig(log.action).icon" /></el-icon>
-                        {{ getActionConfig(log.action).label }}
-                      </div>
-                    </el-tag>
-                    <span class="log-time">{{ formatAuditTime(log.timestamp) }}</span>
-                  </div>
-                  <div class="log-operator">
-                    <el-icon><User /></el-icon>
-                    <span class="operator-name">{{ log.operatorName }}</span>
-                    <span class="operator-dept">{{ log.operatorDept }}</span>
-                  </div>
-                  <div
-                    v-if="log.previousProgress !== undefined && log.newProgress !== undefined"
-                    class="log-progress"
-                  >
-                    <span class="progress-label">进度变化:</span>
-                    <span class="progress-from">{{ log.previousProgress }}%</span>
-                    <el-icon class="progress-arrow"><Right /></el-icon>
-                    <span class="progress-to">{{ log.newProgress }}%</span>
-                  </div>
-                  <div v-if="log.comment" class="log-comment">
-                    <el-icon><ChatDotRound /></el-icon>
-                    <span>{{ log.comment }}</span>
-                  </div>
-                </div>
-              </el-timeline-item>
-            </el-timeline>
-          </div>
-
-          <div v-else class="audit-log-empty">
-            <el-empty description="暂无审计日志" :image-size="60" />
-          </div>
-        </div>
       </div>
     </el-drawer>
 
@@ -3229,7 +3202,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               :step="5"
               style="width: 200px"
             />
-            <span class="form-hint">%（只能递增，不能低于当前进度）</span>
+            <span class="form-hint">%（如果低于或等于真实进度，保存时会提示错误）</span>
           </el-form-item>
           <el-form-item label="进度备注" required>
             <el-input
@@ -3268,8 +3241,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       </div>
 
       <template #footer>
-        <el-button @click="closeReportDialog">取消</el-button>
-        <el-button type="primary" @click="submitProgressReport">保存</el-button>
+        <el-button @click="closeReportDialog" :disabled="isSavingReport">取消</el-button>
+        <el-button type="primary" :loading="isSavingReport" :disabled="isSavingReport" @click="submitProgressReport">保存</el-button>
       </template>
     </el-dialog>
 
@@ -3287,6 +3260,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       "
       :show-plan-approvals="true"
       :show-approval-section="true"
+      :workflow-code="resolvePlanApprovalWorkflowCode()"
+      history-view-mode="card-only"
       approval-type="submission"
     />
   </div>
@@ -3609,6 +3584,21 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   font-size: 14px;
 }
 
+/* 进度单元格容器 */
+.progress-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* 填报进度样式 - 蓝色小字 */
+.reported-progress {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  opacity: 0.8;
+}
+
 /* ============================================================
    进度状态颜色样式
    用于根据里程碑进度判断显示不同颜色
@@ -3811,166 +3801,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   margin-top: var(--spacing-sm);
   color: var(--text-regular);
   font-size: 13px;
-}
-
-/* 审计日志区域样式 - 与 AuditLogDrawer 保持一致 */
-.audit-log-section {
-  margin-top: var(--spacing-lg);
-}
-
-.audit-log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-}
-
-.audit-log-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.audit-log-title .el-icon {
-  color: var(--color-primary, #2c5282);
-  font-size: 18px;
-}
-
-.audit-log-title h4 {
-  font-size: 16px;
-  color: var(--text-main);
-  margin: 0;
-  font-weight: 600;
-}
-
-.audit-log-header .log-count {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.audit-log-timeline {
-  max-height: 400px;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.audit-log-timeline::-webkit-scrollbar {
-  width: 6px;
-}
-
-.audit-log-timeline::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.audit-log-timeline::-webkit-scrollbar-thumb {
-  background: var(--border-light, #e2e8f0);
-  border-radius: 3px;
-}
-
-.audit-log-timeline::-webkit-scrollbar-thumb:hover {
-  background: var(--border-color, #cbd5e1);
-}
-
-.audit-log-timeline .log-card {
-  background: var(--bg-page, #f8fafc);
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 4px;
-}
-
-.audit-log-timeline .log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.audit-log-timeline .log-header .el-tag {
-  width: fit-content;
-}
-
-.audit-log-timeline .log-time {
-  font-size: 12px;
-  color: var(--text-placeholder, #94a3b8);
-}
-
-.audit-log-timeline .log-operator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-regular, #475569);
-  margin-bottom: 8px;
-}
-
-.audit-log-timeline .log-operator .el-icon {
-  color: var(--text-placeholder, #94a3b8);
-  font-size: 14px;
-}
-
-.audit-log-timeline .operator-name {
-  font-weight: 500;
-}
-
-.audit-log-timeline .operator-dept {
-  color: var(--text-secondary, #64748b);
-}
-
-.audit-log-timeline .operator-dept::before {
-  content: '·';
-  margin: 0 4px;
-}
-
-.audit-log-timeline .log-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  background: var(--bg-white, #fff);
-  border-radius: 4px;
-}
-
-.audit-log-timeline .progress-label {
-  color: var(--text-secondary, #64748b);
-}
-
-.audit-log-timeline .progress-from {
-  color: var(--text-placeholder, #94a3b8);
-}
-
-.audit-log-timeline .progress-arrow {
-  color: var(--text-placeholder, #94a3b8);
-  font-size: 12px;
-}
-
-.audit-log-timeline .progress-to {
-  color: var(--color-primary, #2c5282);
-  font-weight: 600;
-}
-
-.audit-log-timeline .log-comment {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-regular, #475569);
-  padding: 8px 10px;
-  background: var(--bg-white, #fff);
-  border-radius: 4px;
-  border-left: 3px solid var(--color-primary-light, #93c5fd);
-}
-
-.audit-log-timeline .log-comment .el-icon {
-  color: var(--color-primary, #2c5282);
-  font-size: 14px;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.audit-log-empty {
-  padding: var(--spacing-lg);
 }
 
 /* ========================================

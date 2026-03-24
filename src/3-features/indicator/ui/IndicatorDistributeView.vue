@@ -3,7 +3,7 @@
  * 指标下发与审批页面（职能部门专用）
  * 功能：接收战略任务 → 查看战略指标 → 拆分子指标 → 下发给学院 → 审批学院提交
  */
-import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   Plus,
   Promotion,
@@ -21,10 +21,14 @@ import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
-import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
+import { usePlanStore } from '@/features/plan/model/store'
 import { ApprovalProgressDrawer } from '@/features/approval'
 import { indicatorApi } from '@/features/indicator/api'
+import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import { logger } from '@/shared/lib/utils/logger'
+import type { Plan } from '@/shared/types'
+import { canUseAsFunctionalParentIndicator } from '@/features/indicator/lib/scope'
+import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -37,11 +41,21 @@ const strategicStore = useStrategicStore()
 const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
+const planStore = usePlanStore()
 
 // 当前用户部门（优先使用视角切换的部门）
 const currentDept = computed(
   () => props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || ''
 )
+
+const currentDepartmentOrgId = computed(() => {
+  const authOrgId = Number(authStore.user?.orgId ?? NaN)
+  const matchedOrgId = getOrgIdByDeptName(currentDept.value)
+  if (matchedOrgId != null) {
+    return matchedOrgId
+  }
+  return Number.isFinite(authOrgId) && authOrgId > 0 ? authOrgId : null
+})
 
 const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
   const raw = indicator as StrategicIndicator & { taskId?: string | number }
@@ -74,6 +88,45 @@ const matchesDepartment = (value: string | string[] | undefined, deptName: strin
   return String(value).trim() === normalizedDeptName
 }
 
+const resolvePlanYear = (plan: Partial<Plan> & { year?: number | string; cycleId?: number | string }) => {
+  const planRecord = plan as Partial<Plan> & {
+    year?: number | string
+    cycleId?: number | string
+    cycle?: { year?: number | string }
+  }
+  const explicitYear = planRecord.year ?? planRecord.cycle?.year
+  if (explicitYear != null && explicitYear !== '') {
+    const numericYear = Number(explicitYear)
+    return Number.isFinite(numericYear) ? numericYear : null
+  }
+
+  return timeContext.resolveCycleYear(planRecord.cycleId)
+}
+
+function getPlanIndicatorText(indicator: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = indicator[key]
+    if (value !== undefined && value !== null) {
+      const text = String(value).trim()
+      if (text) {
+        return text
+      }
+    }
+  }
+  return ''
+}
+
+function getPlanIndicatorNumber(indicator: Record<string, unknown>, ...keys: string[]): number {
+  for (const key of keys) {
+    const value = indicator[key]
+    const numericValue = Number(value)
+    if (Number.isFinite(numericValue)) {
+      return numericValue
+    }
+  }
+  return 0
+}
+
 // 判断是否为战略发展部（只能查看，不能编辑）
 const isStrategicDept = computed(() => {
   // 使用视角角色判断
@@ -83,6 +136,14 @@ const isStrategicDept = computed(() => {
 // 判断是否为职能部门（可以编辑子指标）
 const isFunctionalDept = computed(() => {
   return props.viewingRole === 'functional_dept'
+})
+
+const currentDispatchWorkflowCode = computed(() => {
+  if (isStrategicDept.value) {
+    return 'PLAN_DISPATCH_STRATEGY'
+  }
+
+  return 'PLAN_DISPATCH_FUNCDEPT'
 })
 
 // 只读模式：战略发展部或者历史快照模式
@@ -101,9 +162,9 @@ const selectedCollege = ref<string | null>(null)
 // 搜索关键词
 const searchKeyword = ref('')
 
-// 审计日志
-const auditLogVisible = ref(false)
-const currentAuditIndicator = ref<StrategicIndicator | null>(null)
+// 指标详情侧边栏
+const detailDrawerVisible = ref(false)
+const currentDetailIndicator = ref<StrategicIndicator | null>(null)
 const addRowFormRef = ref<HTMLElement | null>(null)
 
 // 任务审批抽屉状态
@@ -139,8 +200,67 @@ const pendingApprovalCount = computed(() => {
   return approvalIndicators.value.filter(i => i.progressApprovalStatus === 'PENDING').length
 })
 
+const currentDepartmentPlan = computed<Plan | null>(() => {
+  const departmentName = String(currentDept.value || '').trim()
+  if (!departmentName) {
+    return null
+  }
+
+  const departmentId = getOrgIdByDeptName(departmentName)
+
+  return (
+    planStore.plans.find(plan => {
+      const planAny = plan as Plan & {
+        targetOrgId?: number | string
+        targetOrgName?: string
+        orgId?: number | string
+        orgName?: string
+        year?: number | string
+        cycleId?: number | string
+      }
+      const planYear = resolvePlanYear(planAny)
+      const targetOrgId = Number(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId ?? NaN)
+      const targetOrgName = String(planAny.targetOrgName || planAny.orgName || '').trim()
+      const matchesOrgId =
+        departmentId != null && Number.isFinite(targetOrgId) && targetOrgId === departmentId
+      const matchesOrgName = targetOrgName === departmentName
+
+      return planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName)
+    }) || null
+  )
+})
+
+const currentDepartmentPlanDetails = ref<Plan | null>(null)
+
+const loadCurrentDepartmentPlanDetails = async (force = false) => {
+  const plan = currentDepartmentPlan.value
+  if (!plan?.id) {
+    currentDepartmentPlanDetails.value = null
+    return null
+  }
+
+  const currentDetail = currentDepartmentPlanDetails.value
+  if (!force && currentDetail?.id === plan.id) {
+    return currentDetail
+  }
+
+  try {
+    const latestPlan = await planStore.loadPlanDetails(plan.id, { force, background: true })
+    currentDepartmentPlanDetails.value = latestPlan ?? plan
+    return currentDepartmentPlanDetails.value
+  } catch (error) {
+    currentDepartmentPlanDetails.value = plan
+    logger.warn('[IndicatorDistributeView] 加载当前部门计划详情失败:', error)
+    return currentDepartmentPlanDetails.value
+  }
+}
+
 const refreshDistributionData = async () => {
-  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+  await Promise.all([
+    strategicStore.loadIndicatorsByYear(timeContext.currentYear),
+    planStore.loadPlans({ force: true, background: true })
+  ])
+  await loadCurrentDepartmentPlanDetails(true)
 }
 
 // 打开任务审批抽屉
@@ -164,6 +284,10 @@ const filteredColleges = computed(() => {
   return colleges.value.filter(c => c.toLowerCase().includes(keyword))
 })
 
+const isCollegeSidebarLoading = computed(
+  () => orgStore.loading && !orgStore.loaded && colleges.value.length === 0
+)
+
 // 获取学院的子指标数量（只统计当前部门下发的）
 const getCollegeChildCount = (college: string) => {
   return strategicStore.indicators.filter(i => {
@@ -183,34 +307,109 @@ const getCollegeChildCount = (college: string) => {
 }
 
 // 获取选中学院的所有子指标（按父指标分组，只显示当前部门下发的）
+const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
+  const plan = currentDepartmentPlanDetails.value as (Plan & { indicators?: unknown[] }) | null
+  if (!plan || !Array.isArray(plan.indicators)) {
+    return []
+  }
+
+  const storeIndicatorMap = new Map(
+    strategicStore.indicators.map(indicator => [String(indicator.id), indicator] as const)
+  )
+
+  return plan.indicators.map(rawIndicator => {
+    const source =
+      rawIndicator && typeof rawIndicator === 'object'
+        ? (rawIndicator as Record<string, unknown>)
+        : {}
+    const indicatorId = String(source.id ?? source.indicatorId ?? '')
+    const storeIndicator = indicatorId ? storeIndicatorMap.get(indicatorId) : undefined
+
+    const normalizedIndicator = {
+      ...(storeIndicator || {}),
+      id: indicatorId || storeIndicator?.id || String(Date.now()),
+      name: getPlanIndicatorText(source, 'indicatorName', 'name') || storeIndicator?.name || '',
+      taskContent:
+        getPlanIndicatorText(source, 'taskName', 'taskContent') || storeIndicator?.taskContent || '',
+      type1:
+        (getPlanIndicatorText(
+          source,
+          'type1',
+          'indicatorType',
+          'indicatorType1'
+        ) as StrategicIndicator['type1']) ||
+        storeIndicator?.type1 ||
+        '定量',
+      type2: storeIndicator?.type2 || '其他',
+      status: (getPlanIndicatorText(source, 'status').toUpperCase() ||
+        storeIndicator?.status ||
+        'DISTRIBUTED') as StrategicIndicator['status'],
+      isStrategic: storeIndicator?.isStrategic ?? true,
+      responsibleDept:
+        getPlanIndicatorText(source, 'targetOrgName', 'responsibleDept') ||
+        storeIndicator?.responsibleDept ||
+        currentDept.value,
+      ownerDept:
+        getPlanIndicatorText(source, 'ownerOrgName', 'ownerDept') ||
+        storeIndicator?.ownerDept ||
+        '',
+      progress: getPlanIndicatorNumber(source, 'progress') || storeIndicator?.progress || 0,
+      weight:
+        getPlanIndicatorNumber(source, 'weightPercent', 'weight') || storeIndicator?.weight || 0,
+      year: Number(source.year) || storeIndicator?.year || timeContext.currentYear,
+      milestones: storeIndicator?.milestones || [],
+      statusAudit: storeIndicator?.statusAudit || [],
+      parentIndicatorId:
+        getPlanIndicatorText(source, 'parentIndicatorId', 'parent_indicator_id', 'parentId') ||
+        storeIndicator?.parentIndicatorId
+    } as StrategicIndicator & {
+      targetOrgId?: number
+      ownerOrgId?: number
+    }
+
+    const targetOrgId =
+      getPlanIndicatorNumber(source, 'targetOrgId', 'target_org_id') ||
+      Number((storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0)
+    if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
+      normalizedIndicator.targetOrgId = targetOrgId
+    }
+
+    const ownerOrgId =
+      getPlanIndicatorNumber(source, 'ownerOrgId', 'owner_org_id') ||
+      Number((storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0)
+    if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
+      normalizedIndicator.ownerOrgId = ownerOrgId
+    }
+
+    return normalizedIndicator
+  })
+})
+
+const receivedParentIndicators = computed<StrategicIndicator[]>(() => {
+  const mergedIndicators = new Map<string, StrategicIndicator>()
+
+  currentDepartmentPlanIndicators.value.forEach(indicator => {
+    mergedIndicators.set(String(indicator.id), indicator)
+  })
+
+  strategicStore.indicators.forEach(indicator => {
+    const indicatorId = String(indicator.id)
+    if (!mergedIndicators.has(indicatorId)) {
+      mergedIndicators.set(indicatorId, indicator)
+    }
+  })
+
+  return Array.from(mergedIndicators.values()).filter(indicator =>
+    canUseAsFunctionalParentIndicator(indicator, currentDepartmentOrgId.value, true)
+  )
+})
+
 const collegeIndicators = computed(() => {
   if (!selectedCollege.value) {
     return []
   }
 
-  // 获取当前部门下发给该学院的子指标
-  const childIndicators = strategicStore.indicators.filter(i => {
-    if (i.isStrategic) {
-      return false
-    }
-    // 只显示当前部门下发的指标
-    if (i.ownerDept !== currentDept.value) {
-      return false
-    }
-    // 支持字符串或数组格式的 responsibleDept
-    if (Array.isArray(i.responsibleDept)) {
-      return i.responsibleDept.includes(selectedCollege.value!)
-    }
-    return i.responsibleDept === selectedCollege.value
-  })
-
-  // 获取这些子指标的父指标
-  const parentIds = new Set(childIndicators.map(c => c.parentIndicatorId).filter(Boolean))
-  const parentIndicators = strategicStore.indicators.filter(
-    i => i.isStrategic && parentIds.has(i.id.toString())
-  )
-
-  return parentIndicators
+  return receivedParentIndicators.value
 })
 
 // 获取指标的子指标（只显示当前部门下发的）
@@ -224,6 +423,9 @@ const _getChildIndicators = (parentId: string) => {
 
 // 添加指标表单是否可见（改为底部表单）
 const isAddingIndicator = ref(false)
+
+// 新增指标保存中状态
+const isSavingIndicator = ref(false)
 
 // 新增指标数据（单个）
 const newIndicatorForm = ref<NewIndicatorItem>({
@@ -256,6 +458,8 @@ interface NewIndicatorItem {
   milestones: { id: string; name: string; targetProgress: number; deadline: string }[] // 里程碑
 }
 
+type FormMilestone = NewIndicatorItem['milestones'][number]
+
 // 弹框中的新增指标列表
 const _newIndicatorList = ref<NewIndicatorItem[]>([])
 
@@ -264,18 +468,10 @@ const _selectingParentForIndex = ref<number>(-1)
 
 // 计划和指标数据（用于选择关联指标弹框）
 const plansWithIndicators = computed(() => {
-  // 职能部门只允许关联当前部门已接收的战略指标；战略发展部只读视角保留全量查看
-  const indicators = strategicStore.indicators.filter(i => {
-    if (!i.isStrategic) {
-      return false
-    }
+  const indicators = isFunctionalDept.value
+    ? receivedParentIndicators.value
+    : strategicStore.indicators.filter(i => i.isStrategic)
 
-    if (!isFunctionalDept.value) {
-      return true
-    }
-
-    return matchesDepartment(i.responsibleDept, currentDept.value)
-  })
   const taskMap = new Map<string, StrategicIndicator[]>()
 
   indicators.forEach(indicator => {
@@ -391,21 +587,129 @@ const cancelAddIndicator = () => {
   }
 }
 
+const cloneParentMilestonesForForm = (
+  indicator: StrategicIndicator
+): FormMilestone[] => {
+  if (!Array.isArray(indicator.milestones) || indicator.milestones.length === 0) {
+    return []
+  }
+
+  return indicator.milestones.map((milestone, index) => {
+    const rawMilestone = milestone as {
+      id?: string | number
+      name?: string
+      targetProgress?: number | string
+      progress?: number | string
+      deadline?: string
+      expectedDate?: string
+    }
+
+    const rawProgress = Number(rawMilestone.targetProgress ?? rawMilestone.progress ?? 0)
+
+    return {
+      id: String(rawMilestone.id ?? `copied-ms-${Date.now()}-${index}`),
+      name: String(rawMilestone.name || indicator.name || `里程碑 ${index + 1}`),
+      targetProgress: Number.isFinite(rawProgress) ? rawProgress : 0,
+      deadline: String(rawMilestone.deadline || rawMilestone.expectedDate || '')
+    }
+  })
+}
+
+const buildDraftMilestonesFromForm = (
+  milestones: FormMilestone[]
+): StrategicIndicator['milestones'] =>
+  milestones.map(m => ({
+    id: m.id,
+    name: m.name,
+    targetProgress: m.targetProgress,
+    deadline: m.deadline,
+    status: 'pending' as const
+  }))
+
+const buildLocalMilestonesFromForm = (milestones: FormMilestone[]): LocalMilestone[] =>
+  milestones.map(m => ({
+    id: m.id,
+    name: m.name,
+    expectedDate: m.deadline,
+    progress: m.targetProgress
+  }))
+
+const resolveTargetValueFromMilestones = (
+  milestones: Array<
+    | FormMilestone
+    | LocalMilestone
+    | {
+        targetProgress?: number | string
+        progress?: number | string
+      }
+  >,
+  fallback = 100
+): number => {
+  const lastMilestone = milestones[milestones.length - 1]
+  if (!lastMilestone) {
+    return fallback
+  }
+
+  const rawValue =
+    'targetProgress' in lastMilestone
+      ? lastMilestone.targetProgress
+      : 'progress' in lastMilestone
+        ? lastMilestone.progress
+        : fallback
+  const resolvedValue = Number(rawValue)
+  return Number.isFinite(resolvedValue) ? resolvedValue : fallback
+}
+
+const resolveParentTargetProgress = (indicator: StrategicIndicator): number => {
+  const targetValue = Number(indicator.targetValue ?? NaN)
+  if (Number.isFinite(targetValue) && targetValue >= 0) {
+    return targetValue
+  }
+
+  if (Array.isArray(indicator.milestones) && indicator.milestones.length > 0) {
+    const lastMilestone = indicator.milestones[indicator.milestones.length - 1] as
+      | { targetProgress?: number | string; progress?: number | string }
+      | undefined
+    const fallbackProgress = Number(lastMilestone?.targetProgress ?? lastMilestone?.progress ?? NaN)
+    if (Number.isFinite(fallbackProgress) && fallbackProgress >= 0) {
+      return fallbackProgress
+    }
+  }
+
+  return 100
+}
+
 // 选择关联指标
 const selectParentIndicator = (indicator: StrategicIndicator) => {
+  const copiedMilestones = cloneParentMilestonesForForm(indicator)
+  const resolvedType = indicator.type1 || (indicator.isQualitative ? '定性' : '定量')
+
   newIndicatorForm.value.parentIndicatorId = indicator.id.toString()
   newIndicatorForm.value.parentIndicatorName = indicator.name
   newIndicatorForm.value.taskContent = indicator.taskContent || ''
   // 继承父指标的名称和说明
   newIndicatorForm.value.name = indicator.name || ''
   newIndicatorForm.value.remark = indicator.remark || ''
+  newIndicatorForm.value.weight = Number(indicator.weight ?? 10) || 10
+  newIndicatorForm.value.targetProgress = resolveParentTargetProgress(indicator)
   // 继承父指标的类型（用户仍可修改）
-  newIndicatorForm.value.type1 = indicator.type1 || (indicator.isQualitative ? '定性' : '定量')
-  // 如果是定量指标，自动生成12个月里程碑
-  if (newIndicatorForm.value.type1 === '定量') {
+  newIndicatorForm.value.type1 = resolvedType
+  newIndicatorForm.value.milestones = copiedMilestones
+  // 如果父指标没有里程碑，再按原有规则兜底生成
+  if (newIndicatorForm.value.type1 === '定量' && newIndicatorForm.value.milestones.length === 0) {
     generateMonthlyMilestonesForForm()
   }
   selectParentDialogVisible.value = false
+}
+
+const handleParentIndicatorChange = (value: string) => {
+  const indicator = plansWithIndicators.value
+    .flatMap(task => task.indicators)
+    .find(item => item.id.toString() === value)
+
+  if (indicator) {
+    selectParentIndicator(indicator)
+  }
 }
 
 // 为表单生成12个月里程碑（定量指标）
@@ -456,8 +760,33 @@ const removeFormMilestone = (index: number) => {
   newIndicatorForm.value.milestones.splice(index, 1)
 }
 
-// 保存新增指标（状态为草稿）
-const saveNewIndicator = () => {
+// 保存新指标里程碑到数据库
+const persistNewIndicatorMilestones = async (indicatorId: number, milestones: typeof newIndicatorForm.value.milestones) => {
+  if (!Number.isFinite(indicatorId) || indicatorId <= 0 || milestones.length === 0) {
+    return
+  }
+
+  logger.info(`[IndicatorDistributeView] Saving ${milestones.length} milestones for indicator ${indicatorId}`)
+
+  for (const [index, milestone] of milestones.entries()) {
+    try {
+      await milestoneApi.createMilestone({
+        indicatorId,
+        milestoneName: String(milestone.name || '').trim() || `里程碑 ${index + 1}`,
+        targetProgress: Number(milestone.targetProgress) || 0,
+        dueDate: milestone.deadline || null,
+        status: 'NOT_STARTED',
+        sortOrder: index + 1
+      })
+      logger.info(`[IndicatorDistributeView] Saved milestone ${index + 1}: ${milestone.name}`)
+    } catch (error) {
+      logger.error(`[IndicatorDistributeView] Failed to save milestone ${index + 1}:`, error)
+    }
+  }
+}
+
+// 保存新增指标（状态为草稿）- 立即调用后端API创建
+const saveNewIndicator = async () => {
   // 验证数据
   if (!newIndicatorForm.value.parentIndicatorId) {
     ElMessage.warning('请选择关联的核心指标')
@@ -473,57 +802,111 @@ const saveNewIndicator = () => {
     return
   }
 
-  // 创建子指标（状态为草稿）
-  const parentIndicator = strategicStore.indicators.find(
-    i => i.id.toString() === newIndicatorForm.value.parentIndicatorId
-  )
-  const parentTaskId = parentIndicator
-    ? getIndicatorTaskId(parentIndicator as StrategicIndicator)
-    : ''
+  // 开始保存
+  isSavingIndicator.value = true
 
-  const newIndicator: StrategicIndicator = {
-    id: `${Date.now()}-${selectedCollege.value}-${Math.random().toString(36).substr(2, 9)}`,
-    name: newIndicatorForm.value.name,
-    isQualitative: newIndicatorForm.value.type1 === '定性',
-    type1: newIndicatorForm.value.type1,
-    type2: parentIndicator?.type2 || '发展性',
-    progress: 0,
-    createTime: new Date().toLocaleDateString('zh-CN'),
-    weight: newIndicatorForm.value.weight,
-    remark: newIndicatorForm.value.remark,
-    canWithdraw: false,
-    taskContent: newIndicatorForm.value.taskContent,
-    milestones:
-      newIndicatorForm.value.type1 === '定性'
-        ? newIndicatorForm.value.milestones.map(m => ({
-            id: m.id,
-            name: m.name,
-            targetProgress: m.targetProgress,
-            deadline: m.deadline,
-            status: 'pending' as const
-          }))
-        : [],
-    targetValue:
-      newIndicatorForm.value.type1 === '定量'
-        ? newIndicatorForm.value.targetProgress
-        : newIndicatorForm.value.milestones.length,
-    unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
-    responsibleDept: selectedCollege.value!,
-    responsiblePerson: '',
-    status: 'draft',
-    isStrategic: false,
-    ownerDept: currentDept.value,
-    parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
-    year: timeContext.currentYear,
-    statusAudit: [] // 空表示草稿状态
+  try {
+    // 获取父指标信息
+    const parentIndicator = strategicStore.indicators.find(
+      i => i.id.toString() === newIndicatorForm.value.parentIndicatorId
+    )
+
+    if (!parentIndicator) {
+      throw new Error('找不到关联的核心指标')
+    }
+
+    const indicatorTaskId = Number(getIndicatorTaskId(parentIndicator as StrategicIndicator))
+    const parentIndicatorId = Number(newIndicatorForm.value.parentIndicatorId)
+    const ownerOrgId = getOrgIdByDeptName(currentDept.value)
+    const targetOrgId = getOrgIdByDeptName(selectedCollege.value)
+
+    // 验证必要参数
+    if (!Number.isFinite(indicatorTaskId) || indicatorTaskId <= 0) {
+      throw new Error('指标缺少有效 taskId')
+    }
+    if (!ownerOrgId) {
+      throw new Error(`无法解析当前部门组织ID: ${currentDept.value}`)
+    }
+    if (!targetOrgId) {
+      throw new Error(`无法解析目标学院组织ID: ${selectedCollege.value}`)
+    }
+
+    // 调用后端API创建指标
+    const createResp = await indicatorApi.createIndicator({
+      taskId: indicatorTaskId,
+      indicatorDesc: newIndicatorForm.value.name,
+      ownerOrgId,
+      targetOrgId,
+      weightPercent: newIndicatorForm.value.weight || 0,
+      sortOrder: 0,
+      remark: newIndicatorForm.value.remark || '',
+      progress: 0,
+      year: timeContext.currentYear,
+      canWithdraw: false,
+      parentIndicatorId,
+      type: newIndicatorForm.value.type1
+    } as never)
+
+    if (!createResp.success || !createResp.data) {
+      throw new Error(createResp.message || '创建指标失败')
+    }
+
+    // 后端返回的真实ID
+    const backendId = createResp.data.id
+    if (!backendId) {
+      throw new Error('后端返回的数据缺少ID字段')
+    }
+    const newBackendId = String(backendId)
+
+    // 创建本地指标对象用于前端显示
+    const newIndicator: StrategicIndicator = {
+      id: newBackendId,
+      name: newIndicatorForm.value.name,
+      isQualitative: newIndicatorForm.value.type1 === '定性',
+      type1: newIndicatorForm.value.type1,
+      type2: parentIndicator?.type2 || '发展性',
+      progress: 0,
+      createTime: new Date().toLocaleDateString('zh-CN'),
+      weight: newIndicatorForm.value.weight,
+      remark: newIndicatorForm.value.remark,
+      canWithdraw: false,
+      taskContent: newIndicatorForm.value.taskContent,
+      milestones: buildDraftMilestonesFromForm(newIndicatorForm.value.milestones),
+      targetValue:
+        newIndicatorForm.value.type1 === '定量'
+          ? resolveTargetValueFromMilestones(
+              newIndicatorForm.value.milestones,
+              newIndicatorForm.value.targetProgress
+            )
+          : newIndicatorForm.value.milestones.length,
+      unit: newIndicatorForm.value.type1 === '定量' ? '%' : '个里程碑',
+      responsibleDept: selectedCollege.value!,
+      responsiblePerson: '',
+      status: 'draft',
+      isStrategic: false,
+      ownerDept: currentDept.value,
+      parentIndicatorId: newIndicatorForm.value.parentIndicatorId,
+      year: timeContext.currentYear,
+      statusAudit: []
+    }
+    ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = String(indicatorTaskId)
+
+    // 添加到前端store
+    strategicStore.addDraftIndicator(newIndicator)
+
+    // 保存里程碑到数据库
+    if (newIndicatorForm.value.milestones.length > 0) {
+      await persistNewIndicatorMilestones(Number(newBackendId), newIndicatorForm.value.milestones)
+    }
+
+    ElMessage.success('已添加指标（草稿状态）')
+    cancelAddIndicator()
+  } catch (error: any) {
+    logger.error('[IndicatorDistributeView] saveNewIndicator failed:', error)
+    ElMessage.error(error?.message || '保存指标失败，请重试')
+  } finally {
+    isSavingIndicator.value = false
   }
-  ;(newIndicator as StrategicIndicator & { taskId?: string }).taskId = parentTaskId
-  // Step1: 只保存到前端临时状态，不调用后端 createIndicator
-  // Step2: 点击"下发"按钮时，再调用正式的下发接口
-  strategicStore.addDraftIndicator(newIndicator)
-
-  ElMessage.success('已添加指标（草稿状态）')
-  cancelAddIndicator()
 }
 
 // 判断当前学院是否可以新增指标（没有已下发状态的指标）
@@ -623,6 +1006,9 @@ const _addNewChildRow = (parentIndicatorId: string) => {
 
   // 获取父指标信息
   const parentIndicator = collegeIndicators.value.find(i => i.id.toString() === parentIndicatorId)
+  const resolvedType =
+    parentIndicator?.type1 || (parentIndicator?.isQualitative ? '定性' : '定量') || '定性'
+  const copiedMilestones = parentIndicator ? cloneParentMilestonesForForm(parentIndicator) : []
 
   if (!newChildIndicators[parentIndicatorId]) {
     newChildIndicators[parentIndicatorId] = []
@@ -637,13 +1023,25 @@ const _addNewChildRow = (parentIndicatorId: string) => {
     id: newChildId,
     name: parentIndicator?.name || '', // 继承父指标名称
     college: defaultCollege,
-    targetValue: 100,
-    unit: '%',
-    weight: 10,
+    targetValue:
+      resolvedType === '定量'
+        ? resolveTargetValueFromMilestones(
+            copiedMilestones,
+            parentIndicator ? resolveParentTargetProgress(parentIndicator) : 100
+          )
+        : copiedMilestones.length,
+    unit: resolvedType === '定量' ? '%' : '个里程碑',
+    weight: Number(parentIndicator?.weight ?? 10) || 10,
     remark: parentIndicator?.remark || '', // 继承父指标备注
-    type1: '定性', // 默认定性指标
-    targetProgress: 100, // 定量指标默认目标进度100%
-    milestones: [], // 定性指标里程碑列表
+    type1: resolvedType,
+    targetProgress:
+      resolvedType === '定量'
+        ? resolveTargetValueFromMilestones(
+            copiedMilestones,
+            parentIndicator ? resolveParentTargetProgress(parentIndicator) : 100
+          )
+        : 0,
+    milestones: buildLocalMilestonesFromForm(copiedMilestones),
     isNew: true
   })
 
@@ -724,17 +1122,17 @@ const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
         remark: child.remark,
         canWithdraw: false,
         taskContent: parentIndicator.taskContent,
-        milestones:
-          child.type1 === '定性'
-            ? child.milestones.map(m => ({
-                id: m.id,
-                name: m.name,
-                targetProgress: m.progress,
-                deadline: m.expectedDate,
-                status: 'pending' as const
-              }))
-            : [],
-        targetValue: child.type1 === '定量' ? child.targetProgress : child.milestones.length,
+        milestones: child.milestones.map(m => ({
+          id: m.id,
+          name: m.name,
+          targetProgress: m.progress,
+          deadline: m.expectedDate,
+          status: 'pending' as const
+        })),
+        targetValue:
+          child.type1 === '定量'
+            ? resolveTargetValueFromMilestones(child.milestones, child.targetProgress)
+            : child.milestones.length,
         unit: child.type1 === '定量' ? '%' : '个里程碑',
         responsibleDept: Array.isArray(child.college) ? child.college.join(',') : child.college,
         responsiblePerson: '',
@@ -764,6 +1162,8 @@ const _distributeNewChildren = (parentIndicator: StrategicIndicator) => {
 const editingChildId = ref<string | null>(null)
 const editingChildField = ref<string | null>(null)
 const editingChildValue = ref<Record<string, unknown> | null>(null)
+const savingChildId = ref<string | null>(null)
+const savingChildField = ref<string | null>(null)
 
 // 学院下拉菜单是否打开
 const collegeDropdownVisible = ref(false)
@@ -794,6 +1194,7 @@ const handleGlobalMousedown = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleGlobalMousedown, true)
+  void orgStore.loadDepartments()
   void refreshDistributionData()
 })
 
@@ -801,9 +1202,21 @@ onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleGlobalMousedown, true)
 })
 
+watch(
+  () => [currentDept.value, timeContext.currentYear, currentDepartmentPlan.value?.id],
+  () => {
+    void loadCurrentDepartmentPlanDetails()
+  },
+  { immediate: true }
+)
+
 // 双击编辑子指标
 const handleChildDblClick = (child: StrategicIndicator, field: string) => {
   if (!canEditChild.value) {
+    return
+  }
+
+  if (savingChildId.value === child.id.toString()) {
     return
   }
 
@@ -843,8 +1256,16 @@ const handleChildDblClick = (child: StrategicIndicator, field: string) => {
   })
 }
 
+const isSavingChildCell = (child: StrategicIndicator | undefined, field: string) => {
+  if (!child) {
+    return false
+  }
+
+  return savingChildId.value === child.id.toString() && savingChildField.value === field
+}
+
 // 保存子指标编辑
-const saveChildEdit = (child: StrategicIndicator, field: string) => {
+const saveChildEdit = async (child: StrategicIndicator, field: string) => {
   if (editingChildId.value === null) {
     return
   }
@@ -875,9 +1296,24 @@ const saveChildEdit = (child: StrategicIndicator, field: string) => {
     [field]: valueToSave
   } as Record<string, unknown>
 
-  strategicStore.updateIndicator(child.id.toString(), updates)
-
+  savingChildId.value = child.id.toString()
+  savingChildField.value = field
   cancelChildEdit()
+
+  try {
+    await strategicStore.updateIndicator(child.id.toString(), updates)
+    await refreshDistributionData()
+  } catch (error) {
+    logger.error('[IndicatorDistributeView] 保存子指标编辑失败:', {
+      indicatorId: child.id,
+      field,
+      error
+    })
+    ElMessage.error(error instanceof Error ? error.message : '保存失败，请稍后重试')
+  } finally {
+    savingChildId.value = null
+    savingChildField.value = null
+  }
 }
 
 // 学院选择器下拉框可见性变化
@@ -949,6 +1385,10 @@ const handleBatchWithdraw = async (college: string) => {
     )
   })
 
+  // 分离出真实后端ID的指标和临时ID的指标
+  const realBackendIndicators = withdrawableIndicators.filter(i => /^\d+$/.test(i.id.toString()))
+  const tempIdIndicators = withdrawableIndicators.filter(i => !/^\d+$/.test(i.id.toString()))
+
   if (withdrawableIndicators.length === 0) {
     ElMessage.warning('没有可撤销的子指标')
     return
@@ -970,17 +1410,59 @@ const handleBatchWithdraw = async (college: string) => {
 
   const errors: string[] = []
 
-  for (const indicator of withdrawableIndicators) {
-    const indicatorId = indicator.id.toString()
-    const isRealBackendId = /^\d+$/.test(indicatorId)
-
+  // 如果有真实后端ID的指标，使用批量撤回API
+  if (realBackendIndicators.length > 0) {
     try {
-      if (isRealBackendId) {
-        await indicatorApi.withdrawIndicator(indicatorId)
-      }
-      // 临时 ID 的草稿本来就没有下发，直接更新前端状态即可
+      const ownerOrgId = getOrgIdByDeptName(currentDept.value)
+      const targetOrgId = getOrgIdByDeptName(college)
 
-      // 更新前端状态
+      if (!ownerOrgId) {
+        throw new Error(`无法解析当前部门组织ID: ${currentDept.value}`)
+      }
+      if (!targetOrgId) {
+        throw new Error(`无法解析目标学院组织ID: ${college}`)
+      }
+
+      const result = await indicatorApi.batchWithdrawIndicators(ownerOrgId, targetOrgId, '批量撤销下发')
+
+      if (result.success && result.data) {
+        const { successCount, failedCount, withdrawnIndicatorIds, errors: batchErrors } = result.data
+
+        // 更新前端状态
+        for (const indicatorId of withdrawnIndicatorIds) {
+          strategicStore.addStatusAuditEntry(indicatorId.toString(), {
+            operator: authStore.user?.userId || 'admin',
+            operatorName: authStore.user?.name || '管理员',
+            operatorDept: currentDept.value,
+            action: 'withdraw',
+            comment: '批量撤销下发'
+          })
+          await strategicStore.updateIndicator(indicatorId.toString(), {
+            status: 'draft',
+            canWithdraw: true
+          })
+        }
+
+        if (failedCount > 0 && batchErrors?.length > 0) {
+          errors.push(...batchErrors)
+        }
+
+        if (failedCount === 0) {
+          ElMessage.success(`已成功撤销 ${successCount} 个指标`)
+        } else {
+          ElMessage.warning(`成功撤销 ${successCount} 个指标，失败 ${failedCount} 个`)
+        }
+      } else {
+        ElMessage.error(result.message || '批量撤回失败')
+      }
+    } catch (err: any) {
+      ElMessage.error(`批量撤回失败: ${err.message || err}`)
+    }
+  }
+
+  // 临时 ID 的草稿本来就没有下发，直接更新前端状态即可
+  for (const indicator of tempIdIndicators) {
+    try {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
         operator: authStore.user?.userId || 'admin',
         operatorName: authStore.user?.name || '管理员',
@@ -997,10 +1479,59 @@ const handleBatchWithdraw = async (college: string) => {
     }
   }
 
-  if (errors.length > 0) {
+  if (errors.length > 0 && realBackendIndicators.length === 0) {
     ElMessage.error(`以下指标撤销失败：${errors.join('、')}`)
-  } else {
-    ElMessage.success(`已成功撤销 ${withdrawableIndicators.length} 个指标`)
+  }
+}
+
+const canWithdrawChildIndicator = (indicator: StrategicIndicator) => {
+  const status = getChildStatus(indicator)
+  return status === 'distributed' || status === 'pending' || status === 'approved'
+}
+
+const handleSingleWithdraw = async (indicator: StrategicIndicator) => {
+  if (!canWithdrawChildIndicator(indicator)) {
+    ElMessage.warning('当前指标不可撤回')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确认撤回子指标“${indicator.name}”的下发吗？撤回后可重新编辑或删除。`,
+      '单条撤回确认',
+      {
+        confirmButtonText: '确认撤回',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    const result = await indicatorApi.withdrawIndicator(indicator.id.toString())
+    if (!result.success) {
+      ElMessage.error(result.message || '单条撤回失败')
+      return
+    }
+
+    strategicStore.addStatusAuditEntry(indicator.id.toString(), {
+      operator: authStore.user?.userId || 'admin',
+      operatorName: authStore.user?.name || '管理员',
+      operatorDept: currentDept.value,
+      action: 'withdraw',
+      comment: '单条撤销下发'
+    })
+
+    await strategicStore.updateIndicator(indicator.id.toString(), {
+      status: 'draft',
+      canWithdraw: true
+    })
+
+    ElMessage.success('已撤回 1 个指标')
+  } catch (err: any) {
+    ElMessage.error(`单条撤回失败: ${err.message || err}`)
   }
 }
 
@@ -1075,7 +1606,12 @@ const handleBatchDistribute = async (college: string) => {
         if (!createResp.success || !createResp.data) {
           throw new Error(createResp.message || '创建指标失败')
         }
-        const newBackendId = createResp.data.indicatorId.toString()
+        // 后端返回的真实ID
+        const backendId = createResp.data.id
+        if (!backendId) {
+          throw new Error('后端返回的数据缺少ID字段')
+        }
+        const newBackendId = String(backendId)
         // 用真实 ID 替换临时 ID（纯本地操作，不调用后端）
         strategicStore.replaceIndicatorId(indicatorId, newBackendId)
         await indicatorApi.distributeIndicator({
@@ -1205,10 +1741,13 @@ const _handleDistributeOrWithdraw = (command: string) => {
 
 // 单条指标进度审批也统一由工作流待办处理。
 
+const getSortedMilestones = (milestones?: StrategicIndicator['milestones']) =>
+  sortMilestonesByProgress(milestones || [])
+
 // 查看详情
 const handleViewDetail = (indicator: StrategicIndicator) => {
-  currentAuditIndicator.value = indicator
-  auditLogVisible.value = true
+  currentDetailIndicator.value = indicator
+  detailDrawerVisible.value = true
 }
 
 // 获取子指标状态
@@ -1745,42 +2284,31 @@ const collegeTableData = computed(() => {
       nc.college.includes(selectedCollege.value!)
     )
 
-    // 如果该父指标没有任何子指标（包括待添加的），则添加一个 indicator-only 行
-    if (children.length === 0 && newChildren.length === 0) {
+    // 仅显示真实存在的子指标和正在新增的子指标，不再为“尚未分解”的父指标补空占位行
+    children.forEach(child => {
       data.push({
-        type: 'indicator-only',
+        type: 'child',
         taskTitle: indicator.taskContent || '',
         indicator,
+        child,
         parentIndicatorId: indicatorId
       })
-    } else {
-      // 添加已有子指标行
-      children.forEach(child => {
-        data.push({
-          type: 'child',
-          taskTitle: indicator.taskContent || '',
-          indicator,
-          child,
-          parentIndicatorId: indicatorId
-        })
-      })
+    })
 
-      // 添加新增的子指标行
-      newChildren.forEach((newChild, newIdx) => {
-        // 查找原始索引
-        const originalIdx = (newChildIndicators[indicatorId] || []).findIndex(
-          nc => nc.id === newChild.id
-        )
-        data.push({
-          type: 'new-child',
-          taskTitle: indicator.taskContent || '',
-          indicator,
-          child: newChild,
-          parentIndicatorId: indicatorId,
-          rowIndex: originalIdx >= 0 ? originalIdx : newIdx
-        })
+    newChildren.forEach((newChild, newIdx) => {
+      // 查找原始索引
+      const originalIdx = (newChildIndicators[indicatorId] || []).findIndex(
+        nc => nc.id === newChild.id
+      )
+      data.push({
+        type: 'new-child',
+        taskTitle: indicator.taskContent || '',
+        indicator,
+        child: newChild,
+        parentIndicatorId: indicatorId,
+        rowIndex: originalIdx >= 0 ? originalIdx : newIdx
       })
-    }
+    })
   })
 
   return data
@@ -1844,7 +2372,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
             <span class="college-card-count">{{ getCollegeChildCount(college) }} 个子指标</span>
           </div>
 
-          <el-empty v-if="filteredColleges.length === 0" description="暂无学院" />
+          <el-empty
+            v-if="filteredColleges.length === 0"
+            :description="isCollegeSidebarLoading ? '学院加载中...' : '暂无学院'"
+          />
         </div>
       </div>
 
@@ -1909,14 +2440,14 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 <template v-else-if="collegeOverallStatus.label === '进行中'">
                   <el-button type="warning" plain @click="handleBatchWithdraw(selectedCollege)">
                     <el-icon><RefreshLeft /></el-icon>
-                    撤回
+                    批量撤回
                   </el-button>
                 </template>
                 <!-- 待审批状态：显示撤回按钮 -->
                 <template v-else-if="collegeOverallStatus.label === '待审批'">
                   <el-button type="warning" plain @click="handleBatchWithdraw(selectedCollege)">
                     <el-icon><RefreshLeft /></el-icon>
-                    撤回
+                    批量撤回
                   </el-button>
                 </template>
               </template>
@@ -1959,6 +2490,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'name')"
                         />
+                        <span v-else-if="isSavingChildCell(row.child, 'name')" class="cell-saving-text">
+                          保存中...
+                        </span>
                         <el-tooltip
                           v-else
                           :content="row.child?.type1 === '定性' ? '定性指标' : '定量指标'"
@@ -2031,6 +2565,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'remark')"
                         />
+                        <span v-else-if="isSavingChildCell(row.child, 'remark')" class="cell-saving-text">
+                          保存中...
+                        </span>
                         <span v-else class="remark-text">{{ row.child?.remark || '-' }}</span>
                       </div>
                     </template>
@@ -2081,6 +2618,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field"
                           @blur="saveChildEdit(row.child, 'weight')"
                         />
+                        <span v-else-if="isSavingChildCell(row.child, 'weight')" class="cell-saving-text">
+                          保存中...
+                        </span>
                         <span v-else class="weight-text editable">{{
                           row.child?.weight ?? '-'
                         }}</span>
@@ -2095,7 +2635,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 <!-- 学院模式下不显示学院列 -->
 
                 <!-- 里程碑列 -->
-                <el-table-column label="里程碑" width="120" align="center">
+                <el-table-column label="里程碑" width="100" align="center">
                   <template #default="{ row }">
                     <template v-if="row.type === 'indicator-only'">
                       <span class="milestone-count">-</span>
@@ -2224,6 +2764,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           @keyup.esc="cancelChildEdit"
                         />
                         <span
+                          v-else-if="isSavingChildCell(row.child, 'progress')"
+                          class="cell-saving-text"
+                        >
+                          保存中...
+                        </span>
+                        <span
                           v-else
                           class="progress-text"
                           :class="{
@@ -2241,7 +2787,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-table-column>
 
                 <!-- 操作列 - 学院模式：仅查看和删除（删除需先撤销） -->
-                <el-table-column label="操作" width="120" align="center">
+                <el-table-column label="操作" width="180" align="center">
                   <template #default="{ row }">
                     <!-- 没有子指标的父指标 - 无操作 -->
                     <template v-if="row.type === 'indicator-only'">
@@ -2257,6 +2803,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           @click="handleViewDetail(row.child)"
                         >
                           <el-icon><View /></el-icon>查看
+                        </el-button>
+                        <el-button
+                          v-if="canEditChild && canWithdrawChildIndicator(row.child)"
+                          link
+                          type="warning"
+                          size="small"
+                          @click="handleSingleWithdraw(row.child)"
+                        >
+                          <el-icon><RefreshLeft /></el-icon>撤回
                         </el-button>
                         <!-- 只有草稿状态才能删除，已下发/待审批/已通过的不显示删除按钮 -->
                         <el-button
@@ -2300,14 +2855,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                         filterable
                         placeholder="选择关联的核心指标"
                         style="width: 100%"
-                        @change="
-                          (val: string) => {
-                            const indicator = plansWithIndicators.value
-                              .flatMap(t => t.indicators)
-                              .find(i => i.id.toString() === val)
-                            if (indicator) selectParentIndicator(indicator)
-                          }
-                        "
+                        @change="handleParentIndicatorChange"
                       >
                         <el-option-group
                           v-for="task in plansWithIndicators"
@@ -2333,7 +2881,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                       </el-select>
                     </el-form-item>
                   </el-col>
-                  <el-col :span="6">
+                  <el-col :span="8">
                     <el-form-item label="指标类型">
                       <el-select
                         v-model="newIndicatorForm.type1"
@@ -2347,7 +2895,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                       </el-select>
                     </el-form-item>
                   </el-col>
-                  <el-col :span="6">
+                  <el-col :span="8">
                     <el-form-item label="权重">
                       <el-input-number
                         v-model="newIndicatorForm.weight"
@@ -2449,8 +2997,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-row>
                 <el-row>
                   <el-col :span="24" style="text-align: right">
-                    <el-button type="primary" @click="saveNewIndicator">保存</el-button>
-                    <el-button @click="cancelAddIndicator">取消</el-button>
+                    <el-button type="primary" :loading="isSavingIndicator" :disabled="isSavingIndicator" @click="saveNewIndicator">
+                      {{ isSavingIndicator ? '保存中' : '保存' }}
+                    </el-button>
+                    <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator">取消</el-button>
                   </el-col>
                 </el-row>
               </el-form>
@@ -2463,21 +3013,128 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       </div>
     </div>
 
-    <!-- 审计日志抽屉 -->
-    <AuditLogDrawer
-      v-model="auditLogVisible"
-      :indicator-id="currentAuditIndicator?.id"
-      @close="auditLogVisible = false"
-    />
+    <!-- 指标详情抽屉 -->
+    <el-drawer v-model="detailDrawerVisible" title="指标详情" size="45%">
+      <div v-if="currentDetailIndicator" class="detail-container">
+        <div class="detail-header">
+          <h3>{{ currentDetailIndicator.name }}</h3>
+          <div class="detail-tags">
+            <el-tag
+              size="small"
+              :type="currentDetailIndicator.type1 === '定量' ? 'primary' : 'warning'"
+            >
+              {{ currentDetailIndicator.type1 }}
+            </el-tag>
+            <el-tag
+              size="small"
+              :style="{
+                backgroundColor: _getTaskTypeColor(currentDetailIndicator.type2),
+                color: '#fff',
+                border: 'none'
+              }"
+            >
+              {{ currentDetailIndicator.type2 }}任务
+            </el-tag>
+            <el-tag size="small" :type="_getStatusTagType(getChildStatus(currentDetailIndicator))">
+              {{
+                getChildStatus(currentDetailIndicator) === 'draft'
+                  ? '待下发'
+                  : getChildStatus(currentDetailIndicator) === 'pending'
+                    ? '待审批'
+                    : getChildStatus(currentDetailIndicator) === 'approved'
+                      ? '已通过'
+                      : '已下发'
+              }}
+            </el-tag>
+          </div>
+        </div>
+
+        <el-descriptions :column="2" border class="detail-desc">
+          <el-descriptions-item label="战略任务" :span="2">
+            {{ currentDetailIndicator.taskContent }}
+          </el-descriptions-item>
+          <el-descriptions-item label="任务类别">
+            {{ currentDetailIndicator.type2 }}任务
+          </el-descriptions-item>
+          <el-descriptions-item label="指标类型">
+            {{ currentDetailIndicator.type1 }}
+          </el-descriptions-item>
+          <el-descriptions-item label="权重">{{ currentDetailIndicator.weight }}</el-descriptions-item>
+          <el-descriptions-item label="当前进度">
+            {{ currentDetailIndicator.progress || 0 }}%
+          </el-descriptions-item>
+          <el-descriptions-item label="责任部门">
+            {{ currentDetailIndicator.responsibleDept || '未分配' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间" :span="2">
+            {{ currentDetailIndicator.createTime }}
+          </el-descriptions-item>
+          <el-descriptions-item label="备注" :span="2">
+            {{ currentDetailIndicator.remark || '暂无备注' }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div
+          v-if="currentDetailIndicator.milestones && currentDetailIndicator.milestones.length > 0"
+          class="milestone-section"
+        >
+          <div class="divider"></div>
+          <h4>里程碑节点</h4>
+          <el-timeline style="margin-top: 20px; padding-left: 5px">
+            <el-timeline-item
+              v-for="(milestone, index) in getSortedMilestones(currentDetailIndicator.milestones)"
+              :key="index"
+              :timestamp="milestone.deadline"
+              :type="
+                milestone.status === 'completed'
+                  ? 'success'
+                  : milestone.status === 'overdue'
+                    ? 'danger'
+                    : 'primary'
+              "
+              placement="top"
+            >
+              <div class="timeline-card">
+                <div class="timeline-header">
+                  <span class="action-text">{{ milestone.name }}</span>
+                  <el-tag
+                    size="small"
+                    :type="
+                      milestone.status === 'completed'
+                        ? 'success'
+                        : milestone.status === 'overdue'
+                          ? 'danger'
+                          : 'warning'
+                    "
+                  >
+                    {{
+                      milestone.status === 'completed'
+                        ? '已完成'
+                        : milestone.status === 'overdue'
+                          ? '已逾期'
+                          : '进行中'
+                    }}
+                  </el-tag>
+                </div>
+                <div class="timeline-comment">目标进度: {{ milestone.targetProgress }}%</div>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+        </div>
+      </div>
+    </el-drawer>
 
     <!-- 任务审批进度抽屉 -->
     <ApprovalProgressDrawer
       v-model="taskApprovalVisible"
       :indicators="approvalIndicators"
+      :plan="currentDepartmentPlanDetails"
       :department-name="selectedCollege || currentDept || '当前部门'"
       :plan-name="selectedCollege || currentDept || '当前部门'"
       :show-plan-approvals="true"
       :show-approval-section="true"
+      :workflow-code="currentDispatchWorkflowCode"
+      history-view-mode="card-only"
       approval-type="distribution"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"
@@ -3750,6 +4407,11 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   color: var(--primary-color, #409eff);
 }
 
+.cell-saving-text {
+  font-size: 13px;
+  color: var(--primary-color, #409eff);
+}
+
 /* ========================================
    指标类型样式（与战略任务界面保持一致）
    ======================================== */
@@ -3863,6 +4525,73 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 .milestone-hint {
   font-size: 12px;
   color: var(--text-placeholder);
+}
+
+/* ========================================
+   详情抽屉样式
+   ======================================== */
+.detail-container {
+  padding: 0 var(--spacing-xl);
+}
+
+.detail-header {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.detail-header h3 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 18px;
+  color: var(--text-main);
+}
+
+.detail-tags {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.detail-desc {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: var(--spacing-xl) 0;
+}
+
+.milestone-section h4 {
+  font-size: 16px;
+  color: var(--text-main);
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+.timeline-card {
+  padding: var(--spacing-md);
+  background: var(--bg-page);
+  border-radius: var(--radius-sm);
+}
+
+.timeline-header {
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.action-text {
+  color: var(--text-main);
+}
+
+.timeline-comment {
+  margin-top: var(--spacing-sm);
+  color: var(--text-regular);
+  font-size: 13px;
+}
+
+.detail-tags :deep(.el-tag) {
+  margin-right: 0;
 }
 </style>
 

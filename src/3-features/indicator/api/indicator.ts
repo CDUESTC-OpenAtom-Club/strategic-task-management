@@ -180,6 +180,45 @@ export const indicatorApi = {
   },
 
   /**
+   * 批量撤回指标
+   * 撤回指定发布部门发给目标学院的所有已下发指标
+   *
+   * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
+   * 批量撤回操作在单个事务中完成，确保数据一致性
+   *
+   * 权限要求: 仅战略发展部可以调用
+   *
+   * @param ownerOrgId 发布部门ID
+   * @param targetOrgId 目标学院ID
+   * @param reason 撤回原因（可选）
+   */
+  async batchWithdrawIndicators(
+    ownerOrgId: number,
+    targetOrgId: number,
+    reason?: string
+  ): Promise<ApiResponse<{
+    totalCount: number
+    successCount: number
+    failedCount: number
+    withdrawnIndicatorIds: number[]
+    errors: string[]
+  }>> {
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<{
+        totalCount: number
+        successCount: number
+        failedCount: number
+        withdrawnIndicatorIds: number[]
+        errors: string[]
+      }>>('/indicators/batch-withdraw', {
+        ownerOrgId,
+        targetOrgId,
+        reason: reason || ''
+      })
+    })
+  },
+
+  /**
    * 更新指标
    *
    * 这是一个关键操作，使用显式重试逻辑（最多3次，指数退避）
