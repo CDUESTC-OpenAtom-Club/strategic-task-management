@@ -5,7 +5,29 @@
  */
 
 import { apiClient as api } from '@/shared/api/client'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import {
+  createMemoryDetailPolicy,
+  createSessionListPolicy
+} from '@/shared/lib/utils/cache-config'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type { ApiResponse, Plan } from '@/shared/types'
+
+const PLAN_LIST_POLICY = createSessionListPolicy({
+  tags: ['plan.list']
+})
+
+const PLAN_DETAIL_POLICY = createMemoryDetailPolicy({
+  tags: ['plan.detail']
+})
+
+function withPlanCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
+}
 
 /**
  * Get all plans
@@ -15,7 +37,11 @@ import type { ApiResponse, Plan } from '@/shared/types'
  * @returns All plans
  */
 export async function getAllPlans(): Promise<ApiResponse<Plan[]>> {
-  return api.get('/plans')
+  return fetchWithCache({
+    key: buildQueryKey('plan', 'list', withPlanCacheContext()),
+    policy: PLAN_LIST_POLICY,
+    fetcher: () => api.get('/plans')
+  })
 }
 
 /**
@@ -27,7 +53,14 @@ export async function getAllPlans(): Promise<ApiResponse<Plan[]>> {
  * @returns Plan details
  */
 export async function getPlanById(planId: number | string): Promise<ApiResponse<Plan>> {
-  return api.get(`/plans/${planId}`)
+  return fetchWithCache({
+    key: buildQueryKey('plan', 'detail', withPlanCacheContext({ planId: String(planId) })),
+    policy: {
+      ...PLAN_DETAIL_POLICY,
+      tags: ['plan.detail', `plan.detail.${planId}`]
+    },
+    fetcher: () => api.get(`/plans/${planId}`)
+  })
 }
 
 /**
@@ -39,7 +72,14 @@ export async function getPlanById(planId: number | string): Promise<ApiResponse<
  * @returns Plans for organization
  */
 export async function getPlansByOrg(orgId: number | string): Promise<ApiResponse<Plan[]>> {
-  return api.get('/plans', { orgId })
+  return fetchWithCache({
+    key: buildQueryKey('plan', 'list', withPlanCacheContext({ orgId: String(orgId) })),
+    policy: {
+      ...PLAN_LIST_POLICY,
+      tags: ['plan.list', `plan.org.${orgId}`]
+    },
+    fetcher: () => api.get('/plans', { orgId })
+  })
 }
 
 /**
@@ -51,7 +91,14 @@ export async function getPlansByOrg(orgId: number | string): Promise<ApiResponse
  * @returns Plans with status
  */
 export async function getPlansByStatus(status: string): Promise<ApiResponse<Plan[]>> {
-  return api.get('/plans', { status })
+  return fetchWithCache({
+    key: buildQueryKey('plan', 'list', withPlanCacheContext({ status })),
+    policy: {
+      ...PLAN_LIST_POLICY,
+      tags: ['plan.list', `plan.status.${status}`]
+    },
+    fetcher: () => api.get('/plans', { status })
+  })
 }
 
 /**
@@ -63,5 +110,12 @@ export async function getPlansByStatus(status: string): Promise<ApiResponse<Plan
  * @returns Matching plans
  */
 export async function searchPlans(keyword: string): Promise<ApiResponse<Plan[]>> {
-  return api.get('/plans', { keyword })
+  return fetchWithCache({
+    key: buildQueryKey('plan', 'search', withPlanCacheContext({ keyword })),
+    policy: {
+      ...PLAN_LIST_POLICY,
+      tags: ['plan.list', 'plan.search']
+    },
+    fetcher: () => api.get('/plans', { keyword })
+  })
 }

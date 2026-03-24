@@ -433,7 +433,11 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取告警统计成功',
           timestamp: Date.now()
         })
-      } else if (normalizedPath === '/api/alerts/unresolved' && method === 'GET') {
+      } else if (
+        (normalizedPath === '/api/alerts/unresolved' ||
+          normalizedPath === '/api/alerts/events/unclosed') &&
+        method === 'GET'
+      ) {
         sendJson(res, 200, {
           code: 200,
           success: true,

@@ -10,6 +10,8 @@ import { ref, computed } from 'vue'
 import { apiClient } from '@/shared/api/client'
 import { logger } from '@/shared/lib/utils/logger'
 import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import { createPersistentReferencePolicy } from '@/shared/lib/utils/cache-config'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type { AssessmentCycle as AssessmentCycleVO } from '@/shared/types/backend-aligned'
 
 export const useTimeContextStore = defineStore('timeContext', () => {
@@ -34,6 +36,12 @@ export const useTimeContextStore = defineStore('timeContext', () => {
    * Available years for selection (from backend API)
    */
   const availableYears = ref<number[]>([])
+
+  /**
+   * Full cycle list from backend API.
+   * Used to resolve the real year from cycleId instead of relying on hardcoded mappings.
+   */
+  const cycles = ref<AssessmentCycleVO[]>([])
 
   /**
    * Fallback years if API fails
@@ -61,6 +69,20 @@ export const useTimeContextStore = defineStore('timeContext', () => {
     return fallbackYears.value
   })
 
+  const cycleYearMap = computed(() => {
+    const entries = cycles.value
+      .map(cycle => {
+        const cycleId = Number(cycle.cycleId)
+        const year = Number(cycle.year)
+        return Number.isFinite(cycleId) && cycleId > 0 && Number.isFinite(year)
+          ? ([cycleId, year] as const)
+          : null
+      })
+      .filter((entry): entry is readonly [number, number] => entry !== null)
+
+    return new Map<number, number>(entries)
+  })
+
   /**
    * Whether we're viewing historical data
    */
@@ -84,13 +106,19 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   async function fetchAvailableYears() {
     loading.value = true
     try {
+      const userContext = getCachedUserContext()
       const response = await fetchWithCache<{
         success?: boolean
         data?: AssessmentCycleVO[]
         message?: string
       }>({
-        key: buildQueryKey('cycle', 'list'),
-        policy: { ttlMs: 10 * 60 * 1000, scope: 'memory', staleWhileRevalidate: true, dedupeWindowMs: 1000, tags: ['cycles.list'] },
+        key: buildQueryKey('cycle', 'list', {
+          ...userContext,
+          version: 'v1'
+        }),
+        policy: createPersistentReferencePolicy({
+          tags: ['cycles.list']
+        }),
         fetcher: () => apiClient.get<{
           success?: boolean
           data?: AssessmentCycleVO[]
@@ -104,6 +132,8 @@ export const useTimeContextStore = defineStore('timeContext', () => {
             .filter((year): year is number => typeof year === 'number')
         : []
 
+      cycles.value = Array.isArray(response.data) ? response.data : []
+
       if (response.success && years.length > 0) {
         availableYears.value = [...new Set(years)].sort((left, right) => right - left)
       } else {
@@ -112,6 +142,7 @@ export const useTimeContextStore = defineStore('timeContext', () => {
       }
     } catch (error) {
       logger.error('[TimeContext] Failed to fetch available years:', error)
+      cycles.value = []
       availableYears.value = fallbackYears.value
     } finally {
       loading.value = false
@@ -159,6 +190,15 @@ export const useTimeContextStore = defineStore('timeContext', () => {
     currentYear.value = year
   }
 
+  function resolveCycleYear(cycleId: unknown): number | null {
+    const numericCycleId = Number(cycleId)
+    if (!Number.isFinite(numericCycleId) || numericCycleId <= 0) {
+      return null
+    }
+
+    return cycleYearMap.value.get(numericCycleId) ?? null
+  }
+
   // Auto-initialize on store creation
   initialize()
 
@@ -167,12 +207,15 @@ export const useTimeContextStore = defineStore('timeContext', () => {
     realCurrentYear,
     loading,
     availableYears: yearsForSelector,
+    cycles,
+    cycleYearMap,
     isHistoricalMode,
     isCurrentYear,
     isReadOnly,
     setYear,
     resetToCurrentYear,
     getYearStatus,
+    resolveCycleYear,
     switchYear,
     initialize
   }

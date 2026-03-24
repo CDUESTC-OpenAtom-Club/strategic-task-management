@@ -11,6 +11,8 @@ import { apiClient } from '@/shared/api/client'
 import { withRetry } from '@/shared/lib/api/wrappers'
 import { USE_MOCK } from '@/shared/config/api'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
+import { useTimeContextStore } from '@/shared/lib/timeContext'
 import type {
   ApiResponse,
   Plan,
@@ -155,35 +157,35 @@ function unwrapPlanCollection(
   return []
 }
 
-function inferYearFromCycleId(cycleId: unknown): number | null {
-  const numericCycleId = Number(cycleId)
-  if (!Number.isFinite(numericCycleId)) {
+function normalizeYear(value: unknown): number | null {
+  if (value == null || value === '') {
     return null
   }
 
-  if (numericCycleId === 4 || numericCycleId === 90) {
-    return 2026
-  }
-
-  if (numericCycleId === 7) {
-    return 2025
-  }
-
-  return null
+  const numericYear = Number(value)
+  return Number.isFinite(numericYear) ? numericYear : null
 }
 
-function resolvePlanYear(raw: Record<string, any>): number | null {
-  const explicitYear = raw.year ?? raw.cycle?.year
-  if (explicitYear != null && explicitYear !== '') {
-    const numericYear = Number(explicitYear)
-    return Number.isFinite(numericYear) ? numericYear : null
+function withPlanCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
   }
-
-  return inferYearFromCycleId(raw.cycleId)
 }
 
-function convertBackendPlanToPlan(raw: Record<string, any>): Plan {
-  const inferredYear = resolvePlanYear(raw)
+function resolvePlanYear(
+  raw: Record<string, any>,
+  resolveCycleYear?: (cycleId: unknown) => number | null
+): number | null {
+  return normalizeYear(raw.year ?? raw.cycle?.year) ?? resolveCycleYear?.(raw.cycleId) ?? null
+}
+
+function convertBackendPlanToPlan(
+  raw: Record<string, any>,
+  resolveCycleYear?: (cycleId: unknown) => number | null
+): Plan {
+  const inferredYear = resolvePlanYear(raw, resolveCycleYear)
   const cycleLabel = raw.year ?? inferredYear ?? raw.cycle ?? ''
   const effectiveWorkflowStatus = typeof raw.workflowStatus === 'string' ? raw.workflowStatus.toUpperCase() : ''
   const effectiveStatus =
@@ -576,6 +578,14 @@ interface PlanReportSimpleResponse {
   currentStepName?: string | null
   currentApproverId?: number | null
   currentApproverName?: string | null
+  indicatorDetails?: PlanReportIndicatorDetailResponse[] | null
+}
+
+interface PlanReportIndicatorDetailResponse {
+  indicatorId: number
+  progress?: number | null
+  comment?: string | null
+  milestoneNote?: string | null
 }
 
 interface IndicatorReportContext {
@@ -603,7 +613,15 @@ function mapPlanReportToIndicatorFill(
   report: PlanReportSimpleResponse,
   context: Pick<IndicatorReportContext, 'indicatorId' | 'indicatorName'>
 ): IndicatorFill {
-  const normalizedProgress = Number(report.progress ?? 0)
+  const matchedDetail = Array.isArray(report.indicatorDetails)
+    ? report.indicatorDetails.find(detail => Number(detail.indicatorId) === Number(context.indicatorId))
+    : undefined
+  const fallbackDetail =
+    !matchedDetail && Array.isArray(report.indicatorDetails) && report.indicatorDetails.length === 1
+      ? report.indicatorDetails[0]
+      : undefined
+  const resolvedDetail = matchedDetail ?? fallbackDetail
+  const normalizedProgress = Number(resolvedDetail?.progress ?? report.progress ?? 0)
   const fillDate =
     report.reportMonth && /^\d{6}$/.test(report.reportMonth)
       ? `${report.reportMonth.slice(0, 4)}-${report.reportMonth.slice(4, 6)}-01`
@@ -618,11 +636,7 @@ function mapPlanReportToIndicatorFill(
     report_id: report.id,
     fill_date: fillDate,
     progress: Number.isFinite(normalizedProgress) ? normalizedProgress : 0,
-    content:
-      report.content ||
-      report.summary ||
-      report.title ||
-      `${context.indicatorName} ${report.reportMonth || ''} 填报记录`.trim(),
+    content: resolvedDetail?.comment || report.content || report.summary || report.title || '',
     attachments: [],
     filled_by: report.submittedBy != null ? String(report.submittedBy) : '',
     filled_by_name: report.submittedBy != null ? `用户${report.submittedBy}` : '当前部门',
@@ -809,12 +823,22 @@ async function loadPlanReportById(reportId: number | string): Promise<PlanReport
 }
 
 function normalizePlanCollection(
-  data: Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] } | null | undefined
+  data: Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] } | null | undefined,
+  resolveCycleYear?: (cycleId: unknown) => number | null
 ): Plan[] {
-  return unwrapPlanCollection(data).map(item => convertBackendPlanToPlan(item as Record<string, any>))
+  return unwrapPlanCollection(data).map(item =>
+    convertBackendPlanToPlan(item as Record<string, any>, resolveCycleYear)
+  )
+}
+
+async function getCycleYearResolver(): Promise<(cycleId: unknown) => number | null> {
+  const timeContext = useTimeContextStore()
+  await timeContext.initialize()
+  return (cycleId: unknown) => timeContext.resolveCycleYear(cycleId)
 }
 
 async function loadPlansByCycleFallback(): Promise<ApiResponse<Plan[]>> {
+  const resolveCycleYear = await getCycleYearResolver()
   const cyclesResponse = await apiClient.get<
     ApiResponse<Array<{ id?: number | string; cycleId?: number | string }>>
   >('/cycles/list')
@@ -841,7 +865,7 @@ async function loadPlansByCycleFallback(): Promise<ApiResponse<Plan[]>> {
   const planMap = new Map<string, Plan>()
   cyclePlanResponses
     .flat()
-    .map(plan => convertBackendPlanToPlan(plan as Record<string, any>))
+    .map(plan => convertBackendPlanToPlan(plan as Record<string, any>, resolveCycleYear))
     .forEach(plan => {
       const key = String(plan.id ?? '')
       if (key) {
@@ -917,21 +941,24 @@ export const planApi = {
 
     // 真实 API 调用（后端就绪后启用）
     return fetchWithCache({
-      key: buildQueryKey('plan', 'list'),
+      key: buildQueryKey('plan', 'list', withPlanCacheContext()),
       policy: {
         ttlMs: 2 * 60 * 1000,
-        scope: 'memory',
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
         dedupeWindowMs: 1000,
         tags: ['plan.list']
       },
       fetcher: async () => {
         try {
+          const resolveCycleYear = await getCycleYearResolver()
           const response = await apiClient.get<
             ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
           >('/plans', { page: 0, size: 1000 })
           return {
             ...response,
-            data: normalizePlanCollection(response.data)
+            data: normalizePlanCollection(response.data, resolveCycleYear)
           }
         } catch (error) {
           const fallbackResponse = await loadPlansByCycleFallback()
@@ -961,9 +988,10 @@ export const planApi = {
     const response = await apiClient.get<
       ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
     >('/plans', { page: 0, size: 1000 })
+    const resolveCycleYear = await getCycleYearResolver()
     return {
       ...response,
-      data: normalizePlanCollection(response.data).filter(p => String(p.org_id) === String(orgId))
+      data: normalizePlanCollection(response.data, resolveCycleYear).filter(p => String(p.org_id) === String(orgId))
     }
   },
 
@@ -985,9 +1013,10 @@ export const planApi = {
     const response = await apiClient.get<
       ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
     >('/plans', { status, page: 0, size: 1000 })
+    const resolveCycleYear = await getCycleYearResolver()
     return {
       ...response,
-      data: normalizePlanCollection(response.data)
+      data: normalizePlanCollection(response.data, resolveCycleYear)
     }
   },
 
@@ -1024,7 +1053,11 @@ export const planApi = {
     }
 
     return fetchWithCache({
-      key: buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'basic' }),
+      key: buildQueryKey(
+        'plan',
+        'detail',
+        withPlanCacheContext({ planId: String(planId), kind: 'basic' })
+      ),
       policy: {
         ttlMs: 60 * 1000,
         scope: 'memory',
@@ -1032,11 +1065,12 @@ export const planApi = {
         tags: ['plan.detail', `plan.detail.${planId}`]
       },
       fetcher: async () => {
+        const resolveCycleYear = await getCycleYearResolver()
         const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}`)
         if (hasApiData(response) && response.data) {
           return {
             ...response,
-            data: convertBackendPlanToPlan(response.data as Record<string, any>)
+            data: convertBackendPlanToPlan(response.data as Record<string, any>, resolveCycleYear)
           }
         }
 
@@ -1057,7 +1091,11 @@ export const planApi = {
 
     // 调用后端的 Plan 详情接口
     return fetchWithCache({
-      key: buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'full' }),
+      key: buildQueryKey(
+        'plan',
+        'detail',
+        withPlanCacheContext({ planId: String(planId), kind: 'full' })
+      ),
       policy: {
         ttlMs: 60 * 1000,
         scope: 'memory',
@@ -1065,6 +1103,7 @@ export const planApi = {
         tags: ['plan.detail', `plan.detail.${planId}`]
       },
       fetcher: async () => {
+        const resolveCycleYear = await getCycleYearResolver()
         const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}/details`)
 
         if (hasApiData(response) && response.data) {
@@ -1097,7 +1136,7 @@ export const planApi = {
           }
 
           const plan: Plan = {
-            ...convertBackendPlanToPlan(backendData),
+            ...convertBackendPlanToPlan(backendData, resolveCycleYear),
             tasks
           }
 
@@ -1406,7 +1445,7 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/archive`)
+      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/withdraw`)
       invalidatePlanCaches(planId)
       return response
     })
@@ -1544,12 +1583,21 @@ export const indicatorFillApi = {
 
       return {
         code: 200,
-        data: detailedReports.map(report =>
-          mapPlanReportToIndicatorFill(report, {
-            indicatorId: context.indicatorId,
-            indicatorName: context.indicatorName
+        data: detailedReports
+          .filter(report => {
+            if (!Array.isArray(report.indicatorDetails)) {
+              return true
+            }
+            return report.indicatorDetails.some(
+              detail => Number(detail.indicatorId) === Number(context.indicatorId)
+            )
           })
-        ),
+          .map(report =>
+            mapPlanReportToIndicatorFill(report, {
+              indicatorId: context.indicatorId,
+              indicatorName: context.indicatorName
+            })
+          ),
         message: '获取成功',
         timestamp: new Date().toISOString()
       }
@@ -1674,7 +1722,9 @@ export const indicatorFillApi = {
       summary: form.content,
       progress: form.progress,
       issues: form.content,
-      nextPlan: form.content
+      nextPlan: form.content,
+      operatorUserId:
+        Number(useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId) || undefined
     }
 
     const savedReport = editableExistingReport
@@ -1694,7 +1744,10 @@ export const indicatorFillApi = {
             reportMonth: context.reportMonth,
             reportOrgId: context.reportOrgId,
             reportOrgType: context.reportOrgType,
-            planId: context.planId
+            planId: context.planId,
+            createdBy:
+              Number(useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId) ||
+              undefined
           })
           .then(async createResponse => {
             if (!hasApiData(createResponse) || !createResponse.data) {
@@ -1768,38 +1821,6 @@ export const indicatorFillApi = {
       code: 501,
       data: null as never,
       message: '当前 OpenAPI 未提供填报更新接口',
-      timestamp: new Date().toISOString()
-    }
-  },
-
-  /**
-   * 删除填报记录
-   */
-  async deleteFill(fillId: number | string): Promise<ApiResponse<void>> {
-    if (this.useMockData) {
-      const index = mockIndicatorFills.findIndex(f => f.fillId === Number(fillId))
-      if (index !== -1) {
-        mockIndicatorFills.splice(index, 1)
-        return {
-          success: true,
-          data: undefined,
-          message: '删除成功',
-          timestamp: new Date().toISOString()
-        }
-      }
-      return {
-        code: 1002,
-        data: undefined,
-        message: 'Fill not found',
-        timestamp: new Date().toISOString()
-      }
-    }
-
-    void fillId
-    return {
-      code: 501,
-      data: undefined,
-      message: '当前 OpenAPI 未提供填报删除接口',
       timestamp: new Date().toISOString()
     }
   },

@@ -58,6 +58,49 @@ function getNumber(record: Record<string, unknown>, ...keys: string[]): number {
   return 0
 }
 
+function getOptionalNumber(record: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const value = record[key]
+    if (value === undefined || value === null || value === '') {
+      continue
+    }
+
+    const num = Number(value)
+    if (Number.isFinite(num)) {
+      return num
+    }
+  }
+  return null
+}
+
+function getPendingAttachments(record: Record<string, unknown>): string[] {
+  const raw = record.pendingAttachments
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .map(item => {
+      if (typeof item === 'string') {
+        return item.trim()
+      }
+      if (item && typeof item === 'object') {
+        return getString(
+          item as Record<string, unknown>,
+          'url',
+          'publicUrl',
+          'public_url',
+          'objectKey',
+          'object_key',
+          'name',
+          'originalName'
+        )
+      }
+      return ''
+    })
+    .filter(Boolean)
+}
+
 function getBoolean(record: Record<string, unknown>, ...keys: string[]): boolean | undefined {
   for (const key of keys) {
     const value = record[key]
@@ -74,6 +117,53 @@ function getBoolean(record: Record<string, unknown>, ...keys: string[]): boolean
     }
   }
   return undefined
+}
+
+function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
+  return response.success === true || response.code === 200
+}
+
+async function buildIndicatorUpdatePayload(
+  updates: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const payload: Record<string, unknown> = { ...updates }
+
+  if ('weight' in updates) {
+    const numericWeight = Number(updates.weight)
+    if (Number.isFinite(numericWeight)) {
+      payload.weightPercent = numericWeight
+    }
+    delete payload.weight
+  }
+
+  if ('name' in updates) {
+    const indicatorName = String(updates.name ?? '').trim()
+    if (indicatorName) {
+      payload.indicatorName = indicatorName
+      payload.indicatorDesc = indicatorName
+    }
+    delete payload.name
+  }
+
+  if ('responsibleDept' in updates) {
+    const orgStore = useOrgStore()
+    if (!orgStore.loaded || orgStore.departments.length === 0) {
+      await orgStore.loadDepartments()
+    }
+
+    const responsibleDept = String(updates.responsibleDept ?? '')
+      .split(',')
+      .map(item => item.trim())
+      .find(Boolean)
+
+    const targetOrgId = resolveDepartmentIdByName(orgStore.departments, responsibleDept)
+    if (targetOrgId) {
+      payload.targetOrgId = targetOrgId
+    }
+    delete payload.responsibleDept
+  }
+
+  return payload
 }
 
 function normalizeMilestoneStatus(status: unknown): 'pending' | 'completed' | 'overdue' {
@@ -118,7 +208,7 @@ function normalizeType2FromTaskType(taskType: unknown): '发展性' | '基础性
   return '其他'
 }
 
-function toStrategicIndicator(raw: unknown): StrategicIndicator {
+export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const item = getRecord(raw)
   const id = getString(item, 'id', 'indicatorId')
   const taskId = getString(item, 'taskId', 'task_id', 'planId', 'strategicTaskId')
@@ -130,10 +220,14 @@ function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const level = getString(item, 'level')
   const status = getString(item, 'status').toUpperCase() || 'DRAFT'
   const isStrategic = getBoolean(item, 'isStrategic')
+  const parentIndicatorId = getString(item, 'parentIndicatorId', 'parent_indicator_id', 'parentId')
   // 历史数据中 isStrategic 可能全部为 false，但 FIRST/STRAT_TO_FUNC 仍代表战略指标。
   // 为避免任务下发页被误过滤为空，这里以层级语义优先兜底。
+  // 但只要存在 parentIndicatorId，就必须视为子指标，不能再被 FIRST 误判为父指标。
   const normalizedIsStrategic =
-    isStrategic === true || level === 'FIRST' || level === 'STRAT_TO_FUNC'
+    parentIndicatorId
+      ? false
+      : (isStrategic === true || level === 'FIRST' || level === 'STRAT_TO_FUNC')
 
   const normalizedIndicator: StrategicIndicator = {
     id: id || String(Date.now()),
@@ -152,23 +246,74 @@ function toStrategicIndicator(raw: unknown): StrategicIndicator {
     targetValue: getNumber(item, 'targetValue') || 100,
     actualValue: getNumber(item, 'actualValue', 'progress'),
     unit: getString(item, 'unit') || '%',
-    responsibleDept: getString(item, 'responsibleDept', 'departmentName', 'targetOrgName', 'targetOrgId'),
+    responsibleDept: getString(
+      item,
+      'responsibleDept',
+      'departmentName',
+      'targetOrgName',
+      'target_org_name',
+      'targetOrgId',
+      'target_org_id'
+    ),
     responsiblePerson: getString(item, 'responsiblePerson'),
     status: status as StrategicIndicator['status'],
     isStrategic: normalizedIsStrategic,
-    ownerDept: getString(item, 'ownerDept', 'ownerOrgName', 'ownerOrgId'),
+    ownerDept: getString(item, 'ownerDept', 'ownerOrgName', 'owner_org_name', 'ownerOrgId', 'owner_org_id'),
     year,
-    parentIndicatorId: getString(item, 'parentIndicatorId', 'parentId') || undefined,
+    parentIndicatorId: parentIndicatorId || undefined,
     progressApprovalStatus: getString(item, 'progressApprovalStatus').toUpperCase() || 'NONE',
-    pendingProgress: getNumber(item, 'pendingProgress') || undefined,
-    pendingRemark: getString(item, 'pendingRemark') || undefined,
-    pendingAttachments: Array.isArray(item.pendingAttachments) ? item.pendingAttachments : [],
+    pendingProgress: getOptionalNumber(item, 'pendingProgress'),
+    pendingRemark: getString(item, 'pendingRemark') || null,
+    pendingAttachments: getPendingAttachments(item),
     statusAudit: Array.isArray(item.statusAudit) ? item.statusAudit : []
+  }
+
+  const rawReportProgress = item.reportProgress
+  if (rawReportProgress !== undefined && rawReportProgress !== null && rawReportProgress !== '') {
+    const reportProgress = Number(rawReportProgress)
+    if (Number.isFinite(reportProgress)) {
+      ;(normalizedIndicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress =
+        reportProgress
+    }
   }
 
   // 保留后端 taskId（运行时字段），供页面按唯一主键关联任务类型。
   if (taskId) {
     ;(normalizedIndicator as StrategicIndicator & { taskId?: string }).taskId = taskId
+  }
+
+  // 保留后端组织字段（运行时字段），供页面按稳定的部门 ID 做可见性/筛选判断。
+  const runtimeIndicator = normalizedIndicator as StrategicIndicator & {
+    targetOrgId?: number
+    ownerOrgId?: number
+    targetOrgName?: string
+    ownerOrgName?: string
+    planId?: number
+  }
+
+  const targetOrgId = getNumber(item, 'targetOrgId', 'target_org_id')
+  if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
+    runtimeIndicator.targetOrgId = targetOrgId
+  }
+
+  const ownerOrgId = getNumber(item, 'ownerOrgId', 'owner_org_id')
+  if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
+    runtimeIndicator.ownerOrgId = ownerOrgId
+  }
+
+  const targetOrgName = getString(item, 'targetOrgName', 'target_org_name')
+  if (targetOrgName) {
+    runtimeIndicator.targetOrgName = targetOrgName
+  }
+
+  const ownerOrgName = getString(item, 'ownerOrgName', 'owner_org_name')
+  if (ownerOrgName) {
+    runtimeIndicator.ownerOrgName = ownerOrgName
+  }
+
+  const planId = getNumber(item, 'planId')
+  if (Number.isFinite(planId) && planId > 0) {
+    runtimeIndicator.planId = planId
   }
 
   return normalizedIndicator
@@ -491,35 +636,25 @@ export const useStrategicStore = defineStore('strategic', () => {
   }
 
   async function updateIndicator(id: string, data: Record<string, unknown>) {
-    console.log('[Strategic Store] updateIndicator called with id:', id, 'data:', data)
     try {
-      // logger.debug(`[Strategic Store] Updating indicator ${id}`, data)
-
       const isPersistedId = /^\d+$/.test(id)
-      console.log('[Strategic Store] isPersistedId:', isPersistedId, 'id:', id)
       if (!isPersistedId) {
         throw new Error(`指标 ${id} 尚未持久化，无法更新后端数据`)
       }
 
       const index = indicators.value.findIndex(i => String(i.id) === String(id))
-      const response = await indicatorApi.updateIndicator(id, data)
-      console.log('[Strategic Store] Raw API response:', JSON.stringify(response))
-      console.log('[Strategic Store] API response keys:', Object.keys(response))
-      console.log('[Strategic Store] API response.success:', response.success)
-      console.log('[Strategic Store] API response.code:', response.code)
-      console.log('[Strategic Store] API response.message:', response.message)
-      console.log('[Strategic Store] API response.data:', response.data)
-      // logger.debug(`[Strategic Store] API response:`, response)
+      const requestPayload = await buildIndicatorUpdatePayload(data)
+      const response = await indicatorApi.updateIndicator(id, requestPayload)
 
-      if (response.success) {
-        if (index !== -1 && response.data) {
-          const normalized = toStrategicIndicator(response.data)
+      if (hasApiData(response)) {
+        if (index !== -1) {
+          const normalized = response.data ? toStrategicIndicator(response.data) : null
           indicators.value[index] = {
             ...indicators.value[index],
-            ...normalized
+            ...data,
+            ...(normalized || {})
           }
         }
-        // logger.debug(`[Strategic Store] Indicator ${id} updated successfully`)
       } else {
         throw new Error(response.message || 'Failed to update indicator')
       }

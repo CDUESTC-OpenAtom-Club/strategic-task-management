@@ -12,6 +12,13 @@ import type {
   MilestonePairingStatus,
   MilestoneReportValidation
 } from '@/shared/types'
+import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
+import {
+  CACHE_TTL,
+  createMemoryDetailPolicy,
+  createShortMemoryPolicy
+} from '@/shared/lib/utils/cache-config'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import { logger } from '@/shared/lib/utils/logger'
 
 type MilestoneMutationRequest = {
@@ -64,6 +71,40 @@ function normalizeMilestoneMutationRequest(request: MilestoneMutationRequest): M
   }
 }
 
+function withMilestoneCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
+}
+
+function invalidateMilestoneCaches(indicatorId?: string | number, milestoneId?: string | number): void {
+  const targets: Array<string | ReturnType<typeof buildQueryKey>> = [
+    'milestone.list',
+    'indicator.detail',
+    'indicator.list',
+    'task.detail',
+    'task.list',
+    'plan.detail',
+    'dashboard.overview'
+  ]
+
+  if (indicatorId !== undefined) {
+    targets.push(`milestone.indicator.${indicatorId}`)
+    targets.push(buildQueryKey('milestone', 'list', withMilestoneCacheContext({ indicatorId: String(indicatorId) })))
+  }
+
+  if (milestoneId !== undefined) {
+    targets.push(`milestone.detail.${milestoneId}`)
+    targets.push(
+      buildQueryKey('milestone', 'detail', withMilestoneCacheContext({ milestoneId: String(milestoneId) }))
+    )
+  }
+
+  invalidateQueries(targets)
+}
+
 /**
  * 重试辅助函数 - 使用指数退避策略
  *
@@ -106,7 +147,9 @@ export const milestoneApi = {
    */
   async createMilestone(request: MilestoneMutationRequest): Promise<ApiResponse<Milestone>> {
     const payload = normalizeMilestoneMutationRequest(request)
-    return apiClient.post<ApiResponse<Milestone>>('/milestones', payload)
+    const response = await apiClient.post<ApiResponse<Milestone>>('/milestones', payload)
+    invalidateMilestoneCaches(request.indicatorId, response.data?.id)
+    return response
   },
 
   /**
@@ -117,14 +160,18 @@ export const milestoneApi = {
     request: MilestoneMutationRequest
   ): Promise<ApiResponse<Milestone>> {
     const payload = normalizeMilestoneMutationRequest(request)
-    return apiClient.put<ApiResponse<Milestone>>(`/milestones/${milestoneId}`, payload)
+    const response = await apiClient.put<ApiResponse<Milestone>>(`/milestones/${milestoneId}`, payload)
+    invalidateMilestoneCaches(request.indicatorId, milestoneId)
+    return response
   },
 
   /**
    * 删除里程碑
    */
   async deleteMilestone(milestoneId: string): Promise<ApiResponse<void>> {
-    return apiClient.delete<ApiResponse<void>>(`/milestones/${milestoneId}`)
+    const response = await apiClient.delete<ApiResponse<void>>(`/milestones/${milestoneId}`)
+    invalidateMilestoneCaches(undefined, milestoneId)
+    return response
   },
 
   /**
@@ -140,14 +187,28 @@ export const milestoneApi = {
         dueDate: normalizeDueDate(item.dueDate)
       }))
     }
-    return apiClient.put<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}/batch`, payload)
+    const response = await apiClient.put<ApiResponse<Milestone[]>>(
+      `/milestones/indicator/${indicatorId}/batch`,
+      payload
+    )
+    invalidateMilestoneCaches(indicatorId)
+    return response
   },
 
   /**
    * 获取指标的所有里程碑
    */
   async getMilestonesByIndicator(indicatorId: string): Promise<ApiResponse<Milestone[]>> {
-    return apiClient.get<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}`)
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'list', withMilestoneCacheContext({ indicatorId })),
+      policy: {
+        ...createMemoryDetailPolicy({
+          staleWhileRevalidate: true,
+          tags: ['milestone.list', `milestone.indicator.${indicatorId}`]
+        })
+      },
+      fetcher: () => apiClient.get<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}`)
+    })
   },
 
   /**
@@ -161,7 +222,16 @@ export const milestoneApi = {
       return { success: true, data: {}, message: '', timestamp: new Date().toISOString(), code: 200 }
     }
     const ids = indicatorIds.join(',')
-    return apiClient.get<ApiResponse<Record<number, Milestone[]>>>(`/milestones/by-indicators?ids=${ids}`)
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'batchList', withMilestoneCacheContext({ ids })),
+      policy: {
+        ...createMemoryDetailPolicy({
+          staleWhileRevalidate: true,
+          tags: ['milestone.list']
+        })
+      },
+      fetcher: () => apiClient.get<ApiResponse<Record<number, Milestone[]>>>(`/milestones/by-indicators?ids=${ids}`)
+    })
   },
 
   /**
@@ -169,16 +239,31 @@ export const milestoneApi = {
    * 返回最早的未配对里程碑
    */
   async getNextMilestoneToReport(indicatorId: string): Promise<ApiResponse<Milestone | null>> {
-    return apiClient.get<ApiResponse<Milestone | null>>(
-      `/milestones/indicator/${indicatorId}/next-to-report`
-    )
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'nextToReport', withMilestoneCacheContext({ indicatorId })),
+      policy: {
+        ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_SHORT, {
+          tags: ['milestone.list', `milestone.indicator.${indicatorId}`]
+        })
+      },
+      fetcher: () =>
+        apiClient.get<ApiResponse<Milestone | null>>(`/milestones/indicator/${indicatorId}/next-to-report`)
+    })
   },
 
   /**
    * 获取指标的所有未配对里程碑
    */
   async getUnpairedMilestones(indicatorId: string): Promise<ApiResponse<Milestone[]>> {
-    return apiClient.get<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}/unpaired`)
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'unpaired', withMilestoneCacheContext({ indicatorId })),
+      policy: {
+        ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_SHORT, {
+          tags: ['milestone.list', `milestone.indicator.${indicatorId}`]
+        })
+      },
+      fetcher: () => apiClient.get<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}/unpaired`)
+    })
   },
 
   /**
@@ -194,16 +279,31 @@ export const milestoneApi = {
       pairedAt?: string
     }>
   > {
-    return apiClient.get(`/milestones/${milestoneId}/pairing-status`)
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'pairingStatusByMilestone', withMilestoneCacheContext({ milestoneId })),
+      policy: {
+        ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_SHORT, {
+          tags: ['milestone.list', `milestone.detail.${milestoneId}`]
+        })
+      },
+      fetcher: () => apiClient.get(`/milestones/${milestoneId}/pairing-status`)
+    })
   },
 
   /**
    * 获取指标的配对状态摘要
    */
   async getPairingStatus(indicatorId: string): Promise<ApiResponse<MilestonePairingStatus>> {
-    return apiClient.get<ApiResponse<MilestonePairingStatus>>(
-      `/milestones/indicator/${indicatorId}/pairing-status`
-    )
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'pairingStatus', withMilestoneCacheContext({ indicatorId })),
+      policy: {
+        ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_SHORT, {
+          tags: ['milestone.list', `milestone.indicator.${indicatorId}`]
+        })
+      },
+      fetcher: () =>
+        apiClient.get<ApiResponse<MilestonePairingStatus>>(`/milestones/indicator/${indicatorId}/pairing-status`)
+    })
   },
 
   /**
@@ -213,16 +313,37 @@ export const milestoneApi = {
     indicatorId: string,
     milestoneId: string
   ): Promise<ApiResponse<MilestoneReportValidation>> {
-    return apiClient.get<ApiResponse<MilestoneReportValidation>>(
-      `/milestones/indicator/${indicatorId}/can-report/${milestoneId}`
-    )
+    return fetchWithCache({
+      key: buildQueryKey(
+        'milestone',
+        'reportValidation',
+        withMilestoneCacheContext({ indicatorId, milestoneId })
+      ),
+      policy: {
+        ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_HOT, {
+          tags: ['milestone.list', `milestone.indicator.${indicatorId}`, `milestone.detail.${milestoneId}`]
+        })
+      },
+      fetcher: () =>
+        apiClient.get<ApiResponse<MilestoneReportValidation>>(
+          `/milestones/indicator/${indicatorId}/can-report/${milestoneId}`
+        )
+    })
   },
 
   /**
    * 获取里程碑详情
    */
   async getMilestoneById(milestoneId: string): Promise<ApiResponse<Milestone>> {
-    return apiClient.get<ApiResponse<Milestone>>(`/milestones/${milestoneId}`)
+    return fetchWithCache({
+      key: buildQueryKey('milestone', 'detail', withMilestoneCacheContext({ milestoneId })),
+      policy: {
+        ...createMemoryDetailPolicy({
+          tags: ['milestone.list', `milestone.detail.${milestoneId}`]
+        })
+      },
+      fetcher: () => apiClient.get<ApiResponse<Milestone>>(`/milestones/${milestoneId}`)
+    })
   },
 
   /**

@@ -528,6 +528,8 @@ export interface IndicatorVO {
   indicatorDesc: string
   type?: 'QUANTITATIVE' | 'QUALITATIVE'
   progress?: number
+  reportProgress?: number | null
+  hasCurrentMonthFill?: boolean
   ownerOrgId: number
   targetOrgId: number
   weightPercent: number

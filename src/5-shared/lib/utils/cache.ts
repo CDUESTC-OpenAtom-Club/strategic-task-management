@@ -178,15 +178,26 @@ function isStale(entry: QueryCacheEntry | CacheEntry): boolean {
 
 export const DEFAULT_CACHE_CONFIGS: Record<string, CachePolicy> = {
   '["org","departments",null]': {
-    ttlMs: 10 * 60 * 1000,
-    scope: 'memory',
+    ttlMs: 30 * 60 * 1000,
+    scope: 'session',
+    persist: true,
     staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['org.list']
   },
+  '["cycle","list",null]': {
+    ttlMs: 30 * 60 * 1000,
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
+    dedupeWindowMs: 1000,
+    tags: ['cycles.list']
+  },
   '["plan","list",null]': {
     ttlMs: 2 * 60 * 1000,
-    scope: 'memory',
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['plan.list']
   },
@@ -198,13 +209,17 @@ export const DEFAULT_CACHE_CONFIGS: Record<string, CachePolicy> = {
   },
   '["indicator","list",null]': {
     ttlMs: 2 * 60 * 1000,
-    scope: 'memory',
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['indicator.list']
   },
   '["task","list",null]': {
     ttlMs: 2 * 60 * 1000,
-    scope: 'memory',
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['task.list']
   },
@@ -227,49 +242,59 @@ export const DEFAULT_CACHE_CONFIGS: Record<string, CachePolicy> = {
 function createUrlPatternPolicyMap(): Map<string, CachePolicy> {
   const map = new Map<string, CachePolicy>()
   map.set('/organizations', {
-    ttlMs: 10 * 60 * 1000,
-    scope: 'memory',
+    ttlMs: 30 * 60 * 1000,
+    scope: 'session',
+    persist: true,
     staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['org.list']
   })
   map.set('/orgs', {
-    ttlMs: 5 * 60 * 1000,
-    scope: 'memory',
+    ttlMs: 30 * 60 * 1000,
+    scope: 'session',
+    persist: true,
     staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['org.list']
   })
   map.set('/cycles/list', {
-    ttlMs: 10 * 60 * 1000,
-    scope: 'memory',
+    ttlMs: 30 * 60 * 1000,
+    scope: 'session',
+    persist: true,
     staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['cycles.list']
   })
   map.set('/cycles', {
-    ttlMs: 5 * 60 * 1000,
-    scope: 'memory',
+    ttlMs: 30 * 60 * 1000,
+    scope: 'session',
+    persist: true,
     staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['cycles.list']
   })
   map.set('/plans', {
     ttlMs: 2 * 60 * 1000,
-    scope: 'memory',
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['plan.list']
   })
   map.set('/indicators', {
     ttlMs: 2 * 60 * 1000,
-    scope: 'memory',
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     useLastModified: true,
     tags: ['indicator.list']
   })
   map.set('/tasks', {
     ttlMs: 2 * 60 * 1000,
-    scope: 'memory',
+    scope: 'session',
+    persist: true,
+    staleWhileRevalidate: true,
     dedupeWindowMs: 1000,
     tags: ['task.list']
   })

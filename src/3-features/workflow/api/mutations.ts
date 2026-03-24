@@ -5,6 +5,7 @@
  */
 
 import { apiClient } from '@/shared/api/client'
+import { invalidateQueries } from '@/shared/lib/utils/cache'
 import type { ApiResponse } from '@/shared/types'
 import type {
   StartWorkflowRequest,
@@ -14,6 +15,28 @@ import type {
   WorkflowTaskDecisionRequest,
   WorkflowInstanceResponse
 } from './types'
+
+function invalidateWorkflowCaches(taskOrInstanceId?: string): void {
+  const targets: string[] = [
+    'workflow.todo',
+    'workflow.detail',
+    'workflow.instances',
+    'workflow.statistics',
+    'plan.list',
+    'plan.detail',
+    'indicator.list',
+    'indicator.detail',
+    'task.list',
+    'task.detail',
+    'dashboard.overview'
+  ]
+
+  if (taskOrInstanceId) {
+    targets.push(`workflow.detail.${taskOrInstanceId}`)
+  }
+
+  invalidateQueries(targets)
+}
 
 /**
  * Start a workflow by workflow code
@@ -26,7 +49,9 @@ import type {
 export async function startWorkflow(
   request: StartWorkflowRequest
 ): Promise<ApiResponse<WorkflowInstanceResponse>> {
-  return apiClient.post('/workflows/start', request)
+  const response = await apiClient.post<ApiResponse<WorkflowInstanceResponse>>('/workflows/start', request)
+  invalidateWorkflowCaches(response.data?.instanceId)
+  return response
 }
 
 /**
@@ -42,7 +67,13 @@ export async function approveTask(
   taskId: string,
   request: ApprovalRequest
 ): Promise<ApiResponse<WorkflowInstanceResponse>> {
-  return apiClient.post(`/workflows/tasks/${taskId}/approve`, request)
+  const response = await apiClient.post<ApiResponse<WorkflowInstanceResponse>>(
+    `/workflows/tasks/${taskId}/approve`,
+    request
+  )
+  invalidateWorkflowCaches(taskId)
+  invalidateWorkflowCaches(response.data?.instanceId)
+  return response
 }
 
 /**
@@ -54,7 +85,13 @@ export async function decideTask(
   taskId: string,
   request: WorkflowTaskDecisionRequest
 ): Promise<ApiResponse<WorkflowInstanceResponse>> {
-  return apiClient.post(`/workflows/tasks/${taskId}/decision`, request)
+  const response = await apiClient.post<ApiResponse<WorkflowInstanceResponse>>(
+    `/workflows/tasks/${taskId}/decision`,
+    request
+  )
+  invalidateWorkflowCaches(taskId)
+  invalidateWorkflowCaches(response.data?.instanceId)
+  return response
 }
 
 /**
@@ -70,7 +107,13 @@ export async function rejectTask(
   taskId: string,
   request: RejectionRequest
 ): Promise<ApiResponse<WorkflowInstanceResponse>> {
-  return apiClient.post(`/workflows/tasks/${taskId}/reject`, request)
+  const response = await apiClient.post<ApiResponse<WorkflowInstanceResponse>>(
+    `/workflows/tasks/${taskId}/reject`,
+    request
+  )
+  invalidateWorkflowCaches(taskId)
+  invalidateWorkflowCaches(response.data?.instanceId)
+  return response
 }
 
 /**
@@ -86,7 +129,13 @@ export async function reassignTask(
   taskId: string,
   request: ReassignRequest
 ): Promise<ApiResponse<WorkflowInstanceResponse>> {
-  return apiClient.post(`/workflows/tasks/${taskId}/reassign`, request)
+  const response = await apiClient.post<ApiResponse<WorkflowInstanceResponse>>(
+    `/workflows/tasks/${taskId}/reassign`,
+    request
+  )
+  invalidateWorkflowCaches(taskId)
+  invalidateWorkflowCaches(response.data?.instanceId)
+  return response
 }
 
 /**
@@ -99,5 +148,7 @@ export async function reassignTask(
 export async function cancelWorkflow(
   instanceId: string
 ): Promise<ApiResponse<void>> {
-  return apiClient.post(`/workflows/${instanceId}/cancel`)
+  const response = await apiClient.post<ApiResponse<void>>(`/workflows/${instanceId}/cancel`)
+  invalidateWorkflowCaches(instanceId)
+  return response
 }

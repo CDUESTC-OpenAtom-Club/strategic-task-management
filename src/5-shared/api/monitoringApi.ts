@@ -7,6 +7,7 @@
  */
 
 import { apiClient } from '@/shared/api/client'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 预警事件
@@ -61,12 +62,51 @@ type ApiEnvelope<T> = {
   success?: boolean
 }
 
+type ApiErrorLike = {
+  code?: number | string
+  status?: number
+  message?: string
+  details?: unknown
+  response?: {
+    status?: number
+  }
+}
+
+const EMPTY_ALERT_STATS: AlertStats = {
+  totalOpen: 0,
+  countBySeverity: {
+    CRITICAL: 0,
+    MAJOR: 0,
+    MINOR: 0
+  }
+}
+
+let alertsApiUnavailable = false
+
 function unwrapMockResponse<T>(response: T | ApiEnvelope<T>): T {
   if (response && typeof response === 'object' && 'data' in response) {
     return (response as ApiEnvelope<T>).data as T
   }
 
   return response as T
+}
+
+function isNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const candidate = error as ApiErrorLike
+  return candidate.status === 404 || candidate.code === 404 || candidate.response?.status === 404
+}
+
+async function requestUnclosedAlerts(path: string): Promise<AlertEvent[]> {
+  const response = await apiClient.get<{
+    code: number
+    message: string
+    data: AlertEvent[]
+  }>(path)
+  return unwrapMockResponse(response)
 }
 
 /**
@@ -78,25 +118,57 @@ export const alertApi = {
    * 使用 OpenAPI 告警统计接口
    */
   getStats: async () => {
-    const response = await apiClient.get<{
-      code: number
-      message: string
-      data: AlertStats
-    }>('/alerts/stats')
-    return unwrapMockResponse(response)
+    if (alertsApiUnavailable) {
+      return EMPTY_ALERT_STATS
+    }
+
+    try {
+      const response = await apiClient.get<{
+        code: number
+        message: string
+        data: AlertStats
+      }>('/alerts/stats')
+      return unwrapMockResponse(response)
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw error
+      }
+
+      alertsApiUnavailable = true
+      logger.warn('[alertApi] alerts stats endpoint unavailable, degrade to empty stats')
+      return EMPTY_ALERT_STATS
+    }
   },
 
   /**
    * 获取未关闭的告警事件
-   * 使用 OpenAPI 未解决告警接口
+   * 兼容 `/alerts/events/unclosed` 与 `/alerts/unresolved`
    */
   getUnclosedAlerts: async () => {
-    const response = await apiClient.get<{
-      code: number
-      message: string
-      data: AlertEvent[]
-    }>('/alerts/unresolved')
-    return unwrapMockResponse(response)
+    if (alertsApiUnavailable) {
+      return []
+    }
+
+    try {
+      return await requestUnclosedAlerts('/alerts/events/unclosed')
+    } catch (error) {
+      if (!isNotFoundError(error)) {
+        throw error
+      }
+
+      logger.warn('[alertApi] /alerts/events/unclosed returned 404, fallback to /alerts/unresolved')
+      try {
+        return await requestUnclosedAlerts('/alerts/unresolved')
+      } catch (fallbackError) {
+        if (!isNotFoundError(fallbackError)) {
+          throw fallbackError
+        }
+
+        alertsApiUnavailable = true
+        logger.warn('[alertApi] alerts query endpoints unavailable, degrade to empty alerts list')
+        return []
+      }
+    }
   },
 
   /**

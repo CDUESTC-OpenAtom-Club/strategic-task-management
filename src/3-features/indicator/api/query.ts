@@ -6,8 +6,32 @@
  */
 
 import { apiClient } from '@/shared/api/client'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import {
+  CACHE_TTL,
+  createMemoryDetailPolicy,
+  createSessionListPolicy,
+  createShortMemoryPolicy
+} from '@/shared/lib/utils/cache-config'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type { Indicator, IndicatorFilters } from '@/entities/indicator/model/types'
 import type { IndicatorListResponse, IndicatorDetailResponse, PaginatedResponse } from './types'
+
+const INDICATOR_LIST_POLICY = createSessionListPolicy({
+  tags: ['indicator.list']
+})
+
+const INDICATOR_DETAIL_POLICY = createMemoryDetailPolicy({
+  tags: ['indicator.detail']
+})
+
+function withIndicatorCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
+}
 
 function unwrapData<T>(response: T | { data?: T }): T {
   if (
@@ -87,10 +111,17 @@ function normalizeIndicatorArray(payload: unknown): Indicator[] {
 export async function queryIndicators(
   filters?: IndicatorFilters
 ): Promise<PaginatedResponse<Indicator>> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    '/indicators',
-    filters as Record<string, unknown> | undefined
-  )
+  const params = filters as Record<string, unknown> | undefined
+  const cacheParams = withIndicatorCacheContext(params)
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'list', cacheParams),
+    policy: INDICATOR_LIST_POLICY,
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
+        '/indicators',
+        params
+      )
+  })
   return normalizeIndicatorList(unwrapData(response))
 }
 
@@ -103,7 +134,14 @@ export async function queryIndicators(
  * @returns Indicator detail
  */
 export async function getIndicatorById(id: number): Promise<Indicator> {
-  const response = await apiClient.get<IndicatorDetailResponse | Indicator>(`/indicators/${id}`)
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'detail', withIndicatorCacheContext({ id })),
+    policy: {
+      ...INDICATOR_DETAIL_POLICY,
+      tags: ['indicator.detail', `indicator.detail.${id}`]
+    },
+    fetcher: () => apiClient.get<IndicatorDetailResponse | Indicator>(`/indicators/${id}`)
+  })
   return unwrapData(response)
 }
 
@@ -116,9 +154,17 @@ export async function getIndicatorById(id: number): Promise<Indicator> {
  * @returns Indicator list
  */
 export async function queryIndicatorsByTask(taskId: number): Promise<Indicator[]> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    `/indicators/task/${taskId}`
-  )
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ taskId })),
+    policy: {
+      ...INDICATOR_LIST_POLICY,
+      tags: ['indicator.list', `indicator.task.${taskId}`]
+    },
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
+        `/indicators/task/${taskId}`
+      )
+  })
   return normalizeIndicatorArray(unwrapData(response))
 }
 
@@ -131,9 +177,15 @@ export async function queryIndicatorsByTask(taskId: number): Promise<Indicator[]
  * @returns Indicator list
  */
 export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicator[]> {
-  const response = await apiClient.get<
-    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
-  >('/indicators')
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ ownerOrgId: orgId })),
+    policy: {
+      ...INDICATOR_LIST_POLICY,
+      tags: ['indicator.list', `indicator.ownerOrg.${orgId}`]
+    },
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>('/indicators')
+  })
   return normalizeIndicatorArray(unwrapData(response)).filter(
     indicator => Number((indicator as unknown as Record<string, unknown>).ownerOrgId) === orgId
   )
@@ -148,9 +200,15 @@ export async function queryIndicatorsByOwnerOrg(orgId: number): Promise<Indicato
  * @returns Indicator list
  */
 export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicator[]> {
-  const response = await apiClient.get<
-    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
-  >('/indicators')
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ targetOrgId: orgId })),
+    policy: {
+      ...INDICATOR_LIST_POLICY,
+      tags: ['indicator.list', `indicator.targetOrg.${orgId}`]
+    },
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>('/indicators')
+  })
   return normalizeIndicatorArray(unwrapData(response)).filter(
     indicator => Number((indicator as unknown as Record<string, unknown>).targetOrgId) === orgId
   )
@@ -165,9 +223,15 @@ export async function queryIndicatorsByTargetOrg(orgId: number): Promise<Indicat
  * @returns Indicator list
  */
 export async function queryIndicatorsByLevel(level: number): Promise<Indicator[]> {
-  const response = await apiClient.get<
-    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
-  >('/indicators')
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ level })),
+    policy: {
+      ...INDICATOR_LIST_POLICY,
+      tags: ['indicator.list', `indicator.level.${level}`]
+    },
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>('/indicators')
+  })
   return normalizeIndicatorArray(unwrapData(response)).filter(
     indicator => Number((indicator as unknown as Record<string, unknown>).level) === level
   )
@@ -182,10 +246,18 @@ export async function queryIndicatorsByLevel(level: number): Promise<Indicator[]
  * @returns Indicator list
  */
 export async function searchIndicators(keyword: string): Promise<Indicator[]> {
-  const response = await apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
-    '/indicators/search',
-    { keyword }
-  )
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'search', withIndicatorCacheContext({ keyword })),
+    policy: {
+      ...INDICATOR_LIST_POLICY,
+      tags: ['indicator.list', 'indicator.search']
+    },
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>(
+        '/indicators/search',
+        { keyword }
+      )
+  })
   return normalizeIndicatorArray(unwrapData(response))
 }
 
@@ -197,9 +269,16 @@ export async function searchIndicators(keyword: string): Promise<Indicator[]> {
  * @returns Indicator list
  */
 export async function queryPendingIndicators(): Promise<Indicator[]> {
-  const response = await apiClient.get<
-    IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]
-  >('/indicators')
+  const response = await fetchWithCache({
+    key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ statusGroup: 'pending' })),
+    policy: {
+      ...createShortMemoryPolicy(CACHE_TTL.WORKFLOW_DETAIL, {
+        tags: ['indicator.list', 'indicator.pending']
+      })
+    },
+    fetcher: () =>
+      apiClient.get<IndicatorListResponse | PaginatedResponse<Indicator> | Indicator[]>('/indicators')
+  })
   return normalizeIndicatorArray(unwrapData(response)).filter(indicator =>
     ['PENDING', 'SUBMITTED'].includes(String((indicator as unknown as Record<string, unknown>).status))
   )

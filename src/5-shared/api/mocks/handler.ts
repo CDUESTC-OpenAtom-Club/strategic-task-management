@@ -274,7 +274,11 @@ export class MockApiHandler {
         response = await this.handleGetDashboard()
       } else if (normalizedPath === '/api/alerts/stats' && normalizedMethod === 'GET') {
         response = createMockResponse(mockAlertStats, '获取告警统计成功')
-      } else if (normalizedPath === '/api/alerts/unresolved' && normalizedMethod === 'GET') {
+      } else if (
+        (normalizedPath === '/api/alerts/unresolved' ||
+          normalizedPath === '/api/alerts/events/unclosed') &&
+        normalizedMethod === 'GET'
+      ) {
         response = createMockResponse(mockUnclosedAlerts, '获取未关闭告警成功')
       } else if (normalizedPath === '/api/plans/approval/pending' && normalizedMethod === 'GET') {
         response = createMockResponse(mockPendingApprovals, '获取待审批计划成功')

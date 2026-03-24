@@ -1,5 +1,7 @@
 import { apiClient } from '@/shared/api/client'
 import { withRetry } from '@/shared/lib/api/wrappers'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type {
   ApiResponse,
   IndicatorDistributionRequest,
@@ -26,6 +28,14 @@ export type {
   IndicatorCreateRequest
 } from '@/shared/types/backend-aligned'
 
+function withIndicatorCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
+}
+
 export const indicatorApi = {
   /**
    * 获取所有活跃指标
@@ -45,21 +55,56 @@ export const indicatorApi = {
     if (typeof pagination?.size === 'number') {
       params.size = pagination.size
     }
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', params)
+    return fetchWithCache({
+      key: buildQueryKey('indicator', 'list', withIndicatorCacheContext(params)),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
+        dedupeWindowMs: 1000,
+        tags: ['indicator.list']
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', params)
+    })
   },
 
   /**
    * 获取指标详情
    */
   async getIndicatorById(indicatorId: string): Promise<ApiResponse<IndicatorVO>> {
-    return apiClient.get<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`)
+    return fetchWithCache({
+      key: buildQueryKey(
+        'indicator',
+        'detail',
+        withIndicatorCacheContext({ indicatorId: String(indicatorId) })
+      ),
+      policy: {
+        ttlMs: 60 * 1000,
+        scope: 'memory',
+        dedupeWindowMs: 1000,
+        tags: ['indicator.detail', `indicator.detail.${indicatorId}`]
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`)
+    })
   },
 
   /**
    * 按任务获取指标
    */
   async getIndicatorsByTask(taskId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/task/${taskId}`)
+    return fetchWithCache({
+      key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ taskId: String(taskId) })),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
+        dedupeWindowMs: 1000,
+        tags: ['indicator.list', `indicator.task.${taskId}`]
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/task/${taskId}`)
+    })
   },
 
   /**
@@ -73,21 +118,62 @@ export const indicatorApi = {
    * 按发布方组织获取指标
    */
   async getIndicatorsByOwnerOrg(ownerOrgId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/owner/${ownerOrgId}`)
+    return fetchWithCache({
+      key: buildQueryKey(
+        'indicator',
+        'list',
+        withIndicatorCacheContext({ ownerOrgId: String(ownerOrgId) })
+      ),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
+        dedupeWindowMs: 1000,
+        tags: ['indicator.list', `indicator.ownerOrg.${ownerOrgId}`]
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/owner/${ownerOrgId}`)
+    })
   },
 
   /**
    * 按责任方组织获取指标
    */
   async getIndicatorsByTargetOrg(targetOrgId: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/target/${targetOrgId}`)
+    return fetchWithCache({
+      key: buildQueryKey(
+        'indicator',
+        'list',
+        withIndicatorCacheContext({ targetOrgId: String(targetOrgId) })
+      ),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
+        dedupeWindowMs: 1000,
+        tags: ['indicator.list', `indicator.targetOrg.${targetOrgId}`]
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>(`/indicators/target/${targetOrgId}`)
+    })
   },
 
   /**
    * 搜索指标
    */
   async searchIndicators(keyword: string): Promise<ApiResponse<IndicatorVO[]>> {
-    return apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators/search', { params: { keyword } })
+    return fetchWithCache({
+      key: buildQueryKey('indicator', 'search', withIndicatorCacheContext({ keyword })),
+      policy: {
+        ttlMs: 2 * 60 * 1000,
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
+        dedupeWindowMs: 1000,
+        tags: ['indicator.list', 'indicator.search']
+      },
+      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators/search', { params: { keyword } })
+    })
   },
 
   // ==================== 指标下发相关接口 ====================

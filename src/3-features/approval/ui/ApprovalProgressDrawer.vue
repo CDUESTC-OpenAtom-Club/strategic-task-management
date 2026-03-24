@@ -57,6 +57,8 @@ interface Props {
   readonly?: boolean
   // 审批类型：'distribution' = 下发审批, 'submission' = 上报审批
   approvalType?: 'distribution' | 'submission'
+  historyViewMode?: 'auto' | 'card-only'
+  workflowCode?: string | string[]
 }
 
 interface Emits {
@@ -75,7 +77,9 @@ const props = withDefaults(defineProps<Props>(), {
   showApprovalSection: true,
   showPlanApprovals: false,
   readonly: false,
-  approvalType: 'submission'
+  approvalType: 'submission',
+  historyViewMode: 'auto',
+  workflowCode: ''
 })
 
 const emit = defineEmits<Emits>()
@@ -109,6 +113,25 @@ const submitterNameCache = ref<Record<string, string>>({})
 
 function normalizeDisplayName(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeWorkflowCode(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+}
+
+const expectedWorkflowCodes = computed(() => {
+  const rawCodes = Array.isArray(props.workflowCode) ? props.workflowCode : [props.workflowCode]
+  return rawCodes.map(normalizeWorkflowCode).filter(Boolean)
+})
+
+function matchesExpectedWorkflowCode(workflowCode: unknown): boolean {
+  if (expectedWorkflowCodes.value.length === 0) {
+    return true
+  }
+
+  return expectedWorkflowCodes.value.includes(normalizeWorkflowCode(workflowCode))
 }
 
 function parsePositiveUserId(value: unknown): number | null {
@@ -207,6 +230,8 @@ const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
 const planWorkflowHistoryCards = ref<WorkflowHistoryCardResponse[]>([])
 const selectedHistoryInstanceId = ref<string | null>(null)
 const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)
+const selectedHistoryInstanceDetailLoading = ref(false)
+const historyInstanceDetailCache = ref<Record<string, WorkflowInstanceDetailResponse>>({})
 
 interface PlanApprovalDetailItem {
   instanceId: number
@@ -315,7 +340,14 @@ const scopedPlanApprovals = computed(() => {
     return []
   }
 
-  return withEntityId.filter(instance => scopedPlanEntityIds.value.has(Number(instance.entityId)))
+  return withEntityId.filter(instance => {
+    if (!scopedPlanEntityIds.value.has(Number(instance.entityId))) {
+      return false
+    }
+
+    const flowCode = (instance as { flowCode?: string }).flowCode
+    return matchesExpectedWorkflowCode(flowCode)
+  })
 })
 
 const scopedPendingPlanCount = computed(() => scopedPlanApprovals.value.length)
@@ -325,18 +357,23 @@ const activePlanWorkflow = computed(() => {
   }
 
   const detail = planWorkflowDetail.value
+  const useDetail = detail && matchesExpectedWorkflowCode(detail.flowCode)
   return {
     ...props.plan,
     workflowInstanceId:
-      Number(detail?.instanceId || props.plan.workflowInstanceId || 0) || undefined,
-    workflowStatus: detail?.status || props.plan.workflowStatus || props.plan.status,
-    currentTaskId: detail?.currentTaskId || props.plan.currentTaskId,
-    currentStepName: detail?.currentStepName || props.plan.currentStepName,
-    currentApproverId: detail?.currentApproverId ?? props.plan.currentApproverId,
-    currentApproverName: detail?.currentApproverName || props.plan.currentApproverName,
+      Number((useDetail ? detail.instanceId : undefined) || props.plan.workflowInstanceId || 0) ||
+      undefined,
+    workflowStatus: (useDetail ? detail.status : undefined) || props.plan.workflowStatus || props.plan.status,
+    currentTaskId: (useDetail ? detail.currentTaskId : undefined) || props.plan.currentTaskId,
+    currentStepName:
+      (useDetail ? detail.currentStepName : undefined) || props.plan.currentStepName,
+    currentApproverId: (useDetail ? detail.currentApproverId : undefined) ?? props.plan.currentApproverId,
+    currentApproverName:
+      (useDetail ? detail.currentApproverName : undefined) || props.plan.currentApproverName,
     canWithdraw:
-      typeof detail?.canWithdraw === 'boolean' ? detail.canWithdraw : props.plan.canWithdraw,
-    workflowHistory: Array.isArray(detail?.history) ? detail.history : props.plan.workflowHistory
+      useDetail && typeof detail?.canWithdraw === 'boolean' ? detail.canWithdraw : props.plan.canWithdraw,
+    workflowHistory:
+      useDetail && Array.isArray(detail?.history) ? detail.history : props.plan.workflowHistory
   }
 })
 
@@ -628,7 +665,9 @@ function resolveHistoryStatusTag(status?: string): {
 }
 
 const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
-  return planWorkflowHistoryCards.value.map((item, index) => {
+  return planWorkflowHistoryCards.value
+    .filter(item => matchesExpectedWorkflowCode(item.flowCode))
+    .map((item, index) => {
     const statusTag = resolveHistoryStatusTag(item.status)
     return {
       instanceId: Number(item.instanceId) || index,
@@ -646,7 +685,7 @@ const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
       entityId: item.entityId,
       planName: item.planName
     }
-  })
+    })
 })
 
 const currentPlanApprovalSummary = computed(() => {
@@ -890,7 +929,7 @@ async function loadPlanWorkflowDetail() {
     const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
     if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
       const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
-      if (response.success && response.data) {
+      if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
         planWorkflowDetail.value = response.data
         return
       }
@@ -899,7 +938,7 @@ async function loadPlanWorkflowDetail() {
     const planId = Number(props.plan.id ?? 0)
     if (Number.isFinite(planId) && planId > 0) {
       const response = await getWorkflowInstanceDetailByBusiness('PLAN', planId)
-      if (response.success && response.data) {
+      if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
         planWorkflowDetail.value = response.data
         return
       }
@@ -1139,20 +1178,38 @@ async function loadSelectedHistoryInstanceDetail(instanceId?: number | string | 
   if (!normalizedInstanceId) {
     selectedHistoryInstanceId.value = null
     selectedHistoryInstanceDetail.value = null
+    selectedHistoryInstanceDetailLoading.value = false
     return
   }
 
   selectedHistoryInstanceId.value = normalizedInstanceId
+  const cachedDetail = historyInstanceDetailCache.value[normalizedInstanceId]
+  if (cachedDetail) {
+    selectedHistoryInstanceDetail.value = cachedDetail
+    selectedHistoryInstanceDetailLoading.value = false
+    return
+  }
+
+  selectedHistoryInstanceDetailLoading.value = true
+  selectedHistoryInstanceDetail.value = null
 
   try {
     const response = await getWorkflowInstanceDetail(normalizedInstanceId)
     selectedHistoryInstanceDetail.value = response.success ? (response.data ?? null) : null
+    if (response.success && response.data) {
+      historyInstanceDetailCache.value = {
+        ...historyInstanceDetailCache.value,
+        [normalizedInstanceId]: response.data
+      }
+    }
   } catch (error) {
     selectedHistoryInstanceDetail.value = null
     logger.warn('[ApprovalProgressDrawer] 加载历史审批实例详情失败:', {
       instanceId: normalizedInstanceId,
       error
     })
+  } finally {
+    selectedHistoryInstanceDetailLoading.value = false
   }
 }
 
@@ -1166,8 +1223,16 @@ async function openPlanApprovalDetails(item?: PlanApprovalDetailItem) {
     return
   }
 
-  await loadSelectedHistoryInstanceDetail(item?.instanceId)
   planDetailDialogVisible.value = true
+
+  if (item?.instanceId) {
+    void loadSelectedHistoryInstanceDetail(item.instanceId)
+    return
+  }
+
+  selectedHistoryInstanceId.value = null
+  selectedHistoryInstanceDetail.value = null
+  selectedHistoryInstanceDetailLoading.value = false
 }
 
 // 处理自定义审批流程事件
@@ -1241,6 +1306,18 @@ const showPlanHistoryCard = computed(() => {
   return Boolean(props.showPlanApprovals && historicalPlanApprovalItems.value.length > 0)
 })
 
+const showHistoryTimeline = computed(() => {
+  return props.historyViewMode !== 'card-only' && !showPlanHistoryCard.value
+})
+
+const showCardHistoryEmptyState = computed(() => {
+  return (
+    props.historyViewMode === 'card-only' &&
+    props.showPlanApprovals &&
+    !showPlanHistoryCard.value
+  )
+})
+
 const showArchivedPlanWorkflowEmptyState = computed(() => {
   return Boolean(
     props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value
@@ -1276,7 +1353,7 @@ watch(
 )
 
 watch(
-  () => [props.showPlanApprovals, props.plan?.id, props.plan?.workflowInstanceId],
+  () => [props.showPlanApprovals, props.plan?.id, props.plan?.workflowInstanceId, expectedWorkflowCodes.value.join('|')],
   ([showPlanApprovals, planId]) => {
     if (!showPlanApprovals || !planId) {
       planWorkflowDetail.value = null
@@ -1587,8 +1664,13 @@ watch(
                 </div>
               </div>
             </div>
+            <ElEmpty
+              v-else-if="showCardHistoryEmptyState"
+              description="暂无审批历史"
+              :image-size="120"
+            />
             <ApprovalHistory
-              v-if="!showPlanHistoryCard"
+              v-else-if="showHistoryTimeline"
               :history="approvalHistory"
               :approval-type="approvalType"
             />
@@ -1603,6 +1685,7 @@ watch(
       width="680px"
       class="plan-detail-dialog"
     >
+      <div v-loading="selectedHistoryInstanceDetailLoading" class="plan-detail-content">
       <div class="plan-detail-summary">
         <div class="summary-title">
           {{
@@ -1718,6 +1801,7 @@ watch(
           "
           :approval-type="approvalType"
         />
+      </div>
       </div>
 
       <template #footer>

@@ -14,9 +14,6 @@ import {
   Edit,
   Refresh,
   Loading,
-  User,
-  ChatDotRound,
-  Right,
   Timer
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
@@ -47,7 +44,6 @@ import {
   getStatusIcon as _getStatusIcon
 } from '@/shared/lib/utils/indicatorStatus'
 import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib'
-import AuditLogDrawer from '@/features/task/ui/AuditLogDrawer.vue'
 import { ApprovalProgressDrawer } from '@/features/approval'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
 import { indicatorApi } from '@/features/indicator/api'
@@ -78,55 +74,6 @@ const currentUserPermissionCodes = computed(() => {
     .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
     .filter(Boolean)
 })
-
-// 获取操作类型配置（与 AuditLogDrawer 保持一致）
-const getActionConfig = (action: string) => {
-  const configs: Record<string, { icon: unknown; label: string; type: string }> = {
-    submit: { icon: Upload, label: '提交进度', type: 'primary' },
-    approve: { icon: Check, label: '审批通过', type: 'success' },
-    reject: { icon: Close, label: '审批驳回', type: 'danger' },
-    revoke: { icon: Refresh, label: '撤回提交', type: 'warning' },
-    update: { icon: Edit, label: '更新进度', type: 'info' },
-    distribute: { icon: Promotion, label: '下发指标', type: 'primary' }
-  }
-  return configs[action] || configs.update
-}
-
-// 格式化时间
-const formatAuditTime = (timestamp: Date | string) => {
-  const date = new Date(timestamp)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-// 格式化相对时间
-const formatRelativeTime = (timestamp: Date | string) => {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / (1000 * 60))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffMins < 1) {
-    return '刚刚'
-  }
-  if (diffMins < 60) {
-    return `${diffMins}分钟前`
-  }
-  if (diffHours < 24) {
-    return `${diffHours}小时前`
-  }
-  if (diffDays < 30) {
-    return `${diffDays}天前`
-  }
-  return formatAuditTime(timestamp)
-}
 
 // 只读模式（历史年份为只读）
 const isReadOnly = computed(() => timeContext.isReadOnly)
@@ -1683,15 +1630,6 @@ const _handleWithdrawTask = async (row: StrategicIndicator) => {
     })
 }
 
-// 查看任务级别审计日志
-const taskAuditLogVisible = ref(false)
-const currentTaskAuditGroup = ref<{ taskContent: string; rows: StrategicIndicator[] } | null>(null)
-
-const _handleViewTaskAuditLog = (row: StrategicIndicator) => {
-  currentTaskAuditGroup.value = getTaskGroup(row)
-  taskAuditLogVisible.value = true
-}
-
 // 查看里程碑
 const milestoneDrawerVisible = ref(false)
 const currentMilestoneIndicator = ref<StrategicIndicator | null>(null)
@@ -2061,6 +1999,8 @@ const editingIndicatorId = ref<number | null>(null)
 const editingIndicatorField = ref<string | null>(null)
 const editingIndicatorValue = ref<Record<string, unknown> | null>(null)
 const isSavingIndicatorEdit = ref(false)
+const savingIndicatorId = ref<number | null>(null)
+const savingIndicatorField = ref<string | null>(null)
 
 // 任务详情双击编辑处理
 const _handleDoubleClick = (field: 'title' | 'desc' | 'cycle' | 'createTime', value: string) => {
@@ -2108,10 +2048,16 @@ const handleIndicatorDblClick = (row: StrategicIndicator, field: string) => {
   if (hasDistributedIndicators.value) {
     return
   }
+  if (savingIndicatorId.value === row.id) {
+    return
+  }
   editingIndicatorId.value = row.id
   editingIndicatorField.value = field
   editingIndicatorValue.value = row[field as keyof StrategicIndicator]
 }
+
+const isSavingIndicatorCell = (row: StrategicIndicator, field: string) =>
+  savingIndicatorId.value === row.id && savingIndicatorField.value === field
 
 // 保存指标编辑
 const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
@@ -2140,6 +2086,8 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
 
   try {
     isSavingIndicatorEdit.value = true
+    savingIndicatorId.value = row.id
+    savingIndicatorField.value = field
     // 使用 Store 更新指标
     const updates: Record<string, unknown> = {}
     const mappedField = fieldMapping[field] || field
@@ -2156,8 +2104,8 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
     )
 
     if (field === 'taskContent') {
-      await persistTaskContentEdit(row, String(editingIndicatorValue.value))
       cancelIndicatorEdit()
+      await persistTaskContentEdit(row, String(editingIndicatorValue.value))
       updateEditTime()
       return
     }
@@ -2182,8 +2130,8 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
     }
 
     console.log('[saveIndicatorEdit] updates:', updates)
-    await strategicStore.updateIndicator(row.id.toString(), updates)
     cancelIndicatorEdit()
+    await strategicStore.updateIndicator(row.id.toString(), updates)
     updateEditTime()
   } catch (error) {
     console.error('[saveIndicatorEdit] Error details:', error)
@@ -2192,6 +2140,8 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
     ElMessage.error(message)
   } finally {
     isSavingIndicatorEdit.value = false
+    savingIndicatorId.value = null
+    savingIndicatorField.value = null
   }
 }
 
@@ -2647,10 +2597,6 @@ const confirmAssignment = () => {
 const detailDrawerVisible = ref(false)
 const currentDetail = ref<StrategicIndicator | null>(null)
 
-// 审计日志抽屉状态
-const auditLogVisible = ref(false)
-const currentAuditIndicator = ref<StrategicIndicator | null>(null)
-
 // 任务审批抽屉状态
 const taskApprovalVisible = ref(false)
 
@@ -2672,12 +2618,6 @@ const _hasPendingApprovalForDept = computed(() => {
   }
   return approvalIndicators.value.some(i => i.progressApprovalStatus === 'PENDING')
 })
-
-// 查看审计日志
-const _handleViewAuditLog = (row: StrategicIndicator) => {
-  currentAuditIndicator.value = row
-  auditLogVisible.value = true
-}
 
 // 打开任务审批抽屉
 const handleOpenApproval = () => {
@@ -3757,6 +3697,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                         @blur="saveIndicatorEdit(row, 'taskContent')"
                         @keyup.esc="cancelIndicatorEdit"
                       />
+                      <span v-else-if="isSavingIndicatorCell(row, 'taskContent')" class="cell-saving-text">
+                        保存中...
+                      </span>
                       <el-tooltip
                         v-else
                         :content="`${getCategoryText(row.type2)}任务`"
@@ -3792,6 +3735,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                       :autosize="{ minRows: 2, maxRows: 6 }"
                       @blur="saveIndicatorEdit(row, 'name')"
                     />
+                    <span v-else-if="isSavingIndicatorCell(row, 'name')" class="cell-saving-text">
+                      保存中...
+                    </span>
                     <template v-else>
                       <template v-if="row.name">
                         <el-tooltip
@@ -3837,6 +3783,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                       @blur="saveIndicatorEdit(row, 'remark')"
                       @keyup.esc="cancelIndicatorEdit"
                     />
+                    <span v-else-if="isSavingIndicatorCell(row, 'remark')" class="cell-saving-text">
+                      保存中...
+                    </span>
                     <span v-else class="indicator-name-text remark-text-wrap">{{
                       row.remark || '样例：双击编辑说明'
                     }}</span>
@@ -3855,6 +3804,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                       @blur="saveIndicatorEdit(row, 'weight')"
                       @keyup.enter="saveIndicatorEdit(row, 'weight')"
                     />
+                    <span v-else-if="isSavingIndicatorCell(row, 'weight')" class="cell-saving-text">
+                      保存中...
+                    </span>
                     <span v-else class="weight-text">{{ row.weight }}</span>
                   </div>
                 </template>
@@ -3925,6 +3877,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                       @blur="saveIndicatorEdit(row, 'progress')"
                       @keyup.enter="saveIndicatorEdit(row, 'progress')"
                     />
+                    <span v-else-if="isSavingIndicatorCell(row, 'progress')" class="cell-saving-text">
+                      保存中...
+                    </span>
                     <!-- 始终显示已审批通过的进度（progress），不显示待审批进度 -->
                     <span v-else class="progress-number">{{ row.progress || 0 }}</span>
                   </div>
@@ -4577,75 +4532,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           </el-timeline>
         </div>
 
-        <!-- 审计日志 - 直接显示完整日志 -->
-        <div class="audit-log-section">
-          <div class="divider"></div>
-          <div class="audit-log-header">
-            <div class="audit-log-title">
-              <el-icon><ChatDotRound /></el-icon>
-              <h4>审计日志</h4>
-            </div>
-            <span
-              v-if="currentDetail.statusAudit && currentDetail.statusAudit.length > 0"
-              class="log-count"
-            >
-              共 {{ currentDetail.statusAudit.length }} 条记录
-            </span>
-          </div>
-
-          <!-- 审计日志时间线 -->
-          <div
-            v-if="currentDetail.statusAudit && currentDetail.statusAudit.length > 0"
-            class="audit-log-timeline"
-          >
-            <el-timeline>
-              <el-timeline-item
-                v-for="(log, index) in [...currentDetail.statusAudit].sort(
-                  (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-                )"
-                :key="log.id"
-                :timestamp="formatRelativeTime(log.timestamp)"
-                :type="getActionConfig(log.action).type"
-                :hollow="index !== 0"
-                placement="top"
-              >
-                <div class="log-card">
-                  <div class="log-header">
-                    <el-tag :type="getActionConfig(log.action).type" size="small" effect="dark">
-                      <div style="display: flex; align-items: center; gap: 4px">
-                        <el-icon><component :is="getActionConfig(log.action).icon" /></el-icon>
-                        {{ getActionConfig(log.action).label }}
-                      </div>
-                    </el-tag>
-                    <span class="log-time">{{ formatAuditTime(log.timestamp) }}</span>
-                  </div>
-                  <div class="log-operator">
-                    <el-icon><User /></el-icon>
-                    <span class="operator-name">{{ log.operatorName }}</span>
-                    <span class="operator-dept">{{ log.operatorDept }}</span>
-                  </div>
-                  <div
-                    v-if="log.previousProgress !== undefined && log.newProgress !== undefined"
-                    class="log-progress"
-                  >
-                    <span class="progress-label">进度变化:</span>
-                    <span class="progress-from">{{ log.previousProgress }}%</span>
-                    <el-icon class="progress-arrow"><Right /></el-icon>
-                    <span class="progress-to">{{ log.newProgress }}%</span>
-                  </div>
-                  <div v-if="log.comment" class="log-comment">
-                    <el-icon><ChatDotRound /></el-icon>
-                    <span>{{ log.comment }}</span>
-                  </div>
-                </div>
-              </el-timeline-item>
-            </el-timeline>
-          </div>
-
-          <div v-else class="audit-log-empty">
-            <el-empty description="暂无审计日志" :image-size="60" />
-          </div>
-        </div>
       </div>
     </el-drawer>
 
@@ -4705,13 +4591,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
         <el-button type="primary" @click="confirmDistribute">确认下发</el-button>
       </template>
     </el-dialog>
-
-    <!-- 审计日志抽屉 -->
-    <AuditLogDrawer
-      v-model="auditLogVisible"
-      :indicator-id="currentAuditIndicator?.id"
-      @close="auditLogVisible = false"
-    />
 
     <el-dialog
       v-model="approvalSetupDialogVisible"
@@ -4778,6 +4657,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       :plan-name="currentPlan?.taskName || currentPlan?.name || selectedDepartment"
       :show-plan-approvals="true"
       :show-approval-section="true"
+      :workflow-code="PLAN_APPROVAL_WORKFLOW_CODE"
       approval-type="submission"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"
@@ -5954,166 +5834,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   font-size: 13px;
 }
 
-/* 审计日志区域样式 - 与 AuditLogDrawer 保持一致 */
-.audit-log-section {
-  margin-top: var(--spacing-lg);
-}
-
-.audit-log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-}
-
-.audit-log-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.audit-log-title .el-icon {
-  color: var(--color-primary, #2c5282);
-  font-size: 18px;
-}
-
-.audit-log-title h4 {
-  font-size: 16px;
-  color: var(--text-main);
-  margin: 0;
-  font-weight: 600;
-}
-
-.audit-log-header .log-count {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.audit-log-timeline {
-  max-height: 400px;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.audit-log-timeline::-webkit-scrollbar {
-  width: 6px;
-}
-
-.audit-log-timeline::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.audit-log-timeline::-webkit-scrollbar-thumb {
-  background: var(--border-light, #e2e8f0);
-  border-radius: 3px;
-}
-
-.audit-log-timeline::-webkit-scrollbar-thumb:hover {
-  background: var(--border-color, #cbd5e1);
-}
-
-.audit-log-timeline .log-card {
-  background: var(--bg-page, #f8fafc);
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 4px;
-}
-
-.audit-log-timeline .log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.audit-log-timeline .log-header .el-tag {
-  width: fit-content;
-}
-
-.audit-log-timeline .log-time {
-  font-size: 12px;
-  color: var(--text-placeholder, #94a3b8);
-}
-
-.audit-log-timeline .log-operator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-regular, #475569);
-  margin-bottom: 8px;
-}
-
-.audit-log-timeline .log-operator .el-icon {
-  color: var(--text-placeholder, #94a3b8);
-  font-size: 14px;
-}
-
-.audit-log-timeline .operator-name {
-  font-weight: 500;
-}
-
-.audit-log-timeline .operator-dept {
-  color: var(--text-secondary, #64748b);
-}
-
-.audit-log-timeline .operator-dept::before {
-  content: '·';
-  margin: 0 4px;
-}
-
-.audit-log-timeline .log-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  background: var(--bg-white, #fff);
-  border-radius: 4px;
-}
-
-.audit-log-timeline .progress-label {
-  color: var(--text-secondary, #64748b);
-}
-
-.audit-log-timeline .progress-from {
-  color: var(--text-placeholder, #94a3b8);
-}
-
-.audit-log-timeline .progress-arrow {
-  color: var(--text-placeholder, #94a3b8);
-  font-size: 12px;
-}
-
-.audit-log-timeline .progress-to {
-  color: var(--color-primary, #2c5282);
-  font-weight: 600;
-}
-
-.audit-log-timeline .log-comment {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-regular, #475569);
-  padding: 8px 10px;
-  background: var(--bg-white, #fff);
-  border-radius: 4px;
-  border-left: 3px solid var(--color-primary-light, #93c5fd);
-}
-
-.audit-log-timeline .log-comment .el-icon {
-  color: var(--color-primary, #2c5282);
-  font-size: 14px;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.audit-log-empty {
-  padding: var(--spacing-lg);
-}
-
 .detail-actions {
   margin-top: var(--spacing-2xl);
   padding-top: var(--spacing-xl);
@@ -6195,6 +5915,12 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 .weight-text {
   font-weight: 500;
   color: var(--text-main);
+  white-space: nowrap;
+}
+
+.cell-saving-text {
+  font-size: 13px;
+  color: var(--primary-color, #409eff);
   white-space: nowrap;
 }
 

@@ -16,8 +16,7 @@ const EXACT_MAP: Record<string, string> = {
   '/auth/userinfo': '/auth/me',
   '/users/me': '/auth/me',
   '/analytics/dashboard/overview': '/analytics/dashboard',
-  '/analytics/dashboard/charts': '/analytics/dashboard',
-  '/alerts/events/unclosed': '/alerts/unresolved'
+  '/analytics/dashboard/charts': '/analytics/dashboard'
 }
 
 function normalizePath(input: string): string {

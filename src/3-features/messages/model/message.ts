@@ -7,6 +7,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Message } from '@/shared/types'
+import { messagesApi, type MessageItem } from '@/features/messages/api/messagesApi'
 
 const mockMessages: Message[] = [
   {
@@ -57,9 +58,42 @@ export const useMessageStore = defineStore('message', () => {
     system: systemMessages.value.filter(message => !message.isRead).length
   }))
 
+  function toStoreMessage(message: MessageItem): Message {
+    const normalizedType =
+      message.type === 'ALERT'
+        ? 'alert'
+        : message.type === 'WARNING'
+          ? 'alert'
+          : message.type === 'SYSTEM'
+            ? 'system'
+            : message.type === 'NOTIFICATION' && String(message.status || '').toUpperCase().includes('APPRO')
+              ? 'approval'
+              : message.type === 'NOTIFICATION'
+                ? 'system'
+                : String(message.type || 'system').toLowerCase()
+
+    return {
+      id: String(message.id),
+      type: normalizedType,
+      title: message.title,
+      content: message.content,
+      severity: message.severity?.toLowerCase(),
+      isRead: message.isRead,
+      createdAt: new Date(message.createdAt),
+      relatedId: message.entityId != null ? String(message.entityId) : undefined,
+      actionUrl: message.link
+    }
+  }
+
   async function fetchMessages() {
     loading.value = true
     try {
+      const remoteMessages = await messagesApi.getAllMessages()
+      if (remoteMessages.length > 0) {
+        messages.value = remoteMessages.map(toStoreMessage)
+        return
+      }
+
       messages.value = mockMessages.map(message => ({ ...message }))
     } finally {
       loading.value = false
@@ -72,17 +106,27 @@ export const useMessageStore = defineStore('message', () => {
     }
   }
 
-  function markAsRead(messageId: string) {
+  async function markAsRead(messageId: string) {
     const message = messages.value.find(item => item.id === messageId)
     if (message) {
       message.isRead = true
     }
+    try {
+      await messagesApi.markAsRead(messageId)
+    } catch {
+      // Keep optimistic local state when remote read sync is unavailable.
+    }
   }
 
-  function markAllAsRead() {
+  async function markAllAsRead() {
     messages.value.forEach(message => {
       message.isRead = true
     })
+    try {
+      await messagesApi.markAllAsRead()
+    } catch {
+      // Keep optimistic local state when remote batch sync is unavailable.
+    }
   }
 
   function clearReadMessages() {

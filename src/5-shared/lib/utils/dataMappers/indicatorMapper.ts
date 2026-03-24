@@ -42,6 +42,10 @@ const FRONTEND_TO_BACKEND: Record<string, string> = {
   status: 'status',
   // 进度
   progress: 'progress',
+  // 填报进度（后端返回 reportProgress）
+  reportProgress: 'reportProgress',
+  // 当前月份是否有填报数据
+  hasCurrentMonthFill: 'hasCurrentMonthFill',
   // 进度审批状态
   progressApprovalStatus: 'progressApprovalStatus',
   // 待审批进度
@@ -82,6 +86,8 @@ const BACKEND_TO_FRONTEND: Record<string, string> = {
   year: 'year',
   status: 'status',
   progress: 'progress',
+  reportProgress: 'pendingProgress',
+  hasCurrentMonthFill: 'hasCurrentMonthFill',
   progressApprovalStatus: 'progressApprovalStatus',
   pendingProgress: 'pendingProgress',
   pendingRemark: 'pendingRemark',

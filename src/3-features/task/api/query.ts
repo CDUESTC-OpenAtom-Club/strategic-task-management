@@ -5,8 +5,30 @@
  */
 
 import { apiClient as api } from '@/shared/api/client'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import {
+  createMemoryDetailPolicy,
+  createSessionListPolicy
+} from '@/shared/lib/utils/cache-config'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type { ApiResponse, StrategicTask } from '@/shared/types'
 import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
+
+const TASK_LIST_POLICY = createSessionListPolicy({
+  tags: ['task.list']
+})
+
+const TASK_DETAIL_POLICY = createMemoryDetailPolicy({
+  tags: ['task.detail']
+})
+
+function withTaskCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
+}
 
 /**
  * Get tasks by year
@@ -17,7 +39,14 @@ import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
  * @returns Tasks for the year
  */
 export async function getTasksByYear(year: number): Promise<ApiResponse<StrategicTask[]>> {
-  const response = await api.get('/tasks')
+  const response = await fetchWithCache<ApiResponse<StrategicTask[]>>({
+    key: buildQueryKey('task', 'list', withTaskCacheContext({ year })),
+    policy: {
+      ...TASK_LIST_POLICY,
+      tags: ['task.list', `task.year.${year}`]
+    },
+    fetcher: () => api.get('/tasks')
+  })
   if (response.success && response.data) {
     return { ...response, data: response.data.filter(task => task.year === year) }
   }
@@ -33,7 +62,14 @@ export async function getTasksByYear(year: number): Promise<ApiResponse<Strategi
  * @returns Task details
  */
 export async function getTaskById(taskId: number): Promise<ApiResponse<StrategicTask>> {
-  return api.get(`/tasks/${taskId}`)
+  return fetchWithCache({
+    key: buildQueryKey('task', 'detail', withTaskCacheContext({ taskId })),
+    policy: {
+      ...TASK_DETAIL_POLICY,
+      tags: ['task.detail', `task.detail.${taskId}`]
+    },
+    fetcher: () => api.get(`/tasks/${taskId}`)
+  })
 }
 
 /**
@@ -45,7 +81,14 @@ export async function getTaskById(taskId: number): Promise<ApiResponse<Strategic
  * @returns Tasks for organization
  */
 export async function getTasksByOrg(orgId: number): Promise<ApiResponse<StrategicTask[]>> {
-  return api.get(`/tasks/by-org/${orgId}`)
+  return fetchWithCache({
+    key: buildQueryKey('task', 'list', withTaskCacheContext({ orgId })),
+    policy: {
+      ...TASK_LIST_POLICY,
+      tags: ['task.list', `task.org.${orgId}`]
+    },
+    fetcher: () => api.get(`/tasks/by-org/${orgId}`)
+  })
 }
 
 /**
@@ -78,7 +121,14 @@ export async function getTasksByStatus(_status: string): Promise<ApiResponse<Str
  * @returns Matching tasks
  */
 export async function searchTasks(keyword: string): Promise<ApiResponse<StrategicTask[]>> {
-  return api.get('/tasks/search', { taskName: keyword })
+  return fetchWithCache({
+    key: buildQueryKey('task', 'search', withTaskCacheContext({ keyword })),
+    policy: {
+      ...TASK_LIST_POLICY,
+      tags: ['task.list', 'task.search']
+    },
+    fetcher: () => api.get('/tasks/search', { taskName: keyword })
+  })
 }
 
 /**
@@ -90,7 +140,15 @@ export async function searchTasks(keyword: string): Promise<ApiResponse<Strategi
  * @returns Task indicators
  */
 export async function getTaskIndicators(taskId: number): Promise<ApiResponse<any[]>> {
-  return api.get(`/indicators/task/${taskId}`)
+  return fetchWithCache({
+    key: buildQueryKey('task', 'indicators', withTaskCacheContext({ taskId })),
+    policy: {
+      ...TASK_DETAIL_POLICY,
+      staleWhileRevalidate: true,
+      tags: ['task.detail', `task.detail.${taskId}`, 'indicator.list', `indicator.task.${taskId}`]
+    },
+    fetcher: () => api.get(`/indicators/task/${taskId}`)
+  })
 }
 
 /**
@@ -103,36 +161,45 @@ export async function getTaskIndicators(taskId: number): Promise<ApiResponse<any
  * @returns Task milestones
  */
 export async function getTaskMilestones(taskId: number): Promise<ApiResponse<any[]>> {
-  const indicatorsResponse = await api.get(`/indicators/task/${taskId}`)
+  return fetchWithCache({
+    key: buildQueryKey('task', 'milestones', withTaskCacheContext({ taskId })),
+    policy: {
+      ...TASK_DETAIL_POLICY,
+      staleWhileRevalidate: true,
+      tags: ['task.detail', `task.detail.${taskId}`, 'milestone.list']
+    },
+    fetcher: async () => {
+      const indicatorsResponse = await api.get<ApiResponse<any[]>>(`/indicators/task/${taskId}`)
 
-  if (!indicatorsResponse?.success || !Array.isArray(indicatorsResponse.data)) {
-    return {
-      ...indicatorsResponse,
-      data: []
-    }
-  }
-
-  const indicatorIds = indicatorsResponse.data
-    .map((indicator: { indicatorId?: number; id?: number }) => indicator.indicatorId ?? indicator.id)
-    .filter((id: number | undefined): id is number => typeof id === 'number')
-
-  if (indicatorIds.length === 0) {
-    return { ...indicatorsResponse, data: [] }
-  }
-
-  // 批量查询：1 个请求替代 N 个请求
-  try {
-    const batchResponse = await milestoneApi.getMilestonesByIndicatorIds(indicatorIds)
-    const allMilestones: any[] = []
-    if (batchResponse?.success && batchResponse.data) {
-      for (const milestones of Object.values(batchResponse.data)) {
-        if (Array.isArray(milestones)) {
-          allMilestones.push(...milestones)
+      if (!indicatorsResponse?.success || !Array.isArray(indicatorsResponse.data)) {
+        return {
+          ...indicatorsResponse,
+          data: []
         }
       }
+
+      const indicatorIds = indicatorsResponse.data
+        .map((indicator: { indicatorId?: number; id?: number }) => indicator.indicatorId ?? indicator.id)
+        .filter((id: number | undefined): id is number => typeof id === 'number')
+
+      if (indicatorIds.length === 0) {
+        return { ...indicatorsResponse, data: [] }
+      }
+
+      try {
+        const batchResponse = await milestoneApi.getMilestonesByIndicatorIds(indicatorIds)
+        const allMilestones: any[] = []
+        if (batchResponse?.success && batchResponse.data) {
+          for (const milestones of Object.values(batchResponse.data)) {
+            if (Array.isArray(milestones)) {
+              allMilestones.push(...milestones)
+            }
+          }
+        }
+        return { ...indicatorsResponse, data: allMilestones }
+      } catch {
+        return { ...indicatorsResponse, data: [] }
+      }
     }
-    return { ...indicatorsResponse, data: allMilestones }
-  } catch {
-    return { ...indicatorsResponse, data: [] }
-  }
+  })
 }

@@ -1520,6 +1520,7 @@ const _handleChildTypeChange = (
 const milestonesDialogVisible = ref(false)
 const editingMilestonesChild = ref<NewChildIndicator | StrategicIndicator | null>(null)
 const editingMilestones = ref<LocalMilestone[]>([])
+const savingMilestones = ref(false)
 
 // 打开里程碑编辑弹窗
 const openMilestonesDialog = (child: NewChildIndicator | StrategicIndicator) => {
@@ -1640,31 +1641,38 @@ const saveMilestones = async () => {
     return
   }
 
+  savingMilestones.value = true
   const child = editingMilestonesChild.value
-  if ('isNew' in child && child.isNew) {
-    child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
-    milestonesDialogVisible.value = false
-    editingMilestonesChild.value = null
-    editingMilestones.value = []
-  } else {
-    try {
+  try {
+    if ('isNew' in child && child.isNew) {
+      child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
+      milestonesDialogVisible.value = false
+      editingMilestonesChild.value = null
+      editingMilestones.value = []
+      return
+    } else {
       const indicator = child as StrategicIndicator
-      const updates: Partial<StrategicIndicator> = {
-        targetValue: editingMilestones.value.length,
-        milestones: editingMilestones.value.map(m => ({
-          id: m.id,
-          name: m.name,
-          targetProgress: m.progress,
-          deadline: m.expectedDate,
-          status: 'pending' as const
-        }))
-      }
-
       logger.info(
         `[IndicatorDistributionView] Saving ${editingMilestones.value.length} milestones for indicator ${indicator.id}`
       )
 
-      await strategicStore.updateIndicator(indicator.id.toString(), updates)
+      await milestoneApi.saveMilestonesForIndicator(
+        indicator.id.toString(),
+        editingMilestones.value.map((milestone, index) => {
+          const milestoneId = Number(milestone.id)
+          return {
+            id: Number.isFinite(milestoneId) && milestoneId > 0 ? milestoneId : undefined,
+            milestoneName: String(milestone.name || '').trim(),
+            description: '',
+            dueDate: milestone.expectedDate || null,
+            targetProgress: Number(milestone.progress || 0),
+            status: 'NOT_STARTED',
+            sortOrder: index + 1,
+            isPaired: false,
+            inheritedFrom: null as number | null
+          }
+        })
+      )
 
       logger.info(`[IndicatorDistributionView] Reloading indicators after milestone update...`)
 
@@ -1683,10 +1691,12 @@ const saveMilestones = async () => {
       milestonesDialogVisible.value = false
       editingMilestonesChild.value = null
       editingMilestones.value = []
-    } catch (error) {
-      console.error('Failed to save milestones:', error)
-      ElMessage.error('里程碑更新失败')
     }
+  } catch (error) {
+    console.error('Failed to save milestones:', error)
+    ElMessage.error('里程碑更新失败')
+  } finally {
+    savingMilestones.value = false
   }
 }
 
@@ -2591,7 +2601,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
       <template #footer>
         <el-button @click="milestonesDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveMilestones">保存</el-button>
+        <el-button type="primary" :loading="savingMilestones" @click="saveMilestones">保存</el-button>
       </template>
     </el-dialog>
 

@@ -8,6 +8,7 @@
 import { apiClient } from '@/shared/api/client'
 import { withRetry } from '@/shared/lib/api/wrappers'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import { logger } from '@/shared/lib/utils/logger'
 import {
   getMyPendingTasks,
@@ -32,8 +33,10 @@ interface StrategicTaskVO {
   taskId?: number
   id?: number
   planId?: number | null
-  taskName: string
+  taskName?: string
+  name?: string
   taskDesc?: string | null
+  desc?: string | null
   taskType?: string
   createdAt: string
   year?: number
@@ -43,7 +46,8 @@ interface StrategicTaskVO {
 }
 
 interface BackendTaskCreateRequest {
-  taskName: string
+  taskName?: string
+  name?: string
   taskType: string
   planId: number
   cycleId: number
@@ -51,11 +55,20 @@ interface BackendTaskCreateRequest {
   createdByOrgId: number
   sortOrder?: number
   taskDesc?: string | null
+  desc?: string | null
   remark?: string | null
 }
 
 interface CyclePageResponse<T> {
   content: T[]
+}
+
+function withTaskCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
 }
 
 function invalidateTaskCaches(taskId?: number | string, year?: number): void {
@@ -81,10 +94,12 @@ function invalidateTaskCaches(taskId?: number | string, year?: number): void {
 function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
   const taskId = vo.taskId ?? vo.id ?? 0
   const taskYear = vo.year ?? new Date().getFullYear()
+  const taskName = vo.taskName ?? vo.name ?? ''
+  const taskDesc = vo.taskDesc ?? vo.desc ?? ''
   return {
     id: String(taskId),
-    title: vo.taskName,
-    desc: vo.taskDesc || '',
+    title: taskName,
+    desc: taskDesc,
     createTime: new Date(vo.createdAt).toLocaleDateString('zh-CN'),
     cycle: `${taskYear}年度`,
     startDate: new Date(`${taskYear}-01-01`),
@@ -261,8 +276,19 @@ export const strategicApi = {
    */
   async getCycleByYear(year: number): Promise<ApiResponse<AssessmentCycleVO | null>> {
     try {
-      const response = await apiClient.get<ApiResponse<CyclePageResponse<AssessmentCycleVO>>>('/cycles', {
-        params: { year, page: 0, size: 1 }
+      const response = await fetchWithCache({
+        key: buildQueryKey('cycle', 'detail', withTaskCacheContext({ year })),
+        policy: {
+          ttlMs: 30 * 60 * 1000,
+          scope: 'session',
+          persist: true,
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['cycles.list']
+        },
+        fetcher: () => apiClient.get<ApiResponse<CyclePageResponse<AssessmentCycleVO>>>('/cycles', {
+          params: { year, page: 0, size: 1 }
+        })
       })
       if (response.success && response.data) {
         const cycle = response.data.content?.[0] || null
@@ -289,10 +315,12 @@ export const strategicApi = {
   async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
     try {
       return fetchWithCache({
-        key: buildQueryKey('task', 'list', { year }),
+        key: buildQueryKey('task', 'list', withTaskCacheContext({ year })),
         policy: {
           ttlMs: 2 * 60 * 1000,
-          scope: 'memory',
+          scope: 'session',
+          persist: true,
+          staleWhileRevalidate: true,
           dedupeWindowMs: 1000,
           tags: ['task.list', `task.list.${year}`]
         },
@@ -334,10 +362,12 @@ export const strategicApi = {
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getAllTasks(): Promise<ApiResponse<StrategicTaskVO[]>> {
     return fetchWithCache({
-      key: buildQueryKey('task', 'list'),
+      key: buildQueryKey('task', 'list', withTaskCacheContext()),
       policy: {
         ttlMs: 2 * 60 * 1000,
-        scope: 'memory',
+        scope: 'session',
+        persist: true,
+        staleWhileRevalidate: true,
         dedupeWindowMs: 1000,
         tags: ['task.list']
       },
@@ -350,8 +380,18 @@ export const strategicApi = {
    */
   async getIndicatorsByYear(year: number): Promise<ApiResponse<IndicatorVO[]>> {
     try {
-      // 获取所有指标，然后按年份过滤
-      const response = await apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+      const response = await fetchWithCache({
+        key: buildQueryKey('indicator', 'list', withTaskCacheContext({ year })),
+        policy: {
+          ttlMs: 2 * 60 * 1000,
+          scope: 'session',
+          persist: true,
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['indicator.list']
+        },
+        fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+      })
       if (response.success && response.data) {
         const filteredIndicators = response.data.filter(i => i.year === year)
         return { ...response, data: filteredIndicators }
@@ -460,16 +500,32 @@ export const strategicApi = {
   async createBackendTask(
     request: BackendTaskCreateRequest
   ): Promise<ApiResponse<StrategicTaskVO>> {
-    logger.info('[API] Creating backend task for indicator binding', { request })
+    const payload = {
+      name: request.name ?? request.taskName ?? '',
+      taskType: request.taskType,
+      planId: request.planId,
+      cycleId: request.cycleId,
+      orgId: request.orgId,
+      createdByOrgId: request.createdByOrgId,
+      sortOrder: request.sortOrder ?? 0,
+      desc: request.desc ?? request.taskDesc ?? null,
+      remark: request.remark ?? null
+    }
+
+    logger.info('[API] Creating backend task for indicator binding', { request, payload })
 
     try {
       const response = await withRetry(() =>
-        apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', request)
+        apiClient.post<ApiResponse<StrategicTaskVO>>('/tasks', payload)
       )
       invalidateTaskCaches(response.data?.taskId ?? response.data?.id)
       return response
     } catch (error) {
-      logger.error('[API] Failed to create backend task for indicator binding', { error, request })
+      logger.error('[API] Failed to create backend task for indicator binding', {
+        error,
+        request,
+        payload
+      })
       throw error
     }
   },
@@ -630,7 +686,10 @@ async function getPendingApprovals(_userId: number): Promise<ApiResponse<Pending
           instanceId: Number(item.taskId),
           title: item.taskName,
           entityType: 'TASK',
-          status: item.status
+          status: item.status,
+          flowCode: (item as { flowCode?: string }).flowCode,
+          flowName: (item as { flowName?: string }).flowName,
+          entityId: (item as { entityId?: number }).entityId
         })) as unknown as PendingApproval[]
       }
     }

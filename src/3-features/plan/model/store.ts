@@ -90,15 +90,7 @@ export const usePlanStore = defineStore('plan', () => {
       return Number.isFinite(numericYear) ? numericYear : null
     }
 
-    const cycleId = Number(planRecord.cycleId)
-    if (cycleId === 4 || cycleId === 90) {
-      return 2026
-    }
-    if (cycleId === 7) {
-      return 2025
-    }
-
-    return null
+    return useTimeContextStore().resolveCycleYear(planRecord.cycleId)
   }
 
   // ============ Actions ============

@@ -6,7 +6,24 @@
 
 import { apiClient as api } from '@/shared/api/client'
 import { approveTask, rejectTask } from '@/features/workflow/api'
+import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 import type { ApiResponse, Plan } from '@/shared/types'
+
+function invalidatePlanCaches(planId?: number | string): void {
+  const normalizedId = planId !== undefined ? String(planId) : undefined
+  const targets: Array<string | ReturnType<typeof buildQueryKey>> = [
+    'plan.list',
+    'task.list',
+    'dashboard.overview'
+  ]
+
+  if (normalizedId !== undefined) {
+    targets.push('plan.detail', `plan.detail.${normalizedId}`)
+    targets.push(buildQueryKey('plan', 'detail', { planId: normalizedId }))
+  }
+
+  invalidateQueries(targets)
+}
 
 /**
  * Create new plan
@@ -17,7 +34,9 @@ import type { ApiResponse, Plan } from '@/shared/types'
  * @returns Created plan
  */
 export async function createPlan(data: Partial<Plan>): Promise<ApiResponse<Plan>> {
-  return api.post('/plans', data)
+  const response = await api.post<ApiResponse<Plan>>('/plans', data)
+  invalidatePlanCaches(response.data?.id ?? data.id)
+  return response
 }
 
 /**
@@ -33,7 +52,9 @@ export async function updatePlan(
   planId: number | string,
   data: Partial<Plan>
 ): Promise<ApiResponse<Plan>> {
-  return api.put(`/plans/${planId}`, data)
+  const response = await api.put<ApiResponse<Plan>>(`/plans/${planId}`, data)
+  invalidatePlanCaches(planId)
+  return response
 }
 
 /**
@@ -44,7 +65,9 @@ export async function updatePlan(
  * @param planId - Plan ID
  */
 export async function deletePlan(planId: number | string): Promise<ApiResponse<void>> {
-  return api.delete(`/plans/${planId}`)
+  const response = await api.delete<ApiResponse<void>>(`/plans/${planId}`)
+  invalidatePlanCaches(planId)
+  return response
 }
 
 /**
@@ -60,7 +83,9 @@ export async function submitPlanForApproval(
   comment?: string
 ): Promise<ApiResponse<void>> {
   void comment
-  return api.post(`/plans/${planId}/publish`)
+  const response = await api.post<ApiResponse<void>>(`/plans/${planId}/publish`)
+  invalidatePlanCaches(planId)
+  return response
 }
 
 /**
@@ -78,6 +103,7 @@ export async function approvePlan(
   comment?: string
 ): Promise<ApiResponse<void>> {
   await approveTask(String(instanceId), { comment })
+  invalidatePlanCaches()
   return { success: true, data: undefined }
 }
 
@@ -96,6 +122,7 @@ export async function rejectPlan(
   comment: string
 ): Promise<ApiResponse<void>> {
   await rejectTask(String(instanceId), { reason: comment })
+  invalidatePlanCaches()
   return { success: true, data: undefined }
 }
 
@@ -107,5 +134,7 @@ export async function rejectPlan(
  * @param planId - Plan ID
  */
 export async function archivePlan(planId: number | string): Promise<ApiResponse<void>> {
-  return api.post(`/plans/${planId}/archive`)
+  const response = await api.post<ApiResponse<void>>(`/plans/${planId}/archive`)
+  invalidatePlanCaches(planId)
+  return response
 }

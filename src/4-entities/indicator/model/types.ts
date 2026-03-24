@@ -200,6 +200,9 @@ export interface Indicator {
   pendingRemark?: string
   pendingAttachments?: string // JSON string
 
+  // Report status from backend (based on plan_report table)
+  hasCurrentMonthFill?: boolean
+
   // Metadata
   remark?: string
   confirmationNotes?: string

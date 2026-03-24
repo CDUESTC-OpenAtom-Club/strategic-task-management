@@ -9,6 +9,7 @@
 import { apiClient } from '@/shared/api/client'
 import { logger } from '@/shared/lib/utils/logger'
 import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import { createPersistentReferencePolicy } from '@/shared/lib/utils/cache-config'
 import { orgListResponseSchema, type OrgVO, type OrgType } from './org.schema'
 
 // 重新导出 OrgVO 类型供其他模块使用
@@ -21,6 +22,11 @@ export interface Department {
   type: 'strategic_dept' | 'functional_dept' | 'secondary_college'
   sortOrder: number
 }
+
+const ORG_CACHE_KEY = buildQueryKey('org', 'departments', { version: 'v2' })
+const ORG_CACHE_POLICY = createPersistentReferencePolicy({
+  tags: ['org.list']
+})
 
 /**
  * 将后端 OrgType 映射到前端类型
@@ -135,14 +141,8 @@ export const orgApi = {
   async getAllOrgs(): Promise<OrgVO[]> {
     try {
       const response = await fetchWithCache({
-        key: buildQueryKey('org', 'departments'),
-        policy: {
-          ttlMs: 10 * 60 * 1000,
-          scope: 'memory',
-          staleWhileRevalidate: true,
-          dedupeWindowMs: 1000,
-          tags: ['org.list']
-        },
+        key: ORG_CACHE_KEY,
+        policy: ORG_CACHE_POLICY,
         fetcher: async () => {
           const result = await this.requestOrgList()
           return result ?? { data: [], success: false, message: '组织接口不可用' }
@@ -182,14 +182,8 @@ export const orgApi = {
   async getAllDepartments(): Promise<Department[]> {
     try {
       const response = await fetchWithCache({
-        key: buildQueryKey('org', 'departments'),
-        policy: {
-          ttlMs: 10 * 60 * 1000,
-          scope: 'memory',
-          staleWhileRevalidate: true,
-          dedupeWindowMs: 1000,
-          tags: ['org.list']
-        },
+        key: ORG_CACHE_KEY,
+        policy: ORG_CACHE_POLICY,
         fetcher: async () => {
           const result = await this.requestOrgList()
           return result ?? { data: [], success: false, message: '组织接口不可用' }

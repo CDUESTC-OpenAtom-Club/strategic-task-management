@@ -5,8 +5,48 @@
  */
 
 import { apiClient } from '@/shared/api/client'
+import { alertApi } from '@/shared/api/monitoringApi'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import {
+  CACHE_TTL,
+  createShortMemoryPolicy
+} from '@/shared/lib/utils/cache-config'
 import { logger } from '@/shared/lib/utils/logger'
 import type { DashboardData, DepartmentProgress, AlertSummary } from '@/shared/types'
+
+const DASHBOARD_POLICY = createShortMemoryPolicy(CACHE_TTL.DASHBOARD, {
+  staleWhileRevalidate: true,
+  tags: ['dashboard.overview']
+})
+
+function summarizeAlerts(
+  alerts: Array<{ severity?: string; status?: string }>
+): AlertSummary {
+  const summary: AlertSummary = {
+    severe: 0,
+    moderate: 0,
+    normal: 0,
+    total: 0
+  }
+
+  alerts.forEach(alert => {
+    if (String(alert.status).toUpperCase() === 'CLOSED') {
+      return
+    }
+
+    summary.total += 1
+    const severity = String(alert.severity).toUpperCase()
+    if (severity === 'CRITICAL') {
+      summary.severe += 1
+    } else if (severity === 'MAJOR') {
+      summary.moderate += 1
+    } else {
+      summary.normal += 1
+    }
+  })
+
+  return summary
+}
 
 /**
  * Get dashboard overview data
@@ -18,8 +58,11 @@ import type { DashboardData, DepartmentProgress, AlertSummary } from '@/shared/t
 export async function getDashboardData(): Promise<DashboardData> {
   try {
     logger.debug('[Dashboard API] Fetching dashboard data')
-    const response = await apiClient.post<DashboardData>('/analytics/dashboard', {})
-    return response
+    return await fetchWithCache({
+      key: buildQueryKey('dashboard', 'overview'),
+      policy: DASHBOARD_POLICY,
+      fetcher: () => apiClient.post<DashboardData>('/analytics/dashboard', {})
+    })
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch dashboard data:', error)
     throw error
@@ -72,8 +115,16 @@ export async function getRecentActivities(): Promise<Array<Record<string, unknow
 export async function getAlertSummary(): Promise<AlertSummary> {
   try {
     logger.debug('[Dashboard API] Fetching alert summary')
-    const response = await apiClient.get<AlertSummary>('/alerts/unresolved')
-    return response
+    return await fetchWithCache({
+      key: buildQueryKey('dashboard', 'alertSummary'),
+      policy: {
+        ...createShortMemoryPolicy(CACHE_TTL.WORKFLOW_DETAIL, {
+          staleWhileRevalidate: true,
+          tags: ['dashboard.overview']
+        })
+      },
+      fetcher: async () => summarizeAlerts(await alertApi.getUnclosedAlerts())
+    })
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch alert summary:', error)
     throw error
@@ -96,8 +147,11 @@ export async function getFilteredDashboardData(params: {
 }): Promise<DashboardData> {
   try {
     logger.debug('[Dashboard API] Fetching filtered dashboard data:', params)
-    const response = await apiClient.post<DashboardData>('/analytics/dashboard', params)
-    return response
+    return await fetchWithCache({
+      key: buildQueryKey('dashboard', 'overview', params),
+      policy: DASHBOARD_POLICY,
+      fetcher: () => apiClient.post<DashboardData>('/analytics/dashboard', params)
+    })
   } catch (error) {
     logger.error('[Dashboard API] Failed to fetch filtered dashboard data:', error)
     throw error

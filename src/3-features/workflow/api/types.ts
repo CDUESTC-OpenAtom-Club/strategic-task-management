@@ -114,10 +114,18 @@ export interface WorkflowInstanceDetailResponse {
   definitionId?: string
   definitionName?: string
   status: string
+  flowCode?: string
+  flowName?: string
   businessEntityId?: number
   businessEntityType?: string
   starterId?: number
   starterName?: string
+  planId?: number
+  planName?: string
+  sourceOrgId?: number
+  sourceOrgName?: string
+  targetOrgId?: number
+  targetOrgName?: string
   startTime?: string
   endTime?: string
   currentTaskId?: string

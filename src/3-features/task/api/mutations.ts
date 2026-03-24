@@ -6,11 +6,29 @@
 
 import { apiClient as api } from '@/shared/api/client'
 import { startWorkflow, approveTask as workflowApproveTask, rejectTask as workflowRejectTask } from '@/features/workflow/api'
+import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 import type { ApiResponse, StrategicTask } from '@/shared/types'
 import type {
   TaskCreateRequest,
   TaskUpdateRequest
 } from '@/shared/types'
+
+function invalidateTaskCaches(taskId?: number): void {
+  const targets: Array<string | ReturnType<typeof buildQueryKey>> = [
+    'task.list',
+    'plan.detail',
+    'dashboard.overview'
+  ]
+
+  if (taskId !== undefined) {
+    targets.push('task.detail', `task.detail.${taskId}`)
+    targets.push(buildQueryKey('task', 'detail', { taskId }))
+    targets.push(buildQueryKey('task', 'indicators', { taskId }))
+    targets.push(buildQueryKey('task', 'milestones', { taskId }))
+  }
+
+  invalidateQueries(targets)
+}
 
 /**
  * Create new task
@@ -21,7 +39,9 @@ import type {
  * @returns Created task
  */
 export async function createTask(request: TaskCreateRequest): Promise<ApiResponse<StrategicTask>> {
-  return api.post('/tasks', request)
+  const response = await api.post<ApiResponse<StrategicTask>>('/tasks', request)
+  invalidateTaskCaches(response.data?.taskId)
+  return response
 }
 
 /**
@@ -37,7 +57,9 @@ export async function updateTask(
   taskId: number,
   request: TaskUpdateRequest
 ): Promise<ApiResponse<StrategicTask>> {
-  return api.put(`/tasks/${taskId}`, request)
+  const response = await api.put<ApiResponse<StrategicTask>>(`/tasks/${taskId}`, request)
+  invalidateTaskCaches(taskId)
+  return response
 }
 
 /**
@@ -48,7 +70,9 @@ export async function updateTask(
  * @param taskId - Task ID
  */
 export async function deleteTask(taskId: number): Promise<ApiResponse<void>> {
-  return api.delete(`/tasks/${taskId}`)
+  const response = await api.delete<ApiResponse<void>>(`/tasks/${taskId}`)
+  invalidateTaskCaches(taskId)
+  return response
 }
 
 /**
@@ -72,6 +96,7 @@ export async function submitTaskForApproval(
     businessEntityId: taskId,
     businessEntityType: 'TASK'
   })
+  invalidateTaskCaches(taskId)
   return { success: true, data: undefined }
 }
 
@@ -90,6 +115,7 @@ export async function approveTask(
   comment?: string
 ): Promise<ApiResponse<void>> {
   await workflowApproveTask(String(instanceId), { comment })
+  invalidateTaskCaches()
   return { success: true, data: undefined }
 }
 
@@ -108,6 +134,7 @@ export async function rejectTask(
   reason: string
 ): Promise<ApiResponse<void>> {
   await workflowRejectTask(String(instanceId), { reason })
+  invalidateTaskCaches()
   return { success: true, data: undefined }
 }
 
@@ -119,7 +146,9 @@ export async function rejectTask(
  * @param taskId - Task ID
  */
 export async function activateTask(taskId: number): Promise<ApiResponse<void>> {
-  return api.post(`/tasks/${taskId}/activate`)
+  const response = await api.post<ApiResponse<void>>(`/tasks/${taskId}/activate`)
+  invalidateTaskCaches(taskId)
+  return response
 }
 
 /**
@@ -130,5 +159,7 @@ export async function activateTask(taskId: number): Promise<ApiResponse<void>> {
  * @param taskId - Task ID
  */
 export async function deactivateTask(taskId: number): Promise<ApiResponse<void>> {
-  return api.post(`/tasks/${taskId}/cancel`)
+  const response = await api.post<ApiResponse<void>>(`/tasks/${taskId}/cancel`)
+  invalidateTaskCaches(taskId)
+  return response
 }

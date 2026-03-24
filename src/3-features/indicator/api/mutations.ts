@@ -6,6 +6,7 @@
  */
 
 import { apiClient } from '@/shared/api/client'
+import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 import type {
   Indicator,
   IndicatorCreateRequest,
@@ -20,6 +21,22 @@ import type {
   ApprovalSubmissionResult
 } from './types'
 
+function invalidateIndicatorCaches(id?: number): void {
+  const targets: Array<string | ReturnType<typeof buildQueryKey>> = [
+    'indicator.list',
+    'dashboard.overview',
+    'task.list',
+    'task.detail'
+  ]
+
+  if (id !== undefined) {
+    targets.push('indicator.detail', `indicator.detail.${id}`)
+    targets.push(buildQueryKey('indicator', 'detail', { id }))
+  }
+
+  invalidateQueries(targets)
+}
+
 /**
  * Create indicator
  *
@@ -30,6 +47,7 @@ import type {
  */
 export async function createIndicator(data: IndicatorCreateRequest): Promise<Indicator> {
   const response = await apiClient.post<IndicatorDetailResponse>('/indicators', data)
+  invalidateIndicatorCaches()
   return response.data
 }
 
@@ -47,6 +65,7 @@ export async function updateIndicator(
   data: IndicatorUpdateRequest
 ): Promise<Indicator> {
   const response = await apiClient.post<IndicatorDetailResponse>(`/indicators/${id}/breakdown`, data)
+  invalidateIndicatorCaches(id)
   return response.data
 }
 
@@ -59,6 +78,7 @@ export async function updateIndicator(
  */
 export async function deleteIndicator(id: number): Promise<void> {
   await apiClient.post(`/indicators/${id}/terminate`, {})
+  invalidateIndicatorCaches(id)
 }
 
 /**
@@ -78,6 +98,7 @@ export async function distributeIndicator(
     `/indicators/${id}/distribute`,
     request
   )
+  invalidateIndicatorCaches(id)
   return response.data
 }
 
@@ -105,6 +126,7 @@ export async function batchDistributeIndicators(
     )
   )
 
+  indicatorIds.forEach(id => invalidateIndicatorCaches(id))
   return responses[0]?.data ?? ({ success: true } as unknown as DistributionResult)
 }
 
@@ -118,6 +140,7 @@ export async function batchDistributeIndicators(
  */
 export async function withdrawIndicator(id: number, reason?: string): Promise<void> {
   await apiClient.post(`/indicators/${id}/withdraw`, { reason })
+  invalidateIndicatorCaches(id)
 }
 
 /**
@@ -140,6 +163,7 @@ export async function submitIndicatorForApproval(
       flowCode: 'INDICATOR_APPROVAL'
     }
   )
+  invalidateIndicatorCaches(id)
   return response.data
 }
 
@@ -164,6 +188,7 @@ export async function submitIndicatorProgress(
   void evidence
   void attachments
   const response = await apiClient.post<any>(`/indicators/${id}/submit`, {})
+  invalidateIndicatorCaches(id)
   return response.data
 }
 
@@ -201,5 +226,6 @@ export async function decomposeIndicator(
   const response = await apiClient.post<any>(`/indicators/${id}/breakdown`, {
     decompositions
   })
+  invalidateIndicatorCaches(id)
   return response.data
 }

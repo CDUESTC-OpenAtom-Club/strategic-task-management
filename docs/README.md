@@ -14,6 +14,8 @@
   - 测试策略与验证口径
 - `implementation-guide.md`
   - 实施步骤与执行说明
+- `cache-design.md`
+  - 前端缓存设计、分层、key 与失效策略
 - `api-reference.md`
   - API 参考说明
 - `API调用规范.md`

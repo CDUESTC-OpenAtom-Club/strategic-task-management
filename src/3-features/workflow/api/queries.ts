@@ -5,6 +5,13 @@
  */
 
 import { apiClient } from '@/shared/api/client'
+import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import {
+  CACHE_TTL,
+  createMemoryDetailPolicy,
+  createShortMemoryPolicy
+} from '@/shared/lib/utils/cache-config'
+import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type { ApiResponse } from '@/shared/types'
 import type {
   WorkflowDefinitionResponse,
@@ -15,6 +22,30 @@ import type {
   WorkflowInstanceDetailResponse,
   PageResult
 } from './types'
+
+const WORKFLOW_STABLE_POLICY = createShortMemoryPolicy(CACHE_TTL.DETAIL, {
+  staleWhileRevalidate: true,
+  tags: ['workflow.definitions']
+})
+
+const WORKFLOW_TODO_POLICY = createShortMemoryPolicy(CACHE_TTL.WORKFLOW_TODO, {
+  staleWhileRevalidate: false,
+  tags: ['workflow.todo']
+})
+
+const WORKFLOW_DETAIL_POLICY = createMemoryDetailPolicy({
+  ttlMs: CACHE_TTL.WORKFLOW_DETAIL,
+  tags: ['workflow.detail'],
+  staleWhileRevalidate: false
+})
+
+function withWorkflowContext(params?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...getCachedUserContext(),
+    ...(params ?? {}),
+    version: 'v1'
+  }
+}
 
 /**
  * Get workflow definitions with pagination
@@ -29,7 +60,14 @@ export async function getWorkflowDefinitions(
   pageNum: number = 1,
   pageSize: number = 10
 ): Promise<ApiResponse<PageResult<WorkflowDefinitionResponse>>> {
-  return apiClient.get('/workflows/definitions', { pageNum, pageSize })
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'definitions', withWorkflowContext({ pageNum, pageSize })),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      tags: ['workflow.definitions']
+    },
+    fetcher: () => apiClient.get('/workflows/definitions', { pageNum, pageSize })
+  })
 }
 
 /**
@@ -43,7 +81,14 @@ export async function getWorkflowDefinitions(
 export async function getWorkflowDefinitionById(
   definitionId: string
 ): Promise<ApiResponse<WorkflowDefinitionResponse>> {
-  return apiClient.get(`/workflows/definitions/${definitionId}`)
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'definition', withWorkflowContext({ definitionId })),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      tags: ['workflow.definitions', `workflow.definition.${definitionId}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/definitions/${definitionId}`)
+  })
 }
 
 /**
@@ -57,7 +102,14 @@ export async function getWorkflowDefinitionById(
 export async function getWorkflowDefinitionByCode(
   flowCode: string
 ): Promise<ApiResponse<WorkflowDefinitionResponse>> {
-  return apiClient.get(`/workflows/definitions/code/${flowCode}`)
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'definitionByCode', withWorkflowContext({ flowCode })),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      tags: ['workflow.definitions', `workflow.code.${flowCode}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/definitions/code/${flowCode}`)
+  })
 }
 
 /**
@@ -68,7 +120,15 @@ export async function getWorkflowDefinitionByCode(
 export async function getWorkflowDefinitionPreviewByCode(
   flowCode: string
 ): Promise<ApiResponse<WorkflowDefinitionPreviewResponse>> {
-  return apiClient.get(`/workflows/definitions/code/${flowCode}/preview`)
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'definitionPreview', withWorkflowContext({ flowCode })),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      ttlMs: 30 * 1000,
+      tags: ['workflow.definitions', `workflow.preview.${flowCode}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/definitions/code/${flowCode}/preview`)
+  })
 }
 
 /**
@@ -82,7 +142,14 @@ export async function getWorkflowDefinitionPreviewByCode(
 export async function getWorkflowDefinitionsByEntityType(
   entityType: string
 ): Promise<ApiResponse<WorkflowDefinitionResponse[]>> {
-  return apiClient.get(`/workflows/definitions/entity-type/${entityType}`)
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'definitionsByEntityType', withWorkflowContext({ entityType })),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      tags: ['workflow.definitions', `workflow.entityType.${entityType}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/definitions/entity-type/${entityType}`)
+  })
 }
 
 /**
@@ -100,7 +167,19 @@ export async function getWorkflowInstances(
   pageNum: number = 1,
   pageSize: number = 10
 ): Promise<ApiResponse<PageResult<WorkflowInstanceResponse>>> {
-  return apiClient.get(`/workflows/${definitionId}/instances`, { pageNum, pageSize })
+  return fetchWithCache({
+    key: buildQueryKey(
+      'workflow',
+      'instances',
+      withWorkflowContext({ definitionId, pageNum, pageSize })
+    ),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      ttlMs: 30 * 1000,
+      tags: ['workflow.instances']
+    },
+    fetcher: () => apiClient.get(`/workflows/${definitionId}/instances`, { pageNum, pageSize })
+  })
 }
 
 /**
@@ -114,7 +193,14 @@ export async function getWorkflowInstances(
 export async function getWorkflowInstanceDetail(
   instanceId: string
 ): Promise<ApiResponse<WorkflowInstanceDetailResponse>> {
-  return apiClient.get(`/workflows/instances/${instanceId}`)
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'detail', withWorkflowContext({ instanceId })),
+    policy: {
+      ...WORKFLOW_DETAIL_POLICY,
+      tags: ['workflow.detail', `workflow.detail.${instanceId}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/instances/${instanceId}`)
+  })
 }
 
 /**
@@ -126,7 +212,18 @@ export async function getWorkflowInstanceDetailByBusiness(
   entityType: string,
   entityId: number | string
 ): Promise<ApiResponse<WorkflowInstanceDetailResponse>> {
-  return apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}`)
+  return fetchWithCache({
+    key: buildQueryKey(
+      'workflow',
+      'detailByBusiness',
+      withWorkflowContext({ entityType, entityId: String(entityId) })
+    ),
+    policy: {
+      ...WORKFLOW_DETAIL_POLICY,
+      tags: ['workflow.detail', `workflow.business.${entityType}.${entityId}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}`)
+  })
 }
 
 /**
@@ -138,7 +235,19 @@ export async function getWorkflowInstanceHistoryByBusiness(
   entityType: string,
   entityId: number | string
 ): Promise<ApiResponse<WorkflowHistoryCardResponse[]>> {
-  return apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}/list`)
+  return fetchWithCache({
+    key: buildQueryKey(
+      'workflow',
+      'historyByBusiness',
+      withWorkflowContext({ entityType, entityId: String(entityId) })
+    ),
+    policy: {
+      ...WORKFLOW_STABLE_POLICY,
+      ttlMs: 30 * 1000,
+      tags: ['workflow.detail', `workflow.business.${entityType}.${entityId}`]
+    },
+    fetcher: () => apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}/list`)
+  })
 }
 
 /**
@@ -152,7 +261,14 @@ export async function getWorkflowInstanceHistoryByBusiness(
 export async function getMyPendingTasks(
   pageNum: number = 1
 ): Promise<ApiResponse<PageResult<WorkflowTaskResponse>>> {
-  return apiClient.get('/workflows/my-tasks', { pageNum })
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'todo', withWorkflowContext({ pageNum })),
+    policy: {
+      ...WORKFLOW_TODO_POLICY,
+      tags: ['workflow.todo']
+    },
+    fetcher: () => apiClient.get('/workflows/my-tasks', { pageNum })
+  })
 }
 
 /**
@@ -168,7 +284,15 @@ export async function getMyApprovedInstances(
   pageNum: number = 1,
   pageSize: number = 10
 ): Promise<ApiResponse<PageResult<WorkflowInstanceResponse>>> {
-  return apiClient.get('/workflows/my-approved', { pageNum, pageSize })
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'myApproved', withWorkflowContext({ pageNum, pageSize })),
+    policy: {
+      ...WORKFLOW_TODO_POLICY,
+      ttlMs: 30 * 1000,
+      tags: ['workflow.instances']
+    },
+    fetcher: () => apiClient.get('/workflows/my-approved', { pageNum, pageSize })
+  })
 }
 
 /**
@@ -184,7 +308,15 @@ export async function getMyAppliedInstances(
   pageNum: number = 1,
   pageSize: number = 10
 ): Promise<ApiResponse<PageResult<WorkflowInstanceResponse>>> {
-  return apiClient.get('/workflows/my-applied', { pageNum, pageSize })
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'myApplied', withWorkflowContext({ pageNum, pageSize })),
+    policy: {
+      ...WORKFLOW_TODO_POLICY,
+      ttlMs: 30 * 1000,
+      tags: ['workflow.instances']
+    },
+    fetcher: () => apiClient.get('/workflows/my-applied', { pageNum, pageSize })
+  })
 }
 
 /**
@@ -195,5 +327,13 @@ export async function getMyAppliedInstances(
  * @returns Workflow statistics data
  */
 export async function getWorkflowStatistics(): Promise<ApiResponse<Record<string, unknown>>> {
-  return apiClient.get('/workflows/statistics')
+  return fetchWithCache({
+    key: buildQueryKey('workflow', 'statistics', withWorkflowContext()),
+    policy: {
+      ...WORKFLOW_TODO_POLICY,
+      ttlMs: 30 * 1000,
+      tags: ['workflow.statistics']
+    },
+    fetcher: () => apiClient.get('/workflows/statistics')
+  })
 }
