@@ -85,6 +85,7 @@ const getNodeIcon = (status: WorkflowNode['status']) => {
     case 'completed': return Check
     case 'current': return Loading
     case 'rejected': return Close
+    case 'withdrawn': return Close
     default: return Clock
   }
 }
@@ -181,6 +182,10 @@ const cancelEdit = (nodeId: string) => {
                 <ElTag v-else-if="node.status === 'rejected'" type="danger" effect="light" size="small">
                   <el-icon><Close /></el-icon>
                   已驳回
+                </ElTag>
+                <ElTag v-else-if="node.status === 'withdrawn'" type="info" effect="light" size="small">
+                  <el-icon><Close /></el-icon>
+                  已撤回
                 </ElTag>
                 <ElTag v-else type="info" effect="light" size="small">
                   <el-icon><Clock /></el-icon>

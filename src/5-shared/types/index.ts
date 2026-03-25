@@ -423,7 +423,7 @@ export interface AuditLogFilters {
 export interface WorkflowNode {
   id: string
   name: string
-  status: 'completed' | 'current' | 'pending' | 'rejected'
+  status: 'completed' | 'current' | 'pending' | 'rejected' | 'withdrawn'
   operator?: string
   operatorName?: string
   operateTime?: Date

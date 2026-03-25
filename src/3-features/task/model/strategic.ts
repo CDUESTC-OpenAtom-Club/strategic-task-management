@@ -208,6 +208,34 @@ function normalizeType2FromTaskType(taskType: unknown): '发展性' | '基础性
   return '其他'
 }
 
+function normalizeStatusAudit(rawStatusAudit: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(rawStatusAudit)) {
+    return rawStatusAudit.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
+  }
+
+  if (typeof rawStatusAudit === 'string') {
+    const trimmed = rawStatusAudit.trim()
+    if (!trimmed) {
+      return []
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed)
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+          )
+        : []
+    } catch {
+      return []
+    }
+  }
+
+  return []
+}
+
 export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const item = getRecord(raw)
   const id = getString(item, 'id', 'indicatorId')
@@ -265,7 +293,7 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
     pendingProgress: getOptionalNumber(item, 'pendingProgress'),
     pendingRemark: getString(item, 'pendingRemark') || null,
     pendingAttachments: getPendingAttachments(item),
-    statusAudit: Array.isArray(item.statusAudit) ? item.statusAudit : []
+    statusAudit: normalizeStatusAudit(item.statusAudit)
   }
 
   const rawReportProgress = item.reportProgress

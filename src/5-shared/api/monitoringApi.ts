@@ -62,14 +62,9 @@ type ApiEnvelope<T> = {
   success?: boolean
 }
 
-type ApiErrorLike = {
-  code?: number | string
-  status?: number
-  message?: string
-  details?: unknown
-  response?: {
-    status?: number
-  }
+type SilentHttpResponse<T> = {
+  status: number
+  data?: ApiEnvelope<T> | T
 }
 
 const EMPTY_ALERT_STATS: AlertStats = {
@@ -81,7 +76,26 @@ const EMPTY_ALERT_STATS: AlertStats = {
   }
 }
 
-let alertsApiUnavailable = false
+const ALERTS_REMOTE_ENABLED = import.meta.env.VITE_ENABLE_ALERTS_API === 'true'
+
+const ALERTS_API_UNAVAILABLE_KEY = 'sism_alerts_api_unavailable'
+
+function readAlertsApiUnavailable(): boolean {
+  if (typeof sessionStorage === 'undefined') {
+    return false
+  }
+
+  return sessionStorage.getItem(ALERTS_API_UNAVAILABLE_KEY) === '1'
+}
+
+function markAlertsApiUnavailable(): void {
+  alertsApiUnavailable = true
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem(ALERTS_API_UNAVAILABLE_KEY, '1')
+  }
+}
+
+let alertsApiUnavailable = readAlertsApiUnavailable()
 
 function unwrapMockResponse<T>(response: T | ApiEnvelope<T>): T {
   if (response && typeof response === 'object' && 'data' in response) {
@@ -91,22 +105,32 @@ function unwrapMockResponse<T>(response: T | ApiEnvelope<T>): T {
   return response as T
 }
 
-function isNotFoundError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') {
-    return false
-  }
+async function silentGet<T>(path: string): Promise<SilentHttpResponse<T>> {
+  const response = await apiClient.getAxiosInstance().get<ApiEnvelope<T> | T>(path, {
+    validateStatus: () => true,
+    _skipBusinessErrorThrow: true
+  })
 
-  const candidate = error as ApiErrorLike
-  return candidate.status === 404 || candidate.code === 404 || candidate.response?.status === 404
+  return {
+    status: response.status,
+    data: response.data
+  }
 }
 
-async function requestUnclosedAlerts(path: string): Promise<AlertEvent[]> {
-  const response = await apiClient.get<{
-    code: number
-    message: string
-    data: AlertEvent[]
-  }>(path)
-  return unwrapMockResponse(response)
+async function requestUnclosedAlerts(path: string): Promise<AlertEvent[] | null> {
+  const response = await silentGet<AlertEvent[]>(path)
+  const payload = response.data as ApiEnvelope<AlertEvent[]> | AlertEvent[] | undefined
+  if (
+    response.status === 404 ||
+    (payload &&
+      typeof payload === 'object' &&
+      'success' in payload &&
+      payload.success === false)
+  ) {
+    return null
+  }
+
+  return unwrapMockResponse(payload as ApiEnvelope<AlertEvent[]> | AlertEvent[])
 }
 
 /**
@@ -118,26 +142,29 @@ export const alertApi = {
    * 使用 OpenAPI 告警统计接口
    */
   getStats: async () => {
+    if (!ALERTS_REMOTE_ENABLED) {
+      return EMPTY_ALERT_STATS
+    }
+
     if (alertsApiUnavailable) {
       return EMPTY_ALERT_STATS
     }
 
-    try {
-      const response = await apiClient.get<{
-        code: number
-        message: string
-        data: AlertStats
-      }>('/alerts/stats')
-      return unwrapMockResponse(response)
-    } catch (error) {
-      if (!isNotFoundError(error)) {
-        throw error
-      }
-
-      alertsApiUnavailable = true
+    const response = await silentGet<AlertStats>('/alerts/stats')
+    const payload = response.data as ApiEnvelope<AlertStats> | AlertStats | undefined
+    if (
+      response.status === 404 ||
+      (payload &&
+        typeof payload === 'object' &&
+        'success' in payload &&
+        payload.success === false)
+    ) {
+      markAlertsApiUnavailable()
       logger.warn('[alertApi] alerts stats endpoint unavailable, degrade to empty stats')
       return EMPTY_ALERT_STATS
     }
+
+    return unwrapMockResponse(payload as ApiEnvelope<AlertStats> | AlertStats)
   },
 
   /**
@@ -145,30 +172,28 @@ export const alertApi = {
    * 兼容 `/alerts/events/unclosed` 与 `/alerts/unresolved`
    */
   getUnclosedAlerts: async () => {
+    if (!ALERTS_REMOTE_ENABLED) {
+      return []
+    }
+
     if (alertsApiUnavailable) {
       return []
     }
 
-    try {
-      return await requestUnclosedAlerts('/alerts/events/unclosed')
-    } catch (error) {
-      if (!isNotFoundError(error)) {
-        throw error
-      }
-
-      logger.warn('[alertApi] /alerts/events/unclosed returned 404, fallback to /alerts/unresolved')
-      try {
-        return await requestUnclosedAlerts('/alerts/unresolved')
-      } catch (fallbackError) {
-        if (!isNotFoundError(fallbackError)) {
-          throw fallbackError
-        }
-
-        alertsApiUnavailable = true
-        logger.warn('[alertApi] alerts query endpoints unavailable, degrade to empty alerts list')
-        return []
-      }
+    const preferred = await requestUnclosedAlerts('/alerts/events/unclosed')
+    if (preferred !== null) {
+      return preferred
     }
+
+    logger.warn('[alertApi] /alerts/events/unclosed returned 404, fallback to /alerts/unresolved')
+    const fallback = await requestUnclosedAlerts('/alerts/unresolved')
+    if (fallback !== null) {
+      return fallback
+    }
+
+    markAlertsApiUnavailable()
+    logger.warn('[alertApi] alerts query endpoints unavailable, degrade to empty alerts list')
+    return []
   },
 
   /**

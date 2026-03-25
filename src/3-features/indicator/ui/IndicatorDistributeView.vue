@@ -29,6 +29,7 @@ import { logger } from '@/shared/lib/utils/logger'
 import type { Plan } from '@/shared/types'
 import { canUseAsFunctionalParentIndicator } from '@/features/indicator/lib/scope'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
+import { normalizePlanStatus } from '@/features/task/lib/planStatus'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -149,9 +150,6 @@ const currentDispatchWorkflowCode = computed(() => {
 // 只读模式：战略发展部或者历史快照模式
 const _isReadOnly = computed(() => timeContext.isReadOnly || isStrategicDept.value)
 
-// 是否可以编辑子指标（只有职能部门可以）
-const canEditChild = computed(() => isFunctionalDept.value && !timeContext.isReadOnly)
-
 // 获取所有学院（从数据库动态获取）
 const colleges = computed(() => orgStore.getAllCollegeNames())
 
@@ -231,6 +229,29 @@ const currentDepartmentPlan = computed<Plan | null>(() => {
 })
 
 const currentDepartmentPlanDetails = ref<Plan | null>(null)
+
+const normalizedCurrentDepartmentPlanStatus = computed(() => {
+  return normalizePlanStatus(currentDepartmentPlanDetails.value?.status || currentDepartmentPlan.value?.status || null)
+})
+
+const canEditCurrentDepartmentPlan = computed(() => {
+  return normalizedCurrentDepartmentPlanStatus.value !== 'PENDING'
+})
+
+// 是否可以编辑子指标（只有职能部门可以，审批中锁定）
+const canEditChild = computed(() => {
+  return isFunctionalDept.value && !timeContext.isReadOnly && canEditCurrentDepartmentPlan.value
+})
+
+const distributionApprovalButtonText = computed(() => {
+  if (normalizedCurrentDepartmentPlanStatus.value === 'PENDING') {
+    return '审批中'
+  }
+  if (normalizedCurrentDepartmentPlanStatus.value === 'DISTRIBUTED') {
+    return '查看审批'
+  }
+  return '审批进度'
+})
 
 const loadCurrentDepartmentPlanDetails = async (force = false) => {
   const plan = currentDepartmentPlan.value
@@ -386,20 +407,7 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
 })
 
 const receivedParentIndicators = computed<StrategicIndicator[]>(() => {
-  const mergedIndicators = new Map<string, StrategicIndicator>()
-
-  currentDepartmentPlanIndicators.value.forEach(indicator => {
-    mergedIndicators.set(String(indicator.id), indicator)
-  })
-
-  strategicStore.indicators.forEach(indicator => {
-    const indicatorId = String(indicator.id)
-    if (!mergedIndicators.has(indicatorId)) {
-      mergedIndicators.set(indicatorId, indicator)
-    }
-  })
-
-  return Array.from(mergedIndicators.values()).filter(indicator =>
+  return currentDepartmentPlanIndicators.value.filter(indicator =>
     canUseAsFunctionalParentIndicator(indicator, currentDepartmentOrgId.value, true)
   )
 })
@@ -433,7 +441,7 @@ const newIndicatorForm = ref<NewIndicatorItem>({
   parentIndicatorId: '',
   parentIndicatorName: '',
   taskContent: '',
-  type1: '定性',
+  type1: '定量',
   name: '',
   remark: '',
   weight: 10,
@@ -538,6 +546,11 @@ const _selectParentSpanMethod = ({
 
 // 打开添加指标表单
 const openAddIndicatorForm = () => {
+  if (!canEditCurrentDepartmentPlan.value) {
+    ElMessage.warning('当前计划审批中，暂不能编辑或新增子指标')
+    return
+  }
+
   // 检查是否有已下发的指标（下发后不能再添加）
   if (selectedCollege.value) {
     const collegeStatus = getCollegeStatus(selectedCollege.value)
@@ -553,7 +566,7 @@ const openAddIndicatorForm = () => {
     parentIndicatorId: '',
     parentIndicatorName: '',
     taskContent: '',
-    type1: '定性',
+    type1: '定量',
     name: '',
     remark: '',
     weight: 10,
@@ -578,7 +591,7 @@ const cancelAddIndicator = () => {
     parentIndicatorId: '',
     parentIndicatorName: '',
     taskContent: '',
-    type1: '定性',
+    type1: '定量',
     name: '',
     remark: '',
     weight: 10,
@@ -802,6 +815,12 @@ const saveNewIndicator = async () => {
     return
   }
 
+  const weight = Number(newIndicatorForm.value.weight)
+  if (!Number.isFinite(weight) || weight <= 0) {
+    ElMessage.warning('请填写大于 0 的权重')
+    return
+  }
+
   // 开始保存
   isSavingIndicator.value = true
 
@@ -837,7 +856,7 @@ const saveNewIndicator = async () => {
       indicatorDesc: newIndicatorForm.value.name,
       ownerOrgId,
       targetOrgId,
-      weightPercent: newIndicatorForm.value.weight || 0,
+      weightPercent: weight,
       sortOrder: 0,
       remark: newIndicatorForm.value.remark || '',
       progress: 0,
@@ -867,7 +886,7 @@ const saveNewIndicator = async () => {
       type2: parentIndicator?.type2 || '发展性',
       progress: 0,
       createTime: new Date().toLocaleDateString('zh-CN'),
-      weight: newIndicatorForm.value.weight,
+      weight,
       remark: newIndicatorForm.value.remark,
       canWithdraw: false,
       taskContent: newIndicatorForm.value.taskContent,
@@ -927,6 +946,26 @@ interface LocalMilestone {
   name: string
   expectedDate: string
   progress: number // 0-100
+}
+
+const sortLocalMilestonesByDate = (milestones: LocalMilestone[]): LocalMilestone[] => {
+  const toTime = (value: string) => {
+    if (!value) {
+      return Number.POSITIVE_INFINITY
+    }
+
+    const time = new Date(value).getTime()
+    return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY
+  }
+
+  return [...milestones].sort((a, b) => {
+    const dateDiff = toTime(a.expectedDate) - toTime(b.expectedDate)
+    if (dateDiff !== 0) {
+      return dateDiff
+    }
+
+    return Number(a.progress ?? 0) - Number(b.progress ?? 0)
+  })
 }
 
 // 新增子指标的临时存储（按父指标ID分组）
@@ -1178,6 +1217,20 @@ const handleGlobalMousedown = (e: MouseEvent) => {
   const isInDropdown = !!target.closest('.el-select-dropdown')
   isInteractingWithCollegeSelect.value = isInSelect || isInDropdown
 
+  if (isAddingIndicator.value) {
+    const clickedInsideAddForm =
+      !!addRowFormRef.value && addRowFormRef.value.contains(target)
+    const clickedInsidePopup =
+      !!target.closest('.el-popper') ||
+      !!target.closest('.el-select-dropdown') ||
+      !!target.closest('.el-picker__popper')
+
+    if (!clickedInsideAddForm && !clickedInsidePopup) {
+      cancelAddIndicator()
+      return
+    }
+  }
+
   // 处理新增子指标行的点击外部保存
   if (editingNewChildId.value && addingParentId.value) {
     // 检查是否点击在新增子指标行内
@@ -1373,6 +1426,11 @@ const getMyCollegeIndicators = (college: string) => {
 
 // 批量撤销：针对学院下所有已下发、待审批或已通过的子指标，撤销后可编辑删除
 const handleBatchWithdraw = async (college: string) => {
+  if (!canEditCurrentDepartmentPlan.value) {
+    ElMessage.warning('当前计划审批中，暂不能撤回下发')
+    return
+  }
+
   const childIndicators = getMyCollegeIndicators(college)
   const withdrawableIndicators = childIndicators.filter(i => {
     const status = getChildStatus(i as StrategicIndicator)
@@ -1490,6 +1548,11 @@ const canWithdrawChildIndicator = (indicator: StrategicIndicator) => {
 }
 
 const handleSingleWithdraw = async (indicator: StrategicIndicator) => {
+  if (!canEditCurrentDepartmentPlan.value) {
+    ElMessage.warning('当前计划审批中，暂不能撤回下发')
+    return
+  }
+
   if (!canWithdrawChildIndicator(indicator)) {
     ElMessage.warning('当前指标不可撤回')
     return
@@ -1537,6 +1600,11 @@ const handleSingleWithdraw = async (indicator: StrategicIndicator) => {
 
 // 批量下发：针对学院下所有草稿状态的子指标
 const handleBatchDistribute = async (college: string) => {
+  if (!canEditCurrentDepartmentPlan.value) {
+    ElMessage.warning('当前计划审批中，暂不能继续下发')
+    return
+  }
+
   const childIndicators = getMyCollegeIndicators(college)
   const draftIndicators = childIndicators.filter(
     i => getChildStatus(i as StrategicIndicator) === 'draft'
@@ -2036,21 +2104,26 @@ const _handleChildTypeChange = (
 const milestonesDialogVisible = ref(false)
 const editingMilestonesChild = ref<NewChildIndicator | StrategicIndicator | null>(null)
 const editingMilestones = ref<LocalMilestone[]>([])
+const isSavingMilestones = ref(false)
 
 // 打开里程碑编辑弹窗
 const openMilestonesDialog = (child: NewChildIndicator | StrategicIndicator) => {
   editingMilestonesChild.value = child
   if ('isNew' in child && child.isNew) {
-    editingMilestones.value = JSON.parse(JSON.stringify(child.milestones || []))
+    editingMilestones.value = sortLocalMilestonesByDate(
+      JSON.parse(JSON.stringify(child.milestones || []))
+    )
   } else {
     // 从已有子指标的milestones转换
     const existing = (child as StrategicIndicator).milestones || []
-    editingMilestones.value = existing.map(m => ({
-      id: m.id || `ms-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name: m.name,
-      expectedDate: m.deadline || '',
-      progress: m.targetProgress || 0
-    }))
+    editingMilestones.value = sortLocalMilestonesByDate(
+      existing.map(m => ({
+        id: m.id || `ms-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        name: m.name,
+        expectedDate: m.deadline || '',
+        progress: m.targetProgress || 0
+      }))
+    )
   }
   milestonesDialogVisible.value = true
 }
@@ -2091,6 +2164,7 @@ const addMilestone = () => {
     expectedDate: '',
     progress: lastProgress
   })
+  editingMilestones.value = sortLocalMilestonesByDate(editingMilestones.value)
 }
 
 // 生成12个月里程碑
@@ -2111,6 +2185,8 @@ const generateMonthlyMilestones = () => {
       progress: progress
     })
   }
+
+  editingMilestones.value = sortLocalMilestonesByDate(editingMilestones.value)
 }
 
 // 删除里程碑
@@ -2150,24 +2226,32 @@ const validateMilestoneProgress = (index: number) => {
   }
 }
 
+const handleMilestoneDateChange = () => {
+  editingMilestones.value = sortLocalMilestonesByDate(editingMilestones.value)
+}
+
 // 保存里程碑
 const saveMilestones = async () => {
-  if (!editingMilestonesChild.value) {
+  if (!editingMilestonesChild.value || isSavingMilestones.value) {
     return
   }
 
   const child = editingMilestonesChild.value
   if ('isNew' in child && child.isNew) {
-    child.milestones = JSON.parse(JSON.stringify(editingMilestones.value))
+    child.milestones = JSON.parse(
+      JSON.stringify(sortLocalMilestonesByDate(editingMilestones.value))
+    )
     milestonesDialogVisible.value = false
     editingMilestonesChild.value = null
     editingMilestones.value = []
   } else {
+    isSavingMilestones.value = true
     try {
+      const sortedMilestones = sortLocalMilestonesByDate(editingMilestones.value)
       const indicator = child as StrategicIndicator
       const updates: Partial<StrategicIndicator> = {
-        targetValue: editingMilestones.value.length,
-        milestones: editingMilestones.value.map(m => ({
+        targetValue: sortedMilestones.length,
+        milestones: sortedMilestones.map(m => ({
           id: m.id,
           name: m.name,
           targetProgress: m.progress,
@@ -2177,7 +2261,7 @@ const saveMilestones = async () => {
       }
 
       logger.info(
-        `[IndicatorDistributionView] Saving ${editingMilestones.value.length} milestones for indicator ${indicator.id}`
+        `[IndicatorDistributionView] Saving ${sortedMilestones.length} milestones for indicator ${indicator.id}`
       )
 
       await strategicStore.updateIndicator(indicator.id.toString(), updates)
@@ -2202,6 +2286,8 @@ const saveMilestones = async () => {
     } catch (error) {
       console.error('Failed to save milestones:', error)
       ElMessage.error('里程碑更新失败')
+    } finally {
+      isSavingMilestones.value = false
     }
   }
 }
@@ -2218,15 +2304,17 @@ const _formatMilestones = (child: StrategicIndicator | NewChildIndicator): strin
 // 获取里程碑列表用于tooltip显示
 const getMilestonesTooltip = (child: StrategicIndicator | NewChildIndicator): LocalMilestone[] => {
   if ('isNew' in child && child.isNew) {
-    return child.milestones || []
+    return sortLocalMilestonesByDate(child.milestones || [])
   }
   const indicator = child as StrategicIndicator
-  return (indicator.milestones || []).map(m => ({
-    id: m.id || '',
-    name: m.name,
-    expectedDate: m.deadline || '',
-    progress: m.targetProgress || 0
-  }))
+  return sortLocalMilestonesByDate(
+    (indicator.milestones || []).map(m => ({
+      id: m.id || '',
+      name: m.name,
+      expectedDate: m.deadline || '',
+      progress: m.targetProgress || 0
+    }))
+  )
 }
 
 // 判断里程碑是否已完成（指标当前进度 >= 里程碑目标进度）
@@ -2423,7 +2511,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   @click="handleOpenApproval"
                 >
                   <el-icon><Check /></el-icon>
-                  查看审批{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
+                  {{ distributionApprovalButtonText }}{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
                 </el-button>
                 <!-- 待下发状态：显示添加指标和下发按钮 -->
                 <template v-if="collegeOverallStatus.label === '待下发'">
@@ -2846,10 +2934,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
             <!-- 新增指标表单 -->
             <div v-if="isAddingIndicator" ref="addRowFormRef" class="add-row-form">
               <h3 class="form-title">新增子指标</h3>
+              <div class="add-form-content">
               <el-form label-width="180px" class="no-wrap-labels">
                 <el-row :gutter="16">
                   <el-col :span="12">
-                    <el-form-item label="关联指标" required class="no-wrap-label">
+                    <el-form-item class="no-wrap-label required-form-item">
+                      <template #label><span class="required-asterisk">*</span>关联指标</template>
                       <el-select
                         v-model="newIndicatorForm.parentIndicatorId"
                         filterable
@@ -2882,7 +2972,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     </el-form-item>
                   </el-col>
                   <el-col :span="8">
-                    <el-form-item label="指标类型">
+                    <el-form-item class="required-form-item">
+                      <template #label><span class="required-asterisk">*</span>指标类型</template>
                       <el-select
                         v-model="newIndicatorForm.type1"
                         style="width: 100%"
@@ -2896,7 +2987,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     </el-form-item>
                   </el-col>
                   <el-col :span="8">
-                    <el-form-item label="权重">
+                    <el-form-item class="required-form-item">
+                      <template #label><span class="required-asterisk">*</span>权重</template>
                       <el-input-number
                         v-model="newIndicatorForm.weight"
                         :min="0"
@@ -2910,7 +3002,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-row>
                 <el-row :gutter="16">
                   <el-col :span="24">
-                    <el-form-item label="指标内容" required>
+                    <el-form-item class="required-form-item">
+                      <template #label><span class="required-asterisk">*</span>指标内容</template>
                       <el-input
                         v-model="newIndicatorForm.name"
                         type="textarea"
@@ -2934,7 +3027,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-row>
                 <el-row :gutter="16">
                   <el-col :span="24">
-                    <el-form-item label="里程碑" required>
+                    <el-form-item class="required-form-item">
+                      <template #label><span class="required-asterisk">*</span>里程碑</template>
                       <div class="milestone-form-area">
                         <el-button
                           v-if="newIndicatorForm.type1 === '定性'"
@@ -2995,15 +3089,14 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     </el-form-item>
                   </el-col>
                 </el-row>
-                <el-row>
-                  <el-col :span="24" style="text-align: right">
-                    <el-button type="primary" :loading="isSavingIndicator" :disabled="isSavingIndicator" @click="saveNewIndicator">
-                      {{ isSavingIndicator ? '保存中' : '保存' }}
-                    </el-button>
-                    <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator">取消</el-button>
-                  </el-col>
-                </el-row>
-              </el-form>
+                </el-form>
+              </div>
+              <div class="add-form-actions">
+                <el-button type="primary" :loading="isSavingIndicator" :disabled="isSavingIndicator" @click="saveNewIndicator">
+                  {{ isSavingIndicator ? '保存中' : '保存' }}
+                </el-button>
+                <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator">取消</el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -3146,6 +3239,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       title="编辑里程碑"
       width="700px"
       :close-on-click-modal="false"
+      :close-on-press-escape="!isSavingMilestones"
+      :show-close="!isSavingMilestones"
     >
       <div v-if="editingMilestonesChild" class="milestone-edit-dialog">
         <!-- 指标信息 -->
@@ -3215,6 +3310,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 size="small"
                 value-format="YYYY-MM-DD"
                 class="field-date"
+                @change="handleMilestoneDateChange"
               />
               <el-button
                 type="danger"
@@ -3229,8 +3325,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       </div>
 
       <template #footer>
-        <el-button @click="milestonesDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveMilestones">保存</el-button>
+        <el-button :disabled="isSavingMilestones" @click="milestonesDialogVisible = false">
+          取消
+        </el-button>
+        <el-button type="primary" :loading="isSavingMilestones" @click="saveMilestones">
+          保存
+        </el-button>
       </template>
     </el-dialog>
 
@@ -4429,14 +4529,35 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
    新增指标表单样式（复用战略任务界面样式）
    ======================================== */
 .add-row-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
   background: rgba(64, 158, 255, 0.08);
   padding: var(--spacing-lg);
+  padding-bottom: 72px;
   border-top: 1px solid var(--color-primary-light);
-  max-height: 600px;
-  overflow-y: auto;
   overflow-x: hidden;
   margin-top: 16px;
+}
+
+.add-form-content {
+  flex: 1 1 auto;
+  padding-right: 4px;
+}
+
+.add-form-actions {
+  position: sticky;
+  bottom: calc(var(--spacing-lg) * -1);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: auto calc(var(--spacing-lg) * -1) calc(var(--spacing-lg) * -1);
+  padding: 12px var(--spacing-lg);
+  background: transparent;
+  border-top: none;
+  box-shadow: none;
+  z-index: 10;
 }
 
 .add-row-form::-webkit-scrollbar {
@@ -4462,6 +4583,15 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   font-weight: 600;
   color: var(--color-primary-dark);
   margin: 0 0 var(--spacing-lg) 0;
+}
+
+.required-form-item :deep(.el-form-item__label) {
+  color: var(--text-primary, #303133);
+}
+
+.required-asterisk {
+  color: var(--color-danger, #f56c6c);
+  margin-right: 4px;
 }
 
 /* 强制表单标签不换行 */

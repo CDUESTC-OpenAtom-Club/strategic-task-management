@@ -63,6 +63,18 @@ interface CyclePageResponse<T> {
   content: T[]
 }
 
+function isForbiddenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const status = 'response' in error
+    ? Number((error as { response?: { status?: number } }).response?.status ?? NaN)
+    : Number((error as { status?: number }).status ?? NaN)
+
+  return status === 403
+}
+
 function withTaskCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
   return {
     ...getCachedUserContext(),
@@ -305,7 +317,21 @@ export const strategicApi = {
    */
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
   async getTasksByPlanId(planId: number | string): Promise<ApiResponse<StrategicTaskVO[]>> {
-    return apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-plan/${planId}`)
+    try {
+      return await apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-plan/${planId}`)
+    } catch (error) {
+      if (isForbiddenError(error)) {
+        logger.warn('[strategicApi] tasks by plan forbidden, downgrade to empty list', { planId })
+        return {
+          success: true,
+          code: 200,
+          message: '当前账号无权查看该计划任务，已按空数据处理',
+          data: [],
+          timestamp: new Date().toISOString()
+        }
+      }
+      throw error
+    }
   },
 
   /**
@@ -348,7 +374,24 @@ export const strategicApi = {
             }
           }
 
-          return apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-cycle/${cycleId}`)
+          try {
+            return await apiClient.get<ApiResponse<StrategicTaskVO[]>>(`/tasks/by-cycle/${cycleId}`)
+          } catch (error) {
+            if (isForbiddenError(error)) {
+              logger.warn('[strategicApi] tasks by cycle forbidden, downgrade to empty list', {
+                year,
+                cycleId
+              })
+              return {
+                success: true,
+                code: 200,
+                message: '当前账号无权查看该年度任务，已按空数据处理',
+                data: [],
+                timestamp: new Date().toISOString()
+              }
+            }
+            throw error
+          }
         }
       })
     } catch {

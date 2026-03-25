@@ -84,6 +84,9 @@ export function getIndicatorWorkflowStatusLabel(snapshot?: IndicatorWorkflowSnap
   if (workflowStatus === 'PENDING' || workflowStatus === 'IN_REVIEW' || workflowStatus === 'SUBMITTED') {
     return '待审批'
   }
+  if (workflowStatus === 'WITHDRAWN') {
+    return '已撤回'
+  }
   if (workflowStatus === 'APPROVED' || workflowStatus === 'COMPLETED') {
     return '已通过'
   }

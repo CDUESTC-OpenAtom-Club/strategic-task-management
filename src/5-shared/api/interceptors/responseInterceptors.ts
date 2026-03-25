@@ -44,6 +44,9 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
   const { useMock: _useMock = USE_MOCK } = config
 
   return async (response: AxiosResponse): Promise<AxiosResponse> => {
+    const requestConfig = response.config as InternalAxiosRequestConfig & {
+      _skipBusinessErrorThrow?: boolean
+    }
     // ========================================================================
     // MOCK MODE - 返回模拟数据
     // ========================================================================
@@ -140,6 +143,15 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
         }
       }
 
+      if (requestConfig._skipBusinessErrorThrow) {
+        logger.debug('🫥 [API Business Error] skipped by request config', {
+          url: response.config.url,
+          code: data.code,
+          message: stringifyMessage(data.message)
+        })
+        return response
+      }
+
       logger.error('❌ [API Business Error] success=false code:', data.code, 'message:', stringifyMessage(data.message))
       throw new Error(stringifyMessage(data.message) || 'Request failed')
     }
@@ -164,6 +176,15 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
             message: data.message
           }
         }
+      }
+
+      if (requestConfig._skipBusinessErrorThrow) {
+        logger.debug('🫥 [API Business Error] skipped by request config', {
+          url: response.config.url,
+          code: data.code,
+          message: stringifyMessage(data.message)
+        })
+        return response
       }
 
       logger.error('❌ [API Business Error] code:', data.code, 'message:', stringifyMessage(data.message))

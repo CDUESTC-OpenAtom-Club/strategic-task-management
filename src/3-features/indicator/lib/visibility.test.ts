@@ -33,7 +33,7 @@ describe('indicator visibility rules', () => {
     it('allows functional departments only in visible statuses', () => {
       expect(canViewReceivedPlanContent('DISTRIBUTED', false)).toBe(true)
       expect(canViewReceivedPlanContent('pending', false)).toBe(true)
-      expect(canViewReceivedPlanContent('RETURNED', false)).toBe(true)
+      expect(canViewReceivedPlanContent('RETURNED', false)).toBe(false)
       expect(canViewReceivedPlanContent('DRAFT', false)).toBe(false)
     })
   })

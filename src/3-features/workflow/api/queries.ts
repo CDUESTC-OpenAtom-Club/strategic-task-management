@@ -47,6 +47,33 @@ function withWorkflowContext(params?: Record<string, unknown>): Record<string, u
   }
 }
 
+function isForbiddenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const status = 'response' in error
+    ? Number((error as { response?: { status?: number } }).response?.status ?? NaN)
+    : Number((error as { status?: number }).status ?? NaN)
+
+  return status === 403
+}
+
+function buildForbiddenEmptyPageResult<T>(pageNum: number, pageSize: number): ApiResponse<PageResult<T>> {
+  return {
+    success: true,
+    code: 200,
+    message: '当前账号无权查看工作流数据，已按空数据处理',
+    data: {
+      items: [],
+      total: 0,
+      pageNum,
+      pageSize
+    },
+    timestamp: new Date().toISOString()
+  }
+}
+
 /**
  * Get workflow definitions with pagination
  *
@@ -199,7 +226,22 @@ export async function getWorkflowInstanceDetail(
       ...WORKFLOW_DETAIL_POLICY,
       tags: ['workflow.detail', `workflow.detail.${instanceId}`]
     },
-    fetcher: () => apiClient.get(`/workflows/instances/${instanceId}`)
+    fetcher: async () => {
+      try {
+        return await apiClient.get(`/workflows/instances/${instanceId}`)
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return {
+            success: true,
+            code: 200,
+            message: '当前账号无权查看该工作流实例，已按空数据处理',
+            data: undefined,
+            timestamp: new Date().toISOString()
+          } as ApiResponse<WorkflowInstanceDetailResponse>
+        }
+        throw error
+      }
+    }
   })
 }
 
@@ -222,7 +264,22 @@ export async function getWorkflowInstanceDetailByBusiness(
       ...WORKFLOW_DETAIL_POLICY,
       tags: ['workflow.detail', `workflow.business.${entityType}.${entityId}`]
     },
-    fetcher: () => apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}`)
+    fetcher: async () => {
+      try {
+        return await apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}`)
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return {
+            success: true,
+            code: 200,
+            message: '当前账号无权查看该业务工作流，已按空数据处理',
+            data: undefined,
+            timestamp: new Date().toISOString()
+          } as ApiResponse<WorkflowInstanceDetailResponse>
+        }
+        throw error
+      }
+    }
   })
 }
 
@@ -246,7 +303,22 @@ export async function getWorkflowInstanceHistoryByBusiness(
       ttlMs: 30 * 1000,
       tags: ['workflow.detail', `workflow.business.${entityType}.${entityId}`]
     },
-    fetcher: () => apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}/list`)
+    fetcher: async () => {
+      try {
+        return await apiClient.get(`/workflows/instances/entity/${entityType}/${entityId}/list`)
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return {
+            success: true,
+            code: 200,
+            message: '当前账号无权查看该业务审批历史，已按空数据处理',
+            data: [],
+            timestamp: new Date().toISOString()
+          }
+        }
+        throw error
+      }
+    }
   })
 }
 
@@ -267,7 +339,16 @@ export async function getMyPendingTasks(
       ...WORKFLOW_TODO_POLICY,
       tags: ['workflow.todo']
     },
-    fetcher: () => apiClient.get('/workflows/my-tasks', { pageNum })
+    fetcher: async () => {
+      try {
+        return await apiClient.get('/workflows/my-tasks', { pageNum })
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return buildForbiddenEmptyPageResult<WorkflowTaskResponse>(pageNum, 10)
+        }
+        throw error
+      }
+    }
   })
 }
 
@@ -291,7 +372,16 @@ export async function getMyApprovedInstances(
       ttlMs: 30 * 1000,
       tags: ['workflow.instances']
     },
-    fetcher: () => apiClient.get('/workflows/my-approved', { pageNum, pageSize })
+    fetcher: async () => {
+      try {
+        return await apiClient.get('/workflows/my-approved', { pageNum, pageSize })
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return buildForbiddenEmptyPageResult<WorkflowInstanceResponse>(pageNum, pageSize)
+        }
+        throw error
+      }
+    }
   })
 }
 
@@ -315,7 +405,16 @@ export async function getMyAppliedInstances(
       ttlMs: 30 * 1000,
       tags: ['workflow.instances']
     },
-    fetcher: () => apiClient.get('/workflows/my-applied', { pageNum, pageSize })
+    fetcher: async () => {
+      try {
+        return await apiClient.get('/workflows/my-applied', { pageNum, pageSize })
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return buildForbiddenEmptyPageResult<WorkflowInstanceResponse>(pageNum, pageSize)
+        }
+        throw error
+      }
+    }
   })
 }
 
@@ -334,6 +433,21 @@ export async function getWorkflowStatistics(): Promise<ApiResponse<Record<string
       ttlMs: 30 * 1000,
       tags: ['workflow.statistics']
     },
-    fetcher: () => apiClient.get('/workflows/statistics')
+    fetcher: async () => {
+      try {
+        return await apiClient.get('/workflows/statistics')
+      } catch (error) {
+        if (isForbiddenError(error)) {
+          return {
+            success: true,
+            code: 200,
+            message: '当前账号无权查看工作流统计，已按空数据处理',
+            data: {},
+            timestamp: new Date().toISOString()
+          }
+        }
+        throw error
+      }
+    }
   })
 }

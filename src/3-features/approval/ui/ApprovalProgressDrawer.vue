@@ -513,6 +513,27 @@ const currentPlanInstanceId = computed(() => {
 })
 
 const planWorkflowStatusTag = computed(() => {
+  const latestTaskStatus = String(
+    [...planWorkflowTasks.value]
+      .sort((left, right) => {
+        const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
+        const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
+        if (leftStepNo !== rightStepNo) {
+          return rightStepNo - leftStepNo
+        }
+        return String(right.taskId || '').localeCompare(String(left.taskId || ''))
+      })[0]?.status || ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (latestTaskStatus === 'WITHDRAWN') {
+    return { label: '已撤回', type: 'info' as const }
+  }
+  if (latestTaskStatus === 'REJECTED') {
+    return { label: '已驳回', type: 'danger' as const }
+  }
+
   const rawStatus = String(
     activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || ''
   ).toUpperCase()
@@ -520,7 +541,10 @@ const planWorkflowStatusTag = computed(() => {
     return { label: '已通过', type: 'success' as const }
   }
   if (rawStatus === 'RETURNED' || rawStatus === 'REJECTED') {
-    return { label: '已退回', type: 'danger' as const }
+    return { label: '已驳回', type: 'danger' as const }
+  }
+  if (rawStatus === 'WITHDRAWN') {
+    return { label: '已撤回', type: 'info' as const }
   }
   if (rawStatus === 'PENDING' || rawStatus === 'IN_REVIEW' || rawStatus === 'SUBMITTED') {
     return { label: '审批中', type: 'warning' as const }
@@ -571,11 +595,52 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
   if (normalizedStatus === 'REJECTED') {
     return 'rejected'
   }
+  if (normalizedStatus === 'WITHDRAWN') {
+    return 'withdrawn'
+  }
   if (String(task.taskId || '') === String(currentPlanTaskId.value || '')) {
     return 'current'
   }
   return 'pending'
 }
+
+function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
+  const normalizedStatus = String(task.status || '')
+    .trim()
+    .toUpperCase()
+  if (normalizedStatus === 'WITHDRAWN') {
+    return '已撤回'
+  }
+  if (normalizedStatus === 'REJECTED') {
+    return '已驳回'
+  }
+  if (normalizedStatus === 'COMPLETED') {
+    return '已通过'
+  }
+  return '待审批'
+}
+
+const latestPlanTaskDisplayLabel = computed(() => {
+  const latestTask = [...planWorkflowTasks.value]
+    .sort((left, right) => {
+      const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
+      const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
+      if (leftStepNo !== rightStepNo) {
+        return rightStepNo - leftStepNo
+      }
+      return String(right.taskId || '').localeCompare(String(left.taskId || ''))
+    })[0]
+
+  return latestTask ? resolveTaskStatusLabel(latestTask) : ''
+})
+
+const currentPlanStepDisplay = computed(() => {
+  if (['已撤回', '已驳回', '已通过'].includes(latestPlanTaskDisplayLabel.value)) {
+    return latestPlanTaskDisplayLabel.value
+  }
+
+  return activePlanWorkflow.value?.currentStepName || latestPlanTaskDisplayLabel.value || '审批中'
+})
 
 const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   if (hasPlanWorkflowData.value && props.plan) {
@@ -587,7 +652,7 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
           activePlanWorkflow.value?.name || props.planName || props.departmentName || '当前计划'
         ),
         submitterName: planSubmitterName.value,
-        currentStepName: String(activePlanWorkflow.value?.currentStepName || '审批中'),
+        currentStepName: String(currentPlanStepDisplay.value),
         createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
         entityId: activePlanWorkflow.value?.id,
         planName: activePlanWorkflow.value?.name
@@ -611,7 +676,9 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
     submitterName: String(
       instance.submitterName || instance.applicantName || instance.submitter || '未知'
     ),
-    currentStepName: String(instance.currentStepName || instance.currentStep || '审批中'),
+    currentStepName: String(
+      instance.currentStepName || instance.currentStep || latestPlanTaskDisplayLabel.value || '审批中'
+    ),
     createdAt: typeof instance.createdAt === 'string' ? instance.createdAt : undefined,
     entityId: instance.entityId,
     planName: instance.planName
@@ -656,7 +723,10 @@ function resolveHistoryStatusTag(status?: string): {
     return { label: '已通过', type: 'success' }
   }
   if (normalized === 'REJECTED') {
-    return { label: '已退回', type: 'danger' }
+    return { label: '已驳回', type: 'danger' }
+  }
+  if (normalized === 'WITHDRAWN') {
+    return { label: '已撤回', type: 'info' }
   }
   if (normalized === 'IN_REVIEW' || normalized === 'PENDING' || normalized === 'SUBMITTED') {
     return { label: '审批中', type: 'warning' }
@@ -697,7 +767,7 @@ const currentPlanApprovalSummary = computed(() => {
         activePlanWorkflow.value?.name ||
         props.planName ||
         `${props.departmentName || '当前部门'}计划`,
-      currentStepName: activePlanWorkflow.value?.currentStepName || '审批中',
+      currentStepName: currentPlanStepDisplay.value,
       submitterName: planSubmitterName.value,
       createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
       count: 1
@@ -720,7 +790,9 @@ const currentPlanApprovalSummary = computed(() => {
     currentStepName:
       scopedPlanApprovals.value
         .map(item => item.currentStepName)
-        .find(step => typeof step === 'string' && step.trim()) || '审批中',
+        .find(step => typeof step === 'string' && step.trim()) ||
+      latestPlanTaskDisplayLabel.value ||
+      '审批中',
     submitterName:
       scopedPlanApprovals.value
         .map(item => item.submitterName)

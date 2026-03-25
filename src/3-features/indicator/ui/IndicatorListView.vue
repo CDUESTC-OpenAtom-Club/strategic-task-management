@@ -261,9 +261,6 @@ function isApprovalStatus(
     case 'PENDING':
       effectiveStatus = 'PENDING'
       break
-    case 'RETURNED':
-      effectiveStatus = 'REJECTED'
-      break
     case 'DISTRIBUTED':
     case 'DRAFT':
     case null:
@@ -380,7 +377,7 @@ const canViewReceivedPlanContent = computed(() => {
     return true
   }
 
-  return ['DISTRIBUTED', 'PENDING', 'RETURNED'].includes(normalizedCurrentPlanStatus.value ?? '')
+  return ['DRAFT', 'DISTRIBUTED', 'PENDING'].includes(normalizedCurrentPlanStatus.value ?? '')
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
@@ -971,9 +968,6 @@ const approvalEntryButtonText = computed(() => {
   const status = normalizedCurrentPlanStatus.value
   if (status === 'PENDING') {
     return '审批中'
-  }
-  if (status === 'RETURNED') {
-    return '查看退回'
   }
   if (status === 'DISTRIBUTED') {
     return '查看审批'
@@ -2411,6 +2405,10 @@ const allIndicatorsSubmitted = computed(() => {
   return indicators.value.every(row => isApprovalStatus(row, 'PENDING'))
 })
 
+const canWithdrawCurrentPlan = computed(() => {
+  return normalizedCurrentPlanStatus.value === 'PENDING' && Boolean(currentPlanDetails.value?.canWithdraw)
+})
+
 /**
  * 计算属性：判断是否存在任何可供撤回的指标。
  * 只有当至少有一个指标的状态是 'PENDING' (待审批) 时，才允许撤回。
@@ -2418,10 +2416,7 @@ const allIndicatorsSubmitted = computed(() => {
  * @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
  */
 const canWithdrawAny = computed(() => {
-  if (indicators.value.length === 0) {
-    return false
-  }
-  return indicators.value.some(row => isApprovalStatus(row, 'PENDING'))
+  return canWithdrawCurrentPlan.value
 })
 
 /**
@@ -2434,7 +2429,7 @@ const withdrawTooltip = computed(() => {
   if (canWithdrawAny.value) {
     return '' // 如果可以撤回，则没有提示
   }
-  return '没有待审批的指标可供撤回' // 如果不可撤回，提供原因
+  return '当前审批进度不支持撤回' // 如果不可撤回，提供原因
 })
 
 // 获取未填报的指标数量
@@ -2455,7 +2450,7 @@ const handleSubmitAll = () => {
     return
   }
 
-  if (!['DRAFT', 'RETURNED', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
+  if (!['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
     ElMessage.warning('当前计划正在审批中，不能重复提交')
     return
   }
@@ -2525,16 +2520,10 @@ const handleWithdrawAllProgressApprovals = () => {
   }
 
   const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))
-
-  if (pendingRows.length === 0) {
-    ElMessage.warning('没有待审批的指标可撤回')
-    return
-  }
-
   const indicatorNames = pendingRows.map(ind => ind.name).join('、')
 
   ElMessageBox.confirm(
-    `确认撤回当前计划下全部 ${pendingRows.length} 个已提交指标的审批吗？\n\n${indicatorNames}\n\n撤回后整份计划会回到草稿状态，可重新编辑后再提交。`,
+    `确认撤回当前计划审批吗？${indicatorNames ? `\n\n当前涉及指标：${indicatorNames}` : ''}\n\n撤回后整份计划会回到草稿状态，可重新编辑后再提交。`,
     '一键撤回计划审批',
     {
       confirmButtonText: '确定撤回',

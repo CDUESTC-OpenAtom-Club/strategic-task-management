@@ -13,6 +13,7 @@ import { USE_MOCK } from '@/shared/config/api'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { logger } from '@/shared/lib/utils/logger'
 import type {
   ApiResponse,
   Plan,
@@ -113,6 +114,23 @@ export interface PlanFillVO {
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
   return response.success === true || response.code === 200
+}
+
+type SilentApiResult<T> = {
+  status: number
+  data?: ApiResponse<T> | T
+}
+
+async function silentApiGet<T>(url: string): Promise<SilentApiResult<T>> {
+  const response = await apiClient.getAxiosInstance().get<ApiResponse<T> | T>(url, {
+    validateStatus: () => true,
+    _skipBusinessErrorThrow: true
+  })
+
+  return {
+    status: response.status,
+    data: response.data
+  }
 }
 
 function invalidatePlanCaches(planId?: number | string): void {
@@ -815,8 +833,9 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
 }
 
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
-  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse>>(`/reports/${reportId}`)
-  if (!hasApiData(response) || !response.data) {
+  const result = await silentApiGet<PlanReportSimpleResponse>(`/reports/${reportId}`)
+  const response = result.data as ApiResponse<PlanReportSimpleResponse> | undefined
+  if (result.status >= 500 || !response || !hasApiData(response) || !response.data) {
     throw new Error(typeof response.message === 'string' ? response.message || '加载报告详情失败' : '加载报告详情失败')
   }
   return enrichPlanReportWorkflow(response.data)
@@ -1104,7 +1123,17 @@ export const planApi = {
       },
       fetcher: async () => {
         const resolveCycleYear = await getCycleYearResolver()
-        const response = await apiClient.get<ApiResponse<Plan>>(`/plans/${planId}/details`)
+        const result = await silentApiGet<Plan>(`/plans/${planId}/details`)
+        const response = result.data as ApiResponse<Plan> | undefined
+
+        if (result.status >= 500 || !response || !hasApiData(response) || !response.data) {
+          logger.warn('[planApi] plan details endpoint unavailable, fallback to basic plan', {
+            planId,
+            status: result.status,
+            message: response && typeof response === 'object' && 'message' in response ? response.message : undefined
+          })
+          return this.getPlanById(planId)
+        }
 
         if (hasApiData(response) && response.data) {
           const backendData = response.data as any
@@ -1163,8 +1192,11 @@ export const planApi = {
       'PENDING': 'pending',
       'IN_REVIEW': 'pending',
       'PENDING_APPROVAL': 'pending',
-      'RETURNED': 'returned',
-      'REJECTED': 'returned',
+      'RETURNED': 'draft',
+      'REJECTED': 'draft',
+      'WITHDRAWN': 'draft',
+      'CANCELLED': 'draft',
+      'COMPLETED': 'draft',
       'APPROVED': 'published',
       'DISTRIBUTED': 'published',
       'ACTIVE': 'published',

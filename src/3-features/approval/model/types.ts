@@ -22,7 +22,7 @@ export interface ApprovalInstance {
   updatedAt?: string
 }
 
-export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN' | 'CANCELLED'
 
 export interface ApprovalFlow {
   id: number
@@ -44,7 +44,7 @@ export interface ApprovalStep {
   approvers: ApprovalUser[]
 }
 
-export type ApprovalStepStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SKIPPED'
+export type ApprovalStepStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'WITHDRAWN' | 'SKIPPED'
 
 export interface ApprovalUser {
   id: number

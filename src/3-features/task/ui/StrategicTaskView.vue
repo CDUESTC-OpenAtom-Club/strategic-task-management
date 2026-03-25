@@ -118,6 +118,7 @@ const isInitialDataLoading = computed(() => {
 // 当前选中任务索引
 const currentTaskIndex = ref(0)
 const isAddingOrEditing = ref(false)
+const addRowFormRef = ref<HTMLElement | null>(null)
 
 // 视图模式：table（表格视图）或 card（卡片视图）
 const viewMode = ref<'table' | 'card'>('table')
@@ -711,10 +712,6 @@ const currentPlan = computed(() => {
 
 // 获取当前选中部门对应的 Plan 状态
 const currentPlanStatus = computed(() => {
-  const workflowStatus = normalizePlanStatus(currentPlan.value?.workflowStatus)
-  if (workflowStatus === 'PENDING') {
-    return workflowStatus
-  }
   return normalizePlanStatus(currentPlan.value?.status)
 })
 
@@ -889,46 +886,11 @@ const isPlanDistributed = computed(() => {
   return status === 'DISTRIBUTED'
 })
 
-// 判断当前审批流程是否处于第一个节点且为待审批状态（可以撤回）
-const isFirstStepPending = computed(() => {
-  const status = currentPlanStatus.value
-  const currentStep = currentPlan.value?.currentStep
-
-  // 只有待审批状态才可能处于第一个节点
-  if (status !== 'PENDING') {
-    return false
-  }
-
-  // 如果没有 currentStep 信息，默认认为是第一个节点（未启动审批）
-  if (!currentStep) {
-    return true
-  }
-
-  // currentStep 为 1 表示第一个节点
-  return currentStep === '1' || currentStep === 1
-})
-
 // 判断 Plan 是否可以撤回
-// 条件：草稿状态 OR（待审批状态 AND 第一个节点处于待审批）
+// 统一以后端 workflow snapshot 的 canWithdraw 为准
 const canWithdrawPlan = computed(() => {
-  if (typeof currentPlan.value?.canWithdraw === 'boolean') {
-    return currentPlan.value.canWithdraw
-  }
-
   const status = currentPlanStatus.value
-
-  // 草稿状态可以撤回
-  if (status === 'DRAFT') {
-    return true
-  }
-
-  // 待审批状态，只有第一个节点是待审批时才能撤回
-  if (status === 'PENDING') {
-    return isFirstStepPending.value
-  }
-
-  // 已下发状态不能撤回
-  return false
+  return status === 'PENDING' && Boolean(currentPlan.value?.canWithdraw)
 })
 
 // 判断当前页面指标是否已进入“不可编辑”的流程阶段
@@ -966,10 +928,7 @@ const canDeleteIndicator = (indicator: StrategicIndicator): boolean => {
   }
 
   // Plan 必须处于草稿状态才能删除指标
-  const isPlanDraft =
-    currentPlanStatus.value === 'DRAFT' ||
-    currentPlanStatus.value === 'RETURNED' ||
-    !currentPlanStatus.value
+  const isPlanDraft = currentPlanStatus.value === 'DRAFT' || !currentPlanStatus.value
   return isPlanDraft
 }
 
@@ -982,9 +941,6 @@ const pendingApprovalCount = computed(() => {
 const approvalEntryButtonText = computed(() => {
   if (currentPlanStatus.value === 'PENDING') {
     return '审批中'
-  }
-  if (currentPlanStatus.value === 'RETURNED') {
-    return '查看退回'
   }
   if (currentPlanStatus.value === 'DISTRIBUTED') {
     return '查看审批'
@@ -1014,9 +970,7 @@ const canDistribute = computed(() => {
 
   // Plan 必须处于草稿状态才能下发
   const canSubmitPlan =
-    currentPlanStatus.value === 'DRAFT' ||
-    currentPlanStatus.value === 'RETURNED' ||
-    !currentPlanStatus.value
+    currentPlanStatus.value === 'DRAFT' || !currentPlanStatus.value
   if (!canSubmitPlan) {
     return false
   }
@@ -1034,16 +988,13 @@ const distributeButtonText = computed(() => {
   if (status === 'DRAFT' || !status) {
     return '发起审批'
   }
-  if (status === 'RETURNED') {
-    return '重新提交'
-  }
   return '撤回'
 })
 
 // 下发/撤回按钮类型
 const distributeButtonType = computed(() => {
   const status = currentPlanStatus.value
-  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
+  if (status === 'DRAFT' || !status) {
     return 'success'
   }
   // 待审批/已下发状态：可撤回用 warning，不可撤回用 info(禁用)
@@ -1053,7 +1004,7 @@ const distributeButtonType = computed(() => {
 // 下发/撤回按钮图标
 const distributeButtonIcon = computed(() => {
   const status = currentPlanStatus.value
-  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
+  if (status === 'DRAFT' || !status) {
     return Promotion
   }
   return RefreshLeft
@@ -1065,7 +1016,7 @@ const distributeButtonDisabledReason = computed(() => {
   }
 
   const status = currentPlanStatus.value
-  const isSubmittingStatus = status === 'DRAFT' || status === 'RETURNED' || !status
+  const isSubmittingStatus = status === 'DRAFT' || !status
 
   if (isSubmittingStatus && departmentTotalWeight.value !== 100) {
     return `基础性任务指标权重合计必须为100%，当前为${departmentTotalWeight.value}`
@@ -1075,7 +1026,7 @@ const distributeButtonDisabledReason = computed(() => {
     return '当前审批进度不支持撤回'
   }
 
-  if (status && status !== 'DRAFT' && status !== 'RETURNED' && status !== 'PENDING') {
+  if (status && status !== 'DRAFT' && status !== 'PENDING') {
     return '当前状态不可操作'
   }
 
@@ -1185,8 +1136,8 @@ const handleDistributeOrWithdraw = () => {
 
   const status = currentPlanStatus.value
 
-  if (status === 'DRAFT' || status === 'RETURNED' || !status) {
-    // 草稿/退回状态：确认流程后发起整体计划审批
+  if (status === 'DRAFT' || !status) {
+    // 草稿状态：确认流程后发起整体计划审批
     void openApprovalSetupDialog()
   } else {
     // 待审批/已下发状态：撤回
@@ -1576,17 +1527,21 @@ const getTaskStatus = (_row: StrategicIndicator) => {
   if (planStatus === 'PENDING') {
     return { label: '待审批', type: 'warning', canWithdraw: false }
   }
-  if (planStatus === 'REJECTED') {
-    return { label: '已驳回', type: 'danger', canWithdraw: true }
-  }
   // 默认返回待下发
   return { label: '待下发', type: 'info', canWithdraw: true }
+}
+
+const getPersistedWithdrawableRows = (rows: StrategicIndicator[]): StrategicIndicator[] => {
+  return rows.filter(row => {
+    const normalizedId = String(row.id ?? '').trim()
+    return Boolean(normalizedId) && /^\d+$/.test(normalizedId)
+  })
 }
 
 // 撤回整个任务（撤回同一战略任务下的所有指标）
 const _handleWithdrawTask = async (row: StrategicIndicator) => {
   const group = getTaskGroup(row)
-  const distributedRows = group.rows.filter(r => !r.canWithdraw)
+  const distributedRows = getPersistedWithdrawableRows(group.rows)
 
   if (distributedRows.length === 0) {
     ElMessage.warning('该任务下没有已下发的指标')
@@ -1643,6 +1598,28 @@ const _handleViewMilestones = (row: StrategicIndicator) => {
 const milestoneEditDialogVisible = ref(false)
 const editingMilestoneIndicator = ref<StrategicIndicator | null>(null)
 const editingMilestones = ref<Milestone[]>([])
+const isSavingMilestoneEdit = ref(false)
+const createTempMilestoneId = () => -Date.now() - Math.floor(Math.random() * 1000)
+
+const sortDialogMilestonesByDate = (milestones: Milestone[]): Milestone[] => {
+  const toTime = (value?: string | null) => {
+    if (!value) {
+      return Number.POSITIVE_INFINITY
+    }
+
+    const time = new Date(value).getTime()
+    return Number.isFinite(time) ? time : Number.POSITIVE_INFINITY
+  }
+
+  return [...milestones].sort((a, b) => {
+    const dateDiff = toTime(a.deadline) - toTime(b.deadline)
+    if (dateDiff !== 0) {
+      return dateDiff
+    }
+
+    return Number(a.targetProgress ?? 0) - Number(b.targetProgress ?? 0)
+  })
+}
 
 // 打开里程碑编辑弹窗
 const handleEditMilestones = (row: StrategicIndicator) => {
@@ -1662,7 +1639,9 @@ const handleEditMilestones = (row: StrategicIndicator) => {
 
   editingMilestoneIndicator.value = row
   // 深拷贝里程碑数据
-  editingMilestones.value = JSON.parse(JSON.stringify(row.milestones || []))
+  editingMilestones.value = sortDialogMilestonesByDate(
+    JSON.parse(JSON.stringify(row.milestones || []))
+  )
   milestoneEditDialogVisible.value = true
 }
 
@@ -1681,12 +1660,13 @@ const addMilestoneInDialog = () => {
   const autoName =
     editingMilestoneIndicator.value?.type1 === '定量' ? editingMilestoneIndicator.value?.name : ''
   editingMilestones.value.push({
-    id: Date.now(),
+    id: createTempMilestoneId(),
     name: autoName,
     targetProgress: 0,
     deadline: '',
     status: 'pending'
   })
+  editingMilestones.value = sortDialogMilestonesByDate(editingMilestones.value)
 }
 
 // 生成12个月里程碑（编辑弹窗内）
@@ -1724,6 +1704,7 @@ const generateMonthlyMilestonesInDialog = () => {
       status: 'NOT_STARTED' // 使用后端枚举值
     })
   }
+  editingMilestones.value = sortDialogMilestonesByDate(editingMilestones.value)
   logger.info(
     `[generateMonthlyMilestonesInDialog] Generated ${editingMilestones.value.length} milestones`
   )
@@ -1734,9 +1715,13 @@ const removeMilestoneInDialog = (index: number) => {
   editingMilestones.value.splice(index, 1)
 }
 
+const handleMilestoneDeadlineChange = () => {
+  editingMilestones.value = sortDialogMilestonesByDate(editingMilestones.value)
+}
+
 // 保存里程碑编辑
 const saveMilestoneEdit = async () => {
-  if (!editingMilestoneIndicator.value) {
+  if (!editingMilestoneIndicator.value || isSavingMilestoneEdit.value) {
     return
   }
 
@@ -1756,6 +1741,8 @@ const saveMilestoneEdit = async () => {
     }
   }
 
+  isSavingMilestoneEdit.value = true
+
   try {
     // 从当前指标列表中查找最新的指标对象（使用 id 匹配）
     const currentIndicator = indicators.value.find(
@@ -1769,46 +1756,29 @@ const saveMilestoneEdit = async () => {
 
     const indicatorId = currentIndicator.id.toString()
     const deptKey = selectedDepartment.value || ''
-    const existingMilestones = Array.isArray(currentIndicator.milestones)
-      ? currentIndicator.milestones
-      : []
-    const existingIds = new Set(
-      existingMilestones.map(ms => Number(ms.id)).filter(id => Number.isFinite(id) && id > 0)
-    )
+    const sortedMilestones = sortDialogMilestonesByDate(editingMilestones.value)
 
     logger.info(
-      `[StrategicTaskView] Saving ${editingMilestones.value.length} milestones for indicator ${indicatorId}`
+      `[StrategicTaskView] Saving ${sortedMilestones.length} milestones for indicator ${indicatorId}`
     )
 
-    const editedIds = new Set<number>()
-
-    for (const [index, milestone] of editingMilestones.value.entries()) {
-      const milestoneId = Number(milestone.id)
-      const payload = {
-        indicatorId: Number(indicatorId),
-        milestoneName: String(milestone.name || '').trim(),
-        description: '',
-        dueDate: toMilestoneDueDate(milestone.deadline),
-        targetProgress: Number(milestone.targetProgress || 0),
-        status: toMilestoneRequestStatus(milestone.status),
-        sortOrder: Number(milestone.sortOrder ?? index + 1),
-        isPaired: Boolean((milestone as { isPaired?: boolean }).isPaired ?? false),
-        inheritedFrom: null as number | null
-      }
-
-      if (Number.isFinite(milestoneId) && milestoneId > 0) {
-        editedIds.add(milestoneId)
-        await milestoneApi.updateMilestone(String(milestoneId), payload)
-        continue
-      }
-
-      await milestoneApi.createMilestone(payload)
-    }
-
-    const deletedIds = [...existingIds].filter(id => !editedIds.has(id))
-    for (const milestoneId of deletedIds) {
-      await milestoneApi.deleteMilestone(String(milestoneId))
-    }
+    await milestoneApi.saveMilestonesForIndicator(
+      indicatorId,
+      sortedMilestones.map((milestone, index) => {
+        const milestoneId = Number(milestone.id)
+        return {
+          id: Number.isFinite(milestoneId) && milestoneId > 0 ? milestoneId : undefined,
+          milestoneName: String(milestone.name || '').trim(),
+          description: '',
+          dueDate: toMilestoneDueDate(milestone.deadline),
+          targetProgress: Number(milestone.targetProgress || 0),
+          status: toMilestoneRequestStatus(milestone.status),
+          sortOrder: Number(milestone.sortOrder ?? index + 1),
+          isPaired: Boolean((milestone as { isPaired?: boolean }).isPaired ?? false),
+          inheritedFrom: null as number | null
+        }
+      })
+    )
 
     const refreshedMilestones = await reloadMilestonesForIndicator(indicatorId, deptKey)
     logger.info(
@@ -1823,11 +1793,16 @@ const saveMilestoneEdit = async () => {
   } catch (error) {
     logger.error('Failed to save milestones:', error)
     ElMessage.error('里程碑更新失败')
+  } finally {
+    isSavingMilestoneEdit.value = false
   }
 }
 
 // 取消里程碑编辑
 const cancelMilestoneEdit = () => {
+  if (isSavingMilestoneEdit.value) {
+    return
+  }
   milestoneEditDialogVisible.value = false
   editingMilestoneIndicator.value = null
   editingMilestones.value = []
@@ -2154,6 +2129,22 @@ const cancelIndicatorEdit = () => {
 
 // 全局点击事件处理 - 点击编辑区域外退出编辑
 const handleGlobalClick = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+
+  if (isAddingOrEditing.value) {
+    const clickedInsideAddForm =
+      !!addRowFormRef.value && addRowFormRef.value.contains(target)
+    const clickedInsidePopup =
+      !!target.closest('.el-popper') ||
+      !!target.closest('.el-select-dropdown') ||
+      !!target.closest('.el-picker__popper')
+
+    if (!clickedInsideAddForm && !clickedInsidePopup) {
+      cancelAdd()
+      return
+    }
+  }
+
   // 如果没有正在编辑的字段，直接返回
   if (
     editingIndicatorId.value === null ||
@@ -2162,8 +2153,6 @@ const handleGlobalClick = (event: MouseEvent) => {
   ) {
     return
   }
-
-  const target = event.target as HTMLElement
 
   // 检查点击是否在 el-select 或其下拉菜单内
   const isInSelect = target.closest('.el-select') || target.closest('.el-select-dropdown')
@@ -2256,39 +2245,60 @@ watch([selectedDepartment, () => planStore.plans.length], async () => {
 })
 
 // 方法
-const addNewRow = () => {
+const resetNewRow = (
+  overrides: Partial<{
+    taskContent: string
+    type1: '定性' | '定量'
+    type2: '发展性' | '基础性'
+  }> = {}
+) => {
+  newRow.value = {
+    taskContent: overrides.taskContent ?? '',
+    name: '',
+    type1: overrides.type1 ?? '定量',
+    type2: overrides.type2 ?? '基础性',
+    weight: 0,
+    remark: '',
+    milestones: []
+  }
+}
+
+const openNewRowDialog = (
+  overrides: Partial<{
+    taskContent: string
+    type1: '定性' | '定量'
+    type2: '发展性' | '基础性'
+  }> = {}
+) => {
+  resetNewRow(overrides)
   isAddingOrEditing.value = true
-  // 由于默认是定量指标，自动生成12个里程碑
+
   if (newRow.value.type1 === '定量') {
     generateMonthlyMilestones()
   }
 }
 
+const addNewRow = () => {
+  openNewRowDialog()
+}
+
 // 在指定类别中添加新指标
 const _addIndicatorToCategory = (category: '发展性' | '基础性') => {
   logger.info(`[StrategicTaskView] addIndicatorToCategory called with category: ${category}`)
-  newRow.value.type2 = category
-  isAddingOrEditing.value = true
+  openNewRowDialog({ type2: category })
 }
 
 // 为指定任务新增指标（点击单元格右下角加号）
 const handleAddIndicatorToTask = (row: StrategicIndicator) => {
-  newRow.value.taskContent = row.taskContent || ''
-  newRow.value.type2 = row.type2 || '发展性'
-  isAddingOrEditing.value = true
+  openNewRowDialog({
+    taskContent: row.taskContent || '',
+    type2: row.type2 === '基础性' ? '基础性' : '发展性'
+  })
 }
 
 const cancelAdd = () => {
   isAddingOrEditing.value = false
-  newRow.value = {
-    taskContent: '',
-    name: '',
-    type1: '定量',
-    type2: '基础性',
-    weight: null,
-    remark: '',
-    milestones: []
-  }
+  resetNewRow()
   updateEditTime()
 }
 
@@ -2303,16 +2313,16 @@ const persistNewIndicatorMilestones = async (indicatorId: number, milestones: Mi
     return
   }
 
-  for (const [index, milestone] of milestones.entries()) {
-    await milestoneApi.createMilestone({
-      indicatorId,
+  await milestoneApi.saveMilestonesForIndicator(
+    String(indicatorId),
+    milestones.map((milestone, index) => ({
       milestoneName: String(milestone.name || '').trim() || `里程碑 ${index + 1}`,
       targetProgress: Number(milestone.targetProgress) || 0,
       dueDate: milestone.deadline || null,
       status: milestone.status === 'completed' ? 'COMPLETED' : 'NOT_STARTED',
       sortOrder: index + 1
-    })
-  }
+    }))
+  )
 
   await reloadMilestonesForIndicator(String(indicatorId), selectedDepartment.value || '战略发展部')
 }
@@ -3021,8 +3031,8 @@ const _handleWithdraw = async (row: StrategicIndicator) => {
   if (!canWithdrawPlan.value) {
     if (isPlanDistributed.value) {
       ElMessage.warning('当前 Plan 已下发，无法撤回')
-    } else if (currentPlanStatus.value === 'PENDING' && !isFirstStepPending.value) {
-      ElMessage.warning('当前 Plan 审批流程已开始，无法撤回')
+    } else if (currentPlanStatus.value === 'PENDING') {
+      ElMessage.warning('当前审批进度不支持撤回')
     } else {
       ElMessage.warning('当前状态无法撤回')
     }
@@ -3177,38 +3187,22 @@ const handleWithdrawAll = async () => {
   if (!canWithdrawPlan.value) {
     if (isPlanDistributed.value) {
       ElMessage.warning('当前 Plan 已下发，无法撤回')
-    } else if (currentPlanStatus.value === 'PENDING' && !isFirstStepPending.value) {
-      ElMessage.warning('当前 Plan 审批流程已开始，无法撤回')
+    } else if (currentPlanStatus.value === 'PENDING') {
+      ElMessage.warning('当前审批进度不支持撤回')
     } else {
       ElMessage.warning('当前状态无法撤回')
     }
     return
   }
 
-  // 基于 statusAudit 判断已下发状态
-  const distributedRows = indicators.value.filter(r => {
-    const audit = r.statusAudit || []
-    if (audit.length === 0) {
-      return false
-    } // 无审计记录 = 草稿状态 = 未下发
-    const lastAudit = audit[audit.length - 1]
-    const lastAction = lastAudit?.action
-    // 已下发状态：最后一次操作是 distribute（下发）或 reject（打回）或 approve（审批通过）
-    return (
-      lastAction === 'distribute' ||
-      lastAction === 'reject' ||
-      lastAction === 'approve' ||
-      lastAction === 'submit'
-    )
-  })
-
-  if (distributedRows.length === 0) {
-    ElMessage.warning('当前没有已下发的指标')
+  const planId = Number(currentPlan.value?.id ?? NaN)
+  if (!Number.isFinite(planId) || planId <= 0) {
+    ElMessage.warning('当前没有可撤回的计划')
     return
   }
 
   ElMessageBox.confirm(
-    `确认撤回当前部门的全部 ${distributedRows.length} 个已下发指标？`,
+    '确认撤回当前部门的下发申请？撤回后，当前 Plan 将恢复为草稿状态。',
     '全部撤回确认',
     {
       confirmButtonText: '确认撤回',
@@ -3219,22 +3213,18 @@ const handleWithdrawAll = async () => {
     .then(async () => {
       // 显示加载状态
       const loading = ElMessage({
-        message: '正在撤回指标...',
+        message: '正在撤回 Plan...',
         type: 'info',
         duration: 0
       })
 
       try {
-        // 1. 先调用后端 API 更新所有指标（添加审计记录）
-        await Promise.all(
-          distributedRows.map(row => strategicStore.withdrawIndicator(row.id.toString()))
-        )
-
-        // 2. 重新从后端加载数据，确保前端状态与后端一致
+        await planStore.withdrawPlan(planId)
+        await planStore.loadPlans({ force: true, background: true })
         await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
 
         loading.close()
-        ElMessage.success(`已成功撤回 ${distributedRows.length} 个指标`)
+        ElMessage.success('已成功撤回当前 Plan')
         updateEditTime()
       } catch (err) {
         loading.close()
@@ -3280,7 +3270,7 @@ const _handleBatchWithdrawByTask = async (group: {
   taskContent: string
   rows: StrategicIndicator[]
 }) => {
-  const distributedRows = group.rows.filter(r => !r.canWithdraw)
+  const distributedRows = getPersistedWithdrawableRows(group.rows)
   if (distributedRows.length === 0) {
     ElMessage.warning('该任务下没有已下发的指标')
     return
@@ -3978,9 +3968,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                     <el-tag v-if="currentPlanStatus === 'PENDING'" type="warning" size="small">
                       计划审批中
                     </el-tag>
-                    <el-tag v-else-if="currentPlanStatus === 'RETURNED'" type="danger" size="small">
-                      计划已退回
-                    </el-tag>
                   </div>
                 </div>
                 <div class="card-actions">
@@ -4196,12 +4183,14 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
         </template>
 
         <!-- 新增行表单 -->
-        <div v-if="isAddingOrEditing" class="add-row-form">
+        <div v-if="isAddingOrEditing" ref="addRowFormRef" class="add-row-form">
           <h3 class="form-title">新增任务指标</h3>
-          <el-form label-width="80px">
+          <div class="add-form-content">
+            <el-form label-width="80px">
             <el-row :gutter="16">
               <el-col :span="4">
-                <el-form-item label="任务类型">
+                <el-form-item class="required-form-item">
+                  <template #label><span class="required-asterisk">*</span>任务类型</template>
                   <el-select
                     v-model="newRow.type2"
                     style="width: 100%"
@@ -4213,7 +4202,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="战略任务">
+                <el-form-item class="required-form-item">
+                  <template #label><span class="required-asterisk">*</span>战略任务</template>
                   <el-select
                     ref="taskSelectRef"
                     v-model="newRow.taskContent"
@@ -4236,7 +4226,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                 </el-form-item>
               </el-col>
               <el-col :span="4">
-                <el-form-item label="指标类型">
+                <el-form-item class="required-form-item">
+                  <template #label><span class="required-asterisk">*</span>指标类型</template>
                   <el-select
                     v-model="newRow.type1"
                     style="width: 100%"
@@ -4252,7 +4243,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                 </el-form-item>
               </el-col>
               <el-col :span="4">
-                <el-form-item label="权重">
+                <el-form-item class="required-form-item">
+                  <template #label><span class="required-asterisk">*</span>权重</template>
                   <el-input-number
                     v-model="newRow.weight"
                     :min="0"
@@ -4265,7 +4257,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             </el-row>
             <el-row :gutter="16">
               <el-col :span="24">
-                <el-form-item label="核心指标">
+                <el-form-item class="required-form-item">
+                  <template #label><span class="required-asterisk">*</span>核心指标</template>
                   <el-input
                     v-model="newRow.name"
                     type="textarea"
@@ -4289,7 +4282,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             </el-row>
             <el-row :gutter="16">
               <el-col :span="24">
-                <el-form-item label="里程碑">
+                <el-form-item class="required-form-item">
+                  <template #label><span class="required-asterisk">*</span>里程碑</template>
                   <div class="milestone-form-area">
                     <el-button
                       v-if="newRow.type1 === '定性'"
@@ -4343,13 +4337,12 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-row>
-              <el-col :span="24" style="text-align: right">
-                <el-button type="primary" @click="saveNewRow">保存</el-button>
-                <el-button @click="cancelAdd">取消</el-button>
-              </el-col>
-            </el-row>
           </el-form>
+          </div>
+          <div class="add-form-actions">
+            <el-button type="primary" @click="saveNewRow">保存</el-button>
+            <el-button @click="cancelAdd">取消</el-button>
+          </div>
         </div>
       </div>
 
@@ -4669,6 +4662,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       title="编辑里程碑"
       width="700px"
       :close-on-click-modal="false"
+      :close-on-press-escape="!isSavingMilestoneEdit"
+      :show-close="!isSavingMilestoneEdit"
       @close="cancelMilestoneEdit"
     >
       <div v-if="editingMilestoneIndicator" class="milestone-edit-dialog">
@@ -4741,6 +4736,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                 size="small"
                 value-format="YYYY-MM-DD"
                 class="field-date"
+                @change="handleMilestoneDeadlineChange"
               />
               <el-button
                 type="danger"
@@ -4755,8 +4751,10 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       </div>
 
       <template #footer>
-        <el-button @click="cancelMilestoneEdit">取消</el-button>
-        <el-button type="primary" @click="saveMilestoneEdit">保存</el-button>
+        <el-button :disabled="isSavingMilestoneEdit" @click="cancelMilestoneEdit">取消</el-button>
+        <el-button type="primary" :loading="isSavingMilestoneEdit" @click="saveMilestoneEdit">
+          保存
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -5613,12 +5611,33 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 
 /* 新增行表单 */
 .add-row-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   background: rgba(64, 158, 255, 0.08);
   padding: var(--spacing-lg);
+  padding-bottom: 72px;
   border-top: 1px solid var(--color-primary-light);
-  max-height: 600px;
-  overflow-y: auto;
   overflow-x: hidden;
+}
+
+.add-form-content {
+  flex: 1 1 auto;
+  padding-right: 4px;
+}
+
+.add-form-actions {
+  position: sticky;
+  bottom: calc(var(--spacing-lg) * -1);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: auto calc(var(--spacing-lg) * -1) calc(var(--spacing-lg) * -1);
+  padding: 12px var(--spacing-lg);
+  background: transparent;
+  border-top: none;
+  box-shadow: none;
+  z-index: 10;
 }
 
 .add-row-form::-webkit-scrollbar {
@@ -5644,6 +5663,15 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   font-weight: 600;
   color: var(--color-primary-dark);
   margin: 0 0 var(--spacing-lg) 0;
+}
+
+.required-form-item :deep(.el-form-item__label) {
+  color: var(--text-primary, #303133);
+}
+
+.required-asterisk {
+  color: var(--color-danger, #f56c6c);
+  margin-right: 4px;
 }
 
 /* 多指标输入区域 */
