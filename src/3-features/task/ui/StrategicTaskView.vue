@@ -3221,10 +3221,16 @@ const handleWithdrawAll = async () => {
       try {
         await planStore.withdrawPlan(planId)
         await planStore.loadPlans({ force: true, background: true })
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-
         loading.close()
         ElMessage.success('已成功撤回当前 Plan')
+
+        try {
+          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        } catch (refreshError) {
+          logger.warn('[StrategicTaskView] Plan 撤回成功，但刷新指标列表失败:', refreshError)
+          ElMessage.warning('Plan 已撤回成功，但指标列表刷新失败，请手动刷新页面确认最新状态')
+        }
+
         updateEditTime()
       } catch (err) {
         loading.close()

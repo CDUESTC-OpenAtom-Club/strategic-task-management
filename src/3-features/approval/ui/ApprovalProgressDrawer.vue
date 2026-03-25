@@ -604,6 +604,18 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
   return 'pending'
 }
 
+function resolveWorkflowTaskOperatorName(task: WorkflowTaskResponse): string | undefined {
+  const normalizedStatus = String(task.status || '')
+    .trim()
+    .toUpperCase()
+
+  if (!['COMPLETED', 'REJECTED', 'WITHDRAWN'].includes(normalizedStatus)) {
+    return undefined
+  }
+
+  return normalizeDisplayName(task.assigneeName) || normalizeDisplayName(task.approverOrgName)
+}
+
 function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
   const normalizedStatus = String(task.status || '')
     .trim()
@@ -816,10 +828,7 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
         normalizeDisplayName(task.taskName) ||
         '审批节点',
       status: mapWorkflowTaskStatusToNodeStatus(task),
-      operatorName:
-        normalizeDisplayName(task.assigneeName) ||
-        normalizeDisplayName(task.approverOrgName) ||
-        '待分配',
+      operatorName: resolveWorkflowTaskOperatorName(task),
       operateTime: task.approvedAt
         ? new Date(task.approvedAt)
         : task.createdTime
@@ -1557,11 +1566,6 @@ watch(
                     <span class="label">当前步骤：</span>
                     <span class="value">{{ currentPlanApprovalSummary.currentStepName }}</span>
                   </div>
-                  <div v-if="activePlanWorkflow?.currentApproverName" class="info-row">
-                    <el-icon><User /></el-icon>
-                    <span class="label">当前审批人：</span>
-                    <span class="value">{{ activePlanWorkflow.currentApproverName }}</span>
-                  </div>
                   <div v-if="typeof activePlanWorkflow?.canWithdraw === 'boolean'" class="info-row">
                     <el-icon><Right /></el-icon>
                     <span class="label">当前操作：</span>
@@ -1657,11 +1661,10 @@ watch(
               v-if="
                 hasPlanWorkflowData &&
                 isPlanPendingApproval &&
-                !canCurrentUserHandlePlanApproval &&
-                activePlanWorkflow?.currentApproverName
+                !canCurrentUserHandlePlanApproval
               "
               type="warning"
-              :title="`当前节点审批人为 ${activePlanWorkflow.currentApproverName}，你当前仅可查看审批进度和历史。`"
+              title="当前节点按角色审批流转，你当前仅可查看审批进度和历史。"
               show-icon
               :closable="false"
               style="margin-bottom: 16px"
@@ -1832,13 +1835,6 @@ watch(
             <div v-if="item.completedAt" class="detail-meta-row">
               <span class="detail-label">完成时间：</span>
               <span class="detail-value">{{ formatTime(item.completedAt) }}</span>
-            </div>
-            <div
-              v-if="currentDetailWorkflow?.currentApproverName && !selectedHistoryInstanceId"
-              class="detail-meta-row"
-            >
-              <span class="detail-label">当前审批人：</span>
-              <span class="detail-value">{{ currentDetailWorkflow.currentApproverName }}</span>
             </div>
             <div v-if="item.entityId" class="detail-meta-row">
               <span class="detail-label">关联实体ID：</span>

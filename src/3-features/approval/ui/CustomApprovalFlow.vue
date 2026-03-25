@@ -171,37 +171,40 @@ const cancelEdit = (nodeId: string) => {
                 </div>
 
                 <!-- 当前节点标识 -->
-                <ElTag v-if="node.status === 'current'" type="warning" effect="light" size="small">
+                <ElTag v-if="node.status === 'current'" class="node-status-tag" type="warning" effect="light" size="small">
                   <el-icon class="pulse-icon"><Loading /></el-icon>
-                  待处理
+                  待审批
                 </ElTag>
-                <ElTag v-else-if="node.status === 'completed'" type="success" effect="light" size="small">
+                <ElTag v-else-if="node.status === 'completed'" class="node-status-tag" type="success" effect="light" size="small">
                   <el-icon><Check /></el-icon>
-                  已完成
+                  已通过
                 </ElTag>
-                <ElTag v-else-if="node.status === 'rejected'" type="danger" effect="light" size="small">
+                <ElTag v-else-if="node.status === 'rejected'" class="node-status-tag" type="danger" effect="light" size="small">
                   <el-icon><Close /></el-icon>
                   已驳回
                 </ElTag>
-                <ElTag v-else-if="node.status === 'withdrawn'" type="info" effect="light" size="small">
+                <ElTag v-else-if="node.status === 'withdrawn'" class="node-status-tag" type="info" effect="light" size="small">
                   <el-icon><Close /></el-icon>
                   已撤回
                 </ElTag>
-                <ElTag v-else type="info" effect="light" size="small">
+                <ElTag v-else class="node-status-tag" type="warning" effect="light" size="small">
                   <el-icon><Clock /></el-icon>
-                  等待中
+                  待审批
                 </ElTag>
               </div>
 
               <!-- 审批人信息 -->
-              <div class="node-approver">
-                <div class="approver-info">
-                  <el-avatar :size="32" class="approver-avatar">
-                    {{ (node.operatorName || '待定')[0] }}
+              <div v-if="node.operatorName || node.operateTime || canEditNode(node)" class="node-approver">
+                <div v-if="node.operatorName || node.operateTime" class="approver-info">
+                  <el-avatar
+                    :size="32"
+                    :class="['approver-avatar', { 'is-placeholder': !node.operatorName }]"
+                  >
+                    {{ node.operatorName ? node.operatorName[0] : '无' }}
                   </el-avatar>
                   <div class="approver-details">
-                    <span class="approver-name">
-                      {{ node.operatorName || '待分配' }}
+                    <span v-if="node.operatorName" class="approver-name">
+                      {{ node.operatorName }}
                     </span>
                     <span v-if="node.operateTime" class="approve-time">
                       {{ formatTime(node.operateTime) }}
@@ -395,7 +398,8 @@ const cancelEdit = (nodeId: string) => {
 .node-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
@@ -403,6 +407,8 @@ const cancelEdit = (nodeId: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .node-step {
@@ -416,6 +422,28 @@ const cancelEdit = (nodeId: string) => {
 .node-name {
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.node-status-tag {
+  flex-shrink: 0;
+  margin-top: 2px;
+  min-width: 104px;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.node-status-tag :deep(.el-tag__content) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.approver-avatar.is-placeholder {
+  background: var(--el-fill-color);
+  color: var(--el-text-color-placeholder);
+  border: 1px solid var(--el-border-color);
 }
 
 .pulse-icon {
