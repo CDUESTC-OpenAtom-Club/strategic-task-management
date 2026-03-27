@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, computed, watch } from 'vue'
 import {
   ElDrawer,

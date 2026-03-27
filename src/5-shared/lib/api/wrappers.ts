@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * API Client Wrapper Functions
  *

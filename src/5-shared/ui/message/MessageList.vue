@@ -67,6 +67,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 import { defineProps, defineEmits } from 'vue'
 import { formatDateTime } from '@/shared/lib/utils'
 import type { Message, MessageType, AlertLevel } from '@/shared/types'

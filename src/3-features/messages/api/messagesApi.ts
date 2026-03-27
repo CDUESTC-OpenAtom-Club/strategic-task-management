@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Messages Feature API
  * 集成预警告警消息

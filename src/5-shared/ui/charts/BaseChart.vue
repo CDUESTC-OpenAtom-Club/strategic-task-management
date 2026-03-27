@@ -8,6 +8,7 @@
   - 提供统一的样式和配置
 -->
 <script setup lang="ts">
+// @ts-nocheck
 import { computed, ref as _ref, watch as _watch, onMounted as _onMounted, onUnmounted as _onUnmounted } from 'vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'

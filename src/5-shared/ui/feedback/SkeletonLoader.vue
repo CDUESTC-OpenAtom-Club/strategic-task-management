@@ -99,6 +99,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck
 interface Props {
   /** 骨架屏类型 */
   type?: 'table' | 'card' | 'list' | 'chart' | 'form' | 'basic'

@@ -16,7 +16,7 @@ export const CACHE_TTL = {
 
 export const CACHE_DEDUPE_WINDOW_MS = 1000
 
-type PolicyOverrides = Omit<CachePolicy, 'scope' | 'dedupeWindowMs' | 'tags'> & {
+type PolicyOverrides = Partial<Omit<CachePolicy, 'scope' | 'dedupeWindowMs' | 'tags'>> & {
   tags: string[]
 }
 

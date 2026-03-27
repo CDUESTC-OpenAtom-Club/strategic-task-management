@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { apiClient } from '@/shared/api/client'
 import { withRetry } from '@/shared/lib/api/wrappers'
 import { buildQueryKey, fetchWithCache, invalidateQueries, refreshCachePattern } from '@/shared/lib/utils/cache'

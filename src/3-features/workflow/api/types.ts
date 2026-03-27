@@ -64,6 +64,9 @@ export interface WorkflowTaskResponse {
   taskName: string
   taskKey: string
   status: string
+  entityType?: string
+  entityId?: number | string
+  businessEntityId?: number | string
   currentStepName?: string
   assigneeId?: number
   assigneeName?: string
@@ -81,6 +84,7 @@ export interface WorkflowHistoryItem {
   historyId: string
   taskId: string
   taskName: string
+  stepName?: string
   operatorId?: number
   operatorName?: string
   action: string

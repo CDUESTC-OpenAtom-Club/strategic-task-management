@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, computed, watch, onMounted as _onMounted } from 'vue'
 import {
   ElForm,

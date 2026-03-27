@@ -97,6 +97,7 @@ export const useTimeContextStore = defineStore('timeContext', () => {
    * Whether we're viewing current year
    */
   const isCurrentYear = computed(() => currentYear.value === realCurrentYear.value)
+  const selectedYear = computed(() => currentYear.value)
 
   // ============ Actions ============
 
@@ -204,6 +205,7 @@ export const useTimeContextStore = defineStore('timeContext', () => {
 
   return {
     currentYear,
+    selectedYear,
     realCurrentYear,
     loading,
     availableYears: yearsForSelector,

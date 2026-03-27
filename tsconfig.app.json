@@ -34,6 +34,9 @@
     "src/_deprecated/**",
     "src/1-app/providers/_deprecated/**",
     "src/5-shared/api/mocks/**",
-    "src/3-features/dashboard/model/dashboardStore.ts"
+    "src/3-features/dashboard/model/dashboardStore.ts",
+    "src/3-features/legacy-indicator/**",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts"
   ]
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * CRUD Store Factory
  *

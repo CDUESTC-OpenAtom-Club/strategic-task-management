@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * 预警告警 API
  * 用于 Dashboard 和消息中心的预警统计

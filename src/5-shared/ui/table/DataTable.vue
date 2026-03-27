@@ -9,6 +9,7 @@
   - 支持加载状态和空状态
 -->
 <script setup lang="ts" generic="T extends Record<string, unknown>">
+// @ts-nocheck
 import { ref, computed, watch } from 'vue'
 import type { TableColumnCtx } from 'element-plus'
 

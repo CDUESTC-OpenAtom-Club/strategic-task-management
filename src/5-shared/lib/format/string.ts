@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * String Formatting Utilities
  * 

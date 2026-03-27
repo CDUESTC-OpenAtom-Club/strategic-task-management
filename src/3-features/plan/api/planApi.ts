@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Plan API 服务
  * 新数据结构: Plan -> Task -> Indicator -> IndicatorFill

@@ -106,12 +106,18 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole]
 export interface StrategicTask {
   /** 任务ID (后端: task_id) */
   taskId: number
+  /** 前端兼容ID */
+  id?: number | string
   /** 评估周期ID (后端: cycle_id) */
   cycleId: number
   /** 任务名称 (后端: task_name) */
   taskName: string
+  /** 前端兼容标题 */
+  title?: string
   /** 任务描述 (后端: task_desc) */
   taskDesc: string | null
+  /** 前端兼容内容字段 */
+  taskContent?: string | null
   /** 任务类型 (后端: task_type) */
   taskType: TaskType
   /** 责任部门 (后端: responsible_dept) */
@@ -138,16 +144,26 @@ export interface StrategicTask {
 export interface Indicator {
   /** 指标ID (后端: indicator_id) */
   indicatorId: number
+  /** 前端兼容ID */
+  id?: number | string
   /** 任务ID (后端: task_id) */
   taskId: number | null
   /** 指标名称 (后端: indicator_name) */
   indicatorName: string
+  /** 前端兼容名称 */
+  name?: string
   /** 指标描述 (后端: indicator_desc) */
   indicatorDesc: string | null
+  /** 前端兼容任务内容 */
+  taskContent?: string | null
   /** 指标类型1 (后端: indicator_type1) */
   indicatorType1: string | null
+  /** 前端兼容类型字段 */
+  type1?: string | null
   /** 指标类型2 (后端: indicator_type2) */
   indicatorType2: string | null
+  /** 前端兼容类型字段 */
+  type2?: string | null
   /** 是否为战略指标 (后端: is_strategic) */
   isStrategic: boolean
   /** 责任部门 (后端: responsible_dept) */
@@ -184,6 +200,8 @@ export interface Indicator {
   statusAudit: StatusAuditEntry[]
   /** 状态 (后端: status) */
   status: IndicatorStatus
+  /** 前端兼容工作流状态 */
+  workflowStatus?: string
   /** 显示状态 (根据审批状态计算) */
   displayStatus?: 'DRAFT' | 'PENDING_APPROVAL' | 'DISTRIBUTED'
   /** 备注 (后端: remark) */
@@ -206,16 +224,22 @@ export interface Indicator {
 export interface Milestone {
   /** 里程碑ID (后端: milestone_id) */
   milestoneId: number
+  /** 前端兼容ID */
+  id?: number | string
   /** 指标ID (后端: indicator_id) */
   indicatorId: number | null
   /** 里程碑名称 (后端: milestone_name) */
   milestoneName: string
+  /** 前端兼容名称 */
+  name?: string
   /** 里程碑描述 (后端: milestone_desc) */
   milestoneDesc: string | null
   /** 目标进度 (后端: target_progress) */
   targetProgress: number
   /** 截止时间 (后端: due_date) */
   dueDate: string
+  /** 前端兼容日期字段 */
+  deadline?: string
   /** 权重百分比 (后端: weight_percent) */
   weightPercent: number
   /** 排序顺序 (后端: sort_order) */
@@ -240,18 +264,26 @@ export interface Milestone {
 export interface User {
   /** 用户ID (后端: user_id) */
   userId: number
+  /** 前端兼容ID */
+  id?: number | string
   /** 用户名 (后端: username) */
   username: string
   /** 姓名 (后端: name) */
   name: string
+  /** 前端兼容真实姓名 */
+  realName?: string
   /** 密码哈希 (后端: password_hash) */
-  passwordHash: string
+  passwordHash?: string
   /** 角色 (后端: role) */
   role: UserRole
   /** 后端真实角色编码列表 (如 ROLE_APPROVER / ROLE_VICE_PRESIDENT) */
   roles?: string[]
   /** 部门 (后端: department) */
   department: string
+  /** 前端兼容组织ID */
+  orgId?: number | string
+  /** 前端兼容组织名称 */
+  orgName?: string
   /** 邮箱 (后端: email) */
   email: string | null
   /** 电话 (后端: phone) */
@@ -262,6 +294,10 @@ export interface User {
   createdAt: string
   /** 更新时间 (后端: updated_at) */
   updatedAt: string
+  /** 权限列表 */
+  permissions?: string[]
+  /** 前端兼容头像 */
+  avatar?: string
 }
 
 /**
@@ -374,15 +410,15 @@ export interface PageResponse<T> {
  */
 export interface ApiResponse<T> {
   /** 响应码 */
-  code: number
+  code?: number
   /** 响应消息 */
-  message: string
+  message?: string
   /** 响应数据 */
-  data: T | null
+  data?: T | null
   /** 是否成功 */
-  success: boolean
+  success?: boolean
   /** 时间戳 */
-  timestamp: number
+  timestamp?: number | string
 }
 
 // ============================================================================

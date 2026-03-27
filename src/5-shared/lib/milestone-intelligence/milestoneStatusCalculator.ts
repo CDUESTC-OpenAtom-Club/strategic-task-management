@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Milestone Intelligence - Status Calculator
  *

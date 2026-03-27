@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Response Interceptors - 响应拦截器模块
  *

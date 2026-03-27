@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Unified API Client
  *

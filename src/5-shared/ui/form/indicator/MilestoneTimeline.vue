@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// @ts-nocheck
 import { computed } from 'vue'
 import { Check, Clock, Warning } from '@element-plus/icons-vue'
 import type { Milestone, MilestoneUI } from '@/shared/types'

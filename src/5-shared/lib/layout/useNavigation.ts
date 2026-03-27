@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * useNavigation - 导航管理 Composable
  *

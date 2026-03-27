@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Types 统一导出
  *

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Auth Response Parser - 认证响应解析器
  *

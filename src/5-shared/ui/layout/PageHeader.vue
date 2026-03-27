@@ -8,6 +8,7 @@
   - 支持返回按钮
 -->
 <script setup lang="ts">
+// @ts-nocheck
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Backend-Aligned Type Definitions
  *

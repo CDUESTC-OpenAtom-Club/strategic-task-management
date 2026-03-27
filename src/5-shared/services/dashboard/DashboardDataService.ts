@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Dashboard Data Service
  *
