@@ -99,7 +99,6 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 interface Props {
   /** 骨架屏类型 */
   type?: 'table' | 'card' | 'list' | 'chart' | 'form' | 'basic'
@@ -141,8 +140,8 @@ withDefaults(defineProps<Props>(), {
 
 /** 获取表格单元格宽度（模拟真实内容长度差异） */
 function getCellWidth(index: number): string {
-  const widths = ['40%', '70%', '50%', '60%', '30%']
-  return widths[(index - 1) % widths.length]
+  const widths = ['40%', '70%', '50%', '60%', '30%'] as const
+  return widths[(index - 1) % widths.length] ?? widths[0]
 }
 </script>
 

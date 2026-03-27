@@ -9,79 +9,17 @@
   - 支持加载状态和空状态
 -->
 <script setup lang="ts" generic="T extends Record<string, unknown>">
-// @ts-nocheck
 import { ref, computed, watch } from 'vue'
 import type { TableColumnCtx } from 'element-plus'
+import type { DataTableProps, PaginationConfig, TableColumn } from './DataTable.types'
 
-/** 表格列配置 */
-export interface TableColumn {
-  /** 列键名 */
-  prop: string
-  /** 列标题 */
-  label: string
-  /** 列宽 */
-  width?: number | string
-  /** 最小列宽 */
-  minWidth?: number | string
-  /** 是否固定列 */
-  fixed?: boolean | 'left' | 'right'
-  /** 对齐方式 */
-  align?: 'left' | 'center' | 'right'
-  /** 是否可排序 */
-  sortable?: boolean
-  /** 格式化函数 */
-  formatter?: (row: T, column: TableColumnCtx<T>, cellValue: unknown, index: number) => string
-  /** 自定义插槽名称 */
-  slot?: string
-  /** 子列 (用于分组表头) */
-  children?: TableColumn[]
+type SelectionColumn = {
+  type: 'selection'
+  width: number
+  align: 'center'
 }
 
-/** 分页配置 */
-export interface PaginationConfig {
-  /** 当前页 */
-  page: number
-  /** 每页条数 */
-  pageSize: number
-  /** 总条数 */
-  total: number
-  /** 每页条数选项 */
-  pageSizes?: number[]
-}
-
-/** Props */
-export interface DataTableProps<T> {
-  /** 数据源 */
-  data: T[]
-  /** 列配置 */
-  columns: TableColumn[]
-  /** 表格高度 (固定表头) */
-  height?: string | number
-  /** 最大高度 */
-  maxHeight?: string | number
-  /** 是否显示边框 */
-  border?: boolean
-  /** 是否斑马纹 */
-  stripe?: boolean
-  /** 行键名 (用于优化渲染) */
-  rowKey?: string
-  /** 是否显示加载状态 */
-  loading?: boolean
-  /** 是否显示空状态 */
-  empty?: boolean
-  /** 空状态文字 */
-  emptyText?: string
-  /** 分页配置 */
-  pagination?: PaginationConfig | false
-  /** 默认排序列的 prop 和顺序 */
-  defaultSort?: { prop: string; order: 'ascending' | 'descending' }
-  /** 选中行 */
-  selectedRows?: T[]
-  /** 是否多选 */
-  selectable?: boolean
-  /** 行类名回调 */
-  rowClassName?: string | ((data: { row: T; rowIndex: number }) => string)
-}
+type DisplayColumn = TableColumn | SelectionColumn
 
 const props = withDefaults(defineProps<DataTableProps<T>>(), {
   height: undefined,
@@ -117,11 +55,15 @@ const emit = defineEmits<{
 /** 内部选中行 */
 const innerSelection = ref<T[]>([])
 
+const paginationConfig = computed<PaginationConfig | null>(() =>
+  props.pagination === false ? null : props.pagination
+)
+
 /** 当前页码 */
-const currentPage = ref(props.pagination?.page || 1)
+const currentPage = ref(paginationConfig.value?.page ?? 1)
 
 /** 每页条数 */
-const pageSize = ref(props.pagination?.pageSize || 10)
+const pageSize = ref(paginationConfig.value?.pageSize ?? 10)
 
 /** 监听分页配置变化 */
 watch(() => props.pagination, (newPagination) => {
@@ -133,7 +75,7 @@ watch(() => props.pagination, (newPagination) => {
 
 /** 处理行点击 */
 const handleRowClick = (row: T, column: unknown, event: Event) => {
-  emit('row-click', row, column, event)
+  emit('row-click', row, column as TableColumnCtx<T>, event)
 }
 
 /** 处理选择变化 */
@@ -143,8 +85,12 @@ const handleSelectionChange = (selection: T[]) => {
 }
 
 /** 处理排序变化 */
-const handleSortChange = (sort: { column: unknown; prop: string; order: string | null }) => {
-  emit('sort-change', sort)
+const handleSortChange = (sort: { column?: unknown; prop?: string; order?: string | null }) => {
+  emit('sort-change', {
+    column: sort.column as TableColumnCtx<T>,
+    prop: sort.prop ?? '',
+    order: sort.order ?? null
+  })
 }
 
 /** 处理页码变化 */
@@ -160,8 +106,10 @@ const handleSizeChange = (size: number) => {
 }
 
 /** 计算显示的列 (包含选择列) */
-const displayColumns = computed(() => {
-  if (!props.selectable) {return props.columns}
+const displayColumns = computed<DisplayColumn[]>(() => {
+  if (!props.selectable) {
+    return props.columns
+  }
 
   return [
     {
@@ -172,6 +120,14 @@ const displayColumns = computed(() => {
     ...props.columns
   ]
 })
+
+function isDataColumn(column: DisplayColumn): column is TableColumn {
+  return 'prop' in column
+}
+
+function getCellValue(row: T, prop: string): unknown {
+  return row[prop as keyof T]
+}
 </script>
 
 <template>
@@ -198,10 +154,10 @@ const displayColumns = computed(() => {
       @selection-change="handleSelectionChange"
       @sort-change="handleSortChange"
     >
-      <template v-for="column in displayColumns" :key="column.prop">
+      <template v-for="(column, index) in displayColumns" :key="isDataColumn(column) ? column.prop : `selection-${index}`">
         <!-- 分组表头 -->
         <el-table-column
-          v-if="column.children"
+          v-if="isDataColumn(column) && column.children"
           :prop="column.prop"
           :label="column.label"
           :width="column.width"
@@ -232,7 +188,7 @@ const displayColumns = computed(() => {
 
         <!-- 自定义插槽列 -->
         <el-table-column
-          v-else-if="column.slot"
+          v-else-if="isDataColumn(column) && column.slot"
           :prop="column.prop"
           :label="column.label"
           :width="column.width"
@@ -248,7 +204,7 @@ const displayColumns = computed(() => {
 
         <!-- 格式化函数列 -->
         <el-table-column
-          v-else-if="column.formatter"
+          v-else-if="isDataColumn(column) && column.formatter"
           :prop="column.prop"
           :label="column.label"
           :width="column.width"
@@ -258,9 +214,17 @@ const displayColumns = computed(() => {
           :sortable="column.sortable"
         >
           <template #default="scope">
-            {{ column.formatter(scope.row, scope.column, scope.row[column.prop], scope.$index) }}
+            {{ column.formatter(scope.row, scope.column, getCellValue(scope.row, column.prop), scope.$index) }}
           </template>
         </el-table-column>
+
+        <!-- 选择列 -->
+        <el-table-column
+          v-else-if="'type' in column"
+          :type="column.type"
+          :width="column.width"
+          :align="column.align"
+        />
 
         <!-- 普通列 -->
         <el-table-column
@@ -277,12 +241,12 @@ const displayColumns = computed(() => {
     </el-table>
 
     <!-- 分页器 -->
-    <div v-if="pagination" class="data-table__pagination">
+    <div v-if="paginationConfig" class="data-table__pagination">
       <el-pagination
         :current-page="currentPage"
         :page-size="pageSize"
-        :page-sizes="pagination.pageSizes || [10, 20, 50, 100]"
-        :total="pagination.total"
+        :page-sizes="paginationConfig.pageSizes || [10, 20, 50, 100]"
+        :total="paginationConfig.total"
         layout="total, sizes, prev, pager, next, jumper"
         @current-change="handlePageChange"
         @size-change="handleSizeChange"

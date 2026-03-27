@@ -9,6 +9,6 @@
 
 // Export table components here
 export { default as DataTable } from './DataTable.vue'
-export type { TableColumn, PaginationConfig, DataTableProps } from './DataTable.vue'
+export type { TableColumn, PaginationConfig, DataTableProps } from './DataTable.types'
 // export { default as TablePagination } from './TablePagination.vue'
 // export { default as TableFilters } from './TableFilters.vue'
