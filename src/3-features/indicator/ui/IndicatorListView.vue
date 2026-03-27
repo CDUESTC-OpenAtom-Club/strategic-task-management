@@ -17,7 +17,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
-import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/shared/types'
+import type { StrategicTask as _StrategicTask, StrategicIndicator, Plan } from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
@@ -36,6 +36,7 @@ import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 import { normalizePlanStatus } from '@/features/task/lib/planStatus'
 import { logger } from '@/shared/lib/utils/logger'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
+import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import {
   canCurrentUserHandleIndicatorWorkflow,
@@ -45,6 +46,11 @@ import {
   type IndicatorWorkflowSnapshot
 } from '@/features/plan/lib/indicatorWorkflow'
 import { filterIndicatorsForViewerRole } from '@/features/indicator/lib/scope'
+import {
+  isCollegePlanCandidate,
+  listCollegePlanSourceDepts,
+  resolveCollegePlanSourceDept
+} from '@/features/indicator/lib/collegePlanModule'
 import {
   milestoneDefaultValues as _milestoneDefaultValues,
   MILESTONE_STATUS_VALUES,
@@ -200,6 +206,7 @@ onMounted(async () => {
     strategicStore.loadIndicatorsByYear(timeContext.currentYear)
   ])
 
+  await loadCollegePlanDetails()
   restartPlanApprovalPolling()
 })
 
@@ -395,6 +402,37 @@ async function refreshCurrentPlanDetails(planId: number): Promise<void> {
   const latestPlan = await planStore.loadPlanDetails(planId, { force: true, background: true })
   if (latestPlan) {
     currentPlanDetails.value = latestPlan
+    if (isSecondaryCollege.value) {
+      collegePlanDetailsMap.value = {
+        ...collegePlanDetailsMap.value,
+        [String(planId)]: latestPlan as Plan
+      }
+    }
+  }
+  await loadCurrentPlanReportSummary(planId)
+}
+
+async function loadCurrentPlanReportSummary(planId?: number | null): Promise<void> {
+  if (!isSecondaryCollege.value) {
+    currentPlanReportSummary.value = null
+    return
+  }
+
+  const resolvedPlanId = Number(planId ?? getCurrentPlanId() ?? NaN)
+  const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0 || !Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+    currentPlanReportSummary.value = null
+    return
+  }
+
+  try {
+    currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(
+      resolvedPlanId,
+      reportOrgId
+    )
+  } catch (error) {
+    currentPlanReportSummary.value = null
+    logger.warn('[IndicatorListView] 加载当前上报摘要失败:', { planId: resolvedPlanId, reportOrgId, error })
   }
 }
 
@@ -511,11 +549,39 @@ const filterType2 = ref('') // 任务类型筛选
 const filterType1 = ref('') // 指标类型筛选
 const filterDept = ref('') // 责任部门筛选
 const filterOwnerDept = ref('') // 来源部门筛选（仅学院使用）
+const collegePlanDetailsMap = ref<Record<string, Plan>>({})
+const collegePlanDetailsLoading = ref(false)
+
+const collegePlanCandidates = computed<Plan[]>(() => {
+  if (!isSecondaryCollege.value) {
+    return []
+  }
+
+  return planStore.plans.filter(plan =>
+    isCollegePlanCandidate(plan as Plan, {
+      currentYear: timeContext.currentYear,
+      viewingOrgId: currentViewingOrgId.value,
+      viewingDept: effectiveViewingDept.value,
+      resolvePlanYear: candidate => resolvePlanYear(candidate)
+    })
+  )
+})
 
 // 获取学院接收到的来源部门列表（从指标数据中提取）
 const availableOwnerDepts = computed(() => {
   if (!isSecondaryCollege.value || !effectiveViewingDept.value) {
     return []
+  }
+
+  const planSourceDepts = listCollegePlanSourceDepts(
+    collegePlanCandidates.value.map(plan => {
+      const cachedPlan = collegePlanDetailsMap.value[String(plan.id)]
+      return (cachedPlan || plan) as Plan
+    })
+  )
+
+  if (planSourceDepts.length > 0) {
+    return planSourceDepts
   }
 
   const currentYear = timeContext.currentYear
@@ -535,6 +601,26 @@ const availableOwnerDepts = computed(() => {
   })
 
   return Array.from(ownerDepts).sort()
+})
+
+const selectedCollegePlan = computed<Plan | null>(() => {
+  if (!isSecondaryCollege.value) {
+    return null
+  }
+
+  const selectedSourceDept = filterOwnerDept.value.trim()
+  const matchedPlan = collegePlanCandidates.value.find(plan => {
+    const cachedPlan = collegePlanDetailsMap.value[String(plan.id)]
+    const sourceDept = resolveCollegePlanSourceDept((cachedPlan || plan) as Plan)
+
+    if (!selectedSourceDept) {
+      return Boolean(sourceDept) || collegePlanCandidates.value.length === 1
+    }
+
+    return sourceDept === selectedSourceDept
+  })
+
+  return matchedPlan || collegePlanCandidates.value[0] || null
 })
 
 // 初始化来源部门筛选（默认选中第一个）
@@ -580,6 +666,37 @@ const currentViewingOrgId = computed(() => {
   return null
 })
 
+async function loadCollegePlanDetails(options: { force?: boolean } = {}): Promise<void> {
+  if (!isSecondaryCollege.value || collegePlanCandidates.value.length === 0) {
+    collegePlanDetailsMap.value = {}
+    return
+  }
+
+  if (collegePlanDetailsLoading.value) {
+    return
+  }
+
+  collegePlanDetailsLoading.value = true
+  try {
+    const detailEntries = await Promise.all(
+      collegePlanCandidates.value.map(async plan => {
+        const detailedPlan =
+          (await planStore.loadPlanDetails(plan.id, {
+            force: options.force,
+            background: true
+          })) || plan
+        return [String(plan.id), detailedPlan as Plan] as const
+      })
+    )
+
+    collegePlanDetailsMap.value = Object.fromEntries(detailEntries)
+  } catch (error) {
+    logger.warn('[IndicatorListView] 加载学院计划详情失败:', error)
+  } finally {
+    collegePlanDetailsLoading.value = false
+  }
+}
+
 function filterIndicatorsForCurrentViewer(list: StrategicIndicator[]): StrategicIndicator[] {
   const viewerRole = isStrategicDept.value
     ? 'strategic_dept'
@@ -614,6 +731,15 @@ const resolvePlanYear = (plan: any): number | null => {
 
 // 获取当前用户对应的 Plan（包含指标数据）
 const currentUserPlan = computed(() => {
+  if (isSecondaryCollege.value) {
+    const selectedPlan = selectedCollegePlan.value
+    if (!selectedPlan) {
+      return null
+    }
+
+    return collegePlanDetailsMap.value[String(selectedPlan.id)] || selectedPlan
+  }
+
   // 获取当前用户所在的部门
   const userDept = effectiveViewingDept.value || authStore.userDepartment || ''
   const viewingOrgId = currentViewingOrgId.value
@@ -643,6 +769,15 @@ const currentUserPlanId = computed(() => {
 
 // 存储当前 Plan 的详情（包含指标数据）
 const currentPlanDetails = ref<any>(null)
+const currentPlanReportSummary = ref<{
+  id: number
+  workflowInstanceId?: number | null
+  currentTaskId?: number | null
+  workflowStatus?: string | null
+  currentStepName?: string | null
+  canWithdraw?: boolean
+  status?: string | null
+} | null>(null)
 
 // Plan 详情加载状态
 const isLoadingPlanDetails = ref(false)
@@ -767,18 +902,60 @@ function resolveIndicatorType2(
 
 // 监听 Plan ID 变化，自动加载 Plan 详情
 watch(
+  [isSecondaryCollege, currentViewingOrgId, () => planStore.plans.length, () => timeContext.currentYear],
+  async () => {
+    await loadCollegePlanDetails()
+  },
+  { immediate: true }
+)
+
+watch(
+  availableOwnerDepts,
+  ownerDepts => {
+    if (!isSecondaryCollege.value) {
+      return
+    }
+
+    if (ownerDepts.length === 0) {
+      filterOwnerDept.value = ''
+      return
+    }
+
+    if (!ownerDepts.includes(filterOwnerDept.value)) {
+      filterOwnerDept.value = ownerDepts[0] ?? ''
+    }
+  },
+  { immediate: true }
+)
+
+watch(
   currentUserPlanId,
   async newPlanId => {
     if (newPlanId && (!currentPlanDetails.value || currentPlanDetails.value?.id !== newPlanId)) {
       // 加载 Plan 详情
       isLoadingPlanDetails.value = true
-      const plan = await planStore.loadPlanDetails(newPlanId, { background: true })
+      const cachedCollegePlan =
+        isSecondaryCollege.value && selectedCollegePlan.value
+          ? collegePlanDetailsMap.value[String(selectedCollegePlan.value.id)]
+          : null
+      const plan =
+        cachedCollegePlan && String(cachedCollegePlan.id) === String(newPlanId)
+          ? cachedCollegePlan
+          : await planStore.loadPlanDetails(newPlanId, { background: true })
       if (plan) {
         currentPlanDetails.value = plan
+        if (isSecondaryCollege.value) {
+          collegePlanDetailsMap.value = {
+            ...collegePlanDetailsMap.value,
+            [String(newPlanId)]: plan as Plan
+          }
+        }
       }
+      await loadCurrentPlanReportSummary(newPlanId)
       isLoadingPlanDetails.value = false
     } else if (!newPlanId) {
       currentPlanDetails.value = null
+      currentPlanReportSummary.value = null
       isLoadingPlanDetails.value = false
     }
 
@@ -977,6 +1154,9 @@ const isInitialLoading = computed(() => {
   if (planStore.loading) {
     return true
   }
+  if (collegePlanDetailsLoading.value) {
+    return true
+  }
   // Plan 详情正在加载
   if (isLoadingPlanDetails.value) {
     return true
@@ -1034,10 +1214,16 @@ const approvalDrawerVisible = ref(false)
 // - 审批人（战略发展部）：只显示待审批的指标
 // - 填报人（职能部门/二级学院）：显示所有已提交的指标（待审批+已审批+已驳回）
 const approvalIndicators = computed(() => {
-  let list = strategicStore.indicators.map(i => ({
-    ...i,
-    id: String(i.id)
-  }))
+  let list =
+    hasCurrentUserPlan.value && currentPlanIndicators.value.length > 0
+      ? currentPlanIndicators.value.map(i => ({
+          ...i,
+          id: String(i.id)
+        }))
+      : strategicStore.indicators.map(i => ({
+          ...i,
+          id: String(i.id)
+        }))
 
   // 按当前年份过滤
   const currentYear = timeContext.currentYear
@@ -1049,7 +1235,13 @@ const approvalIndicators = computed(() => {
 
   // 根据当前角色过滤数据
   // 非战略部门只有在计划已下发（已下发状态）时才能看到指标
-  list = filterIndicatorsForCurrentViewer(list)
+  if (!(hasCurrentUserPlan.value && currentPlanIndicators.value.length > 0)) {
+    list = filterIndicatorsForCurrentViewer(list)
+  }
+
+  if (isSecondaryCollege.value && filterOwnerDept.value) {
+    list = list.filter(i => i.ownerDept === filterOwnerDept.value)
+  }
 
   // 审批人：返回待审批的指标 + 有历史记录的指标（确保历史记录能正常显示）
   // 填报人：返回所有有审批状态的指标（用于查看审批进度）
@@ -1069,7 +1261,10 @@ const approvalIndicators = computed(() => {
 
 // 仅计算待审批的数量，用于按钮上的数字显示
 const _pendingApprovalCount = computed(() => {
-  let list = strategicStore.indicators
+  let list =
+    hasCurrentUserPlan.value && currentPlanIndicators.value.length > 0
+      ? currentPlanIndicators.value
+      : strategicStore.indicators
 
   // 按当前年份过滤
   const currentYear = timeContext.currentYear
@@ -1081,7 +1276,13 @@ const _pendingApprovalCount = computed(() => {
 
   // 根据当前角色过滤数据
   // 非战略部门只有在计划已下发时才能看到指标
-  list = filterIndicatorsForCurrentViewer(list)
+  if (!(hasCurrentUserPlan.value && currentPlanIndicators.value.length > 0)) {
+    list = filterIndicatorsForCurrentViewer(list)
+  }
+
+  if (isSecondaryCollege.value && filterOwnerDept.value) {
+    list = list.filter(i => i.ownerDept === filterOwnerDept.value)
+  }
 
   // 只统计待审批状态的指标数量
   // @requirement 2.6 - 使用安全的状态检查，处理无效枚举值
@@ -2385,6 +2586,47 @@ const closeReportDialog = () => {
   }
 }
 
+const syncLocalReportedProgress = (
+  indicatorId: number | string,
+  payload: {
+    progressApprovalStatus: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE'
+    reportProgress: number
+    pendingProgress: number
+    pendingRemark: string
+    pendingAttachments: string[]
+  }
+) => {
+  strategicStore.patchIndicator(String(indicatorId), payload)
+
+  if (currentDetail.value && String(currentDetail.value.id) === String(indicatorId)) {
+    currentDetail.value = {
+      ...currentDetail.value,
+      ...payload
+    }
+  }
+
+  if (currentPlanDetails.value?.indicators?.length) {
+    currentPlanDetails.value = {
+      ...currentPlanDetails.value,
+      indicators: currentPlanDetails.value.indicators.map((item: any) => {
+        const itemId = String(item?.id ?? item?.indicatorId ?? '')
+        if (itemId !== String(indicatorId)) {
+          return item
+        }
+
+        return {
+          ...item,
+          progressApprovalStatus: payload.progressApprovalStatus,
+          reportProgress: payload.reportProgress,
+          pendingProgress: payload.pendingProgress,
+          pendingRemark: payload.pendingRemark,
+          pendingAttachments: payload.pendingAttachments
+        }
+      })
+    }
+  }
+}
+
 // 保存进度填报（设为待提交状态）
 const submitProgressReport = async () => {
   if (!currentReportIndicator.value) {
@@ -2429,22 +2671,13 @@ const submitProgressReport = async () => {
       attachments: reportForm.value.attachments
     })
 
-    strategicStore.patchIndicator(indicator.id.toString(), {
+    syncLocalReportedProgress(indicator.id, {
       progressApprovalStatus: 'DRAFT',
+      reportProgress: reportForm.value.newProgress,
       pendingProgress: reportForm.value.newProgress,
       pendingRemark: reportForm.value.remark,
       pendingAttachments: reportForm.value.attachments
     })
-
-    if (currentDetail.value && String(currentDetail.value.id) === String(indicator.id)) {
-      currentDetail.value = {
-        ...currentDetail.value,
-        progressApprovalStatus: 'DRAFT',
-        pendingProgress: reportForm.value.newProgress,
-        pendingRemark: reportForm.value.remark,
-        pendingAttachments: reportForm.value.attachments
-      }
-    }
 
     ElMessage.success('进度已保存，可在批量操作中提交')
     closeReportDialog()
@@ -2553,6 +2786,10 @@ const allIndicatorsSubmitted = computed(() => {
 })
 
 const canWithdrawCurrentPlan = computed(() => {
+  if (isSecondaryCollege.value) {
+    return isCurrentUserReporter.value && Boolean(currentPlanReportSummary.value?.canWithdraw)
+  }
+
   return (
     normalizedCurrentPlanStatus.value === 'PENDING' &&
     isCurrentUserReporter.value &&
@@ -2604,7 +2841,7 @@ const handleSubmitAll = () => {
     return
   }
 
-  if (!['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
+  if (!isSecondaryCollege.value && !['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
     ElMessage.warning('当前计划正在审批中，不能重复提交')
     return
   }
@@ -2619,7 +2856,7 @@ const handleSubmitAll = () => {
   const indicatorNames = indicators.value.map(ind => ind.name).join('、')
 
   ElMessageBox.prompt(
-    `确认提交当前计划下的全部 ${indicators.value.length} 个指标吗？\n\n指标列表：${indicatorNames}\n\n注意：该操作会发起整份计划的审批，提交后将无法修改，需等待上级部门审批。\n\n请输入提交备注：`,
+    `确认提交当前计划下的全部 ${indicators.value.length} 个指标吗？\n\n指标列表：${indicatorNames}\n\n注意：该操作会发起本次上报审批，提交后将无法修改，需等待上级部门审批。\n\n请输入提交备注：`,
     '一键提交确认',
     {
       confirmButtonText: '确定提交',
@@ -2635,12 +2872,23 @@ const handleSubmitAll = () => {
     }
   ).then(async ({ value: submitComment }) => {
     try {
-      await planStore.submitPlanForApproval(planId, {
-        workflowCode: resolvePlanApprovalWorkflowCode()
-      })
+      if (isSecondaryCollege.value) {
+        const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
+        if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+          ElMessage.warning('无法识别当前学院组织，不能提交上报')
+          return
+        }
+        await indicatorFillApi.submitCurrentMonthPlanReport(planId, reportOrgId)
+      } else {
+        await planStore.submitPlanForApproval(planId, {
+          workflowCode: resolvePlanApprovalWorkflowCode()
+        })
+      }
+
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
       await refreshCurrentPlanDetails(planId)
       ElMessage.success(
-        submitComment?.trim() ? `已提交计划审批：${submitComment.trim()}` : '已发起整份计划审批'
+        submitComment?.trim() ? `已提交上报审批：${submitComment.trim()}` : '已发起本次上报审批'
       )
     } catch (error) {
       logger.error('[IndicatorListView] Failed to submit plan approval:', error)
@@ -2677,8 +2925,8 @@ const handleWithdrawAllProgressApprovals = () => {
   const indicatorNames = pendingRows.map(ind => ind.name).join('、')
 
   ElMessageBox.confirm(
-    `确认撤回当前计划审批吗？${indicatorNames ? `\n\n当前涉及指标：${indicatorNames}` : ''}\n\n撤回后整份计划会回到草稿状态，可重新编辑后再提交。`,
-    '一键撤回计划审批',
+    `确认撤回当前上报审批吗？${indicatorNames ? `\n\n当前涉及指标：${indicatorNames}` : ''}\n\n撤回后本次上报会回到草稿状态，可继续编辑后再提交。`,
+    '一键撤回上报审批',
     {
       confirmButtonText: '确定撤回',
       cancelButtonText: '取消',
@@ -2686,9 +2934,20 @@ const handleWithdrawAllProgressApprovals = () => {
     }
   ).then(async () => {
     try {
-      await planStore.withdrawPlan(planId)
+      if (isSecondaryCollege.value) {
+        const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
+        if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+          ElMessage.warning('无法识别当前学院组织，不能撤回上报')
+          return
+        }
+        await indicatorFillApi.withdrawCurrentMonthPlanReport(planId, reportOrgId)
+      } else {
+        await planStore.withdrawPlan(planId)
+      }
+
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
       await refreshCurrentPlanDetails(planId)
-      ElMessage.success('已撤回当前计划审批')
+      ElMessage.success('已撤回当前上报审批')
     } catch (error) {
       logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
     }
@@ -3245,13 +3504,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
               :key="index"
               :timestamp="milestone.deadline"
-              :type="
-                milestone.status === 'completed'
-                  ? 'success'
-                  : milestone.status === 'overdue'
-                    ? 'danger'
-                    : 'primary'
-              "
+              :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).timelineType"
               placement="top"
             >
               <div class="timeline-card">
@@ -3259,21 +3512,9 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   <span class="action-text">{{ milestone.name }}</span>
                   <el-tag
                     size="small"
-                    :type="
-                      milestone.status === 'completed'
-                        ? 'success'
-                        : milestone.status === 'overdue'
-                          ? 'danger'
-                          : 'warning'
-                    "
+                    :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).tagType"
                   >
-                    {{
-                      milestone.status === 'completed'
-                        ? '已完成'
-                        : milestone.status === 'overdue'
-                          ? '已逾期'
-                          : '进行中'
-                    }}
+                    {{ resolveMilestoneDisplayState(milestone, currentDetail.progress).label }}
                   </el-tag>
                 </div>
                 <div class="timeline-comment">目标进度: {{ milestone.targetProgress }}%</div>
@@ -3394,6 +3635,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       :show-plan-approvals="true"
       :show-approval-section="true"
       :workflow-code="resolvePlanApprovalWorkflowCode()"
+      :workflow-entity-type="isSecondaryCollege ? 'PLAN_REPORT' : 'PLAN'"
+      :workflow-entity-id="isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id"
       history-view-mode="card-only"
       approval-type="submission"
     />

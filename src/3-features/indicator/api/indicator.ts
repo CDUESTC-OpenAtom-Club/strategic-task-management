@@ -6,7 +6,9 @@ import type {
   ApiResponse,
   IndicatorDistributionRequest,
   IndicatorDistributionEligibility,
-  BatchDistributionRequest
+  BatchDistributionRequest,
+  BatchDistributePageIndicatorsRequest,
+  BatchDistributePageIndicatorsResponse
 } from '@/shared/types'
 import type {
   IndicatorVO,
@@ -256,6 +258,17 @@ export const indicatorApi = {
     })
   },
 
+  async batchDistributePageIndicators(
+    request: BatchDistributePageIndicatorsRequest
+  ): Promise<ApiResponse<BatchDistributePageIndicatorsResponse>> {
+    return withRetry(async () => {
+      return apiClient.post<ApiResponse<BatchDistributePageIndicatorsResponse>>(
+        '/indicators/actions/batch-distribute',
+        request
+      )
+    })
+  },
+
   /**
    * 获取已下发的子指标列表
    */
@@ -296,6 +309,7 @@ export const indicatorApi = {
   async batchWithdrawIndicators(
     ownerOrgId: number,
     targetOrgId: number,
+    planId?: number,
     reason?: string
   ): Promise<ApiResponse<{
     totalCount: number
@@ -314,6 +328,7 @@ export const indicatorApi = {
       }>>('/indicators/batch-withdraw', {
         ownerOrgId,
         targetOrgId,
+        ...(typeof planId === 'number' ? { planId } : {}),
         reason: reason || ''
       })
     })

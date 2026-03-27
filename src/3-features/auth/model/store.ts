@@ -261,16 +261,18 @@ export const useAuthStore = defineStore('auth', () => {
         logger.debug('✅[Auth] Token设置完成，准备加载数据')
 
         // 登录成功后，触发数据重新加载
-        import('@/features/task/model/strategic')
-          .then(({ useStrategicStore }) => {
-            const strategicStore = useStrategicStore()
-            const timeContext = useTimeContextStore()
-            logger.debug('🔄 [Auth] 登录成功，重新加载指标数据..')
-            strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-          })
-          .catch(err => {
-            logger.warn('⚠️ [Auth] 重新加载数据失败:', err)
-          })
+        if (mappedUser.role === 'strategic_dept') {
+          import('@/features/task/model/strategic')
+            .then(({ useStrategicStore }) => {
+              const strategicStore = useStrategicStore()
+              const timeContext = useTimeContextStore()
+              logger.debug('🔄 [Auth] 登录成功，重新加载指标数据..')
+              strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+            })
+            .catch(err => {
+              logger.warn('⚠️ [Auth] 重新加载数据失败:', err)
+            })
+        }
 
         return { success: true }
       } else {

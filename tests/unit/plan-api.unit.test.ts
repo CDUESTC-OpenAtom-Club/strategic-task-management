@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cacheManager } from '@/shared/lib/utils/cache'
 
 const apiGetMock = vi.fn()
+const axiosPostMock = vi.fn()
 
 vi.mock('@/shared/api/client', () => ({
   apiClient: {
-    get: apiGetMock
+    get: apiGetMock,
+    getAxiosInstance: () => ({
+      post: axiosPostMock
+    })
   }
 }))
 
@@ -26,9 +30,17 @@ vi.mock('@/features/auth/model/store', () => ({
   })
 }))
 
+vi.mock('@/shared/lib/timeContext', () => ({
+  useTimeContextStore: () => ({
+    initialize: async () => {},
+    resolveCycleYear: () => 2026
+  })
+}))
+
 describe('planApi.getAllPlans', () => {
   beforeEach(() => {
     apiGetMock.mockReset()
+    axiosPostMock.mockReset()
     cacheManager.clear()
     cacheManager.resetStats()
   })
@@ -68,5 +80,23 @@ describe('planApi.getAllPlans', () => {
 
     expect(result.data).toHaveLength(1)
     expect(result.data?.[0]).toMatchObject(plan)
+  })
+
+  it('uses extended timeout when withdrawing a plan', async () => {
+    axiosPostMock.mockResolvedValue({
+      success: true,
+      code: 200,
+      data: {
+        id: 4036,
+        status: 'DRAFT'
+      },
+      message: 'ok'
+    })
+
+    const { planApi } = await import('@/features/plan/api/planApi')
+    const result = await planApi.withdrawPlan(4036)
+
+    expect(axiosPostMock).toHaveBeenCalledWith('/plans/4036/withdraw', undefined, { timeout: 90000 })
+    expect(result.data).toMatchObject({ id: 4036, status: 'DRAFT' })
   })
 })

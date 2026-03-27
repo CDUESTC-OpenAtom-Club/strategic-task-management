@@ -28,6 +28,7 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { logger } from '@/shared/lib/utils/logger'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
+import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import strategicApi, { approvalApi as taskApprovalApi } from '@/features/task/api/strategicApi'
 import {
   getWorkflowDefinitionPreviewByCode,
@@ -56,7 +57,10 @@ import {
   resolveLatestIndicatorWorkflowSnapshot,
   type IndicatorWorkflowSnapshot
 } from '@/features/plan/lib/indicatorWorkflow'
-import type { WorkflowDefinitionPreviewResponse } from '@/features/workflow/api/types'
+import type {
+  WorkflowDefinitionPreviewResponse,
+  WorkflowInstanceDetailResponse
+} from '@/features/workflow/api/types'
 
 // 使用共享 Store
 const strategicStore = useStrategicStore()
@@ -916,8 +920,22 @@ const registerTaskLocally = (taskId: string | number, taskType: 'BASIC' | 'DEVEL
   currentPlanTaskIdSet.value = nextTaskIds
 }
 
+const normalizeEditableText = (value: unknown): string => {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) {
+    return ''
+  }
+
+  const normalized = trimmed.toLowerCase()
+  if (normalized === 'null' || normalized === 'undefined') {
+    return ''
+  }
+
+  return trimmed
+}
+
 const persistTaskContentEdit = async (row: StrategicIndicator, taskName: string) => {
-  const trimmedTaskName = taskName.trim()
+  const trimmedTaskName = normalizeEditableText(taskName)
   if (!trimmedTaskName) {
     throw new Error('战略任务名称不能为空')
   }
@@ -2193,8 +2211,18 @@ const saveIndicatorEdit = async (row: StrategicIndicator, field: string) => {
     )
 
     if (field === 'taskContent') {
+      const normalizedTaskName = normalizeEditableText(editingIndicatorValue.value)
+      if (!normalizedTaskName) {
+        cancelIndicatorEdit()
+        ElMessage.warning('战略任务名称不能为空')
+        return
+      }
+      if (normalizedTaskName === normalizeEditableText(row.taskContent)) {
+        cancelIndicatorEdit()
+        return
+      }
       cancelIndicatorEdit()
-      await persistTaskContentEdit(row, String(editingIndicatorValue.value))
+      await persistTaskContentEdit(row, normalizedTaskName)
       updateEditTime()
       return
     }
@@ -2318,12 +2346,10 @@ onMounted(async () => {
       }
     })(),
     (async () => {
-      if (planStore.plans.length === 0) {
-        try {
-          await planStore.loadPlans()
-        } catch (error) {
-          logger.error('[StrategicTaskView] 初始加载 Plan 失败:', error)
-        }
+      try {
+        await planStore.loadPlans({ force: true, background: true })
+      } catch (error) {
+        logger.error('[StrategicTaskView] 初始加载 Plan 失败:', error)
       }
     })(),
     loadBackendTaskTypeMap()
@@ -2744,6 +2770,7 @@ const currentDetail = ref<StrategicIndicator | null>(null)
 
 // 任务审批抽屉状态
 const taskApprovalVisible = ref(false)
+const preloadedPlanWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
 
 // 专门用于审批抽屉的指标列表（显示当前选中部门的所有指标，一个部门的所有指标状态应该统一）
 const approvalIndicators = computed(() => {
@@ -2767,9 +2794,36 @@ const _hasPendingApprovalForDept = computed(() => {
 // 打开任务审批抽屉
 const handleOpenApproval = () => {
   void (async () => {
+    preloadedPlanWorkflowDetail.value = null
     const planId = currentPlan.value?.id
     if (planId !== undefined && planId !== null && planId !== '') {
       await planStore.loadPlanDetails(planId, { force: true, background: true })
+
+      const latestPlan = currentPlan.value
+      if (latestPlan) {
+        try {
+          const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
+          if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+            const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+            if (response.success && response.data) {
+              preloadedPlanWorkflowDetail.value = response.data
+            }
+          } else {
+            const businessEntityId = Number(latestPlan.id ?? 0)
+            if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
+              const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
+              if (response.success && response.data) {
+                preloadedPlanWorkflowDetail.value = response.data
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn('[StrategicTaskView] 预加载审批抽屉工作流详情失败:', {
+            planId,
+            error
+          })
+        }
+      }
     }
     taskApprovalVisible.value = true
   })()
@@ -4282,21 +4336,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                         <span class="milestone-name">{{ milestone.name }}</span>
                         <el-tag
                           size="small"
-                          :type="
-                            milestone.status === 'completed'
-                              ? 'success'
-                              : milestone.status === 'overdue'
-                                ? 'danger'
-                                : 'warning'
-                          "
+                          :type="resolveMilestoneDisplayState(milestone, currentIndicator.progress).tagType"
                         >
-                          {{
-                            milestone.status === 'completed'
-                              ? '已完成'
-                              : milestone.status === 'overdue'
-                                ? '已逾期'
-                                : '进行中'
-                          }}
+                          {{ resolveMilestoneDisplayState(milestone, currentIndicator.progress).label }}
                         </el-tag>
                       </div>
                       <div class="milestone-details">
@@ -4629,13 +4671,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
               v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
               :key="index"
               :timestamp="milestone.deadline"
-              :type="
-                milestone.status === 'completed'
-                  ? 'success'
-                  : milestone.status === 'overdue'
-                    ? 'danger'
-                    : 'primary'
-              "
+              :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).timelineType"
               placement="top"
             >
               <div class="timeline-card">
@@ -4643,21 +4679,9 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                   <span class="action-text">{{ milestone.name }}</span>
                   <el-tag
                     size="small"
-                    :type="
-                      milestone.status === 'completed'
-                        ? 'success'
-                        : milestone.status === 'overdue'
-                          ? 'danger'
-                          : 'warning'
-                    "
+                    :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).tagType"
                   >
-                    {{
-                      milestone.status === 'completed'
-                        ? '已完成'
-                        : milestone.status === 'overdue'
-                          ? '已逾期'
-                          : '进行中'
-                    }}
+                    {{ resolveMilestoneDisplayState(milestone, currentDetail.progress).label }}
                   </el-tag>
                 </div>
                 <div class="timeline-comment">目标进度: {{ milestone.targetProgress }}%</div>
@@ -4787,6 +4811,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       v-model="taskApprovalVisible"
       :indicators="approvalIndicators"
       :plan="currentPlan"
+      :initial-plan-workflow-detail="preloadedPlanWorkflowDetail"
       :department-name="selectedDepartment"
       :plan-name="currentPlan?.taskName || currentPlan?.name || selectedDepartment"
       :show-plan-approvals="true"

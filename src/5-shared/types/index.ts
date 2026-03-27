@@ -59,6 +59,8 @@ export type {
   IndicatorCreateRequest,
   IndicatorDistributionRequest,
   BatchDistributionRequest,
+  BatchDistributePageIndicatorsRequest,
+  BatchDistributePageIndicatorsResponse,
   IndicatorDistributionEligibility
 } from './backend-aligned'
 
@@ -529,8 +531,13 @@ export interface Plan {
   updatedAt?: string
   createdBy?: string
   createdByOrgId?: number
+  createdByOrgName?: string
   createdByName?: string
   description?: string
+  targetOrgId?: number | string
+  targetOrgName?: string
+  orgName?: string
+  planLevel?: string
   // 前端辅助字段
   totalIndicators?: number // 总指标数
   completedIndicators?: number // 已完成指标数
