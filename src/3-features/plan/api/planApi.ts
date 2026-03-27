@@ -32,6 +32,7 @@ import {
   getMyPendingTasks,
   approveTask,
   rejectTask,
+  cancelWorkflow,
   getWorkflowInstanceDetail,
   getWorkflowInstanceDetailByBusiness
 } from '@/features/workflow/api'
@@ -40,6 +41,8 @@ import { useAuthStore } from '@/features/auth/model/store'
 export interface SubmitPlanApprovalPayload {
   workflowCode: string
 }
+
+const PLAN_WITHDRAW_TIMEOUT_MS = 90000
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
@@ -205,13 +208,10 @@ function convertBackendPlanToPlan(
 ): Plan {
   const inferredYear = resolvePlanYear(raw, resolveCycleYear)
   const cycleLabel = raw.year ?? inferredYear ?? raw.cycle ?? ''
-  const effectiveWorkflowStatus = typeof raw.workflowStatus === 'string' ? raw.workflowStatus.toUpperCase() : ''
-  const effectiveStatus =
-    effectiveWorkflowStatus === 'PENDING' ||
-    effectiveWorkflowStatus === 'IN_REVIEW' ||
-    effectiveWorkflowStatus === 'SUBMITTED'
-      ? effectiveWorkflowStatus
-      : raw.status
+  // Business views must follow the persisted plan status.
+  // workflowStatus is retained separately for approval detail rendering,
+  // but it must not override DRAFT after a withdraw.
+  const effectiveStatus = raw.status
 
   return {
     id: raw.id ?? raw.planId,
@@ -224,6 +224,7 @@ function convertBackendPlanToPlan(
     updatedAt: raw.updatedAt,
     createdBy: raw.createdByOrgId != null ? String(raw.createdByOrgId) : raw.createdBy,
     ...('createdByOrgId' in raw ? { createdByOrgId: Number(raw.createdByOrgId) || undefined } : {}),
+    ...('createdByOrgName' in raw ? { createdByOrgName: raw.createdByOrgName } : {}),
     ...('createdByName' in raw ? { createdByName: raw.createdByName } : {}),
     description: raw.description,
     totalIndicators: raw.indicatorCount,
@@ -596,6 +597,7 @@ interface PlanReportSimpleResponse {
   currentStepName?: string | null
   currentApproverId?: number | null
   currentApproverName?: string | null
+  canWithdraw?: boolean
   indicatorDetails?: PlanReportIndicatorDetailResponse[] | null
 }
 
@@ -691,6 +693,7 @@ async function enrichPlanReportWorkflow(
           workflowInstanceId: Number(workflowResponse.data.instanceId) || auditInstanceId,
           currentTaskId: Number(workflowResponse.data.currentTaskId) || undefined,
           workflowStatus: workflowResponse.data.status,
+          canWithdraw: Boolean(workflowResponse.data.canWithdraw),
           currentStepName: workflowResponse.data.currentStepName ?? undefined,
           currentApproverId: workflowResponse.data.currentApproverId ?? undefined,
           currentApproverName: workflowResponse.data.currentApproverName ?? undefined
@@ -713,6 +716,7 @@ async function enrichPlanReportWorkflow(
         workflowInstanceId: Number(workflowResponse.data.instanceId) || undefined,
         currentTaskId: Number(workflowResponse.data.currentTaskId) || undefined,
         workflowStatus: workflowResponse.data.status,
+        canWithdraw: Boolean(workflowResponse.data.canWithdraw),
         currentStepName: workflowResponse.data.currentStepName ?? undefined,
         currentApproverId: workflowResponse.data.currentApproverId ?? undefined,
         currentApproverName: workflowResponse.data.currentApproverName ?? undefined
@@ -850,6 +854,60 @@ function normalizePlanCollection(
   )
 }
 
+type PaginatedPlanCollection = {
+  items?: Plan[]
+  content?: Plan[]
+  records?: Plan[]
+  totalPages?: number
+  page?: number
+  pageSize?: number
+  total?: number
+  last?: boolean
+}
+
+async function fetchAllPlansFromPages(
+  resolveCycleYear?: (cycleId: unknown) => number | null
+): Promise<Plan[]> {
+  const pageSize = 1000
+  const firstResponse = await apiClient.get<ApiResponse<Plan[] | PaginatedPlanCollection>>('/plans', {
+    page: 0,
+    size: pageSize
+  })
+  const allPlans = normalizePlanCollection(firstResponse.data, resolveCycleYear)
+
+  if (!hasApiData(firstResponse)) {
+    return allPlans
+  }
+
+  const payload = firstResponse.data?.data
+  if (!payload || Array.isArray(payload)) {
+    return allPlans
+  }
+
+  const totalPages = Number(payload.totalPages)
+  if (!Number.isFinite(totalPages) || totalPages <= 1) {
+    return allPlans
+  }
+
+  const planMap = new Map(allPlans.map(plan => [String(plan.id), plan]))
+
+  for (let page = 1; page < totalPages; page += 1) {
+    const response = await apiClient.get<ApiResponse<Plan[] | PaginatedPlanCollection>>('/plans', {
+      page,
+      size: pageSize
+    })
+    if (!hasApiData(response)) {
+      break
+    }
+
+    normalizePlanCollection(response.data, resolveCycleYear).forEach(plan => {
+      planMap.set(String(plan.id), plan)
+    })
+  }
+
+  return Array.from(planMap.values())
+}
+
 async function getCycleYearResolver(): Promise<(cycleId: unknown) => number | null> {
   const timeContext = useTimeContextStore()
   await timeContext.initialize()
@@ -962,22 +1020,24 @@ export const planApi = {
     return fetchWithCache({
       key: buildQueryKey('plan', 'list', withPlanCacheContext()),
       policy: {
-        ttlMs: 2 * 60 * 1000,
-        scope: 'session',
-        persist: true,
-        staleWhileRevalidate: true,
+        // Plan status is workflow-critical. Keep only a short-lived in-memory cache
+        // so a reopened page does not render an outdated persisted status snapshot.
+        ttlMs: 15 * 1000,
+        scope: 'memory',
+        staleWhileRevalidate: false,
         dedupeWindowMs: 1000,
         tags: ['plan.list']
       },
       fetcher: async () => {
         try {
           const resolveCycleYear = await getCycleYearResolver()
-          const response = await apiClient.get<
-            ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
-          >('/plans', { page: 0, size: 1000 })
+          const data = await fetchAllPlansFromPages(resolveCycleYear)
           return {
-            ...response,
-            data: normalizePlanCollection(response.data, resolveCycleYear)
+            success: true,
+            code: 200,
+            message: '获取成功',
+            data,
+            timestamp: new Date().toISOString()
           }
         } catch (error) {
           const fallbackResponse = await loadPlansByCycleFallback()
@@ -1477,8 +1537,25 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/withdraw`)
+      const response = await apiClient.getAxiosInstance().post<ApiResponse<Plan>>(
+        `/plans/${planId}/withdraw`,
+        undefined,
+        { timeout: PLAN_WITHDRAW_TIMEOUT_MS }
+      )
       invalidatePlanCaches(planId)
+      invalidateQueries([
+        'workflow.todo',
+        'workflow.detail',
+        'workflow.instances',
+        'workflow.statistics',
+        'plan.list',
+        'plan.detail',
+        'indicator.list',
+        'indicator.detail',
+        'task.list',
+        'task.detail',
+        'dashboard.overview'
+      ])
       return response
     })
   },
@@ -1734,17 +1811,16 @@ export const indicatorFillApi = {
       )
 
     const latestCurrentMonthReport = currentMonthReports[0]
-    const editableExistingReport = currentMonthReports.find(
-      report => !isLockedPlanReportStatus(report.status)
-    )
+    const editableExistingReport = currentMonthReports.find(report => {
+      const normalizedStatus = getNormalizedReportStatus(report.status)
+      return normalizedStatus === 'DRAFT' || normalizedStatus === 'REJECTED'
+    })
 
     if (latestCurrentMonthReport && !editableExistingReport) {
       const lockedStatus = getNormalizedReportStatus(latestCurrentMonthReport.status)
-      if (lockedStatus === 'APPROVED') {
-        throw new Error('本月填报已审核通过，如需修改请联系管理员处理')
+      if (lockedStatus === 'IN_REVIEW' || lockedStatus === 'SUBMITTED') {
+        throw new Error('本月已有上报正在审批中，暂时不能重复保存或提交')
       }
-
-      throw new Error('本月填报已提交审核，暂时不能重复保存或提交')
     }
 
     const upsertPayload = {
@@ -1909,6 +1985,81 @@ export const indicatorFillApi = {
       message: '提交成功',
       timestamp: new Date().toISOString()
     }
+  },
+
+  async getCurrentMonthPlanReport(
+    planId: number | string,
+    reportOrgId: number,
+    reportMonth: string = getCurrentReportMonth()
+  ): Promise<PlanReportSimpleResponse | null> {
+    const reports = await loadPlanReportsByPlanId(Number(planId))
+    const currentMonthReports = reports
+      .filter(
+        report =>
+          Number(report.reportOrgId) === Number(reportOrgId) &&
+          report.reportMonth === reportMonth
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt || 0).getTime() -
+          new Date(a.updatedAt || a.createdAt || 0).getTime()
+      )
+
+    return currentMonthReports[0] || null
+  },
+
+  async submitCurrentMonthPlanReport(
+    planId: number | string,
+    reportOrgId: number,
+    reportMonth: string = getCurrentReportMonth()
+  ): Promise<PlanReportSimpleResponse> {
+    const currentReport = await this.getCurrentMonthPlanReport(planId, reportOrgId, reportMonth)
+    if (!currentReport?.id) {
+      throw new Error('当前计划下还没有可提交的上报草稿，请先完成指标填报')
+    }
+
+    const normalizedStatus = getNormalizedReportStatus(currentReport.status)
+    if (normalizedStatus === 'IN_REVIEW' || normalizedStatus === 'SUBMITTED') {
+      throw new Error('当前上报已进入审批中，不能重复提交')
+    }
+    if (normalizedStatus === 'APPROVED') {
+      throw new Error('当前上报已审批通过，不能重复提交')
+    }
+
+    const authStore = useAuthStore()
+    const userId = Number(authStore.user?.id ?? (authStore.user as { userId?: number } | null)?.userId)
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new Error('当前登录用户缺少 userId，无法提交上报')
+    }
+
+    const response = await apiClient.post<ApiResponse<PlanReportSimpleResponse>>(
+      `/reports/${currentReport.id}/submit?userId=${userId}`
+    )
+    if (!hasApiData(response) || !response.data) {
+      throw new Error(response.message || '提交上报失败')
+    }
+
+    return loadPlanReportById(response.data.id).catch(() => enrichPlanReportWorkflow(response.data))
+  },
+
+  async withdrawCurrentMonthPlanReport(
+    planId: number | string,
+    reportOrgId: number,
+    reportMonth: string = getCurrentReportMonth()
+  ): Promise<PlanReportSimpleResponse> {
+    const currentReport = await this.getCurrentMonthPlanReport(planId, reportOrgId, reportMonth)
+    if (!currentReport?.id) {
+      throw new Error('当前没有可撤回的上报记录')
+    }
+    if (!currentReport.workflowInstanceId) {
+      throw new Error('当前上报未绑定审批流程，无法撤回')
+    }
+    if (!currentReport.canWithdraw) {
+      throw new Error('当前审批进度不支持撤回')
+    }
+
+    await cancelWorkflow(String(currentReport.workflowInstanceId))
+    return loadPlanReportById(currentReport.id)
   }
 }
 

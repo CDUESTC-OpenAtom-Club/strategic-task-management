@@ -179,7 +179,10 @@ const getActionLabel = (action: string) => {
 
         <!-- 里程碑进度 -->
         <el-tab-pane label="里程碑" name="milestones">
-          <MilestoneTimeline :milestones="indicator.milestones" />
+          <MilestoneTimeline
+            :milestones="indicator.milestones"
+            :current-progress="indicator.progress"
+          />
         </el-tab-pane>
 
         <!-- 审批历史 -->

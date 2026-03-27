@@ -13,6 +13,7 @@ import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import { strategicApi } from '@/features/task/api/strategicApi'
 import { logger } from '@/shared/lib/utils/logger'
 import { useOrgStore } from '@/features/organization/model/store'
+import { withExponentialRetry } from '@/shared/lib/api/wrappers'
 import type { Department } from '@/features/organization/api'
 
 type BackendIndicatorListPayload =
@@ -34,12 +35,17 @@ function getRecord(value: unknown): Record<string, unknown> {
   return {}
 }
 
+function isPlaceholderText(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'null' || normalized === 'undefined'
+}
+
 function getString(record: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const value = record[key]
     if (value !== undefined && value !== null) {
       const text = String(value).trim()
-      if (text) {
+      if (text && !isPlaceholderText(text)) {
         return text
       }
     }
@@ -163,6 +169,21 @@ async function buildIndicatorUpdatePayload(
     delete payload.responsibleDept
   }
 
+  if ('type1' in updates || 'type' in updates || 'indicatorType' in updates || 'isQualitative' in updates) {
+    payload.type =
+      normalizeIndicatorType(
+        updates.type1,
+        updates.type,
+        updates.indicatorType,
+        updates.isQualitative === true ? '定性' : updates.isQualitative === false ? '定量' : ''
+      ) === '定性'
+        ? 'QUALITATIVE'
+        : 'QUANTITATIVE'
+    delete payload.type1
+    delete payload.indicatorType
+    delete payload.isQualitative
+  }
+
   return payload
 }
 
@@ -175,6 +196,27 @@ function normalizeMilestoneStatus(status: unknown): 'pending' | 'completed' | 'o
     return 'overdue'
   }
   return 'pending'
+}
+
+function normalizeIndicatorType(
+  ...values: unknown[]
+): '定性' | '定量' {
+  for (const value of values) {
+    const normalized = String(value || '').trim().toUpperCase()
+    if (!normalized) {
+      continue
+    }
+
+    if (normalized === '定性' || normalized === 'QUALITATIVE') {
+      return '定性'
+    }
+
+    if (normalized === '定量' || normalized === 'QUANTITATIVE') {
+      return '定量'
+    }
+  }
+
+  return '定量'
 }
 
 function normalizeMilestones(rawMilestones: unknown): StrategicIndicator['milestones'] {
@@ -260,8 +302,20 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const normalizedIndicator: StrategicIndicator = {
     id: id || String(Date.now()),
     name: getString(item, 'name', 'indicatorName', 'indicatorDesc') || `指标${id || ''}`,
-    isQualitative: getBoolean(item, 'isQualitative') ?? false,
-    type1: (getString(item, 'type1', 'indicatorType1', 'indicatorType') || '定量') as '定性' | '定量',
+    isQualitative:
+      getBoolean(item, 'isQualitative') ??
+      normalizeIndicatorType(
+        item.type1,
+        item.indicatorType1,
+        item.indicatorType,
+        item.type
+      ) === '定性',
+    type1: normalizeIndicatorType(
+      item.type1,
+      item.indicatorType1,
+      item.indicatorType,
+      item.type
+    ),
     // type2 已从后端库表移除，前端仅做展示兼容，不再作为业务判断依据
     type2: (getString(item, 'type2', 'indicatorType2') || '其他') as '发展性' | '基础性',
     progress: getNumber(item, 'progress'),
@@ -459,6 +513,43 @@ function getErrorMessage(error: unknown): string {
   return '操作失败，请稍后重试'
 }
 
+function getRuntimeTaskId(
+  indicator: (StrategicIndicator & { taskId?: string | number }) | null | undefined
+): string {
+  return String(indicator?.taskId ?? '').trim()
+}
+
+function isGenericTaskFallback(taskContent: string, taskId: string): boolean {
+  return Boolean(taskId) && taskContent === `计划-${taskId}`
+}
+
+function mergePreferredTaskFields(
+  baseIndicator: StrategicIndicator & { taskId?: string | number },
+  fallbackIndicator: Partial<StrategicIndicator> & { taskId?: string | number }
+): StrategicIndicator & { taskId?: string | number } {
+  const nextIndicator = {
+    ...baseIndicator
+  }
+
+  const fallbackTaskId = String(fallbackIndicator.taskId ?? '').trim()
+  if (!getRuntimeTaskId(nextIndicator) && fallbackTaskId) {
+    nextIndicator.taskId = fallbackTaskId
+  }
+
+  const currentTaskId = getRuntimeTaskId(nextIndicator)
+  const currentTaskContent = String(nextIndicator.taskContent || '').trim()
+  const fallbackTaskContent = String(fallbackIndicator.taskContent || '').trim()
+
+  if (
+    (!currentTaskContent || isGenericTaskFallback(currentTaskContent, currentTaskId)) &&
+    fallbackTaskContent
+  ) {
+    nextIndicator.taskContent = fallbackTaskContent
+  }
+
+  return nextIndicator
+}
+
 function buildDepartmentResolver(departments: Department[]) {
   const idToName = new Map<string, string>()
   const aliasToCanonical = new Map<string, string>()
@@ -616,10 +707,18 @@ export const useStrategicStore = defineStore('strategic', () => {
     const request = (async () => {
       try {
         logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
-        const [response, tasksResponse] = await Promise.all([
-          indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }),
-          strategicApi.getTasksByYear(year)
-        ])
+        const [response, tasksResponse] = await withExponentialRetry(
+          () =>
+            Promise.all([
+              indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }),
+              strategicApi.getTasksByYear(year)
+            ]),
+          {
+            maxRetries: 3,
+            baseDelay: 800,
+            maxDelay: 2500
+          }
+        )
 
         if (response.success && response.data) {
           const normalized = normalizeIndicators(response.data as BackendIndicatorListPayload)
@@ -671,17 +770,36 @@ export const useStrategicStore = defineStore('strategic', () => {
       }
 
       const index = indicators.value.findIndex(i => String(i.id) === String(id))
-      const requestPayload = await buildIndicatorUpdatePayload(data)
+      const currentIndicator = index !== -1 ? indicators.value[index] : null
+      const requestPayload = await buildIndicatorUpdatePayload({
+        ...(currentIndicator &&
+        !('type1' in data) &&
+        !('type' in data) &&
+        !('indicatorType' in data) &&
+        !('isQualitative' in data)
+          ? {
+              type1: currentIndicator.type1,
+              isQualitative: currentIndicator.isQualitative
+            }
+          : {}),
+        ...data
+      })
       const response = await indicatorApi.updateIndicator(id, requestPayload)
 
       if (hasApiData(response)) {
         if (index !== -1) {
           const normalized = response.data ? toStrategicIndicator(response.data) : null
-          indicators.value[index] = {
+          const mergedIndicator = {
             ...indicators.value[index],
             ...data,
             ...(normalized || {})
           }
+          indicators.value[index] = mergePreferredTaskFields(mergedIndicator, {
+            taskId: getRuntimeTaskId(currentIndicator as StrategicIndicator & { taskId?: string | number }),
+            taskContent:
+              currentIndicator?.taskContent ||
+              (typeof data.taskContent === 'string' ? data.taskContent : '')
+          })
         }
       } else {
         throw new Error(response.message || 'Failed to update indicator')
@@ -791,7 +909,18 @@ export const useStrategicStore = defineStore('strategic', () => {
       }
 
       const normalized = toStrategicIndicator(response.data)
-      indicators.value.unshift(normalized)
+      indicators.value.unshift(
+        mergePreferredTaskFields(
+          normalized as StrategicIndicator & { taskId?: string | number },
+          {
+            taskId:
+              indicator.taskId !== undefined && indicator.taskId !== null
+                ? String(indicator.taskId)
+                : '',
+            taskContent: indicator.taskContent
+          }
+        )
+      )
       return response
     } catch (err) {
       logger.error('[Strategic Store] Failed to create indicator:', err)

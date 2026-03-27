@@ -54,8 +54,8 @@
 
 ## 环境要求
 
-- **Node.js** >= 18.0.0
-- **npm** >= 9.0.0
+- **Node.js** 22.x
+- **npm** >= 10.0.0
 
 ---
 
@@ -64,6 +64,7 @@
 ### 1. 安装依赖
 
 ```bash
+nvm use
 npm install
 ```
 
@@ -77,12 +78,15 @@ cp .env.example .env
 ### 3. 启动开发服务器
 
 ```bash
+nvm use
 npm run dev
 ```
 
 访问 http://localhost:3500 即可使用系统。
 
 > **注意**: 需要先启动后端服务 (sism-backend)，前端才能正常工作。
+>
+> **推荐**: 新环境首次启动前，先阅读 [`../docs/local-startup-guide.md`](../docs/local-startup-guide.md)。
 
 ---
 
@@ -148,7 +152,7 @@ docs/                       # 项目文档
 
 | 命令 | 说明 |
 |------|------|
-| `npm run dev` | 启动开发服务器 (端口 3000) |
+| `npm run dev` | 启动开发服务器 (端口 3500) |
 | `npm run build` | 构建生产版本 |
 | `npm run build:check` | TypeScript 类型检查 + 构建 |
 | `npm run preview` | 预览生产构建 |

@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Check, Clock, Warning } from '@element-plus/icons-vue'
-import type { Milestone } from '@/shared/types'
+import type { Milestone, MilestoneUI } from '@/shared/types'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
+import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 
 const props = defineProps<{
   milestones: Milestone[]
+  currentProgress?: number
   currentDate?: Date
 }>()
 
 const now = computed(() => props.currentDate || new Date())
 
 const sortedMilestones = computed(() => sortMilestonesByProgress(props.milestones || []))
+const getDisplayState = (milestone: MilestoneUI) =>
+  resolveMilestoneDisplayState(milestone, props.currentProgress, now.value)
 
-const getStatusIcon = (status: Milestone['status']) => {
+const getStatusIcon = (status: ReturnType<typeof getDisplayState>['status']) => {
   switch (status) {
     case 'completed': return Check
     case 'overdue': return Warning
@@ -21,7 +25,7 @@ const getStatusIcon = (status: Milestone['status']) => {
   }
 }
 
-const getStatusType = (status: Milestone['status']) => {
+const getStatusType = (status: ReturnType<typeof getDisplayState>['status']) => {
   switch (status) {
     case 'completed': return 'success'
     case 'overdue': return 'danger'
@@ -29,7 +33,7 @@ const getStatusType = (status: Milestone['status']) => {
   }
 }
 
-const getStatusLabel = (status: Milestone['status']) => {
+const getStatusLabel = (status: ReturnType<typeof getDisplayState>['status']) => {
   switch (status) {
     case 'completed': return '已完成'
     case 'overdue': return '已逾期'
@@ -58,30 +62,34 @@ const getDaysRemaining = (deadline: string) => {
       <el-timeline-item
         v-for="milestone in sortedMilestones"
         :key="milestone.id"
-        :type="getStatusType(milestone.status)"
-        :icon="getStatusIcon(milestone.status)"
-        :hollow="milestone.status === 'pending'"
+        :type="getStatusType(getDisplayState(milestone).status)"
+        :icon="getStatusIcon(getDisplayState(milestone).status)"
+        :hollow="getDisplayState(milestone).status === 'pending'"
       >
         <div class="milestone-item">
           <div class="milestone-header">
             <span class="milestone-name">{{ milestone.name }}</span>
-            <el-tag :type="getStatusType(milestone.status)" size="small" effect="light">
-              {{ getStatusLabel(milestone.status) }}
+            <el-tag
+              :type="getStatusType(getDisplayState(milestone).status)"
+              size="small"
+              effect="light"
+            >
+              {{ getStatusLabel(getDisplayState(milestone).status) }}
             </el-tag>
           </div>
           <div class="milestone-meta">
             <span class="deadline">截止: {{ formatDate(milestone.deadline) }}</span>
             <span 
-              v-if="milestone.status !== 'completed'" 
+              v-if="getDisplayState(milestone).status !== 'completed'" 
               class="remaining"
-              :class="{ 'is-overdue': milestone.status === 'overdue' }"
+              :class="{ 'is-overdue': getDisplayState(milestone).status === 'overdue' }"
             >
               {{ getDaysRemaining(milestone.deadline) }}
             </span>
           </div>
           <el-progress 
             :percentage="milestone.targetProgress" 
-            :status="milestone.status === 'completed' ? 'success' : milestone.status === 'overdue' ? 'exception' : ''"
+            :status="getDisplayState(milestone).progressStatus"
             :stroke-width="6"
             class="milestone-progress"
           />

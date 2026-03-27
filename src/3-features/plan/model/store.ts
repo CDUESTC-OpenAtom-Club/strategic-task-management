@@ -11,6 +11,7 @@ import type { Plan, PlanStatus, PlanFill, IndicatorFill, IndicatorFillForm } fro
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
+import { withExponentialRetry } from '@/shared/lib/api/wrappers'
 import { ElMessage } from 'element-plus'
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
@@ -109,7 +110,11 @@ export const usePlanStore = defineStore('plan', () => {
       try {
         logger.info('[Plan Store] Loading plans...')
         const { planApi } = await import('@/features/plan/api/planApi')
-        const response = await planApi.getAllPlans()
+        const response = await withExponentialRetry(() => planApi.getAllPlans(), {
+          maxRetries: 3,
+          baseDelay: 800,
+          maxDelay: 2500
+        })
 
         if (hasApiData(response)) {
           plans.value = response.data
@@ -149,7 +154,9 @@ export const usePlanStore = defineStore('plan', () => {
       }
     }
 
-    loading.value = true
+    if (!options.background) {
+      loading.value = true
+    }
     error.value = null
 
     try {
@@ -177,7 +184,9 @@ export const usePlanStore = defineStore('plan', () => {
       logger.error('[Plan Store] Failed to load plan:', err)
       return null
     } finally {
-      loading.value = false
+      if (!options.background) {
+        loading.value = false
+      }
     }
   }
 
@@ -193,7 +202,9 @@ export const usePlanStore = defineStore('plan', () => {
       return currentPlan.value
     }
 
-    loading.value = true
+    if (!options.background) {
+      loading.value = true
+    }
     error.value = null
 
     try {
@@ -222,7 +233,9 @@ export const usePlanStore = defineStore('plan', () => {
       logger.error('[Plan Store] Failed to load plan details:', err)
       return null
     } finally {
-      loading.value = false
+      if (!options.background) {
+        loading.value = false
+      }
     }
   }
 

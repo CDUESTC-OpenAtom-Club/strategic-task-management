@@ -41,6 +41,7 @@ import {
   PROGRESS_APPROVAL_STATUS_VALUES,
   type ProgressApprovalStatusValue
 } from '@/shared/config/validationRules'
+import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import {
   calculateMilestoneStatus as _calculateMilestoneStatus,
   getIndicatorProgressStatus as _getIndicatorProgressStatus,
@@ -1975,13 +1976,7 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
               v-for="(milestone, index) in currentDetail.milestones"
               :key="index"
               :timestamp="milestone.deadline"
-              :type="
-                milestone.status === 'completed'
-                  ? 'success'
-                  : milestone.status === 'overdue'
-                    ? 'danger'
-                    : 'primary'
-              "
+              :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).timelineType"
               placement="top"
             >
               <div class="timeline-card">
@@ -1989,21 +1984,9 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
                   <span class="action-text">{{ milestone.name }}</span>
                   <el-tag
                     size="small"
-                    :type="
-                      milestone.status === 'completed'
-                        ? 'success'
-                        : milestone.status === 'overdue'
-                          ? 'danger'
-                          : 'warning'
-                    "
+                    :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).tagType"
                   >
-                    {{
-                      milestone.status === 'completed'
-                        ? '已完成'
-                        : milestone.status === 'overdue'
-                          ? '已逾期'
-                          : '进行中'
-                    }}
+                    {{ resolveMilestoneDisplayState(milestone, currentDetail.progress).label }}
                   </el-tag>
                 </div>
                 <div class="timeline-comment">目标进度: {{ milestone.targetProgress }}%</div>

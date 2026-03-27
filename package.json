@@ -3,7 +3,11 @@
   "private": true,
   "version": "1.0.1",
   "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "scripts": {
+    "preinstall": "node scripts/check-node-version.mjs",
     "dev": "node scripts/dev.mjs",
     "build": "vite build",
     "build:check": "vue-tsc -b && vite build",

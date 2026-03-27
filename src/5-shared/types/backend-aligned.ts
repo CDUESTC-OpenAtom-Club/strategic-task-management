@@ -526,7 +526,7 @@ export interface IndicatorVO {
   indicatorId: number
   parentIndicatorId?: number
   indicatorDesc: string
-  type?: 'QUANTITATIVE' | 'QUALITATIVE'
+  type?: 'QUANTITATIVE' | 'QUALITATIVE' | '定量' | '定性'
   progress?: number
   reportProgress?: number | null
   hasCurrentMonthFill?: boolean
@@ -537,6 +537,7 @@ export interface IndicatorVO {
   status: 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
   createdAt: string
   updatedAt: string
+  taskType?: 'BASIC' | 'DEVELOPMENT' | 'QUANTITATIVE' | 'QUALITATIVE' | string
   // Extended fields for frontend alignment
   milestones?: MilestoneVO[]
   canDistribute?: boolean
@@ -575,7 +576,9 @@ export interface MilestoneVO {
  */
 export interface IndicatorCreateRequest {
   indicatorDesc: string
-  type?: 'QUANTITATIVE' | 'QUALITATIVE'
+  type?: 'QUANTITATIVE' | 'QUALITATIVE' | '定量' | '定性'
+  indicatorType?: '定量' | '定性'
+  type1?: '定量' | '定性'
   taskId?: number
   parentIndicatorId?: number
   ownerOrgId: number
@@ -584,6 +587,8 @@ export interface IndicatorCreateRequest {
   sortOrder?: number
   remark?: string
   progress?: number
+  year?: number
+  canWithdraw?: boolean
   milestones?: Array<{
     milestoneName: string
     milestoneDesc?: string
@@ -610,6 +615,41 @@ export interface BatchDistributionRequest {
   parentIndicatorId: string
   targetOrgIds: string[]
   actorUserId?: string
+}
+
+export interface BatchDistributePageIndicatorsRequest {
+  indicators: Array<{
+    clientRequestId: string
+    indicatorId?: number
+    indicatorDesc?: string
+    type?: 'QUANTITATIVE' | 'QUALITATIVE' | '定量' | '定性'
+    indicatorType?: '定量' | '定性'
+    type1?: '定量' | '定性'
+    taskId?: number
+    parentIndicatorId?: number
+    ownerOrgId?: number
+    targetOrgId: number
+    weightPercent?: number
+    sortOrder?: number
+    remark?: string
+    progress?: number
+    customDesc?: string
+    milestones?: Array<{
+      milestoneName: string
+      description?: string
+      dueDate?: string
+      targetProgress?: number
+      sortOrder?: number
+    }>
+  }>
+}
+
+export interface BatchDistributePageIndicatorsResponse {
+  totalCount: number
+  items: Array<{
+    clientRequestId?: string
+    indicator: IndicatorVO
+  }>
 }
 
 /**
