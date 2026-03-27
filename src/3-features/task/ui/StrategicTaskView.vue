@@ -75,6 +75,31 @@ const currentUserPermissionCodes = computed(() => {
     .filter(Boolean)
 })
 
+const isCurrentUserReporter = computed(() => {
+  const user = authStore.user as
+    | {
+        username?: unknown
+        realName?: unknown
+        name?: unknown
+        roles?: unknown
+      }
+    | null
+
+  const username = String(user?.username ?? '').trim().toLowerCase()
+  const realName = String(user?.realName ?? user?.name ?? '').trim()
+  const roles = Array.isArray(user?.roles)
+    ? user!.roles
+        .map(role => (typeof role === 'string' ? role.trim().toUpperCase() : ''))
+        .filter(Boolean)
+    : []
+
+  return (
+    roles.includes('ROLE_REPORTER') ||
+    username.endsWith('_report') ||
+    realName.includes('填报人')
+  )
+})
+
 // 只读模式（历史年份为只读）
 const isReadOnly = computed(() => timeContext.isReadOnly)
 
@@ -94,25 +119,10 @@ const canEdit = computed(() => {
 // 首屏加载态：接口未返回前展示骨架，避免先渲染"暂无数据"造成误判
 const taskTypeMapLoading = ref(false)
 const currentPlanScopeLoading = ref(false)
+const pageTransitionLoading = ref(false)
 
 const isInitialDataLoading = computed(() => {
-  // 首屏加载：indicators 为空且正在加载
-  const indicatorBootstrapping =
-    strategicStore.loadingState.indicators && strategicStore.indicators.length === 0
-  const orgBootstrapping = orgStore.loading && orgStore.departments.length === 0
-  // 任何时候只要 store 正在加载指标数据，就应该显示加载状态
-  // 这样可以避免在切换部门或刷新数据时先显示"暂无数据"再显示真实数据
-  const anyIndicatorLoading = strategicStore.loadingState.indicators
-  // 修复：加入 planStore.loading，避免在 plan 未加载完成时显示"暂无指标"
-  const planLoading = planStore.loading
-  return (
-    indicatorBootstrapping ||
-    orgBootstrapping ||
-    taskTypeMapLoading.value ||
-    currentPlanScopeLoading.value ||
-    anyIndicatorLoading ||
-    planLoading
-  )
+  return isBootstrappingPage.value || pageTransitionLoading.value
 })
 
 // 当前选中任务索引
@@ -715,6 +725,66 @@ const currentPlanStatus = computed(() => {
   return normalizePlanStatus(currentPlan.value?.status)
 })
 
+const hydratingPlanDetail = ref(false)
+const departmentViewRequestId = ref(0)
+
+const hydrateCurrentPlanWorkflowState = async (options: { force?: boolean } = {}) => {
+  const planId = Number(currentPlan.value?.id ?? NaN)
+  if (!Number.isFinite(planId) || planId <= 0) {
+    return
+  }
+
+  const status = currentPlanStatus.value
+  if (status !== 'PENDING' && status !== 'DISTRIBUTED') {
+    return
+  }
+
+  const plan = currentPlan.value as
+    | (typeof currentPlan.value & {
+        canWithdraw?: boolean
+        workflowInstanceId?: number
+        currentTaskId?: number
+      })
+    | null
+
+  const needHydration =
+    options.force ||
+    (status === 'PENDING' && typeof plan?.canWithdraw !== 'boolean') ||
+    plan?.workflowInstanceId == null ||
+    plan?.currentTaskId == null
+
+  if (!needHydration || hydratingPlanDetail.value) {
+    return
+  }
+
+  hydratingPlanDetail.value = true
+  try {
+    await planStore.loadPlanDetails(planId, { force: true, background: true })
+  } catch (error) {
+    logger.warn('[StrategicTaskView] 预加载 Plan 工作流详情失败:', { planId, error })
+  } finally {
+    hydratingPlanDetail.value = false
+  }
+}
+
+const refreshCurrentDepartmentView = async (options: { showLoading?: boolean } = {}) => {
+  const requestId = departmentViewRequestId.value + 1
+  departmentViewRequestId.value = requestId
+
+  if (options.showLoading) {
+    pageTransitionLoading.value = true
+  }
+
+  try {
+    await hydrateCurrentPlanWorkflowState()
+    await loadCurrentPlanTaskScope()
+  } finally {
+    if (options.showLoading && departmentViewRequestId.value === requestId) {
+      pageTransitionLoading.value = false
+    }
+  }
+}
+
 const PLAN_APPROVAL_WORKFLOW_CODE = 'PLAN_DISPATCH_STRATEGY'
 
 const approvalSetupDialogVisible = ref(false)
@@ -887,10 +957,11 @@ const isPlanDistributed = computed(() => {
 })
 
 // 判断 Plan 是否可以撤回
-// 统一以后端 workflow snapshot 的 canWithdraw 为准
+// 统一以后端 workflow snapshot 的 canWithdraw 为准。
+// 撤回权限只跟当前部门填报人走，不在前端额外放宽跨部门管理权限。
 const canWithdrawPlan = computed(() => {
   const status = currentPlanStatus.value
-  return status === 'PENDING' && Boolean(currentPlan.value?.canWithdraw)
+  return status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
 })
 
 // 判断当前页面指标是否已进入“不可编辑”的流程阶段
@@ -1023,7 +1094,7 @@ const distributeButtonDisabledReason = computed(() => {
   }
 
   if (status === 'PENDING' && !canWithdrawPlan.value) {
-    return '当前审批进度不支持撤回'
+    return isCurrentUserReporter.value ? '当前审批进度不支持撤回' : '当前登录身份不是填报人，不能撤回'
   }
 
   if (status && status !== 'DRAFT' && status !== 'PENDING') {
@@ -1274,6 +1345,33 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
     await planStore.loadPlanDetails(planId, { force: true, background: true })
   }
   await loadPendingPlanApprovalCount()
+}
+
+const refreshTaskPageAfterIndicatorMutation = async () => {
+  const planId = currentPlan.value?.id
+  const invalidateTargets: Array<string | ReturnType<typeof buildQueryKey>> = [
+    'indicator.list',
+    'task.list',
+    'task.scope',
+    'plan.detail',
+    'dashboard.overview',
+    buildQueryKey('task', 'list', { year: timeContext.currentYear })
+  ]
+
+  if (planId !== undefined && planId !== null && planId !== '') {
+    invalidateTargets.push(
+      buildQueryKey('task', 'scope', {
+        department: selectedDepartment.value,
+        planId: String(planId),
+        year: timeContext.currentYear
+      })
+    )
+  }
+
+  invalidateQueries(invalidateTargets)
+  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+  await loadBackendTaskTypeMap()
+  await loadCurrentPlanTaskScope()
 }
 
 const handleApproveCurrentIndicatorWorkflow = async () => {
@@ -1817,6 +1915,22 @@ const _formatUpdateTime = (time: string | Date | undefined) => {
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
 
+const formatDetailDate = (time: string | Date | undefined) => {
+  if (!time) {
+    return '-'
+  }
+
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) {
+    return String(time).slice(0, 10) || '-'
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // 获取进度数字的样式类
 const _getProgressClass = (progress: number) => {
   if (progress >= 80) {
@@ -2215,9 +2329,10 @@ onMounted(async () => {
     loadBackendTaskTypeMap()
   ])
 
-  await loadCurrentPlanTaskScope()
-  await loadMilestonesForCurrentScope()
+  await refreshCurrentDepartmentView()
   isBootstrappingPage.value = false
+
+  void loadMilestonesForCurrentScope()
 
   document.addEventListener('click', handleGlobalClick, true)
 })
@@ -2233,7 +2348,7 @@ watch(
       return
     }
     await loadBackendTaskTypeMap()
-    await loadCurrentPlanTaskScope()
+    await refreshCurrentDepartmentView({ showLoading: true })
   }
 )
 
@@ -2241,8 +2356,24 @@ watch([selectedDepartment, () => planStore.plans.length], async () => {
   if (isBootstrappingPage.value) {
     return
   }
-  await loadCurrentPlanTaskScope()
+  await refreshCurrentDepartmentView({ showLoading: true })
+  void loadMilestonesForCurrentScope()
 })
+
+watch(
+  [() => currentPlan.value?.id, currentPlanStatus],
+  async ([planId, status], [prevPlanId, prevStatus]) => {
+    if (isBootstrappingPage.value) {
+      return
+    }
+
+    if (planId === prevPlanId && status === prevStatus) {
+      return
+    }
+
+    await hydrateCurrentPlanWorkflowState()
+  }
+)
 
 // 方法
 const resetNewRow = (
@@ -2441,8 +2572,8 @@ const _deleteIndicator = (indicator: StrategicIndicator) => {
 
       try {
         await strategicStore.deleteIndicator(indicatorId.toString())
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-        ElMessage.success('指标已删除（已同步数据库）')
+        await refreshTaskPageAfterIndicatorMutation()
+        ElMessage.success('指标已删除')
         updateEditTime()
       } catch (error) {
         logger.error('[StrategicTaskView] 删除指标失败:', error)
@@ -2553,6 +2684,10 @@ const getSortedMilestones = (milestones?: StrategicIndicator['milestones']) =>
   sortMilestonesByProgress(milestones || [])
 
 const selectDepartment = (dept: string) => {
+  if (selectedDepartment.value === dept) {
+    return
+  }
+  pageTransitionLoading.value = true
   selectedDepartment.value = dept
 }
 
@@ -3354,8 +3489,8 @@ const _handleBatchDeleteByTask = (group: { taskContent: string; rows: StrategicI
 
       try {
         await Promise.all(group.rows.map(row => strategicStore.deleteIndicator(row.id.toString())))
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-        ElMessage.success(`已成功删除 ${group.rows.length} 个指标（已同步数据库）`)
+        await refreshTaskPageAfterIndicatorMutation()
+        ElMessage.success(`已成功删除 ${group.rows.length} 个指标`)
         updateEditTime()
       } catch (error) {
         logger.error('[StrategicTaskView] 批量删除指标失败:', error)
@@ -3391,8 +3526,8 @@ const handleDeleteIndicator = (row: StrategicIndicator) => {
 
       try {
         await strategicStore.deleteIndicator(indicatorId.toString())
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-        ElMessage.success('指标已删除（已同步数据库）')
+        await refreshTaskPageAfterIndicatorMutation()
+        ElMessage.success('指标已删除')
         updateEditTime()
       } catch (error) {
         logger.error('[StrategicTaskView] 删除指标失败:', error)
@@ -3589,7 +3724,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           <!-- 审批进度按钮（带徽章） -->
           <el-badge
             v-if="pendingApprovalCount > 0"
-            :value="pendingApprovalCount"
+            is-dot
             class="approval-badge"
           >
             <el-button size="small" type="warning" @click="handleOpenApproval">
@@ -4475,7 +4610,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             currentDetail.responsiblePerson
           }}</el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
-            currentDetail.createTime
+            formatDetailDate(currentDetail.createTime)
           }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{
             currentDetail.remark

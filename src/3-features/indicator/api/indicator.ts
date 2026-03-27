@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/api/client'
 import { withRetry } from '@/shared/lib/api/wrappers'
-import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
+import { buildQueryKey, fetchWithCache, invalidateQueries, refreshCachePattern } from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type {
   ApiResponse,
@@ -34,6 +34,21 @@ function withIndicatorCacheContext(params?: Record<string, unknown>): Record<str
     ...(params ?? {}),
     version: 'v1'
   }
+}
+
+function invalidateIndicatorListCaches(indicatorId?: string): void {
+  const targets: Array<string | ReturnType<typeof buildQueryKey>> = ['indicator.list']
+
+  if (indicatorId) {
+    targets.push(
+      'indicator.detail',
+      `indicator.detail.${indicatorId}`,
+      buildQueryKey('indicator', 'detail', withIndicatorCacheContext({ indicatorId: String(indicatorId) }))
+    )
+  }
+
+  invalidateQueries(targets)
+  refreshCachePattern(/indicators/i)
 }
 
 export const indicatorApi = {
@@ -323,6 +338,7 @@ export const indicatorApi = {
       console.log('[API] updateIndicator request:', indicatorId, updates)
       const result = await apiClient.put<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`, updates)
       console.log('[API] updateIndicator response:', result)
+      invalidateIndicatorListCaches(indicatorId)
       return result
     })
   },
@@ -339,7 +355,10 @@ export const indicatorApi = {
    */
   async createIndicator(request: IndicatorCreateRequest): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<IndicatorVO>>('/indicators', request)
+      const result = await apiClient.post<ApiResponse<IndicatorVO>>('/indicators', request)
+      const createdId = result.data?.data?.id
+      invalidateIndicatorListCaches(createdId ? String(createdId) : undefined)
+      return result
     })
   },
 
@@ -355,7 +374,9 @@ export const indicatorApi = {
    */
   async deleteIndicator(indicatorId: string): Promise<ApiResponse<void>> {
     return withRetry(async () => {
-      return apiClient.delete<ApiResponse<void>>(`/indicators/${indicatorId}`)
+      const result = await apiClient.delete<ApiResponse<void>>(`/indicators/${indicatorId}`)
+      invalidateIndicatorListCaches(indicatorId)
+      return result
     })
   },
 

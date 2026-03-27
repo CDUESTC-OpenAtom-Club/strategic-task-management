@@ -98,6 +98,31 @@ const currentUserPermissionCodes = computed(() => {
     .filter(Boolean)
 })
 
+const isCurrentUserReporter = computed(() => {
+  const user = authStore.user as
+    | {
+        username?: unknown
+        realName?: unknown
+        name?: unknown
+        roles?: unknown
+      }
+    | null
+
+  const username = String(user?.username ?? '').trim().toLowerCase()
+  const realName = String(user?.realName ?? user?.name ?? '').trim()
+  const roles = Array.isArray(user?.roles)
+    ? user!.roles
+        .map(role => (typeof role === 'string' ? role.trim().toUpperCase() : ''))
+        .filter(Boolean)
+    : []
+
+  return (
+    roles.includes('ROLE_REPORTER') ||
+    username.endsWith('_report') ||
+    realName.includes('填报人')
+  )
+})
+
 function getIndicatorDraftStorageKey(indicatorId: number | string): string {
   return `indicator-draft:${timeContext.currentYear}:${currentDraftOwnerKey.value}:${String(indicatorId)}`
 }
@@ -304,12 +329,51 @@ const isSecondaryCollege = computed(() => {
 
 // 当前计划的状态
 const currentPlanStatus = computed(() => {
-  return currentPlanDetails.value?.status || null
+  return currentPlanDetails.value?.status || currentUserPlan.value?.status || null
 })
 
 const normalizedCurrentPlanStatus = computed(() => {
   return normalizePlanStatus(currentPlanStatus.value)
 })
+
+const hydratingPlanDetail = ref(false)
+
+async function hydrateCurrentPlanWorkflowState(options: { force?: boolean } = {}): Promise<void> {
+  const planId = Number(currentPlanDetails.value?.id ?? currentUserPlanId.value ?? NaN)
+  if (!Number.isFinite(planId) || planId <= 0) {
+    return
+  }
+
+  const status = normalizedCurrentPlanStatus.value
+  if (status !== 'PENDING' && status !== 'DISTRIBUTED') {
+    return
+  }
+
+  const plan = currentPlanDetails.value as
+    | ({
+        canWithdraw?: boolean
+        workflowInstanceId?: number
+        currentTaskId?: number
+      } & Record<string, unknown>)
+    | null
+
+  const needHydration =
+    options.force ||
+    (status === 'PENDING' && typeof plan?.canWithdraw !== 'boolean') ||
+    plan?.workflowInstanceId == null ||
+    plan?.currentTaskId == null
+
+  if (!needHydration || hydratingPlanDetail.value) {
+    return
+  }
+
+  hydratingPlanDetail.value = true
+  try {
+    await refreshCurrentPlanDetails(planId)
+  } finally {
+    hydratingPlanDetail.value = false
+  }
+}
 
 const PLAN_APPROVAL_WORKFLOW_CODE_FUNCDEPT = 'PLAN_APPROVAL_FUNCDEPT'
 const PLAN_APPROVAL_WORKFLOW_CODE_COLLEGE = 'PLAN_APPROVAL_COLLEGE'
@@ -362,6 +426,22 @@ function restartPlanApprovalPolling(): void {
   }, PLAN_APPROVAL_POLL_INTERVAL_MS)
 }
 
+function formatDetailDate(time: string | Date | undefined): string {
+  if (!time) {
+    return '-'
+  }
+
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) {
+    return String(time).slice(0, 10) || '-'
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // 判断计划是否处于草稿状态
 const isPlanDraft = computed(() => {
   return normalizedCurrentPlanStatus.value === 'DRAFT' || normalizedCurrentPlanStatus.value === null
@@ -372,9 +452,35 @@ const isPlanDistributed = computed(() => {
   return normalizedCurrentPlanStatus.value === 'DISTRIBUTED'
 })
 
+const shouldShowDetailLifecycleTag = computed(() => {
+  return isStrategicDept.value && (isPlanDraft.value || isPlanDistributed.value)
+})
+
+const shouldShowDetailResponsibleDept = computed(() => {
+  return isStrategicDept.value
+})
+
+const normalizedCurrentPlanWorkflowStatus = computed(() => {
+  return String(currentPlanDetails.value?.workflowStatus || '')
+    .trim()
+    .toUpperCase()
+})
+
+const hasUnfinishedPlanWorkflowInstance = computed(() => {
+  return ['SUBMITTED', 'PENDING', 'IN_REVIEW', 'WAITING'].includes(
+    normalizedCurrentPlanWorkflowStatus.value
+  )
+})
+
 const canViewReceivedPlanContent = computed(() => {
   if (isStrategicDept.value) {
     return true
+  }
+
+  // 非战略发展部场景下，只要当前计划还挂着未结束的流程实例，
+  // 就说明上级下发流程尚未走完，此时不应提前展示任何内容。
+  if (hasUnfinishedPlanWorkflowInstance.value) {
+    return false
   }
 
   return ['DRAFT', 'DISTRIBUTED', 'PENDING'].includes(normalizedCurrentPlanStatus.value ?? '')
@@ -666,7 +772,7 @@ watch(
     if (newPlanId && (!currentPlanDetails.value || currentPlanDetails.value?.id !== newPlanId)) {
       // 加载 Plan 详情
       isLoadingPlanDetails.value = true
-      const plan = await planStore.loadPlanDetails(newPlanId)
+      const plan = await planStore.loadPlanDetails(newPlanId, { background: true })
       if (plan) {
         currentPlanDetails.value = plan
       }
@@ -677,6 +783,18 @@ watch(
     }
 
     restartPlanApprovalPolling()
+  },
+  { immediate: true }
+)
+
+watch(
+  [() => currentPlanDetails.value?.id, normalizedCurrentPlanStatus],
+  async ([planId, status], [prevPlanId, prevStatus]) => {
+    if (planId === prevPlanId && status === prevStatus) {
+      return
+    }
+
+    await hydrateCurrentPlanWorkflowState()
   },
   { immediate: true }
 )
@@ -849,6 +967,10 @@ const hasCurrentUserPlan = computed(() => {
   return hasCurrentUserPlanData.value && canViewReceivedPlanContent.value
 })
 
+const isIndicatorDataLoading = computed(() => {
+  return strategicStore.loading || strategicStore.loadingState.indicators
+})
+
 // 判断是否正在加载初始数据
 const isInitialLoading = computed(() => {
   // Plan Store 正在加载
@@ -857,6 +979,10 @@ const isInitialLoading = computed(() => {
   }
   // Plan 详情正在加载
   if (isLoadingPlanDetails.value) {
+    return true
+  }
+  // 指标列表仍在加载时，不能提前显示表格空态
+  if (isIndicatorDataLoading.value) {
     return true
   }
   // 如果有 currentUserPlanId，但还没有加载 currentPlanDetails
@@ -1269,6 +1395,10 @@ watch(
 // @requirement: Plan-centric status - 整体状态直接使用 Plan 的状态，而不是从单个指标计算
 // 一个 Plan 下的所有指标共享同一个状态
 const overallStatus = computed(() => {
+  if (!isStrategicDept.value && !hasCurrentUserPlan.value) {
+    return 'draft'
+  }
+
   const planStatus = currentPlanStatus.value
   if (!planStatus) {
     return 'draft'
@@ -1290,6 +1420,23 @@ const overallStatus = computed(() => {
     default:
       return 'draft'
   }
+})
+
+const showPlanBatchActions = computed(() => {
+  return (
+    !isStrategicDept.value &&
+    canViewReceivedPlanContent.value &&
+    Boolean(currentUserPlanId.value) &&
+    indicators.value.length > 0
+  )
+})
+
+const showSubmitAllButton = computed(() => {
+  return showPlanBatchActions.value && !allIndicatorsSubmitted.value
+})
+
+const showWithdrawAllButton = computed(() => {
+  return showPlanBatchActions.value && canWithdrawAny.value
 })
 
 // 计算单元格合并信息
@@ -2406,7 +2553,11 @@ const allIndicatorsSubmitted = computed(() => {
 })
 
 const canWithdrawCurrentPlan = computed(() => {
-  return normalizedCurrentPlanStatus.value === 'PENDING' && Boolean(currentPlanDetails.value?.canWithdraw)
+  return (
+    normalizedCurrentPlanStatus.value === 'PENDING' &&
+    isCurrentUserReporter.value &&
+    Boolean(currentPlanDetails.value?.canWithdraw)
+  )
 })
 
 /**
@@ -2428,6 +2579,9 @@ const withdrawTooltip = computed(() => {
   }
   if (canWithdrawAny.value) {
     return '' // 如果可以撤回，则没有提示
+  }
+  if (!isCurrentUserReporter.value) {
+    return '当前登录身份不是填报人，不能撤回'
   }
   return '当前审批进度不支持撤回' // 如果不可撤回，提供原因
 })
@@ -2653,10 +2807,10 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
             <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
 
             <!-- 职能部门/二级学院的批量操作按钮 -->
-            <template v-if="!isStrategicDept">
+            <template v-if="showPlanBatchActions">
               <!-- 一键提交按钮（所有指标都已填报且未全部提交时显示） -->
               <el-button
-                v-if="!allIndicatorsSubmitted"
+                v-if="showSubmitAllButton"
                 type="primary"
                 size="small"
                 :disabled="
@@ -2671,14 +2825,14 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               <!-- 一键撤回按钮（有任何待审批指标时显示） -->
               <el-tooltip
                 :content="withdrawTooltip"
-                :disabled="!timeContext.isReadOnly && canWithdrawAny"
+                :disabled="timeContext.isReadOnly || canWithdrawAny"
                 effect="dark"
                 placement="top"
               >
                 <span style="display: inline-block">
                   <!-- Tooltip 需要一个包裹元素来处理 disabled 状态 -->
                   <el-button
-                    v-if="canWithdrawAny || timeContext.isReadOnly"
+                    v-if="showWithdrawAllButton"
                     type="warning"
                     size="small"
                     :disabled="timeContext.isReadOnly || !canWithdrawAny"
@@ -2713,7 +2867,12 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
         </div>
         <div class="card-body table-body">
           <div class="table-container">
+            <div v-if="isInitialLoading" class="loading-state">
+              <el-skeleton :rows="8" animated />
+            </div>
+
             <el-table
+              v-else-if="indicators.length > 0"
               ref="tableRef"
               v-loading="isLoadingPlanDetails"
               :data="indicators"
@@ -2797,7 +2956,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   </div>
                 </template>
               </el-table-column>
-              <!-- 进度 - 显示数字 -->
               <el-table-column label="里程碑" width="120" align="center">
                 <template #default="{ row }">
                   <el-popover
@@ -2847,12 +3005,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                     <span class="progress-number" :class="getProgressStatusClass(row)">
                       {{ getDisplayProgress(row) }}%
                     </span>
-                    <!-- 显示当前汇报进度/最新填报进度 -->
                     <el-tooltip content="填报进度" placement="top">
-                      <span
-                        v-if="shouldShowReportedProgress(row)"
-                        class="reported-progress"
-                      >
+                      <span v-if="shouldShowReportedProgress(row)" class="reported-progress">
                         ({{ getDisplayedReportedProgress(row) }}%)
                       </span>
                     </el-tooltip>
@@ -2877,9 +3031,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                       <el-button link type="primary" size="small" @click="handleViewDetail(row)"
                         >查看</el-button
                       >
-                      <!-- 职能部门/二级学院显示填报/编辑按钮 -->
-                      <!-- 待审批状态禁用编辑，已填报显示"编辑"（info颜色），未填报显示"填报"（success颜色） -->
-                      <!-- @requirement 2.6 - 使用安全的状态检查，处理无效枚举值 -->
                       <el-button
                         v-if="!isStrategicDept"
                         link
@@ -2896,7 +3047,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                         }}</el-button
                       >
 
-                      <!-- 战略发展部显示撤回下发按钮 -->
                       <el-button
                         v-if="isStrategicDept && canWithdrawDistribution(row)"
                         link
@@ -2944,28 +3094,20 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           </div>
 
           <!-- 空状态 - 统一空状态样式 (Requirements: 7.1, 7.2, 7.3) -->
-          <div v-if="indicators.length === 0" class="empty-state">
-            <!-- 加载中状态 -->
-            <div v-if="isInitialLoading" class="loading-state">
-              <el-skeleton :rows="5" animated />
-            </div>
+          <div v-if="!isInitialLoading && indicators.length === 0" class="empty-state">
+            <el-alert
+              v-if="shouldShowPlanWarning"
+              title="未找到对应的计划"
+              type="warning"
+              :closable="false"
+              style="margin-bottom: 20px"
+            >
+              <template #default>
+                {{ planWarningMessage }}
+              </template>
+            </el-alert>
 
-            <!-- 未找到 Plan 的警告（仅在加载完成后且确实没有数据时显示） -->
-            <template v-else>
-              <el-alert
-                v-if="shouldShowPlanWarning"
-                title="未找到对应的计划"
-                type="warning"
-                :closable="false"
-                style="margin-bottom: 20px"
-              >
-                <template #default>
-                  {{ planWarningMessage }}
-                </template>
-              </el-alert>
-
-              <el-empty :description="shouldShowPlanWarning ? '' : '暂无指标数据'"> </el-empty>
-            </template>
+            <el-empty :description="shouldShowPlanWarning ? '' : '暂无指标数据'"> </el-empty>
           </div>
         </div>
       </div>
@@ -3041,10 +3183,12 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
             >
               {{ currentDetail.type2 }}任务
             </el-tag>
-            <!-- Plan-centric: 状态由 Plan 控制，不是指标自己的 canWithdraw 字段 -->
-            <el-tag v-if="isPlanDraft" size="small" type="info">待下发</el-tag>
-            <el-tag v-else-if="isPlanDistributed" size="small" type="success">已下发</el-tag>
-            <el-tag v-else size="small" type="info">待下发</el-tag>
+            <template v-if="shouldShowDetailLifecycleTag">
+              <!-- Plan-centric: 状态由 Plan 控制，不是指标自己的 canWithdraw 字段 -->
+              <el-tag v-if="isPlanDraft" size="small" type="info">待下发</el-tag>
+              <el-tag v-else-if="isPlanDistributed" size="small" type="success">已下发</el-tag>
+              <el-tag v-else size="small" type="info">待下发</el-tag>
+            </template>
           </div>
         </div>
 
@@ -3060,11 +3204,11 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           <el-descriptions-item label="当前进度"
             >{{ currentDetail.progress || 0 }}%</el-descriptions-item
           >
-          <el-descriptions-item label="责任部门">{{
-            currentDetail.responsibleDept || '未分配'
-          }}</el-descriptions-item>
+          <el-descriptions-item v-if="shouldShowDetailResponsibleDept" label="责任部门">
+            {{ currentDetail.responsibleDept || '未分配' }}
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
-            currentDetail.createTime
+            formatDetailDate(currentDetail.createTime)
           }}</el-descriptions-item>
           <el-descriptions-item label="备注" :span="2">{{
             currentDetail.remark || '暂无备注'

@@ -86,6 +86,7 @@ const getNodeIcon = (status: WorkflowNode['status']) => {
     case 'current': return Loading
     case 'rejected': return Close
     case 'withdrawn': return Close
+    case 'waiting': return Clock
     default: return Clock
   }
 }
@@ -186,6 +187,10 @@ const cancelEdit = (nodeId: string) => {
                 <ElTag v-else-if="node.status === 'withdrawn'" class="node-status-tag" type="info" effect="light" size="small">
                   <el-icon><Close /></el-icon>
                   已撤回
+                </ElTag>
+                <ElTag v-else-if="node.status === 'waiting'" class="node-status-tag" type="info" effect="light" size="small">
+                  <el-icon><Clock /></el-icon>
+                  等待中
                 </ElTag>
                 <ElTag v-else class="node-status-tag" type="warning" effect="light" size="small">
                   <el-icon><Clock /></el-icon>
@@ -341,6 +346,13 @@ const cancelEdit = (nodeId: string) => {
   background: var(--el-color-danger-light-9);
   border-color: var(--el-color-danger);
   color: var(--el-color-danger);
+}
+
+.timeline-item.node-withdrawn .timeline-icon,
+.timeline-item.node-waiting .timeline-icon {
+  background: var(--el-color-info-light-9);
+  border-color: var(--el-color-info);
+  color: var(--el-color-info);
 }
 
 @keyframes pulse {

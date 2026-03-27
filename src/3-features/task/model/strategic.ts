@@ -13,6 +13,7 @@ import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import { strategicApi } from '@/features/task/api/strategicApi'
 import { logger } from '@/shared/lib/utils/logger'
 import { useOrgStore } from '@/features/organization/model/store'
+import { withExponentialRetry } from '@/shared/lib/api/wrappers'
 import type { Department } from '@/features/organization/api'
 
 type BackendIndicatorListPayload =
@@ -616,10 +617,18 @@ export const useStrategicStore = defineStore('strategic', () => {
     const request = (async () => {
       try {
         logger.debug(`[Strategic Store] Loading indicators for year ${year}`)
-        const [response, tasksResponse] = await Promise.all([
-          indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }),
-          strategicApi.getTasksByYear(year)
-        ])
+        const [response, tasksResponse] = await withExponentialRetry(
+          () =>
+            Promise.all([
+              indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }),
+              strategicApi.getTasksByYear(year)
+            ]),
+          {
+            maxRetries: 3,
+            baseDelay: 800,
+            maxDelay: 2500
+          }
+        )
 
         if (response.success && response.data) {
           const normalized = normalizeIndicators(response.data as BackendIndicatorListPayload)

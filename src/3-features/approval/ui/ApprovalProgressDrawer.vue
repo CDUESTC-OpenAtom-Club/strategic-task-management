@@ -392,6 +392,18 @@ const hasPlanWorkflowData = computed(() => {
   )
 })
 
+const normalizedPlanBusinessStatus = computed(() => {
+  const rawStatus = String(props.plan?.status || '')
+    .trim()
+    .toUpperCase()
+
+  if (rawStatus === 'PUBLISHED') {
+    return 'APPROVED'
+  }
+
+  return rawStatus
+})
+
 const planWorkflowStatus = computed(() => {
   return String(
     activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || ''
@@ -404,6 +416,40 @@ const isPlanPendingApproval = computed(() => {
 
 const isPlanCompletedApproval = computed(() => {
   return ['DISTRIBUTED', 'APPROVED'].includes(planWorkflowStatus.value)
+})
+
+const currentPlanOperationLabel = computed(() => {
+  if (!hasPlanWorkflowData.value) {
+    return null
+  }
+
+  if (normalizedPlanBusinessStatus.value === 'DRAFT') {
+    if (planWorkflowStatusTag.value.label === '已撤回') {
+      return '已撤回，可重新发起审批'
+    }
+    if (planWorkflowStatusTag.value.label === '已驳回') {
+      return '已退回，可修改后重新发起审批'
+    }
+    return '草稿状态，可发起审批'
+  }
+
+  if (['DRAFT', 'WITHDRAWN', 'CANCELLED'].includes(planWorkflowStatus.value)) {
+    return '已撤回，可重新发起审批'
+  }
+
+  if (['RETURNED', 'REJECTED'].includes(planWorkflowStatus.value)) {
+    return '已退回，可修改后重新发起审批'
+  }
+
+  if (isPlanCompletedApproval.value) {
+    return '审批已完成'
+  }
+
+  if (isPlanPendingApproval.value) {
+    return activePlanWorkflow.value?.canWithdraw ? '提交方仍可撤回' : '审批流已锁定'
+  }
+
+  return null
 })
 
 const requiredPlanApprovalPermissionCodes = computed(() => {
@@ -513,6 +559,24 @@ const currentPlanInstanceId = computed(() => {
 })
 
 const planWorkflowStatusTag = computed(() => {
+  const allTaskStatuses = new Set(
+    planWorkflowTasks.value.map(task =>
+      String(task.status || '')
+        .trim()
+        .toUpperCase()
+    )
+  )
+
+  if (normalizedPlanBusinessStatus.value === 'DRAFT') {
+    if (allTaskStatuses.has('WITHDRAWN')) {
+      return { label: '已撤回', type: 'info' as const }
+    }
+    if (allTaskStatuses.has('REJECTED')) {
+      return { label: '已驳回', type: 'danger' as const }
+    }
+    return { label: '草稿', type: 'info' as const }
+  }
+
   const latestTaskStatus = String(
     [...planWorkflowTasks.value]
       .sort((left, right) => {
@@ -598,6 +662,16 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
   if (normalizedStatus === 'WITHDRAWN') {
     return 'withdrawn'
   }
+  if (normalizedStatus === 'WAITING') {
+    return 'waiting'
+  }
+  if (
+    normalizedStatus === 'PENDING' &&
+    planWorkflowStatusTag.value.label === '已撤回' &&
+    String(task.taskId || '') !== String(currentPlanTaskId.value || '')
+  ) {
+    return 'waiting'
+  }
   if (String(task.taskId || '') === String(currentPlanTaskId.value || '')) {
     return 'current'
   }
@@ -620,11 +694,21 @@ function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
   const normalizedStatus = String(task.status || '')
     .trim()
     .toUpperCase()
+  if (normalizedStatus === 'WAITING') {
+    return '等待中'
+  }
   if (normalizedStatus === 'WITHDRAWN') {
     return '已撤回'
   }
   if (normalizedStatus === 'REJECTED') {
     return '已驳回'
+  }
+  if (
+    normalizedStatus === 'PENDING' &&
+    planWorkflowStatusTag.value.label === '已撤回' &&
+    String(task.taskId || '') !== String(currentPlanTaskId.value || '')
+  ) {
+    return '等待中'
   }
   if (normalizedStatus === 'COMPLETED') {
     return '已通过'
@@ -647,6 +731,16 @@ const latestPlanTaskDisplayLabel = computed(() => {
 })
 
 const currentPlanStepDisplay = computed(() => {
+  if (normalizedPlanBusinessStatus.value === 'DRAFT') {
+    if (planWorkflowStatusTag.value.label === '已撤回') {
+      return '已撤回'
+    }
+    if (planWorkflowStatusTag.value.label === '已驳回') {
+      return '已退回'
+    }
+    return '草稿'
+  }
+
   if (['已撤回', '已驳回', '已通过'].includes(latestPlanTaskDisplayLabel.value)) {
     return latestPlanTaskDisplayLabel.value
   }
@@ -963,6 +1057,22 @@ function handleClose() {
   emit('close')
 }
 
+async function refreshPlanApprovalAfterMutation(): Promise<void> {
+  const planId = Number(props.plan?.id ?? scopedDepartmentPlan.value?.id ?? NaN)
+
+  if (Number.isFinite(planId) && planId > 0) {
+    await planStore.loadPlanDetails(planId, { force: true, background: true })
+  }
+
+  await Promise.all([
+    loadPendingPlanApprovals(),
+    loadPlanWorkflowDetail(),
+    loadPlanWorkflowHistoryCards()
+  ])
+
+  emit('refresh')
+}
+
 async function loadPendingPlanApprovals() {
   if (hasPlanWorkflowData.value) {
     pendingPlanApprovals.value = []
@@ -1084,19 +1194,28 @@ async function handleApprovePlanBatch() {
           inputType: 'textarea'
         }
       )
-      const userId = authStore.user?.userId || authStore.user?.id || 1
-      const response = await approvalApi.approvePlan(
-        currentPlanTaskId.value,
-        userId,
-        value || '审批通过'
-      )
-      if (!response.success) {
-        ElMessage.error(response.message || '审批失败')
-        return
+      const loadingInstance = ElLoading.service({
+        lock: true,
+        text: '正在审批并同步数据，请稍候...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      })
+
+      try {
+        const userId = authStore.user?.userId || authStore.user?.id || 1
+        const response = await approvalApi.approvePlan(
+          currentPlanTaskId.value,
+          userId,
+          value || '审批通过'
+        )
+        if (!response.success) {
+          ElMessage.error(response.message || '审批失败')
+          return
+        }
+        await refreshPlanApprovalAfterMutation()
+        ElMessage.success('审批通过')
+      } finally {
+        loadingInstance.close()
       }
-      await loadPlanWorkflowDetail()
-      ElMessage.success('审批通过')
-      emit('refresh')
       return
     } catch {
       return
@@ -1122,7 +1241,7 @@ async function handleApprovePlanBatch() {
 
     const loadingInstance = ElLoading.service({
       lock: true,
-      text: '正在审批...',
+      text: '正在审批并同步数据，请稍候...',
       background: 'rgba(0, 0, 0, 0.7)'
     })
 
@@ -1140,9 +1259,8 @@ async function handleApprovePlanBatch() {
         }
       }
 
+      await refreshPlanApprovalAfterMutation()
       ElMessage.success(`已一键通过 ${scopedPlanApprovals.value.length} 条审批实例`)
-      await loadPendingPlanApprovals()
-      emit('refresh')
     } finally {
       loadingInstance.close()
     }
@@ -1179,15 +1297,24 @@ async function handleRejectPlanBatch() {
           inputValidator: val => (val && val.trim() ? true : '请输入驳回原因')
         }
       )
-      const userId = authStore.user?.userId || authStore.user?.id || 1
-      const response = await approvalApi.rejectPlan(currentPlanTaskId.value, userId, value)
-      if (!response.success) {
-        ElMessage.error(response.message || '驳回失败')
-        return
+      const loadingInstance = ElLoading.service({
+        lock: true,
+        text: '正在驳回并同步数据，请稍候...',
+        background: 'rgba(0, 0, 0, 0.7)'
+      })
+
+      try {
+        const userId = authStore.user?.userId || authStore.user?.id || 1
+        const response = await approvalApi.rejectPlan(currentPlanTaskId.value, userId, value)
+        if (!response.success) {
+          ElMessage.error(response.message || '驳回失败')
+          return
+        }
+        await refreshPlanApprovalAfterMutation()
+        ElMessage.success('审批已驳回')
+      } finally {
+        loadingInstance.close()
       }
-      await loadPlanWorkflowDetail()
-      ElMessage.success('审批已驳回')
-      emit('refresh')
       return
     } catch {
       return
@@ -1214,7 +1341,7 @@ async function handleRejectPlanBatch() {
 
     const loadingInstance = ElLoading.service({
       lock: true,
-      text: '正在拒绝...',
+      text: '正在驳回并同步数据，请稍候...',
       background: 'rgba(0, 0, 0, 0.7)'
     })
 
@@ -1228,9 +1355,8 @@ async function handleRejectPlanBatch() {
         }
       }
 
+      await refreshPlanApprovalAfterMutation()
       ElMessage.success(`已一键驳回 ${scopedPlanApprovals.value.length} 条审批实例`)
-      await loadPendingPlanApprovals()
-      emit('refresh')
     } finally {
       loadingInstance.close()
     }
@@ -1434,7 +1560,17 @@ watch(
 )
 
 watch(
-  () => [props.showPlanApprovals, props.plan?.id, props.plan?.workflowInstanceId, expectedWorkflowCodes.value.join('|')],
+  () => [
+    props.showPlanApprovals,
+    props.plan?.id,
+    props.plan?.workflowInstanceId,
+    props.plan?.status,
+    props.plan?.workflowStatus,
+    props.plan?.canWithdraw,
+    props.plan?.currentStepName,
+    JSON.stringify(props.plan?.workflowHistory ?? []),
+    expectedWorkflowCodes.value.join('|')
+  ],
   ([showPlanApprovals, planId]) => {
     if (!showPlanApprovals || !planId) {
       planWorkflowDetail.value = null
@@ -1442,6 +1578,7 @@ watch(
       return
     }
 
+    planWorkflowDetail.value = null
     void loadPlanWorkflowDetail()
     void loadPlanWorkflowHistoryCards()
   },
@@ -1566,12 +1703,10 @@ watch(
                     <span class="label">当前步骤：</span>
                     <span class="value">{{ currentPlanApprovalSummary.currentStepName }}</span>
                   </div>
-                  <div v-if="typeof activePlanWorkflow?.canWithdraw === 'boolean'" class="info-row">
+                  <div v-if="currentPlanOperationLabel" class="info-row">
                     <el-icon><Right /></el-icon>
                     <span class="label">当前操作：</span>
-                    <span class="value">{{
-                      activePlanWorkflow.canWithdraw ? '提交方仍可撤回' : '审批流已锁定'
-                    }}</span>
+                    <span class="value">{{ currentPlanOperationLabel }}</span>
                   </div>
                   <div v-if="activePlanWorkflow?.lastRejectReason" class="info-row">
                     <el-icon><Document /></el-icon>

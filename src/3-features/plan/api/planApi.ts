@@ -205,13 +205,10 @@ function convertBackendPlanToPlan(
 ): Plan {
   const inferredYear = resolvePlanYear(raw, resolveCycleYear)
   const cycleLabel = raw.year ?? inferredYear ?? raw.cycle ?? ''
-  const effectiveWorkflowStatus = typeof raw.workflowStatus === 'string' ? raw.workflowStatus.toUpperCase() : ''
-  const effectiveStatus =
-    effectiveWorkflowStatus === 'PENDING' ||
-    effectiveWorkflowStatus === 'IN_REVIEW' ||
-    effectiveWorkflowStatus === 'SUBMITTED'
-      ? effectiveWorkflowStatus
-      : raw.status
+  // Business views must follow the persisted plan status.
+  // workflowStatus is retained separately for approval detail rendering,
+  // but it must not override DRAFT after a withdraw.
+  const effectiveStatus = raw.status
 
   return {
     id: raw.id ?? raw.planId,
@@ -850,6 +847,60 @@ function normalizePlanCollection(
   )
 }
 
+type PaginatedPlanCollection = {
+  items?: Plan[]
+  content?: Plan[]
+  records?: Plan[]
+  totalPages?: number
+  page?: number
+  pageSize?: number
+  total?: number
+  last?: boolean
+}
+
+async function fetchAllPlansFromPages(
+  resolveCycleYear?: (cycleId: unknown) => number | null
+): Promise<Plan[]> {
+  const pageSize = 1000
+  const firstResponse = await apiClient.get<ApiResponse<Plan[] | PaginatedPlanCollection>>('/plans', {
+    page: 0,
+    size: pageSize
+  })
+  const allPlans = normalizePlanCollection(firstResponse.data, resolveCycleYear)
+
+  if (!hasApiData(firstResponse)) {
+    return allPlans
+  }
+
+  const payload = firstResponse.data?.data
+  if (!payload || Array.isArray(payload)) {
+    return allPlans
+  }
+
+  const totalPages = Number(payload.totalPages)
+  if (!Number.isFinite(totalPages) || totalPages <= 1) {
+    return allPlans
+  }
+
+  const planMap = new Map(allPlans.map(plan => [String(plan.id), plan]))
+
+  for (let page = 1; page < totalPages; page += 1) {
+    const response = await apiClient.get<ApiResponse<Plan[] | PaginatedPlanCollection>>('/plans', {
+      page,
+      size: pageSize
+    })
+    if (!hasApiData(response)) {
+      break
+    }
+
+    normalizePlanCollection(response.data, resolveCycleYear).forEach(plan => {
+      planMap.set(String(plan.id), plan)
+    })
+  }
+
+  return Array.from(planMap.values())
+}
+
 async function getCycleYearResolver(): Promise<(cycleId: unknown) => number | null> {
   const timeContext = useTimeContextStore()
   await timeContext.initialize()
@@ -972,12 +1023,13 @@ export const planApi = {
       fetcher: async () => {
         try {
           const resolveCycleYear = await getCycleYearResolver()
-          const response = await apiClient.get<
-            ApiResponse<Plan[] | { items?: Plan[]; content?: Plan[]; records?: Plan[] }>
-          >('/plans', { page: 0, size: 1000 })
+          const data = await fetchAllPlansFromPages(resolveCycleYear)
           return {
-            ...response,
-            data: normalizePlanCollection(response.data, resolveCycleYear)
+            success: true,
+            code: 200,
+            message: '获取成功',
+            data,
+            timestamp: new Date().toISOString()
           }
         } catch (error) {
           const fallbackResponse = await loadPlansByCycleFallback()
@@ -1479,6 +1531,19 @@ export const planApi = {
     return withRetry(async () => {
       const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/withdraw`)
       invalidatePlanCaches(planId)
+      invalidateQueries([
+        'workflow.todo',
+        'workflow.detail',
+        'workflow.instances',
+        'workflow.statistics',
+        'plan.list',
+        'plan.detail',
+        'indicator.list',
+        'indicator.detail',
+        'task.list',
+        'task.detail',
+        'dashboard.overview'
+      ])
       return response
     })
   },
