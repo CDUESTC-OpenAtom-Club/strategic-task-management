@@ -1303,11 +1303,7 @@ const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
 
 const approvalEntryButtonText = computed(() => {
   if (isSecondaryCollege.value) {
-    const reportStatus = normalizedCurrentPlanReportStatus.value
-    if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportStatus)) {
-      return '待审批'
-    }
-    return '审批记录'
+    return isCurrentPlanReportLocked.value ? '待审批' : '审批记录'
   }
 
   const status = normalizedCurrentPlanStatus.value
@@ -1642,25 +1638,7 @@ const overallStatus = computed(() => {
   }
 
   if (isSecondaryCollege.value) {
-    const reportStatus = normalizedCurrentPlanReportStatus.value
-
-    switch (reportStatus) {
-      case 'PENDING':
-      case 'IN_REVIEW':
-      case 'SUBMITTED':
-        return 'pending'
-      case 'REJECTED':
-      case 'RETURNED':
-      case 'APPROVED':
-      case 'WITHDRAWN':
-      case 'DRAFT':
-        return 'draft'
-      default:
-        if (indicators.value.some(indicator => isApprovalStatus(indicator, 'PENDING'))) {
-          return 'pending'
-        }
-        return 'draft'
-    }
+    return isCurrentPlanReportLocked.value ? 'pending' : 'draft'
   }
 
   const planStatus = currentPlanStatus.value
@@ -2891,9 +2869,11 @@ const isCurrentPlanReportLocked = computed(() => {
     return false
   }
 
-  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(
-    normalizedCurrentPlanReportStatus.value
-  )
+  const reportStatus = normalizedCurrentPlanReportStatus.value
+  const auditInstanceId = Number(currentPlanReportSummary.value?.auditInstanceId ?? NaN)
+  const hasAuditInstance = Number.isFinite(auditInstanceId) && auditInstanceId > 0
+
+  return hasAuditInstance && reportStatus !== 'WITHDRAWN'
 })
 
 /**
@@ -3135,23 +3115,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               class="overall-status-tag"
               >待审批</el-tag
             >
-            <el-tag
-              v-else-if="overallStatus === 'rejected'"
-              type="danger"
-              size="small"
-              class="overall-status-tag"
-              >已驳回</el-tag
-            >
-            <el-tag
-              v-else-if="overallStatus === 'approved'"
-              type="success"
-              size="small"
-              class="overall-status-tag"
-              >已通过</el-tag
-            >
-            <el-tag v-else type="info" size="small" class="overall-status-tag">{{
-              overallStatus === 'active' ? '进行中' : '草稿'
-            }}</el-tag>
+            <el-tag v-else type="info" size="small" class="overall-status-tag">草稿</el-tag>
             <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
 
             <!-- 职能部门/二级学院的批量操作按钮 -->
