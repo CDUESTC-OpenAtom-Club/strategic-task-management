@@ -24,6 +24,13 @@ export const API_BASE_URL = readStringEnv('VITE_API_BASE_URL') || '/api/v1'
  */
 export const USE_MOCK = readStringEnv('VITE_USE_MOCK') === 'true'
 
+/**
+ * WebSocket notifications flag
+ * Disabled by default until the production notification channel is fully ready.
+ */
+export const ENABLE_WEBSOCKET_NOTIFICATIONS =
+  readStringEnv('VITE_ENABLE_WEBSOCKET_NOTIFICATIONS') === 'true'
+
 function deriveApiTarget(): string {
   const explicitApiTarget = readStringEnv('VITE_API_TARGET')
   if (explicitApiTarget) {

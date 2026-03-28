@@ -9,6 +9,7 @@ import { computed } from 'vue'
 import { ElNotification } from 'element-plus'
 import { useWebSocketNotifications, NotificationType } from '@/shared/api/websocket'
 import type { NotificationMessage } from '@/shared/api/websocket'
+import { ENABLE_WEBSOCKET_NOTIFICATIONS } from '@/shared/config/api'
 
 /**
  * Get icon and notification type based on notification type
@@ -53,6 +54,10 @@ function showElNotification(message: NotificationMessage): void {
  * Initialize approval notification listener
  */
 export function initApprovalNotifications(): void {
+  if (!ENABLE_WEBSOCKET_NOTIFICATIONS) {
+    return
+  }
+
   const { connect, requestNotificationPermission } = useWebSocketNotifications()
   
   // Request browser notification permission
