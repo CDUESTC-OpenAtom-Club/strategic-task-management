@@ -30,6 +30,7 @@ import { USE_MOCK } from '@/shared/config/api'
 
 // 需要签名验证的敏感操作路径
 const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/validate', '/auth/register']
 
 /**
  * 请求拦截器配置
@@ -153,7 +154,7 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
         tokenPreview: token.substring(0, 20) + '...',
         url: config.url
       })
-    } else {
+    } else if (!PUBLIC_AUTH_PATHS.some(path => config.url?.includes(path))) {
       logger.warn('[RequestInterceptor] 无Token，未添加Authorization头:', config.url)
       logger.warn('⚠️ [API Auth] 无Token (tokenManager 为空)', {
         url: config.url
