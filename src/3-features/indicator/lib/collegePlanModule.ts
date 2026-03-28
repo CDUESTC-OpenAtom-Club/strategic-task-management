@@ -52,6 +52,11 @@ export function isCollegePlanCandidate(plan: PlanLike, context: CollegePlanMatch
     return false
   }
 
+  const normalizedStatus = normalizeText(plan.status).toUpperCase()
+  if (normalizedStatus === 'DRAFT') {
+    return false
+  }
+
   const targetOrgId = toPositiveNumber(plan.targetOrgId ?? plan.orgId ?? plan.org_id)
   if (context.viewingOrgId && targetOrgId) {
     return targetOrgId === context.viewingOrgId

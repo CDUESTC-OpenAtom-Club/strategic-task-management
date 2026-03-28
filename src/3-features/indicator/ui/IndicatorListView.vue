@@ -537,6 +537,7 @@ const canEdit = computed(() => {
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
+const showOwnerDeptDetail = computed(() => isSecondaryCollege.value)
 
 // 当前选中任务索引
 const currentTaskIndex = ref(0)
@@ -779,6 +780,14 @@ const currentPlanReportSummary = ref<{
   canWithdraw?: boolean
   status?: string | null
 } | null>(null)
+
+const normalizedCurrentPlanReportStatus = computed(() => {
+  return String(
+    currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
+  )
+    .trim()
+    .toUpperCase()
+})
 
 // Plan 详情加载状态
 const isLoadingPlanDetails = ref(false)
@@ -1293,6 +1302,14 @@ const _pendingApprovalCount = computed(() => {
 const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
 
 const approvalEntryButtonText = computed(() => {
+  if (isSecondaryCollege.value) {
+    const reportStatus = normalizedCurrentPlanReportStatus.value
+    if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportStatus)) {
+      return '待审批'
+    }
+    return '审批记录'
+  }
+
   const status = normalizedCurrentPlanStatus.value
   if (status === 'PENDING') {
     return '审批中'
@@ -1563,7 +1580,30 @@ const getDisplayProgress = (indicator: StrategicIndicator): number => {
   return Number.isFinite(progress) ? progress : 0
 }
 
+const hasIndicatorReportIdentity = (indicator: StrategicIndicator): boolean => {
+  const currentReportId = Number(
+    (indicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId ?? NaN
+  )
+  if (Number.isFinite(currentReportId) && currentReportId > 0) {
+    return true
+  }
+
+  const reported = Number(
+    (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress ?? NaN
+  )
+  if (Number.isFinite(reported)) {
+    return true
+  }
+
+  const approvalStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
+  return approvalStatus !== 'NONE' && approvalStatus !== 'DRAFT'
+}
+
 const getDisplayedReportedProgress = (indicator: StrategicIndicator): number | null => {
+  if (!hasIndicatorReportIdentity(indicator)) {
+    return null
+  }
+
   const latestReportProgress = Number(
     (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
   )
@@ -1601,6 +1641,28 @@ const overallStatus = computed(() => {
     return 'draft'
   }
 
+  if (isSecondaryCollege.value) {
+    const reportStatus = normalizedCurrentPlanReportStatus.value
+
+    switch (reportStatus) {
+      case 'PENDING':
+      case 'IN_REVIEW':
+      case 'SUBMITTED':
+        return 'pending'
+      case 'REJECTED':
+      case 'RETURNED':
+      case 'APPROVED':
+      case 'WITHDRAWN':
+      case 'DRAFT':
+        return 'draft'
+      default:
+        if (indicators.value.some(indicator => isApprovalStatus(indicator, 'PENDING'))) {
+          return 'pending'
+        }
+        return 'draft'
+    }
+  }
+
   const planStatus = currentPlanStatus.value
   if (!planStatus) {
     return 'draft'
@@ -1634,12 +1696,14 @@ const showPlanBatchActions = computed(() => {
 })
 
 const showSubmitAllButton = computed(() => {
-  return showPlanBatchActions.value && !allIndicatorsSubmitted.value
+  return showPlanBatchActions.value && !allIndicatorsSubmitted.value && !canWithdrawAny.value
 })
 
 const showWithdrawAllButton = computed(() => {
   return showPlanBatchActions.value && canWithdrawAny.value
 })
+
+const showStrategicTaskColumn = computed(() => !isSecondaryCollege.value)
 
 // 计算单元格合并信息
 const getSpanMethod = ({
@@ -1654,6 +1718,10 @@ const getSpanMethod = ({
   columnIndex: number
 }) => {
   const dataList = indicators.value
+
+  if (!showStrategicTaskColumn.value) {
+    return { rowspan: 1, colspan: 1 }
+  }
 
   // 只有战略任务列（第0列）需要合并
   if (columnIndex === 0) {
@@ -2568,8 +2636,14 @@ const formatMilestoneDate = (deadline: string) => {
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
   const persistedDraft = readPersistedIndicatorDraft(row.id)
+  const reportedProgress = getDisplayedReportedProgress(row)
   reportForm.value = {
-    newProgress: row.pendingProgress ?? persistedDraft?.progress ?? row.progress ?? 0,
+    newProgress:
+      row.pendingProgress ??
+      persistedDraft?.progress ??
+      (reportedProgress !== null ? reportedProgress : null) ??
+      row.progress ??
+      0,
     remark: row.pendingRemark ?? persistedDraft?.remark ?? '',
     attachments: row.pendingAttachments ?? persistedDraft?.attachments ?? []
   }
@@ -2766,7 +2840,11 @@ const handleRejectIndicatorWorkflow = async (row: StrategicIndicator) => {
 // 检查指标是否已有真实填报内容
 // 业务要求：按钮文案只根据当前轮次的 pendingProgress 判断。
 const hasReportContent = (row: StrategicIndicator): boolean => {
-  return row.pendingProgress !== undefined && row.pendingProgress !== null
+  if (row.pendingProgress !== undefined && row.pendingProgress !== null) {
+    return true
+  }
+
+  return getDisplayedReportedProgress(row) !== null
 }
 
 // 检查所有指标是否都已填报
@@ -2806,6 +2884,16 @@ const canWithdrawCurrentPlan = computed(() => {
  */
 const canWithdrawAny = computed(() => {
   return canWithdrawCurrentPlan.value
+})
+
+const isCurrentPlanReportLocked = computed(() => {
+  if (!isSecondaryCollege.value) {
+    return false
+  }
+
+  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(
+    normalizedCurrentPlanReportStatus.value
+  )
 })
 
 /**
@@ -3142,7 +3230,12 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               class="unified-table"
               @selection-change="handleSelectionChange"
             >
-              <el-table-column prop="taskContent" label="战略任务" width="200">
+              <el-table-column
+                v-if="showStrategicTaskColumn"
+                prop="taskContent"
+                label="战略任务"
+                width="200"
+              >
                 <template #default="{ row }">
                   <el-tooltip
                     :content="row.type2 === '发展性' ? '发展性任务' : '基础性任务'"
@@ -3293,10 +3386,15 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                       >
                       <el-button
                         v-if="!isStrategicDept"
+                        v-show="!isCurrentPlanReportLocked"
                         link
                         :type="hasReportContent(row) ? 'info' : 'success'"
                         size="small"
-                        :disabled="isApprovalStatus(row, 'PENDING') || timeContext.isReadOnly"
+                        :disabled="
+                          isApprovalStatus(row, 'PENDING') ||
+                          isCurrentPlanReportLocked ||
+                          timeContext.isReadOnly
+                        "
                         @click="handleOpenReportDialog(row)"
                         >{{
                           isApprovalStatus(row, 'REJECTED')
@@ -3466,6 +3564,9 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           >
           <el-descriptions-item v-if="shouldShowDetailResponsibleDept" label="责任部门">
             {{ currentDetail.responsibleDept || '未分配' }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="showOwnerDeptDetail" label="来源部门">
+            {{ currentDetail.ownerDept || '未知' }}
           </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
             formatDetailDate(currentDetail.createTime)
@@ -3927,9 +4028,10 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
 .action-buttons {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .workflow-inline-actions {

@@ -960,6 +960,10 @@ const currentPlanApprovalSummary = computed(() => {
 
 // ============ 审批流程节点数据 ============
 const workflowNodes = computed<WorkflowNode[]>(() => {
+  if (isPlanHistoryOnlyMode.value) {
+    return []
+  }
+
   if (hasPlanWorkflowData.value && props.plan) {
     if (planWorkflowTasks.value.length === 0) {
       return []
@@ -1252,7 +1256,7 @@ async function handleApprovePlanBatch() {
     return
   }
 
-  if (hasPlanWorkflowData.value && !currentPlanTaskId.value) {
+  if (hasPlanWorkflowData.value) {
     await loadPlanWorkflowDetail()
   }
 
@@ -1354,7 +1358,7 @@ async function handleRejectPlanBatch() {
     return
   }
 
-  if (hasPlanWorkflowData.value && !currentPlanTaskId.value) {
+  if (hasPlanWorkflowData.value) {
     await loadPlanWorkflowDetail()
   }
 
@@ -1587,7 +1591,14 @@ const hasWorkflowTabContent = computed(() => {
   return hasPlanWorkflowData.value || hasApprovalData.value
 })
 
+const isPlanHistoryOnlyMode = computed(() => {
+  return Boolean(props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value)
+})
+
 const showPlanPendingCard = computed(() => {
+  if (isPlanHistoryOnlyMode.value) {
+    return false
+  }
   return Boolean(currentPlanApprovalSummary.value)
 })
 
@@ -1608,7 +1619,11 @@ const showCardHistoryEmptyState = computed(() => {
 })
 
 const showArchivedPlanWorkflowEmptyState = computed(() => {
-  return Boolean(props.showPlanApprovals && hasPlanWorkflowData.value && workflowNodes.value.length === 0)
+  return Boolean(
+    props.showPlanApprovals &&
+      hasPlanWorkflowData.value &&
+      (isPlanHistoryOnlyMode.value || workflowNodes.value.length === 0)
+  )
 })
 
 // ============ 监听 ============

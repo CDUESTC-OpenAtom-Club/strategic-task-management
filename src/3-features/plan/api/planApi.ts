@@ -762,6 +762,7 @@ async function resolveIndicatorReportContext(
 ): Promise<IndicatorReportContext> {
   const { indicatorApi } = await import('@/features/indicator/api')
   const { useOrgStore } = await import('@/features/organization/model/store')
+  const timeContext = useTimeContextStore()
 
   const indicatorResponse = await indicatorApi.getIndicatorById(String(indicatorId))
   if (!hasApiData(indicatorResponse) || !indicatorResponse.data) {
@@ -814,10 +815,51 @@ async function resolveIndicatorReportContext(
         ? 'functional_dept'
         : authStore.effectiveRole
 
+  const isCollegeReportContext =
+    inferredRole === 'secondary_college' ||
+    String(targetDepartmentName).includes('学院') ||
+    (Number(authStore.user?.orgId ?? NaN) > 0 &&
+      Number(authStore.user?.orgId ?? NaN) === reportOrgId &&
+      Number(indicatorData.ownerOrgId ?? NaN) > 0 &&
+      Number(indicatorData.ownerOrgId ?? NaN) !== reportOrgId)
+
+  let resolvedPlanId = planId
+  if (isCollegeReportContext) {
+    const sourceOrgId = Number(indicatorData.ownerOrgId ?? NaN)
+    const currentYear = Number(timeContext.currentYear ?? NaN)
+
+    if (Number.isFinite(sourceOrgId) && sourceOrgId > 0 && Number.isFinite(currentYear) && currentYear > 0) {
+      const resolveCycleYear = await getCycleYearResolver()
+      const allPlans = await fetchAllPlansFromPages(resolveCycleYear)
+      const matchedCollegeReceivingPlan = allPlans.find(plan => {
+        const candidateTargetOrgId = Number(plan.targetOrgId ?? plan.orgId ?? NaN)
+        const candidateCreatedByOrgId = Number((plan as Record<string, unknown>).createdByOrgId ?? NaN)
+        const candidatePlanLevel = String((plan as Record<string, unknown>).planLevel || '')
+          .trim()
+          .toUpperCase()
+        const candidateYear = Number(plan.year ?? resolveCycleYear(plan.cycleId) ?? NaN)
+
+        return (
+          Number.isFinite(candidateTargetOrgId) &&
+          candidateTargetOrgId === reportOrgId &&
+          Number.isFinite(candidateCreatedByOrgId) &&
+          candidateCreatedByOrgId === sourceOrgId &&
+          candidatePlanLevel === 'FUNC_TO_COLLEGE' &&
+          Number.isFinite(candidateYear) &&
+          candidateYear === currentYear
+        )
+      })
+
+      if (matchedCollegeReceivingPlan?.id) {
+        resolvedPlanId = Number(matchedCollegeReceivingPlan.id)
+      }
+    }
+  }
+
   return {
     indicatorId: Number.isFinite(numericIndicatorId) ? numericIndicatorId : Number(indicatorId),
     taskId,
-    planId,
+    planId: resolvedPlanId,
     reportOrgId,
     reportOrgType: mapRoleToReportOrgType(inferredRole, targetDepartmentName),
     reportMonth: getCurrentReportMonth(),
