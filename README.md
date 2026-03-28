@@ -54,7 +54,7 @@
 
 ## 环境要求
 
-- **Node.js** 22.x
+- **Node.js** 22.x - 25.x
 - **npm** >= 10.0.0
 
 ---
@@ -64,6 +64,7 @@
 ### 1. 安装依赖
 
 ```bash
+# 推荐使用 .nvmrc 中锁定的 Node 25，也可使用 Node 22 - 25
 nvm use
 npm install
 ```
@@ -78,6 +79,7 @@ cp .env.example .env
 ### 3. 启动开发服务器
 
 ```bash
+# 推荐使用 .nvmrc 中锁定的 Node 25，也可使用 Node 22 - 25
 nvm use
 npm run dev
 ```

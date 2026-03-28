@@ -7,9 +7,7 @@ import type {
   ApiResponse,
   IndicatorDistributionRequest,
   IndicatorDistributionEligibility,
-  BatchDistributionRequest,
-  BatchDistributePageIndicatorsRequest,
-  BatchDistributePageIndicatorsResponse
+  BatchDistributionRequest
 } from '@/shared/types'
 import type {
   IndicatorVO,
@@ -260,13 +258,29 @@ export const indicatorApi = {
   },
 
   async batchDistributePageIndicators(
-    request: BatchDistributePageIndicatorsRequest
-  ): Promise<ApiResponse<BatchDistributePageIndicatorsResponse>> {
+    request: {
+      indicators: Array<{
+        clientRequestId: string
+        indicatorId?: number
+        targetOrgId: number
+        customDesc?: string
+      }>
+    }
+  ): Promise<ApiResponse<{
+    totalCount: number
+    items: Array<{
+      clientRequestId: string
+      indicatorId: number
+    }>
+  }>> {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<BatchDistributePageIndicatorsResponse>>(
-        '/indicators/actions/batch-distribute',
-        request
-      )
+      return apiClient.post<ApiResponse<{
+        totalCount: number
+        items: Array<{
+          clientRequestId: string
+          indicatorId: number
+        }>
+      }>>('/indicators/actions/batch-distribute', request)
     })
   },
 

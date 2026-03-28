@@ -382,6 +382,7 @@ const activePlanWorkflow = computed(() => {
       Number((useDetail ? detail.instanceId : undefined) || props.plan.workflowInstanceId || 0) ||
       undefined,
     workflowStatus: (useDetail ? detail.status : undefined) || props.plan.workflowStatus || props.plan.status,
+    startedAt: (useDetail ? detail.startTime : undefined) || props.plan.submittedAt || props.plan.createdAt,
     currentTaskId: (useDetail ? detail.currentTaskId : undefined) || props.plan.currentTaskId,
     currentStepName:
       (useDetail ? detail.currentStepName : undefined) || props.plan.currentStepName,
@@ -569,6 +570,14 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 })
 
 const currentPlanTaskId = computed(() => {
+  const pendingTask = planWorkflowTasks.value.find(task => {
+    return String(task.status || '').trim().toUpperCase() === 'PENDING'
+  })
+  const pendingTaskId = Number(pendingTask?.taskId ?? 0)
+  if (Number.isFinite(pendingTaskId) && pendingTaskId > 0) {
+    return pendingTaskId
+  }
+
   const rawTaskId = Number(activePlanWorkflow.value?.currentTaskId ?? 0)
   if (Number.isFinite(rawTaskId) && rawTaskId > 0) {
     return rawTaskId
@@ -645,11 +654,15 @@ const planWorkflowStatusTag = computed(() => {
 })
 
 const planWorkflowHistory = computed<ApprovalHistoryItem[]>(() => {
-  if (!Array.isArray(activePlanWorkflow.value?.workflowHistory)) {
+  const workflowHistorySource = Array.isArray(planWorkflowDetail.value?.history)
+    ? planWorkflowDetail.value.history
+    : activePlanWorkflow.value?.workflowHistory
+
+  if (!Array.isArray(workflowHistorySource)) {
     return []
   }
 
-  return activePlanWorkflow.value.workflowHistory
+  return workflowHistorySource
     .filter(shouldDisplayWorkflowHistoryItem)
     .map((item, index) => ({
       id: String(item.taskId ?? index),
@@ -787,7 +800,10 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
         ),
         submitterName: planSubmitterName.value,
         currentStepName: String(currentPlanStepDisplay.value),
-        createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
+        createdAt:
+          activePlanWorkflow.value?.startedAt ||
+          activePlanWorkflow.value?.submittedAt ||
+          activePlanWorkflow.value?.createdAt,
         entityId:
           activePlanWorkflow.value?.businessEntityId ||
           props.workflowEntityId ||
@@ -906,7 +922,10 @@ const currentPlanApprovalSummary = computed(() => {
         `${props.departmentName || '当前部门'}计划`,
       currentStepName: currentPlanStepDisplay.value,
       submitterName: planSubmitterName.value,
-      createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
+      createdAt:
+        activePlanWorkflow.value?.startedAt ||
+        activePlanWorkflow.value?.submittedAt ||
+        activePlanWorkflow.value?.createdAt,
       count: 1
     }
   }
@@ -1167,16 +1186,23 @@ async function loadPlanWorkflowDetail() {
     return
   }
 
-  try {
-    const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
-    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+  const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+  if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+    try {
       const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
       if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
         planWorkflowDetail.value = response.data
         return
       }
+    } catch (error) {
+      logger.warn('[ApprovalProgressDrawer] 旧实例ID详情加载失败，转按业务实体兜底:', {
+        workflowInstanceId,
+        error
+      })
     }
+  }
 
+  try {
     const businessEntityType = props.workflowEntityType || 'PLAN'
     const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
     if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
