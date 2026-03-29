@@ -62,6 +62,8 @@ interface Props {
   workflowCode?: string | string[]
   workflowEntityType?: 'PLAN' | 'PLAN_REPORT'
   workflowEntityId?: number | string
+  secondaryWorkflowEntityType?: 'PLAN' | 'PLAN_REPORT'
+  secondaryWorkflowEntityId?: number | string
 }
 
 interface Emits {
@@ -85,7 +87,9 @@ const props = withDefaults(defineProps<Props>(), {
   historyViewMode: 'auto',
   workflowCode: '',
   workflowEntityType: 'PLAN',
-  workflowEntityId: undefined
+  workflowEntityId: undefined,
+  secondaryWorkflowEntityType: undefined,
+  secondaryWorkflowEntityId: undefined
 })
 
 const emit = defineEmits<Emits>()
@@ -256,6 +260,11 @@ interface PlanApprovalDetailItem {
   statusType?: 'success' | 'warning' | 'danger' | 'info'
   entityId?: string | number
   planName?: string
+}
+
+interface WorkflowHistoryTarget {
+  entityType: 'PLAN' | 'PLAN_REPORT'
+  entityId: number
 }
 
 // 当前选中的指标
@@ -439,6 +448,36 @@ const scopedPlanApprovals = computed(() => {
 })
 
 const scopedPendingPlanCount = computed(() => scopedPlanApprovals.value.length)
+
+const historyTargets = computed<WorkflowHistoryTarget[]>(() => {
+  const targets: WorkflowHistoryTarget[] = []
+  const seen = new Set<string>()
+
+  const appendTarget = (entityType: 'PLAN' | 'PLAN_REPORT' | undefined, entityId: unknown) => {
+    const normalizedType =
+      entityType === 'PLAN_REPORT' ? 'PLAN_REPORT' : entityType === 'PLAN' ? 'PLAN' : null
+    const normalizedId = Number(entityId ?? NaN)
+    if (!normalizedType || !Number.isFinite(normalizedId) || normalizedId <= 0) {
+      return
+    }
+
+    const key = `${normalizedType}:${normalizedId}`
+    if (seen.has(key)) {
+      return
+    }
+
+    seen.add(key)
+    targets.push({
+      entityType: normalizedType,
+      entityId: normalizedId
+    })
+  }
+
+  appendTarget(props.workflowEntityType, props.workflowEntityId ?? props.plan?.id)
+  appendTarget(props.secondaryWorkflowEntityType, props.secondaryWorkflowEntityId)
+
+  return targets
+})
 const activePlanWorkflow = computed(() => {
   if (!props.plan) {
     return null
@@ -1326,23 +1365,35 @@ async function loadPlanWorkflowHistoryCards() {
     return
   }
 
-  const businessEntityType = props.workflowEntityType || 'PLAN'
-  const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
-  if (!Number.isFinite(businessEntityId) || businessEntityId <= 0) {
+  if (historyTargets.value.length === 0) {
     planWorkflowHistoryCards.value = []
     return
   }
 
   try {
-    const response = await getWorkflowInstanceHistoryByBusiness(
-      businessEntityType,
-      businessEntityId
+    const results = await Promise.all(
+      historyTargets.value.map(target =>
+        getWorkflowInstanceHistoryByBusiness(target.entityType, target.entityId)
+      )
     )
-    if (response.success && Array.isArray(response.data)) {
-      planWorkflowHistoryCards.value = response.data
-      return
-    }
-    planWorkflowHistoryCards.value = []
+
+    const merged = results
+      .flatMap(response => (response.success && Array.isArray(response.data) ? response.data : []))
+      .sort((left, right) => {
+        const leftTime = new Date(left.completedAt || left.startedAt || 0).getTime()
+        const rightTime = new Date(right.completedAt || right.startedAt || 0).getTime()
+        return rightTime - leftTime
+      })
+
+    const seen = new Set<string>()
+    planWorkflowHistoryCards.value = merged.filter(item => {
+      const key = String(item.instanceId || '')
+      if (!key || seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
   } catch (error) {
     planWorkflowHistoryCards.value = []
     logger.warn('[ApprovalProgressDrawer] 加载计划审批历史卡片失败:', error)
@@ -1772,10 +1823,29 @@ watch(
     JSON.stringify(props.plan?.workflowHistory ?? []),
     expectedWorkflowCodes.value.join('|'),
     props.workflowEntityType,
-    props.workflowEntityId
+    props.workflowEntityId,
+    props.secondaryWorkflowEntityType,
+    props.secondaryWorkflowEntityId
   ],
-  ([showPlanApprovals, planId, , , , , , , , workflowEntityType, workflowEntityId]) => {
-    if (!showPlanApprovals || !(workflowEntityId || planId)) {
+  ([
+    showPlanApprovals,
+    planId,
+    ,
+    ,
+    ,
+    ,
+    ,
+    ,
+    ,
+    ,
+    workflowEntityId,
+    secondaryWorkflowEntityType,
+    secondaryWorkflowEntityId
+  ]) => {
+    if (
+      !showPlanApprovals ||
+      !(workflowEntityId || planId || secondaryWorkflowEntityId || secondaryWorkflowEntityType)
+    ) {
       planWorkflowDetail.value = null
       planWorkflowHistoryCards.value = []
       return

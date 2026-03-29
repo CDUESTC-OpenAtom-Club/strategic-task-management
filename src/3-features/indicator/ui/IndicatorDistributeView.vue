@@ -622,9 +622,9 @@ const approvalDrawerPlan = computed<Plan | null>(() => {
   return currentActiveCollegePlan.value
 })
 
-const currentApprovalWorkflowCode = computed(() => {
+const currentApprovalWorkflowCode = computed<string | string[]>(() => {
   if (currentCollegePlanReportSummary.value?.id) {
-    return 'PLAN_APPROVAL_COLLEGE'
+    return ['PLAN_APPROVAL_COLLEGE', currentDispatchWorkflowCode.value]
   }
 
   return currentDispatchWorkflowCode.value
@@ -640,6 +640,14 @@ const currentApprovalEntityId = computed<number | string | undefined>(() => {
   }
 
   return currentActiveCollegePlan.value?.id
+})
+
+const secondaryApprovalEntityType = computed<'PLAN' | undefined>(() => {
+  return currentCollegePlanReportSummary.value?.id ? 'PLAN' : undefined
+})
+
+const secondaryApprovalEntityId = computed<number | string | undefined>(() => {
+  return currentCollegePlanReportSummary.value?.id ? currentActiveCollegePlan.value?.id : undefined
 })
 
 const currentApprovalType = computed<'distribution' | 'submission'>(() => {
@@ -4330,6 +4338,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
       :workflow-code="currentApprovalWorkflowCode"
       :workflow-entity-type="currentApprovalEntityType"
       :workflow-entity-id="currentApprovalEntityId"
+      :secondary-workflow-entity-type="secondaryApprovalEntityType"
+      :secondary-workflow-entity-id="secondaryApprovalEntityId"
       history-view-mode="card-only"
       :approval-type="currentApprovalType"
       @close="taskApprovalVisible = false"
