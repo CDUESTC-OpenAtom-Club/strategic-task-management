@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 /**
  * 指标下发与审批页面（职能部门专用）
  * 功能：接收战略任务 → 查看战略指标 → 拆分子指标 → 下发给学院 → 审批学院提交
@@ -122,7 +121,9 @@ const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
     return directTaskId
   }
 
-  const indicatorById = new Map(strategicStore.indicators.map(item => [String(item.id), item] as const))
+  const indicatorById = new Map(
+    strategicStore.indicators.map(item => [String(item.id), item] as const)
+  )
   const visited = new Set<string>()
   let currentParentId = String(raw.parentIndicatorId ?? '').trim()
 
@@ -183,7 +184,9 @@ const matchesDepartment = (value: string | string[] | undefined, deptName: strin
   return normalizeDepartmentName(value) === normalizedDeptName
 }
 
-const resolvePlanYear = (plan: Partial<Plan> & { year?: number | string; cycleId?: number | string }) => {
+const resolvePlanYear = (
+  plan: Partial<Plan> & { year?: number | string; cycleId?: number | string }
+) => {
   const planRecord = plan as Partial<Plan> & {
     year?: number | string
     cycleId?: number | string
@@ -212,7 +215,9 @@ function getPlanIndicatorText(indicator: Record<string, unknown>, ...keys: strin
 }
 
 function normalizeIndicatorTypeLabel(value?: unknown): '定性' | '定量' | '' {
-  const normalized = String(value || '').trim().toUpperCase()
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
   if (!normalized) {
     return ''
   }
@@ -274,7 +279,9 @@ function getPlanIndicatorNumber(indicator: Record<string, unknown>, ...keys: str
 }
 
 function normalizeTaskTypeToCategory(taskType: unknown): '发展性' | '基础性' | '' {
-  const normalized = String(taskType || '').trim().toUpperCase()
+  const normalized = String(taskType || '')
+    .trim()
+    .toUpperCase()
   if (normalized === 'DEVELOPMENT') {
     return '发展性'
   }
@@ -427,11 +434,13 @@ const currentSelectedCollegePlan = computed<Plan | null>(() => {
         collegeOrgId != null && Number.isFinite(targetOrgId) && targetOrgId === collegeOrgId
       const matchesOrgName = targetOrgName === collegeName
       const matchesCreatedByOrg =
-        currentOrgId == null ||
-        !Number.isFinite(createdByOrgId) ||
-        createdByOrgId === currentOrgId
+        currentOrgId == null || !Number.isFinite(createdByOrgId) || createdByOrgId === currentOrgId
 
-      return planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName) && matchesCreatedByOrg
+      return (
+        planYear === timeContext.currentYear &&
+        (matchesOrgId || matchesOrgName) &&
+        matchesCreatedByOrg
+      )
     }) || null
   )
 })
@@ -494,17 +503,19 @@ const matchesCurrentSelectedCollegePlanContext = (plan: Plan | null | undefined)
     collegeOrgId != null && Number.isFinite(targetOrgId) && targetOrgId === collegeOrgId
   const matchesOrgName = targetOrgName === collegeName
   const matchesCreatedByOrg =
-    currentOrgId == null ||
-    !Number.isFinite(createdByOrgId) ||
-    createdByOrgId === currentOrgId
+    currentOrgId == null || !Number.isFinite(createdByOrgId) || createdByOrgId === currentOrgId
 
-  return planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName) && matchesCreatedByOrg
+  return (
+    planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName) && matchesCreatedByOrg
+  )
 }
 
 const buildTaskTypeMap = (tasks: Array<Record<string, unknown>>): Record<string, string> => {
   const map: Record<string, string> = {}
   tasks.forEach(task => {
-    const taskId = String((task as { taskId?: string | number; id?: string | number }).taskId ?? '').trim()
+    const taskId = String(
+      (task as { taskId?: string | number; id?: string | number }).taskId ?? ''
+    ).trim()
     const fallbackTaskId = String((task as { id?: string | number }).id ?? '').trim()
     const taskType = String((task as { taskType?: string }).taskType || '').trim()
     const key = taskId || fallbackTaskId
@@ -536,11 +547,15 @@ const loadCurrentDepartmentPlanTaskTypeMap = async (planId: number | string | un
 }
 
 const normalizedCurrentDepartmentPlanStatus = computed(() => {
-  const stableDepartmentPlanDetails = matchesCurrentDepartmentPlanContext(currentDepartmentPlanDetails.value)
+  const stableDepartmentPlanDetails = matchesCurrentDepartmentPlanContext(
+    currentDepartmentPlanDetails.value
+  )
     ? currentDepartmentPlanDetails.value
     : null
 
-  return normalizePlanStatus(stableDepartmentPlanDetails?.status || currentDepartmentPlan.value?.status || null)
+  return normalizePlanStatus(
+    stableDepartmentPlanDetails?.status || currentDepartmentPlan.value?.status || null
+  )
 })
 
 const normalizedSelectedCollegePlanStatus = computed(() => {
@@ -707,7 +722,11 @@ const canCurrentUserApproveCurrentPlan = computed(() => {
   }
 
   const currentOrgId = currentDepartmentOrgId.value
-  if (currentOrgId != null && Number.isFinite(currentUserOrgId.value) && currentUserOrgId.value > 0) {
+  if (
+    currentOrgId != null &&
+    Number.isFinite(currentUserOrgId.value) &&
+    currentUserOrgId.value > 0
+  ) {
     return currentUserOrgId.value === currentOrgId
   }
 
@@ -858,7 +877,9 @@ const loadCurrentDepartmentPlanDetails = async (force = false) => {
 }
 
 const loadCurrentSelectedCollegePlanDetails = async (force = false) => {
-  const stablePlan = matchesCurrentSelectedCollegePlanContext(currentSelectedCollegePlanDetails.value)
+  const stablePlan = matchesCurrentSelectedCollegePlanContext(
+    currentSelectedCollegePlanDetails.value
+  )
     ? currentSelectedCollegePlanDetails.value
     : null
   const plan = stablePlan ?? currentSelectedCollegePlan.value
@@ -887,7 +908,9 @@ const loadCurrentSelectedCollegePlanDetails = async (force = false) => {
 }
 
 const refreshDistributionData = async () => {
-  const reloadJobs: Array<Promise<unknown>> = [planStore.loadPlans({ force: true, background: true })]
+  const reloadJobs: Array<Promise<unknown>> = [
+    planStore.loadPlans({ force: true, background: true })
+  ]
 
   // 职能部门分发页不再请求全量年度指标接口。
   // 该接口当前对教务处等账号无权限，继续调用只会产生 403/500 噪音。
@@ -899,10 +922,7 @@ const refreshDistributionData = async () => {
 
   results.forEach((result, index) => {
     if (result.status === 'rejected') {
-      const source =
-        isStrategicDept.value && index === 0
-          ? 'indicators'
-          : 'plans'
+      const source = isStrategicDept.value && index === 0 ? 'indicators' : 'plans'
       logger.warn(`[IndicatorDistributeView] 加载 ${source} 数据失败:`, result.reason)
     }
   })
@@ -922,7 +942,12 @@ const loadCurrentCollegePlanReportSummary = async () => {
   const planId = Number(currentActiveCollegePlan.value?.id ?? NaN)
   const reportOrgId = Number(getOrgIdByDeptName(selectedCollege.value) ?? NaN)
 
-  if (!Number.isFinite(planId) || planId <= 0 || !Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+  if (
+    !Number.isFinite(planId) ||
+    planId <= 0 ||
+    !Number.isFinite(reportOrgId) ||
+    reportOrgId <= 0
+  ) {
     currentCollegePlanReportSummary.value = null
     return
   }
@@ -1031,7 +1056,12 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
       ? strategicStore.indicators.find(item => String(item.id) === parentIndicatorId)
       : undefined
     const planIndicatorTaskId = String(
-      source.taskId ?? source.task_id ?? source.planId ?? source.strategicTaskId ?? source.cycleId ?? ''
+      source.taskId ??
+        source.task_id ??
+        source.planId ??
+        source.strategicTaskId ??
+        source.cycleId ??
+        ''
     ).trim()
     const mappedTaskType =
       currentPlanTaskTypeMap.value[planIndicatorTaskId] ||
@@ -1050,7 +1080,9 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
       id: indicatorId || storeIndicator?.id || String(Date.now()),
       name: getPlanIndicatorText(source, 'indicatorName', 'name') || storeIndicator?.name || '',
       taskContent:
-        getPlanIndicatorText(source, 'taskName', 'taskContent') || storeIndicator?.taskContent || '',
+        getPlanIndicatorText(source, 'taskName', 'taskContent') ||
+        storeIndicator?.taskContent ||
+        '',
       type1:
         normalizeIndicatorTypeLabel(
           getPlanIndicatorText(source, 'type1', 'indicatorType', 'indicatorType1', 'type')
@@ -1087,14 +1119,18 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
 
     const targetOrgId =
       getPlanIndicatorNumber(source, 'targetOrgId', 'target_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0
+      )
     if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
       normalizedIndicator.targetOrgId = targetOrgId
     }
 
     const ownerOrgId =
       getPlanIndicatorNumber(source, 'ownerOrgId', 'owner_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0
+      )
     if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
       normalizedIndicator.ownerOrgId = ownerOrgId
     }
@@ -1174,7 +1210,10 @@ const collegeIndicators = computed(() => {
 // 获取指标的子指标（只显示当前部门下发的）
 const _getChildIndicators = (parentId: string) => {
   return strategicStore.indicators.filter(
-    i => i.parentIndicatorId === parentId && !i.isStrategic && isSameDepartment(i.ownerDept, currentDept.value)
+    i =>
+      i.parentIndicatorId === parentId &&
+      !i.isStrategic &&
+      isSameDepartment(i.ownerDept, currentDept.value)
   )
 }
 
@@ -1350,9 +1389,7 @@ const cancelAddIndicator = () => {
   }
 }
 
-const cloneParentMilestonesForForm = (
-  indicator: StrategicIndicator
-): FormMilestone[] => {
+const cloneParentMilestonesForForm = (indicator: StrategicIndicator): FormMilestone[] => {
   if (!Array.isArray(indicator.milestones) || indicator.milestones.length === 0) {
     return []
   }
@@ -1535,7 +1572,9 @@ const toMilestoneBatchPayload = (
   milestones.map((milestone, index) => {
     const rawId = Number(milestone.id)
     const numericId =
-      options.includeExistingIds !== false && Number.isFinite(rawId) && rawId > 0 ? rawId : undefined
+      options.includeExistingIds !== false && Number.isFinite(rawId) && rawId > 0
+        ? rawId
+        : undefined
     const targetProgress =
       'targetProgress' in milestone
         ? Number(milestone.targetProgress) || 0
@@ -1706,7 +1745,10 @@ const saveNewIndicator = async () => {
         })
       } catch (milestoneError) {
         milestonesPersisted = false
-        logger.error('[IndicatorDistributeView] persist new indicator milestones failed:', milestoneError)
+        logger.error(
+          '[IndicatorDistributeView] persist new indicator milestones failed:',
+          milestoneError
+        )
       }
     }
 
@@ -2057,8 +2099,7 @@ const handleGlobalMousedown = (e: MouseEvent) => {
   isInteractingWithCollegeSelect.value = isInSelect || isInDropdown
 
   if (isAddingIndicator.value) {
-    const clickedInsideAddForm =
-      !!addRowFormRef.value && addRowFormRef.value.contains(target)
+    const clickedInsideAddForm = !!addRowFormRef.value && addRowFormRef.value.contains(target)
     const clickedInsidePopup =
       !!target.closest('.el-popper') ||
       !!target.closest('.el-select-dropdown') ||
@@ -2381,7 +2422,12 @@ const handleBatchWithdraw = async (college: string) => {
       )
 
       if (result.success && result.data) {
-        const { successCount, failedCount, withdrawnIndicatorIds, errors: batchErrors } = result.data
+        const {
+          successCount,
+          failedCount,
+          withdrawnIndicatorIds,
+          errors: batchErrors
+        } = result.data
 
         // 更新前端状态
         for (const indicatorId of withdrawnIndicatorIds) {
@@ -2415,7 +2461,7 @@ const handleBatchWithdraw = async (college: string) => {
     }
   }
 
-    // 临时 ID 不应进入可撤回集合，这里仅兜底兼容旧本地状态数据。
+  // 临时 ID 不应进入可撤回集合，这里仅兜底兼容旧本地状态数据。
   for (const indicator of tempIdIndicators) {
     try {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
@@ -2659,8 +2705,7 @@ const collegeOverallStatus = computed(() => {
 
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
-  const currentPlanStatus =
-    normalizedSelectedCollegePlanStatus.value
+  const currentPlanStatus = normalizedSelectedCollegePlanStatus.value
 
   if (currentPlanStatus === 'DRAFT') {
     return { label: '草稿', type: 'info' }
@@ -3496,12 +3541,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-button>
               </template>
               <template v-else>
-                <el-button
-                  :type="distributionApprovalButtonType"
-                  @click="handleOpenApproval"
-                >
+                <el-button :type="distributionApprovalButtonType" @click="handleOpenApproval">
                   <el-icon><Check /></el-icon>
-                  {{ distributionApprovalButtonText }}{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
+                  {{ distributionApprovalButtonText
+                  }}{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
                 </el-button>
                 <template v-if="collegeOverallStatus.label === '草稿' && canEditChild">
                   <el-button type="primary" @click="openAddIndicatorForm">
@@ -3518,7 +3561,11 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     {{ distributionSubmitButtonText }}
                   </el-button>
                 </template>
-                <template v-else-if="collegeOverallStatus.label === '待审批' && canWithdrawCurrentCollegePlan">
+                <template
+                  v-else-if="
+                    collegeOverallStatus.label === '待审批' && canWithdrawCurrentCollegePlan
+                  "
+                >
                   <el-button
                     type="warning"
                     :loading="isBatchDistributing"
@@ -3569,7 +3616,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'name')"
                         />
-                        <span v-else-if="isSavingChildCell(row.child, 'name')" class="cell-saving-text">
+                        <span
+                          v-else-if="isSavingChildCell(row.child, 'name')"
+                          class="cell-saving-text"
+                        >
                           保存中...
                         </span>
                         <el-tooltip
@@ -3644,7 +3694,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'remark')"
                         />
-                        <span v-else-if="isSavingChildCell(row.child, 'remark')" class="cell-saving-text">
+                        <span
+                          v-else-if="isSavingChildCell(row.child, 'remark')"
+                          class="cell-saving-text"
+                        >
                           保存中...
                         </span>
                         <span v-else class="remark-text">{{ row.child?.remark || '-' }}</span>
@@ -3697,7 +3750,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field"
                           @blur="saveChildEdit(row.child, 'weight')"
                         />
-                        <span v-else-if="isSavingChildCell(row.child, 'weight')" class="cell-saving-text">
+                        <span
+                          v-else-if="isSavingChildCell(row.child, 'weight')"
+                          class="cell-saving-text"
+                        >
                           保存中...
                         </span>
                         <span v-else class="weight-text editable">{{
@@ -3942,11 +3998,17 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                               :value="indicator.id.toString()"
                             >
                               <div class="parent-indicator-option">
-                                <span class="parent-indicator-option__name">{{ indicator.name }}</span>
+                                <span class="parent-indicator-option__name">{{
+                                  indicator.name
+                                }}</span>
                                 <div class="parent-indicator-option__tags">
                                   <el-tag
                                     size="small"
-                                    :type="getIndicatorTypeLabel(indicator) === '定量' ? 'primary' : 'warning'"
+                                    :type="
+                                      getIndicatorTypeLabel(indicator) === '定量'
+                                        ? 'primary'
+                                        : 'warning'
+                                    "
                                   >
                                     {{ getIndicatorTypeLabel(indicator) }}
                                   </el-tag>
@@ -3978,8 +4040,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           v-model="newIndicatorForm.type1"
                           style="width: 100%"
                           @change="
-                            (val: string) =>
-                              handleFormIndicatorTypeChange(val as '定量' | '定性')
+                            (val: string) => handleFormIndicatorTypeChange(val as '定量' | '定性')
                           "
                         >
                           <el-option label="定性" value="定性" />
@@ -4040,10 +4101,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           >
                             <el-icon><Plus /></el-icon> 添加里程碑
                           </el-button>
-                          <div
-                            v-if="newIndicatorForm.milestones.length > 0"
-                            class="milestone-list"
-                          >
+                          <div v-if="newIndicatorForm.milestones.length > 0" class="milestone-list">
                             <div
                               v-for="(ms, idx) in newIndicatorForm.milestones"
                               :key="ms.id"
@@ -4104,7 +4162,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 >
                   {{ isSavingIndicator ? '保存中' : '保存' }}
                 </el-button>
-                <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator">取消</el-button>
+                <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator"
+                  >取消</el-button
+                >
               </div>
             </div>
           </div>
@@ -4130,7 +4190,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           <div class="detail-tags">
             <el-tag
               size="small"
-              :type="getIndicatorTypeLabel(currentDetailIndicator) === '定量' ? 'primary' : 'warning'"
+              :type="
+                getIndicatorTypeLabel(currentDetailIndicator) === '定量' ? 'primary' : 'warning'
+              "
             >
               {{ getIndicatorTypeLabel(currentDetailIndicator) }}
             </el-tag>
@@ -4168,7 +4230,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           <el-descriptions-item label="指标类型">
             {{ getIndicatorTypeLabel(currentDetailIndicator) }}
           </el-descriptions-item>
-          <el-descriptions-item label="权重">{{ currentDetailIndicator.weight }}</el-descriptions-item>
+          <el-descriptions-item label="权重">{{
+            currentDetailIndicator.weight
+          }}</el-descriptions-item>
           <el-descriptions-item label="当前进度">
             {{ currentDetailIndicator.progress || 0 }}%
           </el-descriptions-item>
@@ -4195,7 +4259,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
               :key="index"
               :timestamp="milestone.deadline"
               :type="
-                resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress).timelineType
+                resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress)
+                  .timelineType
               "
               placement="top"
             >
@@ -4205,7 +4270,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   <el-tag
                     size="small"
                     :type="
-                      resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress).tagType
+                      resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress)
+                        .tagType
                     "
                   >
                     {{
@@ -4271,7 +4337,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 {{
                   step.candidateApprovers.length > 0
                     ? step.candidateApprovers
-                        .map(candidate => candidate.realName || candidate.username || `用户${candidate.userId}`)
+                        .map(
+                          candidate =>
+                            candidate.realName || candidate.username || `用户${candidate.userId}`
+                        )
                         .join('、')
                     : '系统自动分配'
                 }}

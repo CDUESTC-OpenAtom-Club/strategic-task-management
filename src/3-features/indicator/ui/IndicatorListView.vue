@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Plus,
@@ -106,16 +105,16 @@ const currentUserPermissionCodes = computed(() => {
 })
 
 const isCurrentUserReporter = computed(() => {
-  const user = authStore.user as
-    | {
-        username?: unknown
-        realName?: unknown
-        name?: unknown
-        roles?: unknown
-      }
-    | null
+  const user = authStore.user as {
+    username?: unknown
+    realName?: unknown
+    name?: unknown
+    roles?: unknown
+  } | null
 
-  const username = String(user?.username ?? '').trim().toLowerCase()
+  const username = String(user?.username ?? '')
+    .trim()
+    .toLowerCase()
   const realName = String(user?.realName ?? user?.name ?? '').trim()
   const roles = Array.isArray(user?.roles)
     ? user!.roles
@@ -124,9 +123,7 @@ const isCurrentUserReporter = computed(() => {
     : []
 
   return (
-    roles.includes('ROLE_REPORTER') ||
-    username.endsWith('_report') ||
-    realName.includes('填报人')
+    roles.includes('ROLE_REPORTER') || username.endsWith('_report') || realName.includes('填报人')
   )
 })
 
@@ -449,7 +446,12 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
 
   const resolvedPlanId = Number(planId ?? getCurrentPlanId() ?? NaN)
   const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
-  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0 || !Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+  if (
+    !Number.isFinite(resolvedPlanId) ||
+    resolvedPlanId <= 0 ||
+    !Number.isFinite(reportOrgId) ||
+    reportOrgId <= 0
+  ) {
     currentPlanReportSummary.value = null
     return
   }
@@ -465,7 +467,11 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
   } catch (error) {
     currentPlanReportSummary.value = null
     clearCurrentPlanReportDerivedState()
-    logger.warn('[IndicatorListView] 加载当前上报摘要失败:', { planId: resolvedPlanId, reportOrgId, error })
+    logger.warn('[IndicatorListView] 加载当前上报摘要失败:', {
+      planId: resolvedPlanId,
+      reportOrgId,
+      error
+    })
   }
 }
 
@@ -878,8 +884,16 @@ function getPlanIndicatorAttachments(indicator: Record<string, unknown>): string
       if (item && typeof item === 'object') {
         const record = item as Record<string, unknown>
         return (
-          getPlanIndicatorText(record, 'url', 'publicUrl', 'public_url', 'objectKey', 'object_key', 'name', 'originalName') ||
-          ''
+          getPlanIndicatorText(
+            record,
+            'url',
+            'publicUrl',
+            'public_url',
+            'objectKey',
+            'object_key',
+            'name',
+            'originalName'
+          ) || ''
         )
       }
       return ''
@@ -941,7 +955,12 @@ function resolveIndicatorType2(
 
 // 监听 Plan ID 变化，自动加载 Plan 详情
 watch(
-  [isSecondaryCollege, currentViewingOrgId, () => planStore.plans.length, () => timeContext.currentYear],
+  [
+    isSecondaryCollege,
+    currentViewingOrgId,
+    () => planStore.plans.length,
+    () => timeContext.currentYear
+  ],
   async () => {
     await loadCollegePlanDetails()
   },
@@ -1042,11 +1061,23 @@ const currentPlanIndicators = computed(() => {
     const normalizedMilestones = normalizePlanMilestones(source.milestones)
     const progress = getPlanIndicatorOptionalNumber(source, 'progress')
     const weight = getPlanIndicatorOptionalNumber(source, 'weightPercent', 'weight')
-    const reportProgress = getPlanIndicatorOptionalNumber(source, 'reportProgress', 'report_progress')
-    const pendingProgress = getPlanIndicatorOptionalNumber(source, 'pendingProgress', 'pending_progress')
+    const reportProgress = getPlanIndicatorOptionalNumber(
+      source,
+      'reportProgress',
+      'report_progress'
+    )
+    const pendingProgress = getPlanIndicatorOptionalNumber(
+      source,
+      'pendingProgress',
+      'pending_progress'
+    )
     const pendingRemark = getPlanIndicatorText(source, 'pendingRemark', 'pending_remark')
     const pendingAttachments = getPlanIndicatorAttachments(source)
-    const currentReportId = getPlanIndicatorOptionalNumber(source, 'currentReportId', 'current_report_id')
+    const currentReportId = getPlanIndicatorOptionalNumber(
+      source,
+      'currentReportId',
+      'current_report_id'
+    )
     const sourceApprovalStatus = getPlanIndicatorText(
       source,
       'progressApprovalStatus',
@@ -1124,36 +1155,45 @@ const currentPlanIndicators = computed(() => {
     if (reportProgress !== undefined) {
       normalizedIndicator.reportProgress = reportProgress
     } else if (
-      (storeIndicator as StrategicIndicator & { reportProgress?: number | null } | undefined)
+      (storeIndicator as (StrategicIndicator & { reportProgress?: number | null }) | undefined)
         ?.reportProgress !== undefined
     ) {
-      normalizedIndicator.reportProgress =
-        (storeIndicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
+      normalizedIndicator.reportProgress = (
+        storeIndicator as StrategicIndicator & { reportProgress?: number | null }
+      ).reportProgress
     }
 
     const targetOrgId =
       getPlanIndicatorNumber(source, 'targetOrgId', 'target_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0
+      )
     if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
       normalizedIndicator.targetOrgId = targetOrgId
     }
 
     const ownerOrgId =
       getPlanIndicatorNumber(source, 'ownerOrgId', 'owner_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0
+      )
     if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
       normalizedIndicator.ownerOrgId = ownerOrgId
     }
 
     if (currentReportId !== undefined) {
-      ;(normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId =
-        currentReportId
+      ;(
+        normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }
+      ).currentReportId = currentReportId
     } else if (
-      (storeIndicator as StrategicIndicator & { currentReportId?: number | null } | undefined)
+      (storeIndicator as (StrategicIndicator & { currentReportId?: number | null }) | undefined)
         ?.currentReportId !== undefined
     ) {
-      ;(normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId =
-        (storeIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId
+      ;(
+        normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }
+      ).currentReportId = (
+        storeIndicator as StrategicIndicator & { currentReportId?: number | null }
+      ).currentReportId
     }
 
     const targetOrgName = getPlanIndicatorText(source, 'targetOrgName', 'target_org_name')
@@ -1441,7 +1481,9 @@ const indicators = computed(() => {
 
   if (isSecondaryCollege.value && Array.isArray(currentPlanReportSummary.value?.indicatorDetails)) {
     const reportId = Number(currentPlanReportSummary.value?.id ?? NaN)
-    const reportStatus = String(currentPlanReportSummary.value?.status || '').trim().toUpperCase()
+    const reportStatus = String(currentPlanReportSummary.value?.status || '')
+      .trim()
+      .toUpperCase()
     const detailMap = new Map(
       currentPlanReportSummary.value.indicatorDetails.map(detail => [
         String(detail?.indicatorId ?? ''),
@@ -1456,19 +1498,22 @@ const indicators = computed(() => {
       }
 
       const detailProgress = Number(detail.progress)
-      const nextProgress = Number.isFinite(detailProgress) ? detailProgress : indicator.pendingProgress
+      const nextProgress = Number.isFinite(detailProgress)
+        ? detailProgress
+        : indicator.pendingProgress
       const nextRemark = String(detail.comment || '').trim() || indicator.pendingRemark || null
 
       return {
         ...indicator,
-        currentReportId: Number.isFinite(reportId) && reportId > 0 ? reportId : indicator.currentReportId,
+        currentReportId:
+          Number.isFinite(reportId) && reportId > 0 ? reportId : indicator.currentReportId,
         reportProgress: nextProgress,
         pendingProgress: nextProgress,
         pendingRemark: nextRemark,
         progressApprovalStatus:
           reportStatus === 'SUBMITTED' || reportStatus === 'IN_REVIEW'
             ? 'PENDING'
-            : indicator.progressApprovalStatus ?? 'DRAFT'
+            : (indicator.progressApprovalStatus ?? 'DRAFT')
       }
     })
   }
@@ -2681,7 +2726,9 @@ const syncBackendReportedProgress = (
 
         return {
           ...item,
-          ...(payload.progressApprovalStatus ? { progressApprovalStatus: payload.progressApprovalStatus } : {}),
+          ...(payload.progressApprovalStatus
+            ? { progressApprovalStatus: payload.progressApprovalStatus }
+            : {}),
           reportProgress: payload.reportProgress,
           pendingProgress: payload.pendingProgress,
           pendingRemark: payload.pendingRemark,
@@ -2732,12 +2779,16 @@ const submitProgressReport = async () => {
         const isCurrentIndicator = itemId === String(indicator.id)
         const reportProgress = isCurrentIndicator
           ? reportForm.value.newProgress
-          : item.pendingProgress ?? getDisplayedReportedProgress(item)
+          : (item.pendingProgress ?? getDisplayedReportedProgress(item))
         const reportRemark = isCurrentIndicator
           ? reportForm.value.remark
           : String(item.pendingRemark || '').trim()
 
-        if (reportProgress === null || reportProgress === undefined || !Number.isFinite(Number(reportProgress))) {
+        if (
+          reportProgress === null ||
+          reportProgress === undefined ||
+          !Number.isFinite(Number(reportProgress))
+        ) {
           return null
         }
 
@@ -2783,7 +2834,7 @@ const submitProgressReport = async () => {
         pendingAttachments:
           String(item.indicator_id) === String(indicator.id)
             ? reportForm.value.attachments
-            : matchedIndicator?.pendingAttachments ?? [],
+            : (matchedIndicator?.pendingAttachments ?? []),
         currentReportId: savedReportId
       })
     }
@@ -2966,7 +3017,10 @@ const handleSubmitAll = () => {
     return
   }
 
-  if (!isSecondaryCollege.value && !['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
+  if (
+    !isSecondaryCollege.value &&
+    !['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)
+  ) {
     ElMessage.warning('当前计划正在审批中，不能重复提交')
     return
   }
@@ -3644,7 +3698,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
             </el-timeline-item>
           </el-timeline>
         </div>
-
       </div>
     </el-drawer>
 
@@ -3737,8 +3790,14 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       </div>
 
       <template #footer>
-        <el-button @click="closeReportDialog" :disabled="isSavingReport">取消</el-button>
-        <el-button type="primary" :loading="isSavingReport" :disabled="isSavingReport" @click="submitProgressReport">保存</el-button>
+        <el-button :disabled="isSavingReport" @click="closeReportDialog">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="isSavingReport"
+          :disabled="isSavingReport"
+          @click="submitProgressReport"
+          >保存</el-button
+        >
       </template>
     </el-dialog>
 
@@ -3758,7 +3817,9 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       :show-approval-section="true"
       :workflow-code="resolvePlanApprovalWorkflowCode()"
       :workflow-entity-type="isSecondaryCollege ? 'PLAN_REPORT' : 'PLAN'"
-      :workflow-entity-id="isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id"
+      :workflow-entity-id="
+        isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id
+      "
       history-view-mode="card-only"
       approval-type="submission"
     />

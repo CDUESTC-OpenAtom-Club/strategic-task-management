@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 战略任务和指标 API 服务
  * 从后端获取数据库中的数据
@@ -28,7 +27,10 @@ import type {
 } from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
 // 导入统一的 IndicatorVO 接口，避免重复定义
-import type { IndicatorVO, AssessmentCycle as AssessmentCycleVO } from '@/shared/types/backend-aligned'
+import type {
+  IndicatorVO,
+  AssessmentCycle as AssessmentCycleVO
+} from '@/shared/types/backend-aligned'
 
 interface StrategicTaskVO {
   taskId?: number
@@ -69,9 +71,10 @@ function isForbiddenError(error: unknown): boolean {
     return false
   }
 
-  const status = 'response' in error
-    ? Number((error as { response?: { status?: number } }).response?.status ?? NaN)
-    : Number((error as { status?: number }).status ?? NaN)
+  const status =
+    'response' in error
+      ? Number((error as { response?: { status?: number } }).response?.status ?? NaN)
+      : Number((error as { status?: number }).status ?? NaN)
 
   return status === 403
 }
@@ -196,7 +199,9 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     // 使用后端返回的新字段，提供默认值
     isQualitative: vo.isQualitative ?? false,
     // indicatorType 是后端返回的 type 字段，定量/定性
-    type1: (vo.type1 as '定性' | '定量') ?? (vo.indicatorType === '定量' ? '定量' : vo.indicatorType === '定性' ? '定性' : '定量'),
+    type1:
+      (vo.type1 as '定性' | '定量') ??
+      (vo.indicatorType === '定量' ? '定量' : vo.indicatorType === '定性' ? '定性' : '定量'),
     type2:
       (vo.type2 as '发展性' | '基础性') ?? (vo.level === 'STRAT_TO_FUNC' ? '发展性' : '基础性'),
     progress: vo.progress ?? calculateProgress(milestones),
@@ -242,7 +247,13 @@ export const strategicApi = {
   async getAllCycles(): Promise<ApiResponse<AssessmentCycleVO[]>> {
     return fetchWithCache<ApiResponse<AssessmentCycleVO[]>>({
       key: buildQueryKey('cycle', 'list'),
-      policy: { ttlMs: 10 * 60 * 1000, scope: 'memory', staleWhileRevalidate: true, dedupeWindowMs: 1000, tags: ['cycles.list'] },
+      policy: {
+        ttlMs: 10 * 60 * 1000,
+        scope: 'memory',
+        staleWhileRevalidate: true,
+        dedupeWindowMs: 1000,
+        tags: ['cycles.list']
+      },
       fetcher: () => apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
     })
   },
@@ -254,7 +265,13 @@ export const strategicApi = {
     try {
       const response = await fetchWithCache<ApiResponse<AssessmentCycleVO[]>>({
         key: buildQueryKey('cycle', 'list'),
-        policy: { ttlMs: 10 * 60 * 1000, scope: 'memory', staleWhileRevalidate: true, dedupeWindowMs: 1000, tags: ['cycles.list'] },
+        policy: {
+          ttlMs: 10 * 60 * 1000,
+          scope: 'memory',
+          staleWhileRevalidate: true,
+          dedupeWindowMs: 1000,
+          tags: ['cycles.list']
+        },
         fetcher: () => apiClient.get<ApiResponse<AssessmentCycleVO[]>>('/cycles/list')
       })
       if (!response.success || !response.data) {
@@ -299,9 +316,10 @@ export const strategicApi = {
           dedupeWindowMs: 1000,
           tags: ['cycles.list']
         },
-        fetcher: () => apiClient.get<ApiResponse<CyclePageResponse<AssessmentCycleVO>>>('/cycles', {
-          params: { year, page: 0, size: 1 }
-        })
+        fetcher: () =>
+          apiClient.get<ApiResponse<CyclePageResponse<AssessmentCycleVO>>>('/cycles', {
+            params: { year, page: 0, size: 1 }
+          })
       })
       if (response.success && response.data) {
         const cycle = response.data.content?.[0] || null
@@ -641,13 +659,19 @@ async function approvePlan(
       }>
     }
 
-    const pendingTask = detail.tasks?.find(task =>
-      String(task.status || '').toUpperCase() === 'PENDING' &&
-      Number(task.assigneeId) === Number(approverId)
-    ) || detail.tasks?.find(task => String(task.status || '').toUpperCase() === 'PENDING')
+    const pendingTask =
+      detail.tasks?.find(
+        task =>
+          String(task.status || '').toUpperCase() === 'PENDING' &&
+          Number(task.assigneeId) === Number(approverId)
+      ) || detail.tasks?.find(task => String(task.status || '').toUpperCase() === 'PENDING')
 
     if (!pendingTask?.taskId) {
-      logger.error('[API] Failed to resolve pending task for plan approval', { instanceId, approverId, detail })
+      logger.error('[API] Failed to resolve pending task for plan approval', {
+        instanceId,
+        approverId,
+        detail
+      })
       throw error
     }
 
@@ -693,13 +717,19 @@ async function rejectPlan(
       }>
     }
 
-    const pendingTask = detail.tasks?.find(task =>
-      String(task.status || '').toUpperCase() === 'PENDING' &&
-      Number(task.assigneeId) === Number(approverId)
-    ) || detail.tasks?.find(task => String(task.status || '').toUpperCase() === 'PENDING')
+    const pendingTask =
+      detail.tasks?.find(
+        task =>
+          String(task.status || '').toUpperCase() === 'PENDING' &&
+          Number(task.assigneeId) === Number(approverId)
+      ) || detail.tasks?.find(task => String(task.status || '').toUpperCase() === 'PENDING')
 
     if (!pendingTask?.taskId) {
-      logger.error('[API] Failed to resolve pending task for plan rejection', { instanceId, approverId, detail })
+      logger.error('[API] Failed to resolve pending task for plan rejection', {
+        instanceId,
+        approverId,
+        detail
+      })
       throw error
     }
 
@@ -792,7 +822,9 @@ async function getPlanApprovalStatus(instanceId: number): Promise<ApiResponse<un
         ...response,
         data: {
           status: (response.data as unknown as { status: string }).status,
-          stepInstances: (response.data as unknown as { tasks: { stepIndex: number; stepName: string }[] }).tasks.map((t, i) => ({
+          stepInstances: (
+            response.data as unknown as { tasks: { stepIndex: number; stepName: string }[] }
+          ).tasks.map((t, i) => ({
             stepIndex: i,
             stepName: t.stepName
           }))
@@ -822,9 +854,12 @@ async function countPendingApprovals(_userId: number): Promise<ApiResponse<numbe
     }
     return { ...response, data: 0 }
   } catch (error) {
-    const msg = error instanceof Error ? error.message
-      : (error && typeof error === 'object' && 'message' in error) ? String((error as { message: unknown }).message)
-      : '未知错误'
+    const msg =
+      error instanceof Error
+        ? error.message
+        : error && typeof error === 'object' && 'message' in error
+          ? String((error as { message: unknown }).message)
+          : '未知错误'
     logger.error('[API] Failed to count pending approvals', msg)
     throw error
   }
@@ -840,7 +875,10 @@ async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> 
   try {
     const response = await getWorkflowInstanceDetail(String(instanceId))
     if (response.success && response.data) {
-      const detail = response.data as unknown as { tasks: { taskName: string }[]; history: { taskName: string }[] }
+      const detail = response.data as unknown as {
+        tasks: { taskName: string }[]
+        history: { taskName: string }[]
+      }
       const stepName = detail.tasks[0]?.taskName || detail.history[0]?.taskName || '未知步骤'
       logger.info('[API] Successfully got current step', { instanceId, stepName })
       return { ...response, data: stepName }
@@ -855,9 +893,7 @@ async function getCurrentStep(instanceId: number): Promise<ApiResponse<string>> 
 /**
  * 获取审批时间轴（基于审批实例详情）
  */
-async function getApprovalTimeline(
-  instanceId: number
-): Promise<
+async function getApprovalTimeline(instanceId: number): Promise<
   ApiResponse<{
     instanceId: number
     currentStepIndex?: number
