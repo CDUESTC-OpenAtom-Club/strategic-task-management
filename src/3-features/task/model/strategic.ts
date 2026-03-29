@@ -188,6 +188,10 @@ async function buildIndicatorUpdatePayload(
   return payload
 }
 
+function toBackendIndicatorType(...values: unknown[]): '定性' | '定量' {
+  return normalizeIndicatorType(...values)
+}
+
 function normalizeMilestoneStatus(status: unknown): 'pending' | 'completed' | 'overdue' {
   const normalized = String(status || '').trim().toUpperCase()
   if (normalized === 'COMPLETED') {
@@ -899,6 +903,12 @@ export const useStrategicStore = defineStore('strategic', () => {
 
       const response = await indicatorApi.createIndicator({
         indicatorDesc: indicator.name,
+        type1: toBackendIndicatorType(
+          indicator.type1,
+          (indicator as StrategicIndicator & { type?: string }).type,
+          (indicator as StrategicIndicator & { indicatorType?: string }).indicatorType,
+          indicator.isQualitative === true ? '定性' : indicator.isQualitative === false ? '定量' : ''
+        ),
         taskId: Number.isFinite(taskId) ? taskId : undefined,
         parentIndicatorId: Number.isFinite(parentIndicatorId) ? parentIndicatorId : undefined,
         ownerOrgId,

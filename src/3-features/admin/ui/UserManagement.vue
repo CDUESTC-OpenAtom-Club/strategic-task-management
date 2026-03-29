@@ -32,7 +32,7 @@ import {
   Key,
   WarningFilled
 } from '@element-plus/icons-vue'
-import type { UserManagementItem, UserForm, Organization, UserRole } from '@/shared/types'
+import type { UserManagementItem, UserForm, Organization } from '@/shared/types'
 import { apiClient as api } from '@/shared/api/client'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useAuditLogStore } from '@/features/admin/model/auditLog'
@@ -99,7 +99,7 @@ const users = ref<UserManagementItem[]>([])
 
 // 搜索筛选
 const searchKeyword = ref('')
-const filterRole = ref<UserRole | 'all'>('all')
+const filterRole = ref<string | 'all'>('all')
 const filterStatus = ref<'all' | 'active' | 'disabled'>('all')
 
 // 对话框状态
@@ -170,13 +170,32 @@ const filteredUsers = computed(() => {
   return result
 })
 
-// 角色选项
-const roleOptions: Array<{ value: UserRole | 'all'; label: string; type?: string }> = [
+interface RoleListItem {
+  id: number
+  roleCode: string
+  roleName: string
+}
+
+interface RoleListResponseShape {
+  data?: {
+    items?: RoleListItem[]
+    content?: RoleListItem[]
+    data?: {
+      items?: RoleListItem[]
+      content?: RoleListItem[]
+    }
+  }
+}
+
+const backendRoles = ref<RoleListItem[]>([])
+
+const roleOptions = computed(() => [
   { value: 'all', label: '全部角色' },
-  { value: 'strategic_dept', label: '战略发展部', type: 'success' },
-  { value: 'functional_dept', label: '职能部门', type: 'warning' },
-  { value: 'secondary_college', label: '二级学院', type: 'info' }
-]
+  ...backendRoles.value.map(role => ({
+    value: role.roleCode,
+    label: role.roleName
+  }))
+])
 
 // 状态选项
 const statusOptions = [
@@ -186,13 +205,16 @@ const statusOptions = [
 ]
 
 // 获取角色配置
-const getRoleConfig = (role: UserRole) => {
-  const configs: Record<UserRole, { label: string; type: string }> = {
-    strategic_dept: { label: '战略发展部', type: 'success' },
-    functional_dept: { label: '职能部门', type: 'warning' },
-    secondary_college: { label: '二级学院', type: 'info' }
+const getRoleConfig = (role: string) => {
+  const matchedRole = backendRoles.value.find(item => item.roleCode === role)
+  if (matchedRole) {
+    return {
+      label: matchedRole.roleName,
+      type: 'info'
+    }
   }
-  return configs[role] || { label: role, type: 'default' }
+
+  return { label: role, type: 'default' }
 }
 
 // 获取状态配置
@@ -347,6 +369,34 @@ const loadOrganizations = async () => {
     ElMessage.error('加载组织结构失败')
   } finally {
     organizationLoading.value = false
+  }
+}
+
+const loadRoles = async () => {
+  try {
+    const response = (await api.get('/roles', {
+      page: 0,
+      pageSize: 100
+    })) as RoleListResponseShape
+
+    const roleItems = Array.isArray(response.data?.items)
+      ? response.data.items
+      : Array.isArray(response.data?.content)
+        ? response.data.content
+        : Array.isArray(response.data?.data?.items)
+          ? response.data.data.items
+          : Array.isArray(response.data?.data?.content)
+            ? response.data.data.content
+            : []
+
+    backendRoles.value = roleItems.map(role => ({
+      id: Number(role.id),
+      roleCode: String(role.roleCode),
+      roleName: String(role.roleName)
+    }))
+  } catch (error) {
+    logger.error('加载角色列表失败:', error)
+    ElMessage.error(getErrorMessage(error, '加载角色列表失败'))
   }
 }
 
@@ -628,6 +678,7 @@ const resetFilter = () => {
 onMounted(() => {
   loadUsers()
   loadOrganizations()
+  loadRoles()
 })
 </script>
 
