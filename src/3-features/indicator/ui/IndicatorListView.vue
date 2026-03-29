@@ -3016,7 +3016,7 @@ const isCurrentPlanReportLocked = computed(() => {
   const auditInstanceId = Number(currentPlanReportSummary.value?.auditInstanceId ?? NaN)
   const hasAuditInstance = Number.isFinite(auditInstanceId) && auditInstanceId > 0
 
-  return hasAuditInstance && reportStatus !== 'WITHDRAWN'
+  return hasAuditInstance && ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(reportStatus)
 })
 
 /**
