@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
   Plus,
@@ -81,16 +80,16 @@ const currentUserPermissionCodes = computed(() => {
 })
 
 const isCurrentUserReporter = computed(() => {
-  const user = authStore.user as
-    | {
-        username?: unknown
-        realName?: unknown
-        name?: unknown
-        roles?: unknown
-      }
-    | null
+  const user = authStore.user as {
+    username?: unknown
+    realName?: unknown
+    name?: unknown
+    roles?: unknown
+  } | null
 
-  const username = String(user?.username ?? '').trim().toLowerCase()
+  const username = String(user?.username ?? '')
+    .trim()
+    .toLowerCase()
   const realName = String(user?.realName ?? user?.name ?? '').trim()
   const roles = Array.isArray(user?.roles)
     ? user!.roles
@@ -99,9 +98,7 @@ const isCurrentUserReporter = computed(() => {
     : []
 
   return (
-    roles.includes('ROLE_REPORTER') ||
-    username.endsWith('_report') ||
-    realName.includes('填报人')
+    roles.includes('ROLE_REPORTER') || username.endsWith('_report') || realName.includes('填报人')
   )
 })
 
@@ -790,7 +787,7 @@ const refreshCurrentDepartmentView = async (options: { showLoading?: boolean } =
   }
 }
 
-const PLAN_APPROVAL_WORKFLOW_CODE = 'PLAN_DISPATCH_STRATEGY'
+const PLAN_APPROVAL_WORKFLOW_CODE = ['PLAN_DISPATCH_STRATEGY', 'PLAN_APPROVAL_FUNCDEPT'] as const
 
 const approvalSetupDialogVisible = ref(false)
 const approvalPreviewLoading = ref(false)
@@ -980,7 +977,9 @@ const isPlanDistributed = computed(() => {
 // 撤回权限只跟当前部门填报人走，不在前端额外放宽跨部门管理权限。
 const canWithdrawPlan = computed(() => {
   const status = currentPlanStatus.value
-  return status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
+  return (
+    status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
+  )
 })
 
 // 判断当前页面指标是否已进入“不可编辑”的流程阶段
@@ -1059,8 +1058,7 @@ const canDistribute = computed(() => {
   }
 
   // Plan 必须处于草稿状态才能下发
-  const canSubmitPlan =
-    currentPlanStatus.value === 'DRAFT' || !currentPlanStatus.value
+  const canSubmitPlan = currentPlanStatus.value === 'DRAFT' || !currentPlanStatus.value
   if (!canSubmitPlan) {
     return false
   }
@@ -1113,7 +1111,9 @@ const distributeButtonDisabledReason = computed(() => {
   }
 
   if (status === 'PENDING' && !canWithdrawPlan.value) {
-    return isCurrentUserReporter.value ? '当前审批进度不支持撤回' : '当前登录身份不是填报人，不能撤回'
+    return isCurrentUserReporter.value
+      ? '当前审批进度不支持撤回'
+      : '当前登录身份不是填报人，不能撤回'
   }
 
   if (status && status !== 'DRAFT' && status !== 'PENDING') {
@@ -2275,8 +2275,7 @@ const handleGlobalClick = (event: MouseEvent) => {
   const target = event.target as HTMLElement
 
   if (isAddingOrEditing.value) {
-    const clickedInsideAddForm =
-      !!addRowFormRef.value && addRowFormRef.value.contains(target)
+    const clickedInsideAddForm = !!addRowFormRef.value && addRowFormRef.value.contains(target)
     const clickedInsidePopup =
       !!target.closest('.el-popper') ||
       !!target.closest('.el-select-dropdown') ||
@@ -3777,11 +3776,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             {{ distributeButtonText }}
           </el-button>
           <!-- 审批进度按钮（带徽章） -->
-          <el-badge
-            v-if="pendingApprovalCount > 0"
-            is-dot
-            class="approval-badge"
-          >
+          <el-badge v-if="pendingApprovalCount > 0" is-dot class="approval-badge">
             <el-button size="small" type="warning" @click="handleOpenApproval">
               <el-icon><Check /></el-icon>
               {{ approvalEntryButtonText }}
@@ -3883,7 +3878,10 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                         @blur="saveIndicatorEdit(row, 'taskContent')"
                         @keyup.esc="cancelIndicatorEdit"
                       />
-                      <span v-else-if="isSavingIndicatorCell(row, 'taskContent')" class="cell-saving-text">
+                      <span
+                        v-else-if="isSavingIndicatorCell(row, 'taskContent')"
+                        class="cell-saving-text"
+                      >
                         保存中...
                       </span>
                       <el-tooltip
@@ -4063,7 +4061,10 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                       @blur="saveIndicatorEdit(row, 'progress')"
                       @keyup.enter="saveIndicatorEdit(row, 'progress')"
                     />
-                    <span v-else-if="isSavingIndicatorCell(row, 'progress')" class="cell-saving-text">
+                    <span
+                      v-else-if="isSavingIndicatorCell(row, 'progress')"
+                      class="cell-saving-text"
+                    >
                       保存中...
                     </span>
                     <!-- 始终显示已审批通过的进度（progress），不显示待审批进度 -->
@@ -4337,9 +4338,14 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                         <span class="milestone-name">{{ milestone.name }}</span>
                         <el-tag
                           size="small"
-                          :type="resolveMilestoneDisplayState(milestone, currentIndicator.progress).tagType"
+                          :type="
+                            resolveMilestoneDisplayState(milestone, currentIndicator.progress)
+                              .tagType
+                          "
                         >
-                          {{ resolveMilestoneDisplayState(milestone, currentIndicator.progress).label }}
+                          {{
+                            resolveMilestoneDisplayState(milestone, currentIndicator.progress).label
+                          }}
                         </el-tag>
                       </div>
                       <div class="milestone-details">
@@ -4371,157 +4377,157 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           <h3 class="form-title">新增任务指标</h3>
           <div class="add-form-content">
             <el-form label-width="80px">
-            <el-row :gutter="16">
-              <el-col :span="4">
-                <el-form-item class="required-form-item">
-                  <template #label><span class="required-asterisk">*</span>任务类型</template>
-                  <el-select
-                    v-model="newRow.type2"
-                    style="width: 100%"
-                    :disabled="!!taskTypeMap[newRow.taskContent]"
-                  >
-                    <el-option label="发展性" value="发展性" />
-                    <el-option label="基础性" value="基础性" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item class="required-form-item">
-                  <template #label><span class="required-asterisk">*</span>战略任务</template>
-                  <el-select
-                    ref="taskSelectRef"
-                    v-model="newRow.taskContent"
-                    filterable
-                    allow-create
-                    default-first-option
-                    placeholder="选择或输入战略任务名称"
-                    style="width: 100%"
-                    :teleported="false"
-                    @change="handleTaskSelect"
-                    @visible-change="handleTaskVisibleChange"
-                  >
-                    <el-option
-                      v-for="task in existingTaskNames"
-                      :key="task"
-                      :label="task"
-                      :value="task"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item class="required-form-item">
-                  <template #label><span class="required-asterisk">*</span>指标类型</template>
-                  <el-select
-                    v-model="newRow.type1"
-                    style="width: 100%"
-                    @change="
-                      (val: string) => {
-                        if (val === '定量') generateMonthlyMilestones()
-                      }
-                    "
-                  >
-                    <el-option label="定性" value="定性" />
-                    <el-option label="定量" value="定量" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="4">
-                <el-form-item class="required-form-item">
-                  <template #label><span class="required-asterisk">*</span>权重</template>
-                  <el-input-number
-                    v-model="newRow.weight"
-                    :min="0"
-                    placeholder="权重"
-                    :controls="false"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="16">
-              <el-col :span="24">
-                <el-form-item class="required-form-item">
-                  <template #label><span class="required-asterisk">*</span>核心指标</template>
-                  <el-input
-                    v-model="newRow.name"
-                    type="textarea"
-                    :autosize="{ minRows: 2, maxRows: 10 }"
-                    placeholder="设置核心指标内容"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="16">
-              <el-col :span="24">
-                <el-form-item label="备注">
-                  <el-input
-                    v-model="newRow.remark"
-                    type="textarea"
-                    :autosize="{ minRows: 3, maxRows: 15 }"
-                    placeholder="输入指标备注"
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="16">
-              <el-col :span="24">
-                <el-form-item class="required-form-item">
-                  <template #label><span class="required-asterisk">*</span>里程碑</template>
-                  <div class="milestone-form-area">
-                    <el-button
-                      v-if="newRow.type1 === '定性'"
-                      size="small"
-                      type="primary"
-                      plain
-                      @click="addMilestone"
+              <el-row :gutter="16">
+                <el-col :span="4">
+                  <el-form-item class="required-form-item">
+                    <template #label><span class="required-asterisk">*</span>任务类型</template>
+                    <el-select
+                      v-model="newRow.type2"
+                      style="width: 100%"
+                      :disabled="!!taskTypeMap[newRow.taskContent]"
                     >
-                      <el-icon><Plus /></el-icon> 添加里程碑
-                    </el-button>
-                    <div v-if="newRow.milestones.length > 0" class="milestone-list">
-                      <div
-                        v-for="(ms, idx) in newRow.milestones"
-                        :key="ms.id"
-                        class="milestone-form-item"
+                      <el-option label="发展性" value="发展性" />
+                      <el-option label="基础性" value="基础性" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item class="required-form-item">
+                    <template #label><span class="required-asterisk">*</span>战略任务</template>
+                    <el-select
+                      ref="taskSelectRef"
+                      v-model="newRow.taskContent"
+                      filterable
+                      allow-create
+                      default-first-option
+                      placeholder="选择或输入战略任务名称"
+                      style="width: 100%"
+                      :teleported="false"
+                      @change="handleTaskSelect"
+                      @visible-change="handleTaskVisibleChange"
+                    >
+                      <el-option
+                        v-for="task in existingTaskNames"
+                        :key="task"
+                        :label="task"
+                        :value="task"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="4">
+                  <el-form-item class="required-form-item">
+                    <template #label><span class="required-asterisk">*</span>指标类型</template>
+                    <el-select
+                      v-model="newRow.type1"
+                      style="width: 100%"
+                      @change="
+                        (val: string) => {
+                          if (val === '定量') generateMonthlyMilestones()
+                        }
+                      "
+                    >
+                      <el-option label="定性" value="定性" />
+                      <el-option label="定量" value="定量" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="4">
+                  <el-form-item class="required-form-item">
+                    <template #label><span class="required-asterisk">*</span>权重</template>
+                    <el-input-number
+                      v-model="newRow.weight"
+                      :min="0"
+                      placeholder="权重"
+                      :controls="false"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="16">
+                <el-col :span="24">
+                  <el-form-item class="required-form-item">
+                    <template #label><span class="required-asterisk">*</span>核心指标</template>
+                    <el-input
+                      v-model="newRow.name"
+                      type="textarea"
+                      :autosize="{ minRows: 2, maxRows: 10 }"
+                      placeholder="设置核心指标内容"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="16">
+                <el-col :span="24">
+                  <el-form-item label="备注">
+                    <el-input
+                      v-model="newRow.remark"
+                      type="textarea"
+                      :autosize="{ minRows: 3, maxRows: 15 }"
+                      placeholder="输入指标备注"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="16">
+                <el-col :span="24">
+                  <el-form-item class="required-form-item">
+                    <template #label><span class="required-asterisk">*</span>里程碑</template>
+                    <div class="milestone-form-area">
+                      <el-button
+                        v-if="newRow.type1 === '定性'"
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="addMilestone"
                       >
-                        <span class="milestone-index">{{ idx + 1 }}.</span>
-                        <el-input
-                          v-model="ms.name"
-                          placeholder="里程碑名称"
-                          style="width: 160px"
-                          size="small"
-                        />
-                        <el-input-number
-                          v-model="ms.targetProgress"
-                          :min="0"
-                          :max="100"
-                          placeholder="目标进度%"
-                          size="small"
-                          style="width: 110px"
-                        />
-                        <el-date-picker
-                          v-model="ms.deadline"
-                          type="date"
-                          placeholder="截止日期"
-                          size="small"
-                          style="width: 130px"
-                          value-format="YYYY-MM-DD"
-                        />
-                        <el-button type="danger" size="small" text @click="removeMilestone(idx)">
-                          <el-icon><Delete /></el-icon>
-                        </el-button>
+                        <el-icon><Plus /></el-icon> 添加里程碑
+                      </el-button>
+                      <div v-if="newRow.milestones.length > 0" class="milestone-list">
+                        <div
+                          v-for="(ms, idx) in newRow.milestones"
+                          :key="ms.id"
+                          class="milestone-form-item"
+                        >
+                          <span class="milestone-index">{{ idx + 1 }}.</span>
+                          <el-input
+                            v-model="ms.name"
+                            placeholder="里程碑名称"
+                            style="width: 160px"
+                            size="small"
+                          />
+                          <el-input-number
+                            v-model="ms.targetProgress"
+                            :min="0"
+                            :max="100"
+                            placeholder="目标进度%"
+                            size="small"
+                            style="width: 110px"
+                          />
+                          <el-date-picker
+                            v-model="ms.deadline"
+                            type="date"
+                            placeholder="截止日期"
+                            size="small"
+                            style="width: 130px"
+                            value-format="YYYY-MM-DD"
+                          />
+                          <el-button type="danger" size="small" text @click="removeMilestone(idx)">
+                            <el-icon><Delete /></el-icon>
+                          </el-button>
+                        </div>
                       </div>
+                      <span v-else class="milestone-hint">{{
+                        newRow.type1 === '定量'
+                          ? '选择定量后自动生成12月里程碑'
+                          : '暂无里程碑，点击添加'
+                      }}</span>
                     </div>
-                    <span v-else class="milestone-hint">{{
-                      newRow.type1 === '定量'
-                        ? '选择定量后自动生成12月里程碑'
-                        : '暂无里程碑，点击添加'
-                    }}</span>
-                  </div>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
           </div>
           <div class="add-form-actions">
             <el-button type="primary" @click="saveNewRow">保存</el-button>
@@ -4690,7 +4696,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             </el-timeline-item>
           </el-timeline>
         </div>
-
       </div>
     </el-drawer>
 
