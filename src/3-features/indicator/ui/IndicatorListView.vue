@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import {
   Plus,
@@ -106,16 +105,16 @@ const currentUserPermissionCodes = computed(() => {
 })
 
 const isCurrentUserReporter = computed(() => {
-  const user = authStore.user as
-    | {
-        username?: unknown
-        realName?: unknown
-        name?: unknown
-        roles?: unknown
-      }
-    | null
+  const user = authStore.user as {
+    username?: unknown
+    realName?: unknown
+    name?: unknown
+    roles?: unknown
+  } | null
 
-  const username = String(user?.username ?? '').trim().toLowerCase()
+  const username = String(user?.username ?? '')
+    .trim()
+    .toLowerCase()
   const realName = String(user?.realName ?? user?.name ?? '').trim()
   const roles = Array.isArray(user?.roles)
     ? user!.roles
@@ -124,9 +123,7 @@ const isCurrentUserReporter = computed(() => {
     : []
 
   return (
-    roles.includes('ROLE_REPORTER') ||
-    username.endsWith('_report') ||
-    realName.includes('填报人')
+    roles.includes('ROLE_REPORTER') || username.endsWith('_report') || realName.includes('填报人')
   )
 })
 
@@ -413,6 +410,34 @@ async function refreshCurrentPlanDetails(planId: number): Promise<void> {
   await loadCurrentPlanReportSummary(planId)
 }
 
+function clearCurrentPlanReportDerivedState(): void {
+  if (!currentPlanDetails.value?.indicators?.length) {
+    return
+  }
+
+  currentPlanDetails.value = {
+    ...currentPlanDetails.value,
+    indicators: currentPlanDetails.value.indicators.map((item: any) => {
+      if (!item || typeof item !== 'object') {
+        return item
+      }
+
+      const nextItem = { ...(item as Record<string, unknown>) }
+      delete nextItem.reportProgress
+      delete nextItem.report_progress
+      delete nextItem.pendingProgress
+      delete nextItem.pending_progress
+      delete nextItem.pendingRemark
+      delete nextItem.pending_remark
+      delete nextItem.pendingAttachments
+      delete nextItem.currentReportId
+      delete nextItem.current_report_id
+
+      return nextItem
+    })
+  }
+}
+
 async function loadCurrentPlanReportSummary(planId?: number | null): Promise<void> {
   if (!isSecondaryCollege.value) {
     currentPlanReportSummary.value = null
@@ -421,7 +446,12 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
 
   const resolvedPlanId = Number(planId ?? getCurrentPlanId() ?? NaN)
   const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
-  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0 || !Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+  if (
+    !Number.isFinite(resolvedPlanId) ||
+    resolvedPlanId <= 0 ||
+    !Number.isFinite(reportOrgId) ||
+    reportOrgId <= 0
+  ) {
     currentPlanReportSummary.value = null
     return
   }
@@ -431,9 +461,17 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
       resolvedPlanId,
       reportOrgId
     )
+    if (!currentPlanReportSummary.value) {
+      clearCurrentPlanReportDerivedState()
+    }
   } catch (error) {
     currentPlanReportSummary.value = null
-    logger.warn('[IndicatorListView] 加载当前上报摘要失败:', { planId: resolvedPlanId, reportOrgId, error })
+    clearCurrentPlanReportDerivedState()
+    logger.warn('[IndicatorListView] 加载当前上报摘要失败:', {
+      planId: resolvedPlanId,
+      reportOrgId,
+      error
+    })
   }
 }
 
@@ -505,24 +543,16 @@ const normalizedCurrentPlanWorkflowStatus = computed(() => {
     .toUpperCase()
 })
 
-const hasUnfinishedPlanWorkflowInstance = computed(() => {
-  return ['SUBMITTED', 'PENDING', 'IN_REVIEW', 'WAITING'].includes(
-    normalizedCurrentPlanWorkflowStatus.value
-  )
-})
-
 const canViewReceivedPlanContent = computed(() => {
   if (isStrategicDept.value) {
     return true
   }
 
-  // 非战略发展部场景下，只要当前计划还挂着未结束的流程实例，
-  // 就说明上级下发流程尚未走完，此时不应提前展示任何内容。
-  if (hasUnfinishedPlanWorkflowInstance.value) {
-    return false
-  }
-
-  return ['DRAFT', 'DISTRIBUTED', 'PENDING'].includes(normalizedCurrentPlanStatus.value ?? '')
+  // 接收方页面的核心前提是“当前部门已经匹配到自己的接收 plan”，
+  // 不应再额外卡死在“必须已下发/流程已完结”。
+  // 上级部门 -> 下级部门链路中，plan 仍处于草稿或流程中时，
+  // 下级仍需要先看到并接收指标进行填报。
+  return hasCurrentUserPlanData.value
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
@@ -537,6 +567,7 @@ const canEdit = computed(() => {
 
 // 是否显示责任部门列（只有战略发展部才显示）
 const showResponsibleDeptColumn = computed(() => isStrategicDept.value)
+const showOwnerDeptDetail = computed(() => isSecondaryCollege.value)
 
 // 当前选中任务索引
 const currentTaskIndex = ref(0)
@@ -677,20 +708,28 @@ async function loadCollegePlanDetails(options: { force?: boolean } = {}): Promis
     return
   }
 
+  const targetPlan = selectedCollegePlan.value || collegePlanCandidates.value[0] || null
+  if (!targetPlan?.id) {
+    return
+  }
+
+  const cacheKey = String(targetPlan.id)
+  if (!options.force && collegePlanDetailsMap.value[cacheKey]) {
+    return
+  }
+
   collegePlanDetailsLoading.value = true
   try {
-    const detailEntries = await Promise.all(
-      collegePlanCandidates.value.map(async plan => {
-        const detailedPlan =
-          (await planStore.loadPlanDetails(plan.id, {
-            force: options.force,
-            background: true
-          })) || plan
-        return [String(plan.id), detailedPlan as Plan] as const
-      })
-    )
+    const detailedPlan =
+      (await planStore.loadPlanDetails(targetPlan.id, {
+        force: options.force,
+        background: true
+      })) || targetPlan
 
-    collegePlanDetailsMap.value = Object.fromEntries(detailEntries)
+    collegePlanDetailsMap.value = {
+      ...collegePlanDetailsMap.value,
+      [cacheKey]: detailedPlan as Plan
+    }
   } catch (error) {
     logger.warn('[IndicatorListView] 加载学院计划详情失败:', error)
   } finally {
@@ -778,7 +817,20 @@ const currentPlanReportSummary = ref<{
   currentStepName?: string | null
   canWithdraw?: boolean
   status?: string | null
+  indicatorDetails?: Array<{
+    indicatorId?: number | string | null
+    progress?: number | string | null
+    comment?: string | null
+  }> | null
 } | null>(null)
+
+const normalizedCurrentPlanReportStatus = computed(() => {
+  return String(
+    currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
+  )
+    .trim()
+    .toUpperCase()
+})
 
 // Plan 详情加载状态
 const isLoadingPlanDetails = ref(false)
@@ -840,8 +892,16 @@ function getPlanIndicatorAttachments(indicator: Record<string, unknown>): string
       if (item && typeof item === 'object') {
         const record = item as Record<string, unknown>
         return (
-          getPlanIndicatorText(record, 'url', 'publicUrl', 'public_url', 'objectKey', 'object_key', 'name', 'originalName') ||
-          ''
+          getPlanIndicatorText(
+            record,
+            'url',
+            'publicUrl',
+            'public_url',
+            'objectKey',
+            'object_key',
+            'name',
+            'originalName'
+          ) || ''
         )
       }
       return ''
@@ -903,7 +963,12 @@ function resolveIndicatorType2(
 
 // 监听 Plan ID 变化，自动加载 Plan 详情
 watch(
-  [isSecondaryCollege, currentViewingOrgId, () => planStore.plans.length, () => timeContext.currentYear],
+  [
+    isSecondaryCollege,
+    currentViewingOrgId,
+    () => planStore.plans.length,
+    () => timeContext.currentYear
+  ],
   async () => {
     await loadCollegePlanDetails()
   },
@@ -1004,11 +1069,23 @@ const currentPlanIndicators = computed(() => {
     const normalizedMilestones = normalizePlanMilestones(source.milestones)
     const progress = getPlanIndicatorOptionalNumber(source, 'progress')
     const weight = getPlanIndicatorOptionalNumber(source, 'weightPercent', 'weight')
-    const reportProgress = getPlanIndicatorOptionalNumber(source, 'reportProgress', 'report_progress')
-    const pendingProgress = getPlanIndicatorOptionalNumber(source, 'pendingProgress', 'pending_progress')
+    const reportProgress = getPlanIndicatorOptionalNumber(
+      source,
+      'reportProgress',
+      'report_progress'
+    )
+    const pendingProgress = getPlanIndicatorOptionalNumber(
+      source,
+      'pendingProgress',
+      'pending_progress'
+    )
     const pendingRemark = getPlanIndicatorText(source, 'pendingRemark', 'pending_remark')
     const pendingAttachments = getPlanIndicatorAttachments(source)
-    const currentReportId = getPlanIndicatorOptionalNumber(source, 'currentReportId', 'current_report_id')
+    const currentReportId = getPlanIndicatorOptionalNumber(
+      source,
+      'currentReportId',
+      'current_report_id'
+    )
     const sourceApprovalStatus = getPlanIndicatorText(
       source,
       'progressApprovalStatus',
@@ -1086,36 +1163,45 @@ const currentPlanIndicators = computed(() => {
     if (reportProgress !== undefined) {
       normalizedIndicator.reportProgress = reportProgress
     } else if (
-      (storeIndicator as StrategicIndicator & { reportProgress?: number | null } | undefined)
+      (storeIndicator as (StrategicIndicator & { reportProgress?: number | null }) | undefined)
         ?.reportProgress !== undefined
     ) {
-      normalizedIndicator.reportProgress =
-        (storeIndicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
+      normalizedIndicator.reportProgress = (
+        storeIndicator as StrategicIndicator & { reportProgress?: number | null }
+      ).reportProgress
     }
 
     const targetOrgId =
       getPlanIndicatorNumber(source, 'targetOrgId', 'target_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0
+      )
     if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
       normalizedIndicator.targetOrgId = targetOrgId
     }
 
     const ownerOrgId =
       getPlanIndicatorNumber(source, 'ownerOrgId', 'owner_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0
+      )
     if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
       normalizedIndicator.ownerOrgId = ownerOrgId
     }
 
     if (currentReportId !== undefined) {
-      ;(normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId =
-        currentReportId
+      ;(
+        normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }
+      ).currentReportId = currentReportId
     } else if (
-      (storeIndicator as StrategicIndicator & { currentReportId?: number | null } | undefined)
+      (storeIndicator as (StrategicIndicator & { currentReportId?: number | null }) | undefined)
         ?.currentReportId !== undefined
     ) {
-      ;(normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId =
-        (storeIndicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId
+      ;(
+        normalizedIndicator as StrategicIndicator & { currentReportId?: number | null }
+      ).currentReportId = (
+        storeIndicator as StrategicIndicator & { currentReportId?: number | null }
+      ).currentReportId
     }
 
     const targetOrgName = getPlanIndicatorText(source, 'targetOrgName', 'target_org_name')
@@ -1196,7 +1282,7 @@ const planWarningMessage = computed(() => {
   const departmentName = effectiveViewingDept.value || authStore.userDepartment || '当前部门'
 
   if (hasCurrentUserPlanData.value && !canViewReceivedPlanContent.value) {
-    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但当前仍未进入可查看阶段。请先完成上级下发后再查看。`
+    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但当前计划数据暂不可见，请刷新后重试。`
   }
 
   if (isSecondaryCollege.value) {
@@ -1293,6 +1379,10 @@ const _pendingApprovalCount = computed(() => {
 const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
 
 const approvalEntryButtonText = computed(() => {
+  if (isSecondaryCollege.value) {
+    return isCurrentPlanReportLocked.value ? '待审批' : '审批记录'
+  }
+
   const status = normalizedCurrentPlanStatus.value
   if (status === 'PENDING') {
     return '审批中'
@@ -1397,6 +1487,45 @@ const indicators = computed(() => {
     id: String(i.id)
   }))
 
+  if (isSecondaryCollege.value && Array.isArray(currentPlanReportSummary.value?.indicatorDetails)) {
+    const reportId = Number(currentPlanReportSummary.value?.id ?? NaN)
+    const reportStatus = String(currentPlanReportSummary.value?.status || '')
+      .trim()
+      .toUpperCase()
+    const detailMap = new Map(
+      currentPlanReportSummary.value.indicatorDetails.map(detail => [
+        String(detail?.indicatorId ?? ''),
+        detail
+      ])
+    )
+
+    list = list.map(indicator => {
+      const detail = detailMap.get(String(indicator.id))
+      if (!detail) {
+        return indicator
+      }
+
+      const detailProgress = Number(detail.progress)
+      const nextProgress = Number.isFinite(detailProgress)
+        ? detailProgress
+        : indicator.pendingProgress
+      const nextRemark = String(detail.comment || '').trim() || indicator.pendingRemark || null
+
+      return {
+        ...indicator,
+        currentReportId:
+          Number.isFinite(reportId) && reportId > 0 ? reportId : indicator.currentReportId,
+        reportProgress: nextProgress,
+        pendingProgress: nextProgress,
+        pendingRemark: nextRemark,
+        progressApprovalStatus:
+          reportStatus === 'SUBMITTED' || reportStatus === 'IN_REVIEW'
+            ? 'PENDING'
+            : (indicator.progressApprovalStatus ?? 'DRAFT')
+      }
+    })
+  }
+
   // 按当前年份过滤
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
@@ -1449,55 +1578,6 @@ const indicators = computed(() => {
 
 const indicatorWorkflowCache = ref<Record<string, IndicatorWorkflowSnapshot | null>>({})
 const indicatorWorkflowLoadingMap = ref<Record<string, boolean>>({})
-const indicatorDraftHydratedMap = ref<Record<string, boolean>>({})
-const indicatorDraftHydratingMap = ref<Record<string, boolean>>({})
-
-async function hydrateIndicatorDraftState(indicatorId: number | string): Promise<void> {
-  const cacheKey = String(indicatorId)
-  if (indicatorDraftHydratedMap.value[cacheKey]) {
-    return
-  }
-
-  if (indicatorDraftHydratingMap.value[cacheKey]) {
-    return
-  }
-
-  indicatorDraftHydratingMap.value = {
-    ...indicatorDraftHydratingMap.value,
-    [cacheKey]: true
-  }
-
-  try {
-    const persistedDraft = readPersistedIndicatorDraft(indicatorId)
-
-    if (!persistedDraft) {
-      indicatorDraftHydratedMap.value = {
-        ...indicatorDraftHydratedMap.value,
-        [cacheKey]: true
-      }
-      return
-    }
-
-    strategicStore.patchIndicator(String(indicatorId), {
-      pendingProgress: persistedDraft.progress,
-      pendingRemark: persistedDraft.remark,
-      pendingAttachments: persistedDraft.attachments,
-      progressApprovalStatus: 'DRAFT'
-    })
-
-    indicatorDraftHydratedMap.value = {
-      ...indicatorDraftHydratedMap.value,
-      [cacheKey]: true
-    }
-  } catch (error) {
-    logger.warn('[IndicatorListView] 加载指标最近填报草稿失败:', { indicatorId, error })
-  } finally {
-    indicatorDraftHydratingMap.value = {
-      ...indicatorDraftHydratingMap.value,
-      [cacheKey]: false
-    }
-  }
-}
 
 const loadIndicatorWorkflowSnapshot = async (
   indicatorId: number | string,
@@ -1563,7 +1643,30 @@ const getDisplayProgress = (indicator: StrategicIndicator): number => {
   return Number.isFinite(progress) ? progress : 0
 }
 
+const hasIndicatorReportIdentity = (indicator: StrategicIndicator): boolean => {
+  const currentReportId = Number(
+    (indicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId ?? NaN
+  )
+  if (Number.isFinite(currentReportId) && currentReportId > 0) {
+    return true
+  }
+
+  const reported = Number(
+    (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress ?? NaN
+  )
+  if (Number.isFinite(reported)) {
+    return true
+  }
+
+  const approvalStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
+  return approvalStatus !== 'NONE' && approvalStatus !== 'DRAFT'
+}
+
 const getDisplayedReportedProgress = (indicator: StrategicIndicator): number | null => {
+  if (!hasIndicatorReportIdentity(indicator)) {
+    return null
+  }
+
   const latestReportProgress = Number(
     (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
   )
@@ -1586,10 +1689,35 @@ watch(
     if (!ids) {
       return
     }
-    void Promise.all([
-      ...indicators.value.map(indicator => loadIndicatorWorkflowSnapshot(indicator.id)),
-      ...indicators.value.map(indicator => hydrateIndicatorDraftState(indicator.id))
-    ])
+    const indicatorsNeedingWorkflowSnapshot = indicators.value.filter(indicator => {
+      const approvalStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
+      if (approvalStatus !== 'NONE' && approvalStatus !== 'DRAFT') {
+        return true
+      }
+
+      const currentReportId = Number(
+        (indicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId ??
+          NaN
+      )
+      if (Number.isFinite(currentReportId) && currentReportId > 0) {
+        return true
+      }
+
+      const reportedProgress = Number(
+        (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress ?? NaN
+      )
+      return Number.isFinite(reportedProgress)
+    })
+
+    if (indicatorsNeedingWorkflowSnapshot.length === 0) {
+      return
+    }
+
+    void Promise.all(
+      indicatorsNeedingWorkflowSnapshot.map(indicator =>
+        loadIndicatorWorkflowSnapshot(indicator.id)
+      )
+    )
   },
   { immediate: true }
 )
@@ -1599,6 +1727,10 @@ watch(
 const overallStatus = computed(() => {
   if (!isStrategicDept.value && !hasCurrentUserPlan.value) {
     return 'draft'
+  }
+
+  if (isSecondaryCollege.value) {
+    return isCurrentPlanReportLocked.value ? 'pending' : 'draft'
   }
 
   const planStatus = currentPlanStatus.value
@@ -1634,12 +1766,14 @@ const showPlanBatchActions = computed(() => {
 })
 
 const showSubmitAllButton = computed(() => {
-  return showPlanBatchActions.value && !allIndicatorsSubmitted.value
+  return showPlanBatchActions.value && !allIndicatorsSubmitted.value && !canWithdrawAny.value
 })
 
 const showWithdrawAllButton = computed(() => {
   return showPlanBatchActions.value && canWithdrawAny.value
 })
+
+const showStrategicTaskColumn = computed(() => !isSecondaryCollege.value)
 
 // 计算单元格合并信息
 const getSpanMethod = ({
@@ -1654,6 +1788,10 @@ const getSpanMethod = ({
   columnIndex: number
 }) => {
   const dataList = indicators.value
+
+  if (!showStrategicTaskColumn.value) {
+    return { rowspan: 1, colspan: 1 }
+  }
 
   // 只有战略任务列（第0列）需要合并
   if (columnIndex === 0) {
@@ -2568,8 +2706,14 @@ const formatMilestoneDate = (deadline: string) => {
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
   const persistedDraft = readPersistedIndicatorDraft(row.id)
+  const reportedProgress = getDisplayedReportedProgress(row)
   reportForm.value = {
-    newProgress: row.pendingProgress ?? persistedDraft?.progress ?? row.progress ?? 0,
+    newProgress:
+      (reportedProgress !== null ? reportedProgress : null) ??
+      row.pendingProgress ??
+      persistedDraft?.progress ??
+      row.progress ??
+      0,
     remark: row.pendingRemark ?? persistedDraft?.remark ?? '',
     attachments: row.pendingAttachments ?? persistedDraft?.attachments ?? []
   }
@@ -2587,14 +2731,15 @@ const closeReportDialog = () => {
   }
 }
 
-const syncLocalReportedProgress = (
+const syncBackendReportedProgress = (
   indicatorId: number | string,
   payload: {
-    progressApprovalStatus: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE'
+    progressApprovalStatus?: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE'
     reportProgress: number
-    pendingProgress: number
-    pendingRemark: string
-    pendingAttachments: string[]
+    pendingProgress?: number | null
+    pendingRemark?: string | null
+    pendingAttachments?: string[]
+    currentReportId?: number | null
   }
 ) => {
   strategicStore.patchIndicator(String(indicatorId), payload)
@@ -2617,11 +2762,14 @@ const syncLocalReportedProgress = (
 
         return {
           ...item,
-          progressApprovalStatus: payload.progressApprovalStatus,
+          ...(payload.progressApprovalStatus
+            ? { progressApprovalStatus: payload.progressApprovalStatus }
+            : {}),
           reportProgress: payload.reportProgress,
           pendingProgress: payload.pendingProgress,
           pendingRemark: payload.pendingRemark,
-          pendingAttachments: payload.pendingAttachments
+          pendingAttachments: payload.pendingAttachments,
+          currentReportId: payload.currentReportId
         }
       })
     }
@@ -2658,12 +2806,49 @@ const submitProgressReport = async () => {
   try {
     isSavingReport.value = true
 
-    await planStore.saveIndicatorFill({
+    const batchSourceIndicators =
+      currentPlanIndicators.value.length > 0 ? currentPlanIndicators.value : indicators.value
+
+    const batchItems = batchSourceIndicators
+      .map(item => {
+        const itemId = String(item.id)
+        const isCurrentIndicator = itemId === String(indicator.id)
+        const reportProgress = isCurrentIndicator
+          ? reportForm.value.newProgress
+          : (item.pendingProgress ?? getDisplayedReportedProgress(item))
+        const reportRemark = isCurrentIndicator
+          ? reportForm.value.remark
+          : String(item.pendingRemark || '').trim()
+
+        if (
+          reportProgress === null ||
+          reportProgress === undefined ||
+          !Number.isFinite(Number(reportProgress))
+        ) {
+          return null
+        }
+
+        if (!isCurrentIndicator && !reportRemark && getDisplayedReportedProgress(item) === null) {
+          return null
+        }
+
+        return {
+          indicator_id: item.id,
+          indicator_name: item.name,
+          progress: Number(reportProgress),
+          content: reportRemark,
+          milestone_id: isCurrentIndicator ? nearestMilestone.value?.id : undefined
+        }
+      })
+      .filter(Boolean)
+
+    const savedFill = await planStore.saveIndicatorFill({
       indicator_id: indicator.id,
       progress: reportForm.value.newProgress,
       content: reportForm.value.remark,
       attachments: [],
-      milestone_id: nearestMilestone.value?.id
+      milestone_id: nearestMilestone.value?.id,
+      batch_items: batchItems
     })
 
     persistIndicatorDraft(indicator.id, {
@@ -2672,13 +2857,23 @@ const submitProgressReport = async () => {
       attachments: reportForm.value.attachments
     })
 
-    syncLocalReportedProgress(indicator.id, {
-      progressApprovalStatus: 'DRAFT',
-      reportProgress: reportForm.value.newProgress,
-      pendingProgress: reportForm.value.newProgress,
-      pendingRemark: reportForm.value.remark,
-      pendingAttachments: reportForm.value.attachments
-    })
+    const savedReportId = Number(savedFill?.id ?? 0) || null
+    for (const item of batchItems) {
+      const matchedIndicator = batchSourceIndicators.find(
+        candidate => String(candidate.id) === String(item.indicator_id)
+      )
+      syncBackendReportedProgress(item.indicator_id, {
+        progressApprovalStatus: matchedIndicator?.progressApprovalStatus ?? 'DRAFT',
+        reportProgress: Number(item.progress),
+        pendingProgress: Number(item.progress),
+        pendingRemark: item.content,
+        pendingAttachments:
+          String(item.indicator_id) === String(indicator.id)
+            ? reportForm.value.attachments
+            : (matchedIndicator?.pendingAttachments ?? []),
+        currentReportId: savedReportId
+      })
+    }
 
     ElMessage.success('进度已保存，可在批量操作中提交')
     closeReportDialog()
@@ -2766,7 +2961,11 @@ const handleRejectIndicatorWorkflow = async (row: StrategicIndicator) => {
 // 检查指标是否已有真实填报内容
 // 业务要求：按钮文案只根据当前轮次的 pendingProgress 判断。
 const hasReportContent = (row: StrategicIndicator): boolean => {
-  return row.pendingProgress !== undefined && row.pendingProgress !== null
+  if (row.pendingProgress !== undefined && row.pendingProgress !== null) {
+    return true
+  }
+
+  return getDisplayedReportedProgress(row) !== null
 }
 
 // 检查所有指标是否都已填报
@@ -2808,6 +3007,18 @@ const canWithdrawAny = computed(() => {
   return canWithdrawCurrentPlan.value
 })
 
+const isCurrentPlanReportLocked = computed(() => {
+  if (!isSecondaryCollege.value) {
+    return false
+  }
+
+  const reportStatus = normalizedCurrentPlanReportStatus.value
+  const auditInstanceId = Number(currentPlanReportSummary.value?.auditInstanceId ?? NaN)
+  const hasAuditInstance = Number.isFinite(auditInstanceId) && auditInstanceId > 0
+
+  return hasAuditInstance && reportStatus !== 'WITHDRAWN'
+})
+
 /**
  * 计算属性：为撤回按钮提供动态的提示信息。
  */
@@ -2842,7 +3053,10 @@ const handleSubmitAll = () => {
     return
   }
 
-  if (!isSecondaryCollege.value && !['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)) {
+  if (
+    !isSecondaryCollege.value &&
+    !['DRAFT', 'DISTRIBUTED', null].includes(normalizedCurrentPlanStatus.value)
+  ) {
     ElMessage.warning('当前计划正在审批中，不能重复提交')
     return
   }
@@ -3047,23 +3261,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               class="overall-status-tag"
               >待审批</el-tag
             >
-            <el-tag
-              v-else-if="overallStatus === 'rejected'"
-              type="danger"
-              size="small"
-              class="overall-status-tag"
-              >已驳回</el-tag
-            >
-            <el-tag
-              v-else-if="overallStatus === 'approved'"
-              type="success"
-              size="small"
-              class="overall-status-tag"
-              >已通过</el-tag
-            >
-            <el-tag v-else type="info" size="small" class="overall-status-tag">{{
-              overallStatus === 'active' ? '进行中' : '草稿'
-            }}</el-tag>
+            <el-tag v-else type="info" size="small" class="overall-status-tag">草稿</el-tag>
             <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
 
             <!-- 职能部门/二级学院的批量操作按钮 -->
@@ -3142,7 +3340,12 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               class="unified-table"
               @selection-change="handleSelectionChange"
             >
-              <el-table-column prop="taskContent" label="战略任务" width="200">
+              <el-table-column
+                v-if="showStrategicTaskColumn"
+                prop="taskContent"
+                label="战略任务"
+                width="200"
+              >
                 <template #default="{ row }">
                   <el-tooltip
                     :content="row.type2 === '发展性' ? '发展性任务' : '基础性任务'"
@@ -3293,10 +3496,15 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                       >
                       <el-button
                         v-if="!isStrategicDept"
+                        v-show="!isCurrentPlanReportLocked"
                         link
                         :type="hasReportContent(row) ? 'info' : 'success'"
                         size="small"
-                        :disabled="isApprovalStatus(row, 'PENDING') || timeContext.isReadOnly"
+                        :disabled="
+                          isApprovalStatus(row, 'PENDING') ||
+                          isCurrentPlanReportLocked ||
+                          timeContext.isReadOnly
+                        "
                         @click="handleOpenReportDialog(row)"
                         >{{
                           isApprovalStatus(row, 'REJECTED')
@@ -3467,6 +3675,9 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           <el-descriptions-item v-if="shouldShowDetailResponsibleDept" label="责任部门">
             {{ currentDetail.responsibleDept || '未分配' }}
           </el-descriptions-item>
+          <el-descriptions-item v-if="showOwnerDeptDetail" label="来源部门">
+            {{ currentDetail.ownerDept || '未知' }}
+          </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">{{
             formatDetailDate(currentDetail.createTime)
           }}</el-descriptions-item>
@@ -3523,7 +3734,6 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
             </el-timeline-item>
           </el-timeline>
         </div>
-
       </div>
     </el-drawer>
 
@@ -3616,8 +3826,14 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       </div>
 
       <template #footer>
-        <el-button @click="closeReportDialog" :disabled="isSavingReport">取消</el-button>
-        <el-button type="primary" :loading="isSavingReport" :disabled="isSavingReport" @click="submitProgressReport">保存</el-button>
+        <el-button :disabled="isSavingReport" @click="closeReportDialog">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="isSavingReport"
+          :disabled="isSavingReport"
+          @click="submitProgressReport"
+          >保存</el-button
+        >
       </template>
     </el-dialog>
 
@@ -3637,7 +3853,9 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       :show-approval-section="true"
       :workflow-code="resolvePlanApprovalWorkflowCode()"
       :workflow-entity-type="isSecondaryCollege ? 'PLAN_REPORT' : 'PLAN'"
-      :workflow-entity-id="isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id"
+      :workflow-entity-id="
+        isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id
+      "
       history-view-mode="card-only"
       approval-type="submission"
     />
@@ -3927,9 +4145,10 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
 .action-buttons {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 8px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .workflow-inline-actions {

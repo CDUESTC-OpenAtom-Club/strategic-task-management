@@ -60,6 +60,8 @@ interface Props {
   approvalType?: 'distribution' | 'submission'
   historyViewMode?: 'auto' | 'card-only'
   workflowCode?: string | string[]
+  workflowEntityType?: 'PLAN' | 'PLAN_REPORT'
+  workflowEntityId?: number | string
 }
 
 interface Emits {
@@ -80,7 +82,9 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   approvalType: 'submission',
   historyViewMode: 'auto',
-  workflowCode: ''
+  workflowCode: '',
+  workflowEntityType: 'PLAN',
+  workflowEntityId: undefined
 })
 
 const emit = defineEmits<Emits>()
@@ -495,11 +499,22 @@ function resolveExpectedApproverRoleCodes(): string[] {
 }
 
 function resolveExpectedApproverOrgId(): number | null {
+  const stepName = String(activePlanWorkflow.value?.currentStepName || '').trim()
   const currentTaskId = String(activePlanWorkflow.value?.currentTaskId || '').trim()
   if (currentTaskId && Array.isArray(planWorkflowDetail.value?.tasks)) {
     const currentTask = planWorkflowDetail.value.tasks.find(
       task => String(task.taskId || '').trim() === currentTaskId
     )
+
+    if (stepName.includes('职能部门终审')) {
+      const sourceOrgId = Number(
+        planWorkflowDetail.value?.sourceOrgId ?? activePlanWorkflow.value?.sourceOrgId ?? 0
+      )
+      if (Number.isFinite(sourceOrgId) && sourceOrgId > 0) {
+        return sourceOrgId
+      }
+    }
+
     const approverOrgId = Number(currentTask?.approverOrgId ?? 0)
     if (Number.isFinite(approverOrgId) && approverOrgId > 0) {
       return approverOrgId
@@ -542,6 +557,14 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 })
 
 const currentPlanTaskId = computed(() => {
+  const pendingTask = planWorkflowTasks.value.find(task => {
+    return String(task.status || '').trim().toUpperCase() === 'PENDING'
+  })
+  const pendingTaskId = Number(pendingTask?.taskId ?? 0)
+  if (Number.isFinite(pendingTaskId) && pendingTaskId > 0) {
+    return pendingTaskId
+  }
+
   const rawTaskId = Number(activePlanWorkflow.value?.currentTaskId ?? 0)
   if (Number.isFinite(rawTaskId) && rawTaskId > 0) {
     return rawTaskId
@@ -911,6 +934,10 @@ const currentPlanApprovalSummary = computed(() => {
 
 // ============ 审批流程节点数据 ============
 const workflowNodes = computed<WorkflowNode[]>(() => {
+  if (isPlanHistoryOnlyMode.value) {
+    return []
+  }
+
   if (props.showPlanApprovals && !hasPlanWorkflowData.value) {
     return []
   }
@@ -1117,19 +1144,27 @@ async function loadPlanWorkflowDetail() {
     return
   }
 
-  try {
-    const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
-    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+  const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+  if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+    try {
       const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
       if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
         planWorkflowDetail.value = response.data
         return
       }
+    } catch (error) {
+      logger.warn('[ApprovalProgressDrawer] 旧实例ID详情加载失败，转按业务实体兜底:', {
+        workflowInstanceId,
+        error
+      })
     }
+  }
 
-    const planId = Number(props.plan.id ?? 0)
-    if (Number.isFinite(planId) && planId > 0) {
-      const response = await getWorkflowInstanceDetailByBusiness('PLAN', planId)
+  try {
+    const businessEntityType = props.workflowEntityType || 'PLAN'
+    const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
+    if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
+      const response = await getWorkflowInstanceDetailByBusiness(businessEntityType, businessEntityId)
       if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
         planWorkflowDetail.value = response.data
         return
@@ -1149,14 +1184,15 @@ async function loadPlanWorkflowHistoryCards() {
     return
   }
 
-  const planId = Number(props.plan.id ?? 0)
-  if (!Number.isFinite(planId) || planId <= 0) {
+  const businessEntityType = props.workflowEntityType || 'PLAN'
+  const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
+  if (!Number.isFinite(businessEntityId) || businessEntityId <= 0) {
     planWorkflowHistoryCards.value = []
     return
   }
 
   try {
-    const response = await getWorkflowInstanceHistoryByBusiness('PLAN', planId)
+    const response = await getWorkflowInstanceHistoryByBusiness(businessEntityType, businessEntityId)
     if (response.success && Array.isArray(response.data)) {
       planWorkflowHistoryCards.value = response.data
       return
@@ -1174,7 +1210,7 @@ async function handleApprovePlanBatch() {
     return
   }
 
-  if (hasPlanWorkflowData.value && !currentPlanTaskId.value) {
+  if (hasPlanWorkflowData.value) {
     await loadPlanWorkflowDetail()
   }
 
@@ -1276,7 +1312,7 @@ async function handleRejectPlanBatch() {
     return
   }
 
-  if (hasPlanWorkflowData.value && !currentPlanTaskId.value) {
+  if (hasPlanWorkflowData.value) {
     await loadPlanWorkflowDetail()
   }
 
@@ -1504,7 +1540,14 @@ const hasWorkflowTabContent = computed(() => {
   return hasPlanWorkflowData.value || hasApprovalData.value
 })
 
+const isPlanHistoryOnlyMode = computed(() => {
+  return Boolean(props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value)
+})
+
 const showPlanPendingCard = computed(() => {
+  if (isPlanHistoryOnlyMode.value) {
+    return false
+  }
   return Boolean(
     currentPlanApprovalSummary.value && (!hasPlanWorkflowData.value || isPlanPendingApproval.value)
   )
@@ -1528,7 +1571,9 @@ const showCardHistoryEmptyState = computed(() => {
 
 const showArchivedPlanWorkflowEmptyState = computed(() => {
   return Boolean(
-    props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value
+    props.showPlanApprovals &&
+      hasPlanWorkflowData.value &&
+      (isPlanHistoryOnlyMode.value || workflowNodes.value.length === 0)
   )
 })
 

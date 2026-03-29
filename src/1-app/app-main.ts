@@ -11,7 +11,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './providers/router'
 
-// Element Plus样式（自动按需导入组件时仍需样式）
+// Element Plus全量样式
 import 'element-plus/dist/index.css'
 // Element Plus Icons样式
 import '@element-plus/icons-vue'

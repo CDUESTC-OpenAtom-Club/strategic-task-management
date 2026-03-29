@@ -159,6 +159,20 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     const axiosError = axios.isAxiosError(error) ? error : null
     const errorCode = axiosError?.code
     const errorMessage = axiosError?.message || (error instanceof Error ? error.message : String(error))
+    const responseStatus = axiosError?.response?.status
+    const responseContentType = String(axiosError?.response?.headers?.['content-type'] || '')
+    const responseData = axiosError?.response?.data as
+      | { message?: string; code?: string }
+      | string
+      | undefined
+
+    // Vite dev proxy may convert upstream ECONNREFUSED into an HTTP 500 with
+    // empty/plain-text body. Treat it as backend unreachable instead of a
+    // misleading server-side 500.
+    const looksLikeProxyConnectionFailure =
+      responseStatus === 500 &&
+      responseContentType.includes('text/plain') &&
+      (responseData === '' || responseData == null)
 
     // 处理超时错误
     if (errorCode === 'ECONNABORTED' && errorMessage.includes('timeout')) {
@@ -172,7 +186,11 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       }
     }
 
-    if (errorCode === 'ECONNREFUSED' || errorMessage.includes('Network Error')) {
+    if (
+      errorCode === 'ECONNREFUSED' ||
+      errorMessage.includes('Network Error') ||
+      looksLikeProxyConnectionFailure
+    ) {
       logger.error('❌ [Health Check] 无法连接到后端服务:', error)
       return {
         service: 'Backend API',
@@ -184,8 +202,8 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     }
 
     // 提取后端返回的详细错误信息
-    const responseData = axiosError?.response?.data as { message?: string; code?: string } | undefined
-    const detailedMessage = responseData?.message || errorMessage
+    const detailedMessage =
+      (typeof responseData === 'object' && responseData?.message) || errorMessage
     logger.error('❌ [Health Check] 后端服务异常:', error)
 
     return {

@@ -104,7 +104,15 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   /**
    * Fetch available years from backend API
    */
-  async function fetchAvailableYears() {
+  async function fetchAvailableYears(options: { force?: boolean } = {}) {
+    if (!options.force && (availableYears.value.length > 0 || cycles.value.length > 0)) {
+      return
+    }
+
+    if (loading.value) {
+      return
+    }
+
     loading.value = true
     try {
       const userContext = getCachedUserContext()
@@ -120,11 +128,12 @@ export const useTimeContextStore = defineStore('timeContext', () => {
         policy: createPersistentReferencePolicy({
           tags: ['cycles.list']
         }),
-        fetcher: () => apiClient.get<{
-          success?: boolean
-          data?: AssessmentCycleVO[]
-          message?: string
-        }>('/cycles/list')
+        fetcher: () =>
+          apiClient.get<{
+            success?: boolean
+            data?: AssessmentCycleVO[]
+            message?: string
+          }>('/cycles/list')
       })
 
       const years = Array.isArray(response.data)
@@ -153,8 +162,27 @@ export const useTimeContextStore = defineStore('timeContext', () => {
   /**
    * Initialize - fetch years from API
    */
-  async function initialize() {
-    await fetchAvailableYears()
+  const initializePromise = ref<Promise<void> | null>(null)
+
+  async function initialize(options: { force?: boolean } = {}) {
+    if (!options.force && (availableYears.value.length > 0 || cycles.value.length > 0)) {
+      return
+    }
+
+    if (initializePromise.value) {
+      return initializePromise.value
+    }
+
+    const task = (async () => {
+      try {
+        await fetchAvailableYears(options)
+      } finally {
+        initializePromise.value = null
+      }
+    })()
+
+    initializePromise.value = task
+    return task
   }
 
   /**

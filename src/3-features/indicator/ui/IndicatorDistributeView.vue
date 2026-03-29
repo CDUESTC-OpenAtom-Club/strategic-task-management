@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 /**
  * 指标下发与审批页面（职能部门专用）
  * 功能：接收战略任务 → 查看战略指标 → 拆分子指标 → 下发给学院 → 审批学院提交
@@ -122,7 +121,9 @@ const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
     return directTaskId
   }
 
-  const indicatorById = new Map(strategicStore.indicators.map(item => [String(item.id), item] as const))
+  const indicatorById = new Map(
+    strategicStore.indicators.map(item => [String(item.id), item] as const)
+  )
   const visited = new Set<string>()
   let currentParentId = String(raw.parentIndicatorId ?? '').trim()
 
@@ -183,7 +184,9 @@ const matchesDepartment = (value: string | string[] | undefined, deptName: strin
   return normalizeDepartmentName(value) === normalizedDeptName
 }
 
-const resolvePlanYear = (plan: Partial<Plan> & { year?: number | string; cycleId?: number | string }) => {
+const resolvePlanYear = (
+  plan: Partial<Plan> & { year?: number | string; cycleId?: number | string }
+) => {
   const planRecord = plan as Partial<Plan> & {
     year?: number | string
     cycleId?: number | string
@@ -212,7 +215,9 @@ function getPlanIndicatorText(indicator: Record<string, unknown>, ...keys: strin
 }
 
 function normalizeIndicatorTypeLabel(value?: unknown): '定性' | '定量' | '' {
-  const normalized = String(value || '').trim().toUpperCase()
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
   if (!normalized) {
     return ''
   }
@@ -274,7 +279,9 @@ function getPlanIndicatorNumber(indicator: Record<string, unknown>, ...keys: str
 }
 
 function normalizeTaskTypeToCategory(taskType: unknown): '发展性' | '基础性' | '' {
-  const normalized = String(taskType || '').trim().toUpperCase()
+  const normalized = String(taskType || '')
+    .trim()
+    .toUpperCase()
   if (normalized === 'DEVELOPMENT') {
     return '发展性'
   }
@@ -317,6 +324,8 @@ type CurrentCollegePlanReportSummary = Awaited<
 >
 const currentCollegePlanReportSummary = ref<CurrentCollegePlanReportSummary>(null)
 const isBatchDistributing = ref(false)
+const pageBootstrapPromise = ref<Promise<void> | null>(null)
+const refreshDistributionPromise = ref<Promise<void> | null>(null)
 
 // 搜索关键词
 const searchKeyword = ref('')
@@ -427,11 +436,13 @@ const currentSelectedCollegePlan = computed<Plan | null>(() => {
         collegeOrgId != null && Number.isFinite(targetOrgId) && targetOrgId === collegeOrgId
       const matchesOrgName = targetOrgName === collegeName
       const matchesCreatedByOrg =
-        currentOrgId == null ||
-        !Number.isFinite(createdByOrgId) ||
-        createdByOrgId === currentOrgId
+        currentOrgId == null || !Number.isFinite(createdByOrgId) || createdByOrgId === currentOrgId
 
-      return planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName) && matchesCreatedByOrg
+      return (
+        planYear === timeContext.currentYear &&
+        (matchesOrgId || matchesOrgName) &&
+        matchesCreatedByOrg
+      )
     }) || null
   )
 })
@@ -494,17 +505,19 @@ const matchesCurrentSelectedCollegePlanContext = (plan: Plan | null | undefined)
     collegeOrgId != null && Number.isFinite(targetOrgId) && targetOrgId === collegeOrgId
   const matchesOrgName = targetOrgName === collegeName
   const matchesCreatedByOrg =
-    currentOrgId == null ||
-    !Number.isFinite(createdByOrgId) ||
-    createdByOrgId === currentOrgId
+    currentOrgId == null || !Number.isFinite(createdByOrgId) || createdByOrgId === currentOrgId
 
-  return planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName) && matchesCreatedByOrg
+  return (
+    planYear === timeContext.currentYear && (matchesOrgId || matchesOrgName) && matchesCreatedByOrg
+  )
 }
 
 const buildTaskTypeMap = (tasks: Array<Record<string, unknown>>): Record<string, string> => {
   const map: Record<string, string> = {}
   tasks.forEach(task => {
-    const taskId = String((task as { taskId?: string | number; id?: string | number }).taskId ?? '').trim()
+    const taskId = String(
+      (task as { taskId?: string | number; id?: string | number }).taskId ?? ''
+    ).trim()
     const fallbackTaskId = String((task as { id?: string | number }).id ?? '').trim()
     const taskType = String((task as { taskType?: string }).taskType || '').trim()
     const key = taskId || fallbackTaskId
@@ -536,26 +549,66 @@ const loadCurrentDepartmentPlanTaskTypeMap = async (planId: number | string | un
 }
 
 const normalizedCurrentDepartmentPlanStatus = computed(() => {
-  return normalizePlanStatus(currentDepartmentPlanDetails.value?.status || currentDepartmentPlan.value?.status || null)
+  const stableDepartmentPlanDetails = matchesCurrentDepartmentPlanContext(
+    currentDepartmentPlanDetails.value
+  )
+    ? currentDepartmentPlanDetails.value
+    : null
+
+  return normalizePlanStatus(
+    stableDepartmentPlanDetails?.status || currentDepartmentPlan.value?.status || null
+  )
 })
 
 const normalizedSelectedCollegePlanStatus = computed(() => {
+  const stableSelectedCollegePlanDetails = matchesCurrentSelectedCollegePlanContext(
+    currentSelectedCollegePlanDetails.value
+  )
+    ? currentSelectedCollegePlanDetails.value
+    : null
+
   return normalizePlanStatus(
-    currentSelectedCollegePlanDetails.value?.status || currentSelectedCollegePlan.value?.status || null
+    stableSelectedCollegePlanDetails?.status || currentSelectedCollegePlan.value?.status || null
   )
 })
 
 const currentActiveCollegePlan = computed<Plan | null>(() => {
-  return currentSelectedCollegePlanDetails.value || currentSelectedCollegePlan.value || null
+  const stableSelectedCollegePlanDetails = matchesCurrentSelectedCollegePlanContext(
+    currentSelectedCollegePlanDetails.value
+  )
+    ? currentSelectedCollegePlanDetails.value
+    : null
+
+  return stableSelectedCollegePlanDetails || currentSelectedCollegePlan.value || null
+})
+
+const normalizedCurrentActiveCollegeWorkflowStatus = computed(() => {
+  return String(currentActiveCollegePlan.value?.workflowStatus || '')
+    .trim()
+    .toUpperCase()
+})
+
+const selectedCollegePlanUiStatus = computed(() => {
+  const planStatus = normalizedSelectedCollegePlanStatus.value
+  if (['DRAFT', 'RETURNED', 'DISTRIBUTED'].includes(planStatus)) {
+    return planStatus
+  }
+
+  const workflowStatus = normalizedCurrentActiveCollegeWorkflowStatus.value
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) {
+    return workflowStatus
+  }
+
+  return planStatus || workflowStatus
 })
 
 const canEditCurrentCollegePlan = computed(() => {
-  return normalizedSelectedCollegePlanStatus.value !== 'PENDING'
+  return !['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)
 })
 
 const canWithdrawCurrentCollegePlan = computed(() => {
   return (
-    normalizedSelectedCollegePlanStatus.value === 'PENDING' &&
+    ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value) &&
     Boolean(currentActiveCollegePlan.value?.canWithdraw)
   )
 })
@@ -593,29 +646,112 @@ const currentApprovalType = computed<'distribution' | 'submission'>(() => {
   return currentCollegePlanReportSummary.value?.id ? 'submission' : 'distribution'
 })
 
-const distributionApprovalButtonText = computed(() => {
-  const reportWorkflowStatus = String(
-    currentCollegePlanReportSummary.value?.workflowStatus ||
-      currentCollegePlanReportSummary.value?.status ||
-      ''
+const currentUserPermissionCodes = computed(() => {
+  const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
+  if (!Array.isArray(permissions)) {
+    return []
+  }
+  return permissions
+    .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
+    .filter(Boolean)
+})
+
+const currentUserRoleCodes = computed(() => {
+  const roles = (authStore.user as { roles?: unknown[] } | null)?.roles
+  if (!Array.isArray(roles)) {
+    return []
+  }
+  return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
+})
+
+const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
+
+const requiredApprovalPermissionCodes = computed(() => {
+  return currentApprovalType.value === 'distribution'
+    ? ['BTN_STRATEGY_TASK_DISPATCH_APPROVE', 'BTN_INDICATOR_DISPATCH_APPROVE']
+    : ['BTN_DATA_REPORT_APPROVE', 'BTN_INDICATOR_REPORT_APPROVE']
+})
+
+const resolveCurrentStepExpectedRoleCodes = () => {
+  const stepName = String(currentActiveCollegePlan.value?.currentStepName || '').trim()
+  if (!stepName) {
+    return []
+  }
+
+  if (
+    stepName.includes('职能部门审批') ||
+    stepName.includes('职能部门终审') ||
+    stepName.includes('二级学院审批')
+  ) {
+    return ['ROLE_APPROVER']
+  }
+
+  if (stepName.includes('战略发展部')) {
+    return ['ROLE_STRATEGY_DEPT_HEAD']
+  }
+
+  if (stepName.includes('分管校领导') || stepName.includes('学院院长')) {
+    return ['ROLE_VICE_PRESIDENT']
+  }
+
+  return []
+}
+
+const canCurrentUserApproveCurrentPlan = computed(() => {
+  if (!['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)) {
+    return false
+  }
+
+  const hasPermission = requiredApprovalPermissionCodes.value.some(code =>
+    currentUserPermissionCodes.value.includes(code)
   )
-    .trim()
-    .toUpperCase()
+  if (!hasPermission) {
+    return false
+  }
 
-  if (currentCollegePlanReportSummary.value?.id) {
-    if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportWorkflowStatus)) {
-      return '审批中'
+  const currentApproverId = Number(currentActiveCollegePlan.value?.currentApproverId ?? 0)
+  const currentUserId = Number(authStore.user?.userId ?? authStore.user?.id ?? 0)
+  if (currentApproverId > 0 && currentUserId > 0) {
+    return currentApproverId === currentUserId
+  }
+
+  const expectedRoles = resolveCurrentStepExpectedRoleCodes()
+  if (expectedRoles.length > 0) {
+    const hasExpectedRole = expectedRoles.some(role => currentUserRoleCodes.value.includes(role))
+    if (!hasExpectedRole) {
+      return false
     }
-    return '查看审批'
   }
 
-  if (normalizedSelectedCollegePlanStatus.value === 'PENDING') {
-    return '审批中'
+  const currentOrgId = currentDepartmentOrgId.value
+  if (
+    currentOrgId != null &&
+    Number.isFinite(currentUserOrgId.value) &&
+    currentUserOrgId.value > 0
+  ) {
+    return currentUserOrgId.value === currentOrgId
   }
-  if (normalizedSelectedCollegePlanStatus.value === 'DISTRIBUTED') {
-    return '查看审批'
+
+  return true
+})
+
+const hasCurrentCollegePendingApproval = computed(() => {
+  if (pendingApprovalCount.value > 0) {
+    return true
   }
-  return '发起审批'
+
+  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)
+})
+
+const distributionApprovalButtonType = computed(() => {
+  return hasCurrentCollegePendingApproval.value ? 'warning' : 'default'
+})
+
+const distributionApprovalButtonText = computed(() => {
+  if (hasCurrentCollegePendingApproval.value) {
+    return '待审批'
+  }
+  return '查看审批进度'
 })
 
 const distributionSubmitButtonText = computed(() => {
@@ -628,7 +764,7 @@ const distributionSubmitButtonText = computed(() => {
     return `下发 (${draftCount})`
   }
 
-  return '发起下发审批'
+  return '下发'
 })
 
 const approvalSetupDialogVisible = ref(false)
@@ -743,7 +879,9 @@ const loadCurrentDepartmentPlanDetails = async (force = false) => {
 }
 
 const loadCurrentSelectedCollegePlanDetails = async (force = false) => {
-  const stablePlan = matchesCurrentSelectedCollegePlanContext(currentSelectedCollegePlanDetails.value)
+  const stablePlan = matchesCurrentSelectedCollegePlanContext(
+    currentSelectedCollegePlanDetails.value
+  )
     ? currentSelectedCollegePlanDetails.value
     : null
   const plan = stablePlan ?? currentSelectedCollegePlan.value
@@ -772,30 +910,48 @@ const loadCurrentSelectedCollegePlanDetails = async (force = false) => {
 }
 
 const refreshDistributionData = async () => {
-  const reloadJobs: Array<Promise<unknown>> = [planStore.loadPlans({ force: true, background: true })]
-
-  // 职能部门分发页不再请求全量年度指标接口。
-  // 该接口当前对教务处等账号无权限，继续调用只会产生 403/500 噪音。
-  if (isStrategicDept.value) {
-    reloadJobs.unshift(strategicStore.loadIndicatorsByYear(timeContext.currentYear))
+  if (refreshDistributionPromise.value) {
+    await refreshDistributionPromise.value
+    return
   }
 
-  const results = await Promise.allSettled(reloadJobs)
+  refreshDistributionPromise.value = (async () => {
+    const reloadJobs: Array<Promise<unknown>> = [
+      planStore.loadPlans({ force: true, background: true })
+    ]
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      const source =
-        isStrategicDept.value && index === 0
-          ? 'indicators'
-          : 'plans'
-      logger.warn(`[IndicatorDistributeView] 加载 ${source} 数据失败:`, result.reason)
+    // 职能部门分发页不再请求全量年度指标接口。
+    // 该接口当前对教务处等账号无权限，继续调用只会产生 403/500 噪音。
+    if (isStrategicDept.value) {
+      reloadJobs.unshift(strategicStore.loadIndicatorsByYear(timeContext.currentYear))
     }
-  })
 
-  await loadCurrentDepartmentPlanDetails(true)
-  await loadCurrentSelectedCollegePlanDetails(true)
-  await loadCurrentCollegePlanReportSummary()
-  lastEditTime.value = new Date().toLocaleString()
+    const results = await Promise.allSettled(reloadJobs)
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const source = isStrategicDept.value && index === 0 ? 'indicators' : 'plans'
+        logger.warn(`[IndicatorDistributeView] 加载 ${source} 数据失败:`, result.reason)
+      }
+    })
+
+    await loadCurrentDepartmentPlanDetails(true)
+    await loadCurrentSelectedCollegePlanDetails(true)
+    await loadCurrentCollegePlanReportSummary()
+    lastEditTime.value = new Date().toLocaleString()
+  })()
+
+  try {
+    await refreshDistributionPromise.value
+  } finally {
+    refreshDistributionPromise.value = null
+  }
+}
+
+const waitForPageBootstrap = async () => {
+  if (pageBootstrapPromise.value) {
+    await pageBootstrapPromise.value
+  }
 }
 
 const loadCurrentCollegePlanReportSummary = async () => {
@@ -807,7 +963,12 @@ const loadCurrentCollegePlanReportSummary = async () => {
   const planId = Number(currentActiveCollegePlan.value?.id ?? NaN)
   const reportOrgId = Number(getOrgIdByDeptName(selectedCollege.value) ?? NaN)
 
-  if (!Number.isFinite(planId) || planId <= 0 || !Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+  if (
+    !Number.isFinite(planId) ||
+    planId <= 0 ||
+    !Number.isFinite(reportOrgId) ||
+    reportOrgId <= 0
+  ) {
     currentCollegePlanReportSummary.value = null
     return
   }
@@ -845,15 +1006,6 @@ const formatDetailDate = (time: string | Date | undefined): string => {
 
 // 打开任务审批抽屉
 const handleOpenApproval = () => {
-  if (currentCollegePlanReportSummary.value?.id) {
-    taskApprovalVisible.value = true
-    return
-  }
-
-  if (normalizedCurrentDepartmentPlanStatus.value === 'DRAFT') {
-    void openDistributionApprovalSetupDialog()
-    return
-  }
   taskApprovalVisible.value = true
 }
 
@@ -925,7 +1077,12 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
       ? strategicStore.indicators.find(item => String(item.id) === parentIndicatorId)
       : undefined
     const planIndicatorTaskId = String(
-      source.taskId ?? source.task_id ?? source.planId ?? source.strategicTaskId ?? source.cycleId ?? ''
+      source.taskId ??
+        source.task_id ??
+        source.planId ??
+        source.strategicTaskId ??
+        source.cycleId ??
+        ''
     ).trim()
     const mappedTaskType =
       currentPlanTaskTypeMap.value[planIndicatorTaskId] ||
@@ -944,7 +1101,9 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
       id: indicatorId || storeIndicator?.id || String(Date.now()),
       name: getPlanIndicatorText(source, 'indicatorName', 'name') || storeIndicator?.name || '',
       taskContent:
-        getPlanIndicatorText(source, 'taskName', 'taskContent') || storeIndicator?.taskContent || '',
+        getPlanIndicatorText(source, 'taskName', 'taskContent') ||
+        storeIndicator?.taskContent ||
+        '',
       type1:
         normalizeIndicatorTypeLabel(
           getPlanIndicatorText(source, 'type1', 'indicatorType', 'indicatorType1', 'type')
@@ -981,14 +1140,18 @@ const currentDepartmentPlanIndicators = computed<StrategicIndicator[]>(() => {
 
     const targetOrgId =
       getPlanIndicatorNumber(source, 'targetOrgId', 'target_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { targetOrgId?: number | string })?.targetOrgId ?? 0
+      )
     if (Number.isFinite(targetOrgId) && targetOrgId > 0) {
       normalizedIndicator.targetOrgId = targetOrgId
     }
 
     const ownerOrgId =
       getPlanIndicatorNumber(source, 'ownerOrgId', 'owner_org_id') ||
-      Number((storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0)
+      Number(
+        (storeIndicator as StrategicIndicator & { ownerOrgId?: number | string })?.ownerOrgId ?? 0
+      )
     if (Number.isFinite(ownerOrgId) && ownerOrgId > 0) {
       normalizedIndicator.ownerOrgId = ownerOrgId
     }
@@ -1068,7 +1231,10 @@ const collegeIndicators = computed(() => {
 // 获取指标的子指标（只显示当前部门下发的）
 const _getChildIndicators = (parentId: string) => {
   return strategicStore.indicators.filter(
-    i => i.parentIndicatorId === parentId && !i.isStrategic && isSameDepartment(i.ownerDept, currentDept.value)
+    i =>
+      i.parentIndicatorId === parentId &&
+      !i.isStrategic &&
+      isSameDepartment(i.ownerDept, currentDept.value)
   )
 }
 
@@ -1244,9 +1410,7 @@ const cancelAddIndicator = () => {
   }
 }
 
-const cloneParentMilestonesForForm = (
-  indicator: StrategicIndicator
-): FormMilestone[] => {
+const cloneParentMilestonesForForm = (indicator: StrategicIndicator): FormMilestone[] => {
   if (!Array.isArray(indicator.milestones) || indicator.milestones.length === 0) {
     return []
   }
@@ -1429,7 +1593,9 @@ const toMilestoneBatchPayload = (
   milestones.map((milestone, index) => {
     const rawId = Number(milestone.id)
     const numericId =
-      options.includeExistingIds !== false && Number.isFinite(rawId) && rawId > 0 ? rawId : undefined
+      options.includeExistingIds !== false && Number.isFinite(rawId) && rawId > 0
+        ? rawId
+        : undefined
     const targetProgress =
       'targetProgress' in milestone
         ? Number(milestone.targetProgress) || 0
@@ -1600,7 +1766,10 @@ const saveNewIndicator = async () => {
         })
       } catch (milestoneError) {
         milestonesPersisted = false
-        logger.error('[IndicatorDistributeView] persist new indicator milestones failed:', milestoneError)
+        logger.error(
+          '[IndicatorDistributeView] persist new indicator milestones failed:',
+          milestoneError
+        )
       }
     }
 
@@ -1951,8 +2120,7 @@ const handleGlobalMousedown = (e: MouseEvent) => {
   isInteractingWithCollegeSelect.value = isInSelect || isInDropdown
 
   if (isAddingIndicator.value) {
-    const clickedInsideAddForm =
-      !!addRowFormRef.value && addRowFormRef.value.contains(target)
+    const clickedInsideAddForm = !!addRowFormRef.value && addRowFormRef.value.contains(target)
     const clickedInsidePopup =
       !!target.closest('.el-popper') ||
       !!target.closest('.el-select-dropdown') ||
@@ -1980,8 +2148,12 @@ const handleGlobalMousedown = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleGlobalMousedown, true)
-  void orgStore.loadDepartments()
-  void refreshDistributionData()
+  pageBootstrapPromise.value = (async () => {
+    await orgStore.loadDepartments()
+    await refreshDistributionData()
+  })().finally(() => {
+    pageBootstrapPromise.value = null
+  })
 })
 
 onBeforeUnmount(() => {
@@ -1991,7 +2163,10 @@ onBeforeUnmount(() => {
 watch(
   () => [currentDept.value, timeContext.currentYear, currentDepartmentPlan.value?.id],
   () => {
-    void loadCurrentDepartmentPlanDetails()
+    void (async () => {
+      await waitForPageBootstrap()
+      await loadCurrentDepartmentPlanDetails()
+    })()
   },
   { immediate: true }
 )
@@ -2003,8 +2178,11 @@ watch(
     currentSelectedCollegePlan.value?.id
   ],
   () => {
-    void loadCurrentSelectedCollegePlanDetails()
-    void loadCurrentCollegePlanReportSummary()
+    void (async () => {
+      await waitForPageBootstrap()
+      await loadCurrentSelectedCollegePlanDetails()
+      await loadCurrentCollegePlanReportSummary()
+    })()
   },
   { immediate: true }
 )
@@ -2275,7 +2453,12 @@ const handleBatchWithdraw = async (college: string) => {
       )
 
       if (result.success && result.data) {
-        const { successCount, failedCount, withdrawnIndicatorIds, errors: batchErrors } = result.data
+        const {
+          successCount,
+          failedCount,
+          withdrawnIndicatorIds,
+          errors: batchErrors
+        } = result.data
 
         // 更新前端状态
         for (const indicatorId of withdrawnIndicatorIds) {
@@ -2309,7 +2492,7 @@ const handleBatchWithdraw = async (college: string) => {
     }
   }
 
-    // 临时 ID 不应进入可撤回集合，这里仅兜底兼容旧本地状态数据。
+  // 临时 ID 不应进入可撤回集合，这里仅兜底兼容旧本地状态数据。
   for (const indicator of tempIdIndicators) {
     try {
       strategicStore.addStatusAuditEntry(indicator.id.toString(), {
@@ -2368,8 +2551,9 @@ const handleBatchDistribute = async (college: string) => {
   }
 
   const draftIndicators = childIndicators.filter(
-    i => getChildStatus(i as StrategicIndicator) === 'draft'
+    i => getChildLifecycleStatus(i as StrategicIndicator) === 'draft'
   )
+  const planId = Number(currentActiveCollegePlan.value?.id ?? NaN)
 
   if (draftIndicators.length === 0) {
     if (childIndicators.length === 0) {
@@ -2409,7 +2593,6 @@ const handleBatchDistribute = async (college: string) => {
 
   const ownerOrgId = getOrgIdByDeptName(currentDept.value)
   const targetOrgId = getOrgIdByDeptName(college)
-  const planId = Number(currentActiveCollegePlan.value?.id ?? NaN)
 
   if (!ownerOrgId || !targetOrgId) {
     ElMessage.error(`无法解析组织ID，owner=${currentDept.value}, target=${college}`)
@@ -2470,12 +2653,11 @@ const handleBatchDistribute = async (college: string) => {
 
     response.data.items.forEach(item => {
       const clientRequestId = String(item.clientRequestId || '')
-      const backendIndicator = item.indicator
-      if (!clientRequestId || !backendIndicator?.id) {
+      const backendId = String(item.indicatorId || '')
+      if (!clientRequestId || !backendId) {
         return
       }
 
-      const backendId = String(backendIndicator.id)
       if (clientRequestId !== backendId) {
         strategicStore.replaceIndicatorId(clientRequestId, backendId)
       }
@@ -2554,8 +2736,7 @@ const collegeOverallStatus = computed(() => {
 
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
-  const currentPlanStatus =
-    normalizedSelectedCollegePlanStatus.value || normalizedCurrentDepartmentPlanStatus.value
+  const currentPlanStatus = normalizedSelectedCollegePlanStatus.value
 
   if (currentPlanStatus === 'DRAFT') {
     return { label: '草稿', type: 'info' }
@@ -2622,12 +2803,45 @@ const handleViewDetail = (indicator: StrategicIndicator) => {
   detailDrawerVisible.value = true
 }
 
+const resolveSelectedCollegePlanDrivenChildStatus = (
+  child: StrategicIndicator
+): 'draft' | 'distributed' | 'pending' | 'approved' | null => {
+  if (!selectedCollege.value) {
+    return null
+  }
+
+  const belongsToSelectedCollege = Array.isArray(child.responsibleDept)
+    ? child.responsibleDept.includes(selectedCollege.value)
+    : child.responsibleDept === selectedCollege.value
+
+  if (!belongsToSelectedCollege) {
+    return null
+  }
+
+  switch (normalizedSelectedCollegePlanStatus.value) {
+    case 'DRAFT':
+    case 'RETURNED':
+      return 'draft'
+    case 'PENDING':
+      return 'pending'
+    case 'DISTRIBUTED':
+      return 'distributed'
+    default:
+      return null
+  }
+}
+
 // 获取子指标状态
 // 状态流转：draft(草稿) → distributed(已下发) → pending(待审批，下级提交后) → approved(已通过)
 // 打回后回到 distributed 状态，撤销后回到 draft 状态
 // 注意：这里的 pending 状态是指进度审批待审批（progressApprovalStatus），不是指标定义审核（lifecycle status 的 PENDING_REVIEW）
 // Legacy ACTIVE status is treated as equivalent to DISTRIBUTED
 const getChildStatus = (child: StrategicIndicator) => {
+  const planDrivenStatus = resolveSelectedCollegePlanDrivenChildStatus(child)
+  if (planDrivenStatus) {
+    return planDrivenStatus
+  }
+
   const normalizedStatus = String(child.status || '').toUpperCase()
   const statusMap: Record<string, string> = {
     DRAFT: 'draft',
@@ -2643,6 +2857,48 @@ const getChildStatus = (child: StrategicIndicator) => {
   }
 
   // fallback：兼容本地 statusAudit 推导
+  const audit = child.statusAudit || []
+  if (audit.length === 0) {
+    return 'draft'
+  }
+  const lastAudit = audit[audit.length - 1]
+  if (!lastAudit) {
+    return 'draft'
+  }
+  const lastAction = lastAudit.action
+  if (lastAction === 'submit') {
+    return 'pending'
+  }
+  if (lastAction === 'approve') {
+    return 'approved'
+  }
+  if (lastAction === 'reject') {
+    return 'distributed'
+  }
+  if (lastAction === 'distribute') {
+    return 'distributed'
+  }
+  if (lastAction === 'withdraw') {
+    return 'draft'
+  }
+  return 'draft'
+}
+
+const getChildLifecycleStatus = (child: StrategicIndicator) => {
+  const normalizedStatus = String(child.status || '').toUpperCase()
+  const statusMap: Record<string, string> = {
+    DRAFT: 'draft',
+    PENDING: 'pending',
+    PENDING_REVIEW: 'pending',
+    DISTRIBUTED: 'distributed',
+    ACTIVE: 'distributed',
+    APPROVED: 'approved',
+    REJECTED: 'distributed'
+  }
+  if (normalizedStatus) {
+    return statusMap[normalizedStatus] ?? 'draft'
+  }
+
   const audit = child.statusAudit || []
   if (audit.length === 0) {
     return 'draft'
@@ -3316,12 +3572,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-button>
               </template>
               <template v-else>
-                <el-button
-                  :type="pendingApprovalCount > 0 ? 'warning' : 'default'"
-                  @click="handleOpenApproval"
-                >
+                <el-button :type="distributionApprovalButtonType" @click="handleOpenApproval">
                   <el-icon><Check /></el-icon>
-                  {{ distributionApprovalButtonText }}{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
+                  {{ distributionApprovalButtonText
+                  }}{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
                 </el-button>
                 <template v-if="collegeOverallStatus.label === '草稿' && canEditChild">
                   <el-button type="primary" @click="openAddIndicatorForm">
@@ -3338,7 +3592,11 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     {{ distributionSubmitButtonText }}
                   </el-button>
                 </template>
-                <template v-else-if="collegeOverallStatus.label === '待审批' && canWithdrawCurrentCollegePlan">
+                <template
+                  v-else-if="
+                    collegeOverallStatus.label === '待审批' && canWithdrawCurrentCollegePlan
+                  "
+                >
                   <el-button
                     type="warning"
                     :loading="isBatchDistributing"
@@ -3389,7 +3647,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'name')"
                         />
-                        <span v-else-if="isSavingChildCell(row.child, 'name')" class="cell-saving-text">
+                        <span
+                          v-else-if="isSavingChildCell(row.child, 'name')"
+                          class="cell-saving-text"
+                        >
                           保存中...
                         </span>
                         <el-tooltip
@@ -3464,7 +3725,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field textarea-cell"
                           @blur="saveChildEdit(row.child, 'remark')"
                         />
-                        <span v-else-if="isSavingChildCell(row.child, 'remark')" class="cell-saving-text">
+                        <span
+                          v-else-if="isSavingChildCell(row.child, 'remark')"
+                          class="cell-saving-text"
+                        >
                           保存中...
                         </span>
                         <span v-else class="remark-text">{{ row.child?.remark || '-' }}</span>
@@ -3517,7 +3781,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           class="editing-field"
                           @blur="saveChildEdit(row.child, 'weight')"
                         />
-                        <span v-else-if="isSavingChildCell(row.child, 'weight')" class="cell-saving-text">
+                        <span
+                          v-else-if="isSavingChildCell(row.child, 'weight')"
+                          class="cell-saving-text"
+                        >
                           保存中...
                         </span>
                         <span v-else class="weight-text editable">{{
@@ -3762,11 +4029,17 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                               :value="indicator.id.toString()"
                             >
                               <div class="parent-indicator-option">
-                                <span class="parent-indicator-option__name">{{ indicator.name }}</span>
+                                <span class="parent-indicator-option__name">{{
+                                  indicator.name
+                                }}</span>
                                 <div class="parent-indicator-option__tags">
                                   <el-tag
                                     size="small"
-                                    :type="getIndicatorTypeLabel(indicator) === '定量' ? 'primary' : 'warning'"
+                                    :type="
+                                      getIndicatorTypeLabel(indicator) === '定量'
+                                        ? 'primary'
+                                        : 'warning'
+                                    "
                                   >
                                     {{ getIndicatorTypeLabel(indicator) }}
                                   </el-tag>
@@ -3798,8 +4071,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           v-model="newIndicatorForm.type1"
                           style="width: 100%"
                           @change="
-                            (val: string) =>
-                              handleFormIndicatorTypeChange(val as '定量' | '定性')
+                            (val: string) => handleFormIndicatorTypeChange(val as '定量' | '定性')
                           "
                         >
                           <el-option label="定性" value="定性" />
@@ -3860,10 +4132,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                           >
                             <el-icon><Plus /></el-icon> 添加里程碑
                           </el-button>
-                          <div
-                            v-if="newIndicatorForm.milestones.length > 0"
-                            class="milestone-list"
-                          >
+                          <div v-if="newIndicatorForm.milestones.length > 0" class="milestone-list">
                             <div
                               v-for="(ms, idx) in newIndicatorForm.milestones"
                               :key="ms.id"
@@ -3924,7 +4193,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 >
                   {{ isSavingIndicator ? '保存中' : '保存' }}
                 </el-button>
-                <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator">取消</el-button>
+                <el-button :disabled="isSavingIndicator" @click="cancelAddIndicator"
+                  >取消</el-button
+                >
               </div>
             </div>
           </div>
@@ -3950,7 +4221,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           <div class="detail-tags">
             <el-tag
               size="small"
-              :type="getIndicatorTypeLabel(currentDetailIndicator) === '定量' ? 'primary' : 'warning'"
+              :type="
+                getIndicatorTypeLabel(currentDetailIndicator) === '定量' ? 'primary' : 'warning'
+              "
             >
               {{ getIndicatorTypeLabel(currentDetailIndicator) }}
             </el-tag>
@@ -3988,7 +4261,9 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           <el-descriptions-item label="指标类型">
             {{ getIndicatorTypeLabel(currentDetailIndicator) }}
           </el-descriptions-item>
-          <el-descriptions-item label="权重">{{ currentDetailIndicator.weight }}</el-descriptions-item>
+          <el-descriptions-item label="权重">{{
+            currentDetailIndicator.weight
+          }}</el-descriptions-item>
           <el-descriptions-item label="当前进度">
             {{ currentDetailIndicator.progress || 0 }}%
           </el-descriptions-item>
@@ -4015,7 +4290,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
               :key="index"
               :timestamp="milestone.deadline"
               :type="
-                resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress).timelineType
+                resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress)
+                  .timelineType
               "
               placement="top"
             >
@@ -4025,7 +4301,8 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                   <el-tag
                     size="small"
                     :type="
-                      resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress).tagType
+                      resolveMilestoneDisplayState(milestone, currentDetailIndicator.progress)
+                        .tagType
                     "
                   >
                     {{
@@ -4091,7 +4368,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 {{
                   step.candidateApprovers.length > 0
                     ? step.candidateApprovers
-                        .map(candidate => candidate.realName || candidate.username || `用户${candidate.userId}`)
+                        .map(
+                          candidate =>
+                            candidate.realName || candidate.username || `用户${candidate.userId}`
+                        )
                         .join('、')
                     : '系统自动分配'
                 }}

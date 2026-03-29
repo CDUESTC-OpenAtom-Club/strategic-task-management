@@ -1,6 +1,6 @@
 import type { StrategicIndicator } from '@/shared/types'
 
-export const RECEIVED_PLAN_VISIBLE_STATUSES = ['DISTRIBUTED', 'PENDING'] as const
+export const RECEIVED_PLAN_VISIBLE_STATUSES = ['DRAFT', 'DISTRIBUTED', 'PENDING'] as const
 
 export function canViewReceivedPlanContent(
   planStatus: string | null | undefined,
