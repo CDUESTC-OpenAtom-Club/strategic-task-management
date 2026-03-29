@@ -44,10 +44,14 @@ const auditLogStore = useAuditLogStore()
 
 interface UserListPageData {
   content: Record<string, unknown>[]
+  totalElements?: number
+  totalPages?: number
+  number?: number
+  size?: number
 }
 
 interface UserListResponseShape {
-  data?: UserListPageData | { data?: UserListPageData }
+  data?: Record<string, unknown>[] | UserListPageData | { data?: UserListPageData }
 }
 
 const getCurrentOperatorName = () => authStore.user?.name || ''
@@ -57,12 +61,17 @@ const getErrorMessage = (error: unknown, fallback: string) => {
     return error.message
   }
 
-  const message = (error as { response?: { data?: { message?: string } }; message?: string }).response
-    ?.data?.message
+  const message = (error as { response?: { data?: { message?: string } }; message?: string })
+    .response?.data?.message
   return message || (error as { message?: string }).message || fallback
 }
 
 const resolveUserListPageData = (response: UserListResponseShape): UserListPageData | null => {
+  if (Array.isArray(response.data)) {
+    return {
+      content: response.data
+    }
+  }
   if (response.data && 'content' in response.data) {
     return response.data
   }
@@ -306,7 +315,9 @@ const loadUsers = async () => {
       orgId: String(user.orgId ?? ''),
       orgName: String(user.orgName ?? user.department ?? ''),
       roles: Array.isArray(user.roles)
-        ? user.roles.map((r: { roleCode?: string; role?: string }) => r.roleCode ?? r.role ?? '')
+        ? user.roles.map((r: string | { roleCode?: string; role?: string }) =>
+            typeof r === 'string' ? r : (r.roleCode ?? r.role ?? '')
+          )
         : [],
       status: (user.status ?? 'active') as UserManagementItem['status'],
       lastLoginAt: String(user.lastLoginAt ?? ''),
@@ -990,8 +1001,7 @@ onMounted(() => {
   </div>
 </template>
 
-<script lang="ts">
-</script>
+<script lang="ts"></script>
 
 <style scoped>
 .user-management {

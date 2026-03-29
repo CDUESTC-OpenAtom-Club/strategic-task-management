@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch } from 'vue'
 import {
   ElDrawer,
@@ -62,6 +61,8 @@ interface Props {
   workflowCode?: string | string[]
   workflowEntityType?: 'PLAN' | 'PLAN_REPORT'
   workflowEntityId?: number | string
+  secondaryWorkflowEntityType?: 'PLAN' | 'PLAN_REPORT'
+  secondaryWorkflowEntityId?: number | string
 }
 
 interface Emits {
@@ -84,7 +85,9 @@ const props = withDefaults(defineProps<Props>(), {
   historyViewMode: 'auto',
   workflowCode: '',
   workflowEntityType: 'PLAN',
-  workflowEntityId: undefined
+  workflowEntityId: undefined,
+  secondaryWorkflowEntityType: undefined,
+  secondaryWorkflowEntityId: undefined
 })
 
 const emit = defineEmits<Emits>()
@@ -255,6 +258,11 @@ interface PlanApprovalDetailItem {
   planName?: string
 }
 
+interface WorkflowHistoryTarget {
+  entityType: 'PLAN' | 'PLAN_REPORT'
+  entityId: number
+}
+
 // 当前选中的指标
 const currentIndicator = computed(() => {
   if (props.indicatorId) {
@@ -356,6 +364,36 @@ const scopedPlanApprovals = computed(() => {
 })
 
 const scopedPendingPlanCount = computed(() => scopedPlanApprovals.value.length)
+
+const historyTargets = computed<WorkflowHistoryTarget[]>(() => {
+  const targets: WorkflowHistoryTarget[] = []
+  const seen = new Set<string>()
+
+  const appendTarget = (entityType: 'PLAN' | 'PLAN_REPORT' | undefined, entityId: unknown) => {
+    const normalizedType =
+      entityType === 'PLAN_REPORT' ? 'PLAN_REPORT' : entityType === 'PLAN' ? 'PLAN' : null
+    const normalizedId = Number(entityId ?? NaN)
+    if (!normalizedType || !Number.isFinite(normalizedId) || normalizedId <= 0) {
+      return
+    }
+
+    const key = `${normalizedType}:${normalizedId}`
+    if (seen.has(key)) {
+      return
+    }
+
+    seen.add(key)
+    targets.push({
+      entityType: normalizedType,
+      entityId: normalizedId
+    })
+  }
+
+  appendTarget(props.workflowEntityType, props.workflowEntityId ?? props.plan?.id)
+  appendTarget(props.secondaryWorkflowEntityType, props.secondaryWorkflowEntityId)
+
+  return targets
+})
 const activePlanWorkflow = computed(() => {
   if (!props.plan) {
     return null
@@ -368,15 +406,18 @@ const activePlanWorkflow = computed(() => {
     workflowInstanceId:
       Number((useDetail ? detail.instanceId : undefined) || props.plan.workflowInstanceId || 0) ||
       undefined,
-    workflowStatus: (useDetail ? detail.status : undefined) || props.plan.workflowStatus || props.plan.status,
+    workflowStatus:
+      (useDetail ? detail.status : undefined) || props.plan.workflowStatus || props.plan.status,
     currentTaskId: (useDetail ? detail.currentTaskId : undefined) || props.plan.currentTaskId,
-    currentStepName:
-      (useDetail ? detail.currentStepName : undefined) || props.plan.currentStepName,
-    currentApproverId: (useDetail ? detail.currentApproverId : undefined) ?? props.plan.currentApproverId,
+    currentStepName: (useDetail ? detail.currentStepName : undefined) || props.plan.currentStepName,
+    currentApproverId:
+      (useDetail ? detail.currentApproverId : undefined) ?? props.plan.currentApproverId,
     currentApproverName:
       (useDetail ? detail.currentApproverName : undefined) || props.plan.currentApproverName,
     canWithdraw:
-      useDetail && typeof detail?.canWithdraw === 'boolean' ? detail.canWithdraw : props.plan.canWithdraw,
+      useDetail && typeof detail?.canWithdraw === 'boolean'
+        ? detail.canWithdraw
+        : props.plan.canWithdraw,
     workflowHistory:
       useDetail && Array.isArray(detail?.history) ? detail.history : props.plan.workflowHistory
   }
@@ -558,7 +599,11 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 
 const currentPlanTaskId = computed(() => {
   const pendingTask = planWorkflowTasks.value.find(task => {
-    return String(task.status || '').trim().toUpperCase() === 'PENDING'
+    return (
+      String(task.status || '')
+        .trim()
+        .toUpperCase() === 'PENDING'
+    )
   })
   const pendingTaskId = Number(pendingTask?.taskId ?? 0)
   if (Number.isFinite(pendingTaskId) && pendingTaskId > 0) {
@@ -602,15 +647,14 @@ const planWorkflowStatusTag = computed(() => {
   }
 
   const latestTaskStatus = String(
-    [...planWorkflowTasks.value]
-      .sort((left, right) => {
-        const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
-        const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
-        if (leftStepNo !== rightStepNo) {
-          return rightStepNo - leftStepNo
-        }
-        return String(right.taskId || '').localeCompare(String(left.taskId || ''))
-      })[0]?.status || ''
+    [...planWorkflowTasks.value].sort((left, right) => {
+      const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
+      const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
+      if (leftStepNo !== rightStepNo) {
+        return rightStepNo - leftStepNo
+      }
+      return String(right.taskId || '').localeCompare(String(left.taskId || ''))
+    })[0]?.status || ''
   )
     .trim()
     .toUpperCase()
@@ -741,15 +785,14 @@ function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
 }
 
 const latestPlanTaskDisplayLabel = computed(() => {
-  const latestTask = [...planWorkflowTasks.value]
-    .sort((left, right) => {
-      const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
-      const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
-      if (leftStepNo !== rightStepNo) {
-        return rightStepNo - leftStepNo
-      }
-      return String(right.taskId || '').localeCompare(String(left.taskId || ''))
-    })[0]
+  const latestTask = [...planWorkflowTasks.value].sort((left, right) => {
+    const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
+    const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
+    if (leftStepNo !== rightStepNo) {
+      return rightStepNo - leftStepNo
+    }
+    return String(right.taskId || '').localeCompare(String(left.taskId || ''))
+  })[0]
 
   return latestTask ? resolveTaskStatusLabel(latestTask) : ''
 })
@@ -807,7 +850,10 @@ const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
       instance.submitterName || instance.applicantName || instance.submitter || '未知'
     ),
     currentStepName: String(
-      instance.currentStepName || instance.currentStep || latestPlanTaskDisplayLabel.value || '审批中'
+      instance.currentStepName ||
+        instance.currentStep ||
+        latestPlanTaskDisplayLabel.value ||
+        '审批中'
     ),
     createdAt: typeof instance.createdAt === 'string' ? instance.createdAt : undefined,
     entityId: instance.entityId,
@@ -868,23 +914,23 @@ const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   return planWorkflowHistoryCards.value
     .filter(item => matchesExpectedWorkflowCode(item.flowCode))
     .map((item, index) => {
-    const statusTag = resolveHistoryStatusTag(item.status)
-    return {
-      instanceId: Number(item.instanceId) || index,
-      instanceNo: String(item.instanceNo || item.instanceId || `审批实例 ${index + 1}`),
-      title: normalizeDisplayName(item.planName) || `Plan ${item.entityId || ''}`.trim(),
-      routeTitle: resolveApprovalRouteTitle(item),
-      flowName: item.flowName,
-      flowCode: item.flowCode,
-      submitterName: normalizeDisplayName(item.requesterName) || '未知',
-      currentStepName: statusTag.label,
-      createdAt: item.startedAt,
-      completedAt: item.completedAt,
-      statusLabel: statusTag.label,
-      statusType: statusTag.type,
-      entityId: item.entityId,
-      planName: item.planName
-    }
+      const statusTag = resolveHistoryStatusTag(item.status)
+      return {
+        instanceId: Number(item.instanceId) || index,
+        instanceNo: String(item.instanceNo || item.instanceId || `审批实例 ${index + 1}`),
+        title: normalizeDisplayName(item.planName) || `Plan ${item.entityId || ''}`.trim(),
+        routeTitle: resolveApprovalRouteTitle(item),
+        flowName: item.flowName,
+        flowCode: item.flowCode,
+        submitterName: normalizeDisplayName(item.requesterName) || '未知',
+        currentStepName: statusTag.label,
+        createdAt: item.startedAt,
+        completedAt: item.completedAt,
+        statusLabel: statusTag.label,
+        statusType: statusTag.type,
+        entityId: item.entityId,
+        planName: item.planName
+      }
     })
 })
 
@@ -1148,7 +1194,11 @@ async function loadPlanWorkflowDetail() {
   if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
     try {
       const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
-      if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
+      if (
+        response.success &&
+        response.data &&
+        matchesExpectedWorkflowCode(response.data.flowCode)
+      ) {
         planWorkflowDetail.value = response.data
         return
       }
@@ -1164,8 +1214,15 @@ async function loadPlanWorkflowDetail() {
     const businessEntityType = props.workflowEntityType || 'PLAN'
     const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
     if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
-      const response = await getWorkflowInstanceDetailByBusiness(businessEntityType, businessEntityId)
-      if (response.success && response.data && matchesExpectedWorkflowCode(response.data.flowCode)) {
+      const response = await getWorkflowInstanceDetailByBusiness(
+        businessEntityType,
+        businessEntityId
+      )
+      if (
+        response.success &&
+        response.data &&
+        matchesExpectedWorkflowCode(response.data.flowCode)
+      ) {
         planWorkflowDetail.value = response.data
         return
       }
@@ -1184,20 +1241,35 @@ async function loadPlanWorkflowHistoryCards() {
     return
   }
 
-  const businessEntityType = props.workflowEntityType || 'PLAN'
-  const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
-  if (!Number.isFinite(businessEntityId) || businessEntityId <= 0) {
+  if (historyTargets.value.length === 0) {
     planWorkflowHistoryCards.value = []
     return
   }
 
   try {
-    const response = await getWorkflowInstanceHistoryByBusiness(businessEntityType, businessEntityId)
-    if (response.success && Array.isArray(response.data)) {
-      planWorkflowHistoryCards.value = response.data
-      return
-    }
-    planWorkflowHistoryCards.value = []
+    const results = await Promise.all(
+      historyTargets.value.map(target =>
+        getWorkflowInstanceHistoryByBusiness(target.entityType, target.entityId)
+      )
+    )
+
+    const merged = results
+      .flatMap(response => (response.success && Array.isArray(response.data) ? response.data : []))
+      .sort((left, right) => {
+        const leftTime = new Date(left.completedAt || left.startedAt || 0).getTime()
+        const rightTime = new Date(right.completedAt || right.startedAt || 0).getTime()
+        return rightTime - leftTime
+      })
+
+    const seen = new Set<string>()
+    planWorkflowHistoryCards.value = merged.filter(item => {
+      const key = String(item.instanceId || '')
+      if (!key || seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
   } catch (error) {
     planWorkflowHistoryCards.value = []
     logger.warn('[ApprovalProgressDrawer] 加载计划审批历史卡片失败:', error)
@@ -1541,7 +1613,9 @@ const hasWorkflowTabContent = computed(() => {
 })
 
 const isPlanHistoryOnlyMode = computed(() => {
-  return Boolean(props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value)
+  return Boolean(
+    props.showPlanApprovals && hasPlanWorkflowData.value && isPlanCompletedApproval.value
+  )
 })
 
 const showPlanPendingCard = computed(() => {
@@ -1563,17 +1637,15 @@ const showHistoryTimeline = computed(() => {
 
 const showCardHistoryEmptyState = computed(() => {
   return (
-    props.historyViewMode === 'card-only' &&
-    props.showPlanApprovals &&
-    !showPlanHistoryCard.value
+    props.historyViewMode === 'card-only' && props.showPlanApprovals && !showPlanHistoryCard.value
   )
 })
 
 const showArchivedPlanWorkflowEmptyState = computed(() => {
   return Boolean(
     props.showPlanApprovals &&
-      hasPlanWorkflowData.value &&
-      (isPlanHistoryOnlyMode.value || workflowNodes.value.length === 0)
+    hasPlanWorkflowData.value &&
+    (isPlanHistoryOnlyMode.value || workflowNodes.value.length === 0)
   )
 })
 
@@ -1840,9 +1912,7 @@ watch(
             />
             <ElAlert
               v-if="
-                hasPlanWorkflowData &&
-                isPlanPendingApproval &&
-                !canCurrentUserHandlePlanApproval
+                hasPlanWorkflowData && isPlanPendingApproval && !canCurrentUserHandlePlanApproval
               "
               type="warning"
               title="当前节点按角色审批流转，你当前仅可查看审批进度和历史。"
@@ -1942,115 +2012,115 @@ watch(
       class="plan-detail-dialog"
     >
       <div v-loading="selectedHistoryInstanceDetailLoading" class="plan-detail-content">
-      <div class="plan-detail-summary">
-        <div class="summary-title">
-          {{
-            historicalPlanApprovalItems.find(
-              item => String(item.instanceId) === selectedHistoryInstanceId
-            )?.routeTitle ||
-            currentPlanApprovalSummary?.planName ||
-            '当前计划'
-          }}
+        <div class="plan-detail-summary">
+          <div class="summary-title">
+            {{
+              historicalPlanApprovalItems.find(
+                item => String(item.instanceId) === selectedHistoryInstanceId
+              )?.routeTitle ||
+              currentPlanApprovalSummary?.planName ||
+              '当前计划'
+            }}
+          </div>
+          <div class="summary-subtitle">
+            {{
+              selectedHistoryInstanceId
+                ? '当前查看审批实例'
+                : isPlanPendingApproval
+                  ? '待审批实例'
+                  : '历史审批实例'
+            }}
+            {{ selectedHistoryInstanceId ? '' : currentPlanApprovalItems.length }}
+          </div>
         </div>
-        <div class="summary-subtitle">
-          {{
-            selectedHistoryInstanceId
-              ? '当前查看审批实例'
-              : isPlanPendingApproval
-                ? '待审批实例'
-                : '历史审批实例'
-          }}
-          {{ selectedHistoryInstanceId ? '' : currentPlanApprovalItems.length }}
-        </div>
-      </div>
 
-      <div
-        v-if="
-          (selectedHistoryInstanceId ? historicalPlanApprovalItems : currentPlanApprovalItems)
-            .length > 0
-        "
-        class="plan-detail-list"
-      >
         <div
-          v-for="item in selectedHistoryInstanceId
-            ? historicalPlanApprovalItems.filter(
-                historyItem => String(historyItem.instanceId) === selectedHistoryInstanceId
-              )
-            : currentPlanApprovalItems"
-          :key="item.instanceId"
-          class="plan-detail-item"
+          v-if="
+            (selectedHistoryInstanceId ? historicalPlanApprovalItems : currentPlanApprovalItems)
+              .length > 0
+          "
+          class="plan-detail-list"
         >
-          <div class="detail-item-header">
-            <div class="detail-item-title">{{ item.routeTitle || item.title }}</div>
-            <ElTag
-              :type="item.statusType || detailDialogStatusTag.type"
-              effect="light"
-              size="small"
-            >
-              {{ item.statusLabel || detailDialogStatusTag.label }}
-            </ElTag>
-          </div>
-          <div class="detail-item-meta">
-            <div v-if="item.flowName" class="detail-meta-row">
-              <span class="detail-label">流程名称：</span>
-              <span class="detail-value">{{ item.flowName }}</span>
-            </div>
-            <div class="detail-meta-row">
-              <span class="detail-label">实例编号：</span>
-              <span class="detail-value">{{ item.instanceNo }}</span>
-            </div>
-            <div class="detail-meta-row">
-              <span class="detail-label">提交人：</span>
-              <span class="detail-value">{{ item.submitterName }}</span>
-            </div>
-            <div class="detail-meta-row">
-              <span class="detail-label">提交时间：</span>
-              <span class="detail-value">{{ formatTime(item.createdAt) }}</span>
-            </div>
-            <div class="detail-meta-row">
-              <span class="detail-label"
-                >{{ selectedHistoryInstanceId ? '实例状态' : '当前步骤' }}：</span
+          <div
+            v-for="item in selectedHistoryInstanceId
+              ? historicalPlanApprovalItems.filter(
+                  historyItem => String(historyItem.instanceId) === selectedHistoryInstanceId
+                )
+              : currentPlanApprovalItems"
+            :key="item.instanceId"
+            class="plan-detail-item"
+          >
+            <div class="detail-item-header">
+              <div class="detail-item-title">{{ item.routeTitle || item.title }}</div>
+              <ElTag
+                :type="item.statusType || detailDialogStatusTag.type"
+                effect="light"
+                size="small"
               >
-              <span class="detail-value">{{ item.currentStepName }}</span>
+                {{ item.statusLabel || detailDialogStatusTag.label }}
+              </ElTag>
             </div>
-            <div v-if="item.completedAt" class="detail-meta-row">
-              <span class="detail-label">完成时间：</span>
-              <span class="detail-value">{{ formatTime(item.completedAt) }}</span>
-            </div>
-            <div v-if="item.entityId" class="detail-meta-row">
-              <span class="detail-label">关联实体ID：</span>
-              <span class="detail-value">{{ item.entityId }}</span>
+            <div class="detail-item-meta">
+              <div v-if="item.flowName" class="detail-meta-row">
+                <span class="detail-label">流程名称：</span>
+                <span class="detail-value">{{ item.flowName }}</span>
+              </div>
+              <div class="detail-meta-row">
+                <span class="detail-label">实例编号：</span>
+                <span class="detail-value">{{ item.instanceNo }}</span>
+              </div>
+              <div class="detail-meta-row">
+                <span class="detail-label">提交人：</span>
+                <span class="detail-value">{{ item.submitterName }}</span>
+              </div>
+              <div class="detail-meta-row">
+                <span class="detail-label">提交时间：</span>
+                <span class="detail-value">{{ formatTime(item.createdAt) }}</span>
+              </div>
+              <div class="detail-meta-row">
+                <span class="detail-label"
+                  >{{ selectedHistoryInstanceId ? '实例状态' : '当前步骤' }}：</span
+                >
+                <span class="detail-value">{{ item.currentStepName }}</span>
+              </div>
+              <div v-if="item.completedAt" class="detail-meta-row">
+                <span class="detail-label">完成时间：</span>
+                <span class="detail-value">{{ formatTime(item.completedAt) }}</span>
+              </div>
+              <div v-if="item.entityId" class="detail-meta-row">
+                <span class="detail-label">关联实体ID：</span>
+                <span class="detail-value">{{ item.entityId }}</span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <ElEmpty v-else description="暂无审批实例详情" :image-size="100" />
+        <ElEmpty v-else description="暂无审批实例详情" :image-size="100" />
 
-      <div
-        v-if="(selectedHistoryInstanceDetail?.history?.length || planWorkflowHistory.length) > 0"
-        class="plan-detail-history"
-      >
-        <div class="summary-title">审批历史</div>
-        <ApprovalHistory
-          :history="
-            selectedHistoryInstanceDetail?.history?.length
-              ? selectedHistoryInstanceDetail.history
-                  .filter(shouldDisplayWorkflowHistoryItem)
-                  .map((historyItem, index) => ({
-                    id: String(historyItem.taskId ?? index),
-                    action: normalizeWorkflowAction(historyItem.action),
-                    operator: String(historyItem.operatorId ?? index),
-                    operatorName: String(historyItem.operatorName || '系统'),
-                    operateTime: new Date(historyItem.operateTime || Date.now()),
-                    stepName:
-                      typeof historyItem.taskName === 'string' ? historyItem.taskName : undefined,
-                    comment: historyItem.comment
-                  }))
-              : planWorkflowHistory
-          "
-          :approval-type="approvalType"
-        />
-      </div>
+        <div
+          v-if="(selectedHistoryInstanceDetail?.history?.length || planWorkflowHistory.length) > 0"
+          class="plan-detail-history"
+        >
+          <div class="summary-title">审批历史</div>
+          <ApprovalHistory
+            :history="
+              selectedHistoryInstanceDetail?.history?.length
+                ? selectedHistoryInstanceDetail.history
+                    .filter(shouldDisplayWorkflowHistoryItem)
+                    .map((historyItem, index) => ({
+                      id: String(historyItem.taskId ?? index),
+                      action: normalizeWorkflowAction(historyItem.action),
+                      operator: String(historyItem.operatorId ?? index),
+                      operatorName: String(historyItem.operatorName || '系统'),
+                      operateTime: new Date(historyItem.operateTime || Date.now()),
+                      stepName:
+                        typeof historyItem.taskName === 'string' ? historyItem.taskName : undefined,
+                      comment: historyItem.comment
+                    }))
+                : planWorkflowHistory
+            "
+            :approval-type="approvalType"
+          />
+        </div>
       </div>
 
       <template #footer>

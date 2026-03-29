@@ -382,6 +382,7 @@ async function hydrateCurrentPlanWorkflowState(options: { force?: boolean } = {}
 
 const PLAN_APPROVAL_WORKFLOW_CODE_FUNCDEPT = 'PLAN_APPROVAL_FUNCDEPT'
 const PLAN_APPROVAL_WORKFLOW_CODE_COLLEGE = 'PLAN_APPROVAL_COLLEGE'
+const PLAN_DISPATCH_WORKFLOW_CODE_FUNCDEPT = 'PLAN_DISPATCH_FUNCDEPT'
 const PLAN_APPROVAL_POLL_INTERVAL_MS = 15000
 let planApprovalPollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -390,9 +391,9 @@ function getCurrentPlanId(): number | null {
   return Number.isFinite(planId) && planId > 0 ? planId : null
 }
 
-function resolvePlanApprovalWorkflowCode(): string {
+function resolvePlanApprovalWorkflowCode(): string | string[] {
   return isSecondaryCollege.value
-    ? PLAN_APPROVAL_WORKFLOW_CODE_COLLEGE
+    ? [PLAN_APPROVAL_WORKFLOW_CODE_COLLEGE, PLAN_DISPATCH_WORKFLOW_CODE_FUNCDEPT]
     : PLAN_APPROVAL_WORKFLOW_CODE_FUNCDEPT
 }
 
@@ -1391,6 +1392,16 @@ const approvalEntryButtonText = computed(() => {
     return '查看审批'
   }
   return '审批进度'
+})
+
+const secondaryApprovalWorkflowEntityType = computed<'PLAN' | undefined>(() => {
+  return isSecondaryCollege.value && currentPlanReportSummary.value?.id ? 'PLAN' : undefined
+})
+
+const secondaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
+  return isSecondaryCollege.value && currentPlanReportSummary.value?.id
+    ? currentUserPlanId.value
+    : undefined
 })
 
 const handleOpenApproval = () => {
@@ -3856,6 +3867,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       :workflow-entity-id="
         isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id
       "
+      :secondary-workflow-entity-type="secondaryApprovalWorkflowEntityType"
+      :secondary-workflow-entity-id="secondaryApprovalWorkflowEntityId"
       history-view-mode="card-only"
       approval-type="submission"
     />

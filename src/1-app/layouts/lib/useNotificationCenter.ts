@@ -1,16 +1,16 @@
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { Bell } from '@element-plus/icons-vue'
 import { useMessageStore } from '@/features/messages/model/message'
-import { useApprovalCenter } from '@/features/approval'
 
 export function useNotificationCenter() {
+  const router = useRouter()
   const messageStore = useMessageStore()
-  const { openApprovalCenter } = useApprovalCenter()
 
   const unreadCount = computed(() => messageStore.unreadCount.all)
 
   const handleNotificationClick = () => {
-    openApprovalCenter()
+    router.push('/messages')
   }
 
   return {

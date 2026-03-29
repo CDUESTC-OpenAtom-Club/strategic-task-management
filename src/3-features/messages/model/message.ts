@@ -66,7 +66,10 @@ export const useMessageStore = defineStore('message', () => {
           ? 'alert'
           : message.type === 'SYSTEM'
             ? 'system'
-            : message.type === 'NOTIFICATION' && String(message.status || '').toUpperCase().includes('APPRO')
+            : message.type === 'NOTIFICATION' &&
+                String(message.status || '')
+                  .toUpperCase()
+                  .includes('APPRO')
               ? 'approval'
               : message.type === 'NOTIFICATION'
                 ? 'system'
@@ -106,10 +109,17 @@ export const useMessageStore = defineStore('message', () => {
     }
   }
 
+  function isRemoteNotificationId(messageId: string): boolean {
+    return /^\d+$/.test(String(messageId).trim())
+  }
+
   async function markAsRead(messageId: string) {
     const message = messages.value.find(item => item.id === messageId)
     if (message) {
       message.isRead = true
+    }
+    if (!isRemoteNotificationId(messageId)) {
+      return
     }
     try {
       await messagesApi.markAsRead(messageId)
@@ -123,7 +133,15 @@ export const useMessageStore = defineStore('message', () => {
       message.isRead = true
     })
     try {
-      await messagesApi.markAllAsRead()
+      const remoteMessageIds = messages.value
+        .map(message => String(message.id))
+        .filter(isRemoteNotificationId)
+
+      if (remoteMessageIds.length === 0) {
+        return
+      }
+
+      await messagesApi.markMultipleAsRead(remoteMessageIds)
     } catch {
       // Keep optimistic local state when remote batch sync is unavailable.
     }
