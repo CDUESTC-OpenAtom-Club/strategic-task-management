@@ -15,12 +15,11 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const loading = ref(false)
+const detailLoading = ref<string | null>(null)
 const fills = ref<IndicatorFill[]>([])
 
 const sortedFills = computed(() =>
-  [...fills.value].sort(
-    (a, b) => new Date(b.fill_date).getTime() - new Date(a.fill_date).getTime()
-  )
+  [...fills.value].sort((a, b) => new Date(b.fill_date).getTime() - new Date(a.fill_date).getTime())
 )
 
 const loadHistory = async () => {
@@ -94,8 +93,16 @@ const formatDateTime = (dateStr?: string) => {
   ).padStart(2, '0')}`
 }
 
-const selectFill = (fill: IndicatorFill) => {
-  emit('select', fill)
+const selectFill = async (fill: IndicatorFill) => {
+  detailLoading.value = String(fill.id)
+  try {
+    const detailedFill = await planStore.loadIndicatorFillById(fill.id, props.indicatorId)
+    emit('select', detailedFill || fill)
+  } catch {
+    emit('select', fill)
+  } finally {
+    detailLoading.value = null
+  }
 }
 
 void loadHistory()
@@ -117,6 +124,7 @@ void loadHistory()
         :key="fill.id"
         type="button"
         class="history-card"
+        :disabled="detailLoading === String(fill.id)"
         @click="selectFill(fill)"
       >
         <div class="history-top">
@@ -147,7 +155,13 @@ void loadHistory()
 
         <div class="history-footer">
           <span>填报日期 {{ formatDate(fill.fill_date) }}</span>
-          <span>更新于 {{ formatDateTime(fill.updated_at) }}</span>
+          <span>
+            {{
+              detailLoading === String(fill.id)
+                ? '正在加载详情...'
+                : `更新于 ${formatDateTime(fill.updated_at)}`
+            }}
+          </span>
         </div>
       </button>
     </div>

@@ -708,20 +708,28 @@ async function loadCollegePlanDetails(options: { force?: boolean } = {}): Promis
     return
   }
 
+  const targetPlan = selectedCollegePlan.value || collegePlanCandidates.value[0] || null
+  if (!targetPlan?.id) {
+    return
+  }
+
+  const cacheKey = String(targetPlan.id)
+  if (!options.force && collegePlanDetailsMap.value[cacheKey]) {
+    return
+  }
+
   collegePlanDetailsLoading.value = true
   try {
-    const detailEntries = await Promise.all(
-      collegePlanCandidates.value.map(async plan => {
-        const detailedPlan =
-          (await planStore.loadPlanDetails(plan.id, {
-            force: options.force,
-            background: true
-          })) || plan
-        return [String(plan.id), detailedPlan as Plan] as const
-      })
-    )
+    const detailedPlan =
+      (await planStore.loadPlanDetails(targetPlan.id, {
+        force: options.force,
+        background: true
+      })) || targetPlan
 
-    collegePlanDetailsMap.value = Object.fromEntries(detailEntries)
+    collegePlanDetailsMap.value = {
+      ...collegePlanDetailsMap.value,
+      [cacheKey]: detailedPlan as Plan
+    }
   } catch (error) {
     logger.warn('[IndicatorListView] 加载学院计划详情失败:', error)
   } finally {
@@ -1681,7 +1689,35 @@ watch(
     if (!ids) {
       return
     }
-    void Promise.all(indicators.value.map(indicator => loadIndicatorWorkflowSnapshot(indicator.id)))
+    const indicatorsNeedingWorkflowSnapshot = indicators.value.filter(indicator => {
+      const approvalStatus = getSafeApprovalStatus(indicator.progressApprovalStatus)
+      if (approvalStatus !== 'NONE' && approvalStatus !== 'DRAFT') {
+        return true
+      }
+
+      const currentReportId = Number(
+        (indicator as StrategicIndicator & { currentReportId?: number | null }).currentReportId ??
+          NaN
+      )
+      if (Number.isFinite(currentReportId) && currentReportId > 0) {
+        return true
+      }
+
+      const reportedProgress = Number(
+        (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress ?? NaN
+      )
+      return Number.isFinite(reportedProgress)
+    })
+
+    if (indicatorsNeedingWorkflowSnapshot.length === 0) {
+      return
+    }
+
+    void Promise.all(
+      indicatorsNeedingWorkflowSnapshot.map(indicator =>
+        loadIndicatorWorkflowSnapshot(indicator.id)
+      )
+    )
   },
   { immediate: true }
 )

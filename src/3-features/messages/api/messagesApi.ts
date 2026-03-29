@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Messages Feature API
  * 集成预警告警消息
@@ -7,10 +6,7 @@
 import { apiClient } from '@/shared/api/client'
 import { alertApi, type WarningEvent, type AlertEvent } from '@/shared/api/monitoringApi'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
-import {
-  CACHE_TTL,
-  createShortMemoryPolicy
-} from '@/shared/lib/utils/cache-config'
+import { CACHE_TTL, createShortMemoryPolicy } from '@/shared/lib/utils/cache-config'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import { logger } from '@/shared/lib/utils/logger'
 
@@ -154,7 +150,10 @@ export const messagesApi = {
    * 使用正确的后端API路径：/api/v1/notifications/my
    */
   async getMessages() {
-    return await apiClient.get('/notifications')
+    return await apiClient.get('/notifications/my', {
+      page: 0,
+      size: 20
+    })
   },
 
   /**
@@ -216,7 +215,9 @@ export const messagesApi = {
       : Array.isArray(payload?.content)
         ? payload.content
         : []
-    const result = await Promise.allSettled(notificationList.map((msg: MessageItem) => this.markAsRead(msg.id)))
+    const result = await Promise.allSettled(
+      notificationList.map((msg: MessageItem) => this.markAsRead(msg.id))
+    )
     invalidateMessageCaches()
     return result
   },

@@ -324,6 +324,8 @@ type CurrentCollegePlanReportSummary = Awaited<
 >
 const currentCollegePlanReportSummary = ref<CurrentCollegePlanReportSummary>(null)
 const isBatchDistributing = ref(false)
+const pageBootstrapPromise = ref<Promise<void> | null>(null)
+const refreshDistributionPromise = ref<Promise<void> | null>(null)
 
 // 搜索关键词
 const searchKeyword = ref('')
@@ -908,29 +910,48 @@ const loadCurrentSelectedCollegePlanDetails = async (force = false) => {
 }
 
 const refreshDistributionData = async () => {
-  const reloadJobs: Array<Promise<unknown>> = [
-    planStore.loadPlans({ force: true, background: true })
-  ]
-
-  // 职能部门分发页不再请求全量年度指标接口。
-  // 该接口当前对教务处等账号无权限，继续调用只会产生 403/500 噪音。
-  if (isStrategicDept.value) {
-    reloadJobs.unshift(strategicStore.loadIndicatorsByYear(timeContext.currentYear))
+  if (refreshDistributionPromise.value) {
+    await refreshDistributionPromise.value
+    return
   }
 
-  const results = await Promise.allSettled(reloadJobs)
+  refreshDistributionPromise.value = (async () => {
+    const reloadJobs: Array<Promise<unknown>> = [
+      planStore.loadPlans({ force: true, background: true })
+    ]
 
-  results.forEach((result, index) => {
-    if (result.status === 'rejected') {
-      const source = isStrategicDept.value && index === 0 ? 'indicators' : 'plans'
-      logger.warn(`[IndicatorDistributeView] 加载 ${source} 数据失败:`, result.reason)
+    // 职能部门分发页不再请求全量年度指标接口。
+    // 该接口当前对教务处等账号无权限，继续调用只会产生 403/500 噪音。
+    if (isStrategicDept.value) {
+      reloadJobs.unshift(strategicStore.loadIndicatorsByYear(timeContext.currentYear))
     }
-  })
 
-  await loadCurrentDepartmentPlanDetails(true)
-  await loadCurrentSelectedCollegePlanDetails(true)
-  await loadCurrentCollegePlanReportSummary()
-  lastEditTime.value = new Date().toLocaleString()
+    const results = await Promise.allSettled(reloadJobs)
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const source = isStrategicDept.value && index === 0 ? 'indicators' : 'plans'
+        logger.warn(`[IndicatorDistributeView] 加载 ${source} 数据失败:`, result.reason)
+      }
+    })
+
+    await loadCurrentDepartmentPlanDetails(true)
+    await loadCurrentSelectedCollegePlanDetails(true)
+    await loadCurrentCollegePlanReportSummary()
+    lastEditTime.value = new Date().toLocaleString()
+  })()
+
+  try {
+    await refreshDistributionPromise.value
+  } finally {
+    refreshDistributionPromise.value = null
+  }
+}
+
+const waitForPageBootstrap = async () => {
+  if (pageBootstrapPromise.value) {
+    await pageBootstrapPromise.value
+  }
 }
 
 const loadCurrentCollegePlanReportSummary = async () => {
@@ -2127,8 +2148,12 @@ const handleGlobalMousedown = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('mousedown', handleGlobalMousedown, true)
-  void orgStore.loadDepartments()
-  void refreshDistributionData()
+  pageBootstrapPromise.value = (async () => {
+    await orgStore.loadDepartments()
+    await refreshDistributionData()
+  })().finally(() => {
+    pageBootstrapPromise.value = null
+  })
 })
 
 onBeforeUnmount(() => {
@@ -2138,7 +2163,10 @@ onBeforeUnmount(() => {
 watch(
   () => [currentDept.value, timeContext.currentYear, currentDepartmentPlan.value?.id],
   () => {
-    void loadCurrentDepartmentPlanDetails()
+    void (async () => {
+      await waitForPageBootstrap()
+      await loadCurrentDepartmentPlanDetails()
+    })()
   },
   { immediate: true }
 )
@@ -2150,8 +2178,11 @@ watch(
     currentSelectedCollegePlan.value?.id
   ],
   () => {
-    void loadCurrentSelectedCollegePlanDetails()
-    void loadCurrentCollegePlanReportSummary()
+    void (async () => {
+      await waitForPageBootstrap()
+      await loadCurrentSelectedCollegePlanDetails()
+      await loadCurrentCollegePlanReportSummary()
+    })()
   },
   { immediate: true }
 )

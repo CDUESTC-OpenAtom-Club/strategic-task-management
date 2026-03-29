@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Plan Feature Store
  *
@@ -85,7 +84,11 @@ export const usePlanStore = defineStore('plan', () => {
   })
 
   const resolvePlanYear = (plan: Plan): number | null => {
-    const planRecord = plan as Plan & { year?: number | string; cycleId?: number | string; cycle?: { year?: number | string } }
+    const planRecord = plan as Plan & {
+      year?: number | string
+      cycleId?: number | string
+      cycle?: { year?: number | string }
+    }
     const explicitYear = planRecord.year ?? planRecord.cycle?.year
     if (explicitYear != null && explicitYear !== '') {
       const numericYear = Number(explicitYear)
@@ -127,9 +130,12 @@ export const usePlanStore = defineStore('plan', () => {
         logger.warn('[Plan Store] No plans loaded')
         return []
       } catch (err) {
-        error.value = err instanceof Error ? err.message
-          : (err && typeof err === 'object' && 'message' in err) ? String((err as { message: unknown }).message)
-          : '加载计划失败'
+        error.value =
+          err instanceof Error
+            ? err.message
+            : err && typeof err === 'object' && 'message' in err
+              ? String((err as { message: unknown }).message)
+              : '加载计划失败'
         logger.error('[Plan Store] Failed to load plans:', error.value)
         ElMessage.error('加载计划失败')
         return []
@@ -220,16 +226,16 @@ export const usePlanStore = defineStore('plan', () => {
           ...response.data,
           targetOrgName:
             response.data.targetOrgName ||
-            (existingPlan as Plan & { targetOrgName?: string } | undefined)?.targetOrgName,
+            (existingPlan as (Plan & { targetOrgName?: string }) | undefined)?.targetOrgName,
           targetOrgId:
             response.data.targetOrgId ??
-            (existingPlan as Plan & { targetOrgId?: number | string } | undefined)?.targetOrgId,
+            (existingPlan as (Plan & { targetOrgId?: number | string }) | undefined)?.targetOrgId,
           year:
             (response.data as Plan & { year?: number | string }).year ??
-            (existingPlan as Plan & { year?: number | string } | undefined)?.year,
+            (existingPlan as (Plan & { year?: number | string }) | undefined)?.year,
           cycleId:
             response.data.cycleId ??
-            (existingPlan as Plan & { cycleId?: number | string } | undefined)?.cycleId
+            (existingPlan as (Plan & { cycleId?: number | string }) | undefined)?.cycleId
         } as Plan
 
         currentPlan.value = mergedPlan
@@ -240,7 +246,9 @@ export const usePlanStore = defineStore('plan', () => {
         } else {
           plans.value.push(mergedPlan)
         }
-        logger.info(`[Plan Store] Loaded plan details ${planId} with ${response.data.tasks?.length || 0} tasks`)
+        logger.info(
+          `[Plan Store] Loaded plan details ${planId} with ${response.data.tasks?.length || 0} tasks`
+        )
         return mergedPlan
       } else {
         currentPlan.value = null
@@ -690,6 +698,30 @@ export const usePlanStore = defineStore('plan', () => {
     }
   }
 
+  const loadIndicatorFillById = async (fillId: number | string, indicatorId?: number | string) => {
+    loading.value = true
+    error.value = null
+
+    try {
+      logger.info(`[Plan Store] Loading indicator fill detail ${fillId}...`)
+      const { indicatorFillApi } = await import('@/features/plan/api/planApi')
+      const response = await indicatorFillApi.getFillById(fillId, indicatorId)
+
+      if (hasApiData(response)) {
+        return response.data
+      }
+
+      throw new Error(response.message || '加载指标填报详情失败')
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '加载指标填报详情失败'
+      logger.error('[Plan Store] Failed to load indicator fill detail:', err)
+      ElMessage.error(error.value)
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   const saveIndicatorFill = async (form: IndicatorFillForm) => {
     submitting.value = true
     error.value = null
@@ -831,6 +863,7 @@ export const usePlanStore = defineStore('plan', () => {
     loadPlanDetails,
     loadPendingFills,
     loadIndicatorFillHistory,
+    loadIndicatorFillById,
     createPlan,
     updatePlan,
     deletePlan,

@@ -24,9 +24,9 @@ export function useAppLayout() {
     async isAuth => {
       if (isAuth && !orgStore.loaded) {
         await orgStore.loadDepartments()
-        await messageStore.fetchMessages()
+        void messageStore.fetchMessages()
       } else if (isAuth && orgStore.loaded && messageStore.messages.length === 0) {
-        await messageStore.fetchMessages()
+        void messageStore.fetchMessages()
       }
     },
     { immediate: true }

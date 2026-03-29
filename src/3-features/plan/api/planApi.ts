@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Plan API 服务
  * 新数据结构: Plan -> Task -> Indicator -> IndicatorFill
@@ -157,7 +156,10 @@ async function silentApiGet<T>(url: string): Promise<SilentApiResult<T>> {
 }
 
 function invalidatePlanCaches(planId?: number | string): void {
-  const targets: Array<string | readonly [string, string, Record<string, string>]> = ['plan.list', 'dashboard.overview']
+  const targets: Array<string | readonly [string, string, Record<string, string>]> = [
+    'plan.list',
+    'dashboard.overview'
+  ]
   if (planId !== undefined) {
     targets.push('plan.detail', `plan.detail.${planId}`)
     targets.push(buildQueryKey('plan', 'detail', { planId: String(planId), kind: 'basic' }))
@@ -256,17 +258,25 @@ function convertBackendPlanToPlan(
     totalIndicators: raw.indicatorCount,
     completedIndicators: raw.completionPercentage,
     // Preserve backend fields used by existing views during the migration period.
-    ...(('targetOrgId' in raw || 'orgId' in raw) ? { targetOrgId: raw.targetOrgId ?? raw.orgId } : {}),
+    ...('targetOrgId' in raw || 'orgId' in raw
+      ? { targetOrgId: raw.targetOrgId ?? raw.orgId }
+      : {}),
     ...(resolvedTargetOrgName ? { targetOrgName: resolvedTargetOrgName } : {}),
     ...('orgName' in raw ? { orgName: raw.orgName } : {}),
     ...('cycleId' in raw ? { cycleId: raw.cycleId } : {}),
     ...(inferredYear != null ? { year: inferredYear } : {}),
     ...('planLevel' in raw ? { planLevel: raw.planLevel } : {}),
-    ...('workflowInstanceId' in raw ? { workflowInstanceId: Number(raw.workflowInstanceId) || undefined } : {}),
+    ...('workflowInstanceId' in raw
+      ? { workflowInstanceId: Number(raw.workflowInstanceId) || undefined }
+      : {}),
     ...('currentTaskId' in raw ? { currentTaskId: Number(raw.currentTaskId) || undefined } : {}),
     ...('workflowStatus' in raw ? { workflowStatus: raw.workflowStatus } : {}),
-    ...('currentStepName' in raw ? { currentStepName: raw.currentStepName, currentStep: raw.currentStepName } : {}),
-    ...('currentApproverId' in raw ? { currentApproverId: Number(raw.currentApproverId) || undefined } : {}),
+    ...('currentStepName' in raw
+      ? { currentStepName: raw.currentStepName, currentStep: raw.currentStepName }
+      : {}),
+    ...('currentApproverId' in raw
+      ? { currentApproverId: Number(raw.currentApproverId) || undefined }
+      : {}),
     ...('currentApproverName' in raw ? { currentApproverName: raw.currentApproverName } : {}),
     ...('canWithdraw' in raw ? { canWithdraw: Boolean(raw.canWithdraw) } : {}),
     ...('canEdit' in raw ? { canEdit: Boolean(raw.canEdit) } : {}),
@@ -275,11 +285,15 @@ function convertBackendPlanToPlan(
     ...('submittedByName' in raw ? { submittedByName: raw.submittedByName } : {}),
     ...('submittedAt' in raw ? { submittedAt: raw.submittedAt } : {}),
     ...('lastRejectReason' in raw ? { lastRejectReason: raw.lastRejectReason } : {}),
-    ...('workflowHistory' in raw && Array.isArray(raw.workflowHistory) ? { workflowHistory: raw.workflowHistory } : {})
+    ...('workflowHistory' in raw && Array.isArray(raw.workflowHistory)
+      ? { workflowHistory: raw.workflowHistory }
+      : {})
   } as Plan
 }
 
-function convertApprovalDetailToPlanFill(detail: ApprovalDetail & Record<string, unknown>): PlanFill {
+function convertApprovalDetailToPlanFill(
+  detail: ApprovalDetail & Record<string, unknown>
+): PlanFill {
   return {
     id: detail.id,
     plan_id: detail.entityId,
@@ -660,7 +674,9 @@ function mapPlanReportToIndicatorFill(
   context: Pick<IndicatorReportContext, 'indicatorId' | 'indicatorName'>
 ): IndicatorFill {
   const matchedDetail = Array.isArray(report.indicatorDetails)
-    ? report.indicatorDetails.find(detail => Number(detail.indicatorId) === Number(context.indicatorId))
+    ? report.indicatorDetails.find(
+        detail => Number(detail.indicatorId) === Number(context.indicatorId)
+      )
     : undefined
   const fallbackDetail =
     !matchedDetail && Array.isArray(report.indicatorDetails) && report.indicatorDetails.length === 1
@@ -673,7 +689,7 @@ function mapPlanReportToIndicatorFill(
       ? `${report.reportMonth.slice(0, 4)}-${report.reportMonth.slice(4, 6)}-01`
       : report.reportMonth && /^\d{4}-\d{2}$/.test(report.reportMonth)
         ? `${report.reportMonth}-01`
-      : report.updatedAt || report.createdAt || new Date().toISOString()
+        : report.updatedAt || report.createdAt || new Date().toISOString()
 
   return {
     id: report.id,
@@ -775,7 +791,9 @@ function getCurrentReportMonth(): string {
 }
 
 function getNormalizedReportStatus(status?: string | null): string {
-  return String(status || '').trim().toUpperCase()
+  return String(status || '')
+    .trim()
+    .toUpperCase()
 }
 
 function isLockedPlanReportStatus(status?: string | null): boolean {
@@ -826,7 +844,9 @@ async function resolveIndicatorReportContext(
     indicatorData.targetOrgName ?? authStore.effectiveDepartment ?? authStore.userDepartment ?? ''
   )
   const matchedDepartment = orgStore.getDepartmentByName(targetDepartmentName)
-  const fallbackOrgId = Number(indicatorData.targetOrgId ?? matchedDepartment?.id ?? indicatorData.ownerOrgId)
+  const fallbackOrgId = Number(
+    indicatorData.targetOrgId ?? matchedDepartment?.id ?? indicatorData.ownerOrgId
+  )
   const reportOrgId = Number(indicatorData.targetOrgId ?? matchedDepartment?.id ?? fallbackOrgId)
 
   if (!Number.isFinite(reportOrgId)) {
@@ -853,12 +873,19 @@ async function resolveIndicatorReportContext(
     const sourceOrgId = Number(indicatorData.ownerOrgId ?? NaN)
     const currentYear = Number(timeContext.currentYear ?? NaN)
 
-    if (Number.isFinite(sourceOrgId) && sourceOrgId > 0 && Number.isFinite(currentYear) && currentYear > 0) {
+    if (
+      Number.isFinite(sourceOrgId) &&
+      sourceOrgId > 0 &&
+      Number.isFinite(currentYear) &&
+      currentYear > 0
+    ) {
       const resolveCycleYear = await getCycleYearResolver()
       const allPlans = await fetchAllPlansFromPages(resolveCycleYear)
       const matchedCollegeReceivingPlan = allPlans.find(plan => {
         const candidateTargetOrgId = Number(plan.targetOrgId ?? plan.orgId ?? NaN)
-        const candidateCreatedByOrgId = Number((plan as Record<string, unknown>).createdByOrgId ?? NaN)
+        const candidateCreatedByOrgId = Number(
+          (plan as Record<string, unknown>).createdByOrgId ?? NaN
+        )
         const candidatePlanLevel = String((plan as Record<string, unknown>).planLevel || '')
           .trim()
           .toUpperCase()
@@ -895,9 +922,15 @@ async function resolveIndicatorReportContext(
 }
 
 async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
-  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(`/reports/plan/${planId}`)
+  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(
+    `/reports/plan/${planId}`
+  )
   if (!hasApiData(response)) {
-    throw new Error(typeof response.message === 'string' ? response.message || '加载计划报告失败' : '加载计划报告失败')
+    throw new Error(
+      typeof response.message === 'string'
+        ? response.message || '加载计划报告失败'
+        : '加载计划报告失败'
+    )
   }
 
   const reports = Array.isArray(response.data) ? response.data : []
@@ -908,7 +941,11 @@ async function loadPlanReportById(reportId: number | string): Promise<PlanReport
   const result = await silentApiGet<PlanReportSimpleResponse>(`/reports/${reportId}`)
   const response = result.data as ApiResponse<PlanReportSimpleResponse> | undefined
   if (result.status >= 500 || !response || !hasApiData(response) || !response.data) {
-    throw new Error(typeof response.message === 'string' ? response.message || '加载报告详情失败' : '加载报告详情失败')
+    throw new Error(
+      typeof response.message === 'string'
+        ? response.message || '加载报告详情失败'
+        : '加载报告详情失败'
+    )
   }
   return enrichPlanReportWorkflow(response.data)
 }
@@ -937,10 +974,13 @@ async function fetchAllPlansFromPages(
   resolveCycleYear?: (cycleId: unknown) => number | null
 ): Promise<Plan[]> {
   const pageSize = 1000
-  const firstResponse = await apiClient.get<ApiResponse<Plan[] | PaginatedPlanCollection>>('/plans', {
-    page: 0,
-    size: pageSize
-  })
+  const firstResponse = await apiClient.get<ApiResponse<Plan[] | PaginatedPlanCollection>>(
+    '/plans',
+    {
+      page: 0,
+      size: pageSize
+    }
+  )
   const allPlans = normalizePlanCollection(firstResponse.data, resolveCycleYear)
 
   if (!hasApiData(firstResponse)) {
@@ -984,9 +1024,10 @@ async function getCycleYearResolver(): Promise<(cycleId: unknown) => number | nu
 
 async function loadPlansByCycleFallback(): Promise<ApiResponse<Plan[]>> {
   const resolveCycleYear = await getCycleYearResolver()
-  const cyclesResponse = await apiClient.get<
-    ApiResponse<Array<{ id?: number | string; cycleId?: number | string }>>
-  >('/cycles/list')
+  const cyclesResponse =
+    await apiClient.get<ApiResponse<Array<{ id?: number | string; cycleId?: number | string }>>>(
+      '/cycles/list'
+    )
 
   const cycles = Array.isArray(cyclesResponse.data) ? cyclesResponse.data : []
   const cycleIds = cycles
@@ -1138,7 +1179,9 @@ export const planApi = {
     const resolveCycleYear = await getCycleYearResolver()
     return {
       ...response,
-      data: normalizePlanCollection(response.data, resolveCycleYear).filter(p => String(p.org_id) === String(orgId))
+      data: normalizePlanCollection(response.data, resolveCycleYear).filter(
+        p => String(p.org_id) === String(orgId)
+      )
     }
   },
 
@@ -1258,7 +1301,10 @@ export const planApi = {
           logger.warn('[planApi] plan details endpoint unavailable, fallback to basic plan', {
             planId,
             status: result.status,
-            message: response && typeof response === 'object' && 'message' in response ? response.message : undefined
+            message:
+              response && typeof response === 'object' && 'message' in response
+                ? response.message
+                : undefined
           })
           return this.getPlanById(planId)
         }
@@ -1316,20 +1362,20 @@ export const planApi = {
    */
   convertStatusFromBackend(status: string): PlanStatus {
     const map: Record<string, PlanStatus> = {
-      'DRAFT': 'draft',
-      'PENDING': 'pending',
-      'IN_REVIEW': 'pending',
-      'PENDING_APPROVAL': 'pending',
-      'RETURNED': 'draft',
-      'REJECTED': 'draft',
-      'WITHDRAWN': 'draft',
-      'CANCELLED': 'draft',
-      'COMPLETED': 'draft',
-      'APPROVED': 'published',
-      'DISTRIBUTED': 'published',
-      'ACTIVE': 'published',
-      'PUBLISHED': 'published',
-      'ARCHIVED': 'archived'
+      DRAFT: 'draft',
+      PENDING: 'pending',
+      IN_REVIEW: 'pending',
+      PENDING_APPROVAL: 'pending',
+      RETURNED: 'draft',
+      REJECTED: 'draft',
+      WITHDRAWN: 'draft',
+      CANCELLED: 'draft',
+      COMPLETED: 'draft',
+      APPROVED: 'published',
+      DISTRIBUTED: 'published',
+      ACTIVE: 'published',
+      PUBLISHED: 'published',
+      ARCHIVED: 'archived'
     }
     return map[status] || 'draft'
   },
@@ -1511,7 +1557,10 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      const response = await apiClient.post<ApiResponse<Plan>>(`/plans/${planId}/submit-dispatch`, payload)
+      const response = await apiClient.post<ApiResponse<Plan>>(
+        `/plans/${planId}/submit-dispatch`,
+        payload
+      )
       invalidatePlanCaches(planId)
       return response
     })
@@ -1605,11 +1654,11 @@ export const planApi = {
     }
 
     return withRetry(async () => {
-      const response = await apiClient.getAxiosInstance().post<ApiResponse<Plan>>(
-        `/plans/${planId}/withdraw`,
-        undefined,
-        { timeout: PLAN_WITHDRAW_TIMEOUT_MS }
-      )
+      const response = await apiClient
+        .getAxiosInstance()
+        .post<
+          ApiResponse<Plan>
+        >(`/plans/${planId}/withdraw`, undefined, { timeout: PLAN_WITHDRAW_TIMEOUT_MS })
       invalidatePlanCaches(planId)
       invalidateQueries([
         'workflow.todo',
@@ -1748,33 +1797,14 @@ export const indicatorFillApi = {
             new Date(a.updatedAt || a.createdAt || 0).getTime()
         )
 
-      const detailedReports = await Promise.all(
-        scopedReports.map(async report => {
-          try {
-            return await loadPlanReportById(report.id)
-          } catch {
-            return report
-          }
-        })
-      )
-
       return {
         code: 200,
-        data: detailedReports
-          .filter(report => {
-            if (!Array.isArray(report.indicatorDetails)) {
-              return true
-            }
-            return report.indicatorDetails.some(
-              detail => Number(detail.indicatorId) === Number(context.indicatorId)
-            )
+        data: scopedReports.map(report =>
+          mapPlanReportToIndicatorFill(report, {
+            indicatorId: context.indicatorId,
+            indicatorName: context.indicatorName
           })
-          .map(report =>
-            mapPlanReportToIndicatorFill(report, {
-              indicatorId: context.indicatorId,
-              indicatorName: context.indicatorName
-            })
-          ),
+        ),
         message: '获取成功',
         timestamp: new Date().toISOString()
       }
@@ -1792,7 +1822,10 @@ export const indicatorFillApi = {
   /**
    * 获取单次填报记录详情
    */
-  async getFillById(fillId: number | string): Promise<ApiResponse<IndicatorFill | null>> {
+  async getFillById(
+    fillId: number | string,
+    indicatorId?: number | string
+  ): Promise<ApiResponse<IndicatorFill | null>> {
     if (this.useMockData) {
       const fillVO = mockIndicatorFills.find(f => f.fillId === Number(fillId))
       if (!fillVO) {
@@ -1812,12 +1845,32 @@ export const indicatorFillApi = {
       }
     }
 
-    void fillId
-    return {
-      code: 200,
-      data: null,
-      message: '当前 OpenAPI 未提供单条填报详情接口',
-      timestamp: new Date().toISOString()
+    try {
+      const report = await loadPlanReportById(fillId)
+      const resolvedIndicatorId = Number(
+        indicatorId ?? report.indicatorDetails?.[0]?.indicatorId ?? NaN
+      )
+      const indicatorName = String(report.title || '指标填报').trim() || '指标填报'
+
+      return {
+        code: 200,
+        data: mapPlanReportToIndicatorFill(report, {
+          indicatorId:
+            Number.isFinite(resolvedIndicatorId) && resolvedIndicatorId > 0
+              ? resolvedIndicatorId
+              : 0,
+          indicatorName
+        }),
+        message: '获取成功',
+        timestamp: new Date().toISOString()
+      }
+    } catch (error) {
+      return {
+        code: 500,
+        data: null,
+        message: error instanceof Error ? error.message : '加载填报详情失败',
+        timestamp: new Date().toISOString()
+      }
     }
   },
 
@@ -1892,7 +1945,9 @@ export const indicatorFillApi = {
     }
 
     const operatorUserId =
-      Number(useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId) || undefined
+      Number(
+        useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId
+      ) || undefined
 
     const normalizedBatchItems = (
       Array.isArray(form.batch_items) && form.batch_items.length > 0
@@ -1916,7 +1971,8 @@ export const indicatorFillApi = {
       }))
       .filter(item => Number.isFinite(item.indicatorId) && Number.isFinite(item.progress))
       .filter(
-        (item, index, list) => list.findIndex(candidate => candidate.indicatorId === item.indicatorId) === index
+        (item, index, list) =>
+          list.findIndex(candidate => candidate.indicatorId === item.indicatorId) === index
       )
 
     const ensureCurrentMonthReport = async (): Promise<PlanReportSimpleResponse> => {
@@ -1924,13 +1980,16 @@ export const indicatorFillApi = {
         return editableExistingReport
       }
 
-      const createResponse = await apiClient.post<ApiResponse<PlanReportSimpleResponse>>('/reports', {
-        reportMonth: context.reportMonth,
-        reportOrgId: context.reportOrgId,
-        reportOrgType: context.reportOrgType,
-        planId: context.planId,
-        createdBy: operatorUserId
-      })
+      const createResponse = await apiClient.post<ApiResponse<PlanReportSimpleResponse>>(
+        '/reports',
+        {
+          reportMonth: context.reportMonth,
+          reportOrgId: context.reportOrgId,
+          reportOrgType: context.reportOrgType,
+          planId: context.planId,
+          createdBy: operatorUserId
+        }
+      )
       if (!hasApiData(createResponse) || !createResponse.data) {
         throw new Error(createResponse.message || '创建填报草稿失败')
       }
@@ -2066,20 +2125,21 @@ export const indicatorFillApi = {
     )
 
     if (!hasApiData(response) || !response.data) {
-      throw new Error(typeof response.message === 'string' ? response.message || '提交指标填报失败' : '提交指标填报失败')
+      throw new Error(
+        typeof response.message === 'string'
+          ? response.message || '提交指标填报失败'
+          : '提交指标填报失败'
+      )
     }
 
     const reportDetail = await loadPlanReportById(response.data.id).catch(() => response.data)
 
     return {
       code: 200,
-      data: mapPlanReportToIndicatorFill(
-        reportDetail,
-        {
-          indicatorId: Number((reportDetail as Record<string, unknown>).indicatorId ?? 0),
-          indicatorName: String(reportDetail.title || '指标填报')
-        }
-      ),
+      data: mapPlanReportToIndicatorFill(reportDetail, {
+        indicatorId: Number((reportDetail as Record<string, unknown>).indicatorId ?? 0),
+        indicatorName: String(reportDetail.title || '指标填报')
+      }),
       message: '提交成功',
       timestamp: new Date().toISOString()
     }
@@ -2094,8 +2154,7 @@ export const indicatorFillApi = {
     const currentMonthReports = reports
       .filter(
         report =>
-          Number(report.reportOrgId) === Number(reportOrgId) &&
-          report.reportMonth === reportMonth
+          Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
       )
       .sort(
         (a, b) =>
@@ -2125,7 +2184,9 @@ export const indicatorFillApi = {
     }
 
     const authStore = useAuthStore()
-    const userId = Number(authStore.user?.id ?? (authStore.user as { userId?: number } | null)?.userId)
+    const userId = Number(
+      authStore.user?.id ?? (authStore.user as { userId?: number } | null)?.userId
+    )
     if (!Number.isFinite(userId) || userId <= 0) {
       throw new Error('当前登录用户缺少 userId，无法提交上报')
     }
@@ -2228,7 +2289,9 @@ export const planFillApi = {
     return {
       ...response,
       data: Array.isArray((response.data as unknown as { items: unknown[] })?.items)
-        ? (response.data as unknown as { items: unknown[] }).items.map(convertApprovalDetailToPlanFill)
+        ? (response.data as unknown as { items: unknown[] }).items.map(
+            convertApprovalDetailToPlanFill
+          )
         : []
     }
   },
