@@ -413,6 +413,34 @@ async function refreshCurrentPlanDetails(planId: number): Promise<void> {
   await loadCurrentPlanReportSummary(planId)
 }
 
+function clearCurrentPlanReportDerivedState(): void {
+  if (!currentPlanDetails.value?.indicators?.length) {
+    return
+  }
+
+  currentPlanDetails.value = {
+    ...currentPlanDetails.value,
+    indicators: currentPlanDetails.value.indicators.map((item: any) => {
+      if (!item || typeof item !== 'object') {
+        return item
+      }
+
+      const nextItem = { ...(item as Record<string, unknown>) }
+      delete nextItem.reportProgress
+      delete nextItem.report_progress
+      delete nextItem.pendingProgress
+      delete nextItem.pending_progress
+      delete nextItem.pendingRemark
+      delete nextItem.pending_remark
+      delete nextItem.pendingAttachments
+      delete nextItem.currentReportId
+      delete nextItem.current_report_id
+
+      return nextItem
+    })
+  }
+}
+
 async function loadCurrentPlanReportSummary(planId?: number | null): Promise<void> {
   if (!isSecondaryCollege.value) {
     currentPlanReportSummary.value = null
@@ -431,8 +459,12 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
       resolvedPlanId,
       reportOrgId
     )
+    if (!currentPlanReportSummary.value) {
+      clearCurrentPlanReportDerivedState()
+    }
   } catch (error) {
     currentPlanReportSummary.value = null
+    clearCurrentPlanReportDerivedState()
     logger.warn('[IndicatorListView] 加载当前上报摘要失败:', { planId: resolvedPlanId, reportOrgId, error })
   }
 }

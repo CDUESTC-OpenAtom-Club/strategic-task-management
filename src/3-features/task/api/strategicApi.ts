@@ -722,18 +722,51 @@ async function getPendingApprovals(_userId: number): Promise<ApiResponse<Pending
   try {
     const response = await getMyPendingTasks(1)
     if (response.success && response.data) {
-      const pageResult = response.data as unknown as { items: { taskId: string; taskName: string; status: string }[] }
+      const pageResult = response.data as unknown as {
+        items: Array<{
+          taskId: string
+          instanceId?: string
+          taskName: string
+          status: string
+          flowCode?: string
+          flowName?: string
+          entityId?: number
+          entityType?: string
+          approverOrgId?: number
+          approverOrgName?: string
+          sourceOrgId?: number
+          sourceOrgName?: string
+          targetOrgId?: number
+          targetOrgName?: string
+          planId?: number
+          planName?: string
+          currentStepName?: string
+          createdTime?: string
+        }>
+      }
       logger.info('[API] Successfully got pending approvals', { count: pageResult.items.length })
       return {
         ...response,
         data: pageResult.items.map(item => ({
-          instanceId: Number(item.taskId),
-          title: item.taskName,
-          entityType: 'TASK',
+          instanceId: Number(item.instanceId) || 0,
+          taskId: Number(item.taskId) || 0,
+          title: item.planName || item.taskName,
+          entityType: item.entityType || 'TASK',
           status: item.status,
-          flowCode: (item as { flowCode?: string }).flowCode,
-          flowName: (item as { flowName?: string }).flowName,
-          entityId: (item as { entityId?: number }).entityId
+          flowCode: item.flowCode,
+          flowName: item.flowName,
+          entityId: item.entityId,
+          businessEntityType: item.entityType,
+          approverOrgId: item.approverOrgId,
+          approverOrgName: item.approverOrgName,
+          sourceOrgId: item.sourceOrgId,
+          sourceOrgName: item.sourceOrgName,
+          targetOrgId: item.targetOrgId,
+          targetOrgName: item.targetOrgName,
+          planId: item.planId,
+          planName: item.planName,
+          currentStepName: item.currentStepName || item.taskName,
+          createdAt: item.createdTime
         })) as unknown as PendingApproval[]
       }
     }

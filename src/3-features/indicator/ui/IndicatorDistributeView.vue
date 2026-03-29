@@ -714,12 +714,20 @@ const canCurrentUserApproveCurrentPlan = computed(() => {
   return true
 })
 
+const hasCurrentCollegePendingApproval = computed(() => {
+  if (pendingApprovalCount.value > 0) {
+    return true
+  }
+
+  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)
+})
+
 const distributionApprovalButtonType = computed(() => {
-  return canCurrentUserApproveCurrentPlan.value ? 'warning' : 'default'
+  return hasCurrentCollegePendingApproval.value ? 'warning' : 'default'
 })
 
 const distributionApprovalButtonText = computed(() => {
-  if (canCurrentUserApproveCurrentPlan.value) {
+  if (hasCurrentCollegePendingApproval.value) {
     return '待审批'
   }
   return '查看审批进度'

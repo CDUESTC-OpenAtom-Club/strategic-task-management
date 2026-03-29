@@ -341,30 +341,103 @@ const scopedPlanEntityIds = computed(() => {
   return entityIds
 })
 
+function toPositiveNumber(value: unknown): number | null {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null
+  }
+  return numericValue
+}
+
+const relevantDepartmentOrgIds = computed(() => {
+  const orgIds = new Set<number>()
+
+  const currentOrgId = toPositiveNumber(currentUserOrgId.value)
+  if (currentOrgId) {
+    orgIds.add(currentOrgId)
+  }
+
+  const rawPlan = props.plan as
+    | (Plan & {
+        createdByOrgId?: number | string
+        sourceOrgId?: number | string
+      })
+    | null
+    | undefined
+
+  const createdByOrgId = toPositiveNumber(rawPlan?.createdByOrgId)
+  if (createdByOrgId) {
+    orgIds.add(createdByOrgId)
+  }
+
+  const sourceOrgId = toPositiveNumber(rawPlan?.sourceOrgId)
+  if (sourceOrgId) {
+    orgIds.add(sourceOrgId)
+  }
+
+  const activeSourceOrgId = toPositiveNumber(activePlanWorkflow.value?.sourceOrgId)
+  if (activeSourceOrgId) {
+    orgIds.add(activeSourceOrgId)
+  }
+
+  return orgIds
+})
+
+function isDepartmentRelevantApproval(instance: Record<string, any>): boolean {
+  if (relevantDepartmentOrgIds.value.size === 0) {
+    return false
+  }
+
+  const approverOrgId = toPositiveNumber(instance.approverOrgId)
+  if (approverOrgId && relevantDepartmentOrgIds.value.has(approverOrgId)) {
+    return true
+  }
+
+  const sourceOrgId = toPositiveNumber(instance.sourceOrgId)
+  if (sourceOrgId && relevantDepartmentOrgIds.value.has(sourceOrgId)) {
+    return true
+  }
+
+  return false
+}
+
 const scopedPlanApprovals = computed(() => {
-  if (scopedPlanEntityIds.value.size === 0) {
-    if (props.departmentName || props.planName) {
-      return []
-    }
-    return pendingPlanApprovals.value
-  }
-
-  const withEntityId = pendingPlanApprovals.value.filter(instance => {
-    const entityId = Number(instance.entityId)
-    return Number.isFinite(entityId) && entityId > 0
-  })
-
-  if (withEntityId.length === 0) {
-    return []
-  }
-
-  return withEntityId.filter(instance => {
-    if (!scopedPlanEntityIds.value.has(Number(instance.entityId))) {
+  const matchingApprovals = pendingPlanApprovals.value.filter(instance => {
+    const flowCode = (instance as { flowCode?: string }).flowCode
+    if (!matchesExpectedWorkflowCode(flowCode)) {
       return false
     }
 
-    const flowCode = (instance as { flowCode?: string }).flowCode
-    return matchesExpectedWorkflowCode(flowCode)
+    const entityId = Number(instance.entityId)
+    const matchesEntity =
+      Number.isFinite(entityId) &&
+      entityId > 0 &&
+      scopedPlanEntityIds.value.has(entityId)
+
+    const matchesDepartment = isDepartmentRelevantApproval(instance)
+
+    if (scopedPlanEntityIds.value.size === 0) {
+      return matchesDepartment || !props.departmentName
+    }
+
+    return matchesEntity || matchesDepartment
+  })
+
+  const seenKeys = new Set<string>()
+  return matchingApprovals.filter(instance => {
+    const key =
+      String(
+        (instance as { instanceId?: string | number }).instanceId ||
+          (instance as { taskId?: string | number }).taskId ||
+          (instance as { entityId?: string | number }).entityId ||
+          ''
+      ).trim() || JSON.stringify(instance)
+
+    if (seenKeys.has(key)) {
+      return false
+    }
+    seenKeys.add(key)
+    return true
   })
 })
 
@@ -1159,11 +1232,6 @@ async function refreshPlanApprovalAfterMutation(): Promise<void> {
 }
 
 async function loadPendingPlanApprovals() {
-  if (hasPlanWorkflowData.value) {
-    pendingPlanApprovals.value = []
-    return
-  }
-
   if (!props.showPlanApprovals) {
     pendingPlanApprovals.value = []
     return
@@ -1876,7 +1944,7 @@ watch(
         </ElTabPane>
 
         <!-- 审批流程视图（使用CustomApprovalFlow组件） -->
-        <ElTabPane v-if="hasWorkflowTabContent" name="workflow" label="审批流程">
+        <ElTabPane name="workflow" label="审批流程">
           <ElEmpty
             v-if="showArchivedPlanWorkflowEmptyState || workflowNodes.length === 0"
             description="暂无审批数据"
