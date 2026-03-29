@@ -787,7 +787,11 @@ const refreshCurrentDepartmentView = async (options: { showLoading?: boolean } =
   }
 }
 
-const PLAN_APPROVAL_WORKFLOW_CODE = ['PLAN_DISPATCH_STRATEGY', 'PLAN_APPROVAL_FUNCDEPT'] as const
+const PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE = 'PLAN_DISPATCH_STRATEGY'
+const PLAN_APPROVAL_HISTORY_WORKFLOW_CODES = [
+  'PLAN_DISPATCH_STRATEGY',
+  'PLAN_APPROVAL_FUNCDEPT'
+] as const
 
 const approvalSetupDialogVisible = ref(false)
 const approvalPreviewLoading = ref(false)
@@ -1148,7 +1152,7 @@ const openApprovalSetupDialog = async () => {
   approvalSetupDialogVisible.value = true
 
   try {
-    const response = await getWorkflowDefinitionPreviewByCode(PLAN_APPROVAL_WORKFLOW_CODE)
+    const response = await getWorkflowDefinitionPreviewByCode(PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE)
     if (!response.success || !response.data) {
       throw new Error(response.message || '加载审批流程失败')
     }
@@ -1202,7 +1206,7 @@ const confirmPlanApprovalSubmission = async () => {
   approvalSubmitting.value = true
   try {
     await planStore.submitPlanForApproval(planId, {
-      workflowCode: preview.workflowCode || PLAN_APPROVAL_WORKFLOW_CODE
+      workflowCode: preview.workflowCode || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
     })
     await planStore.loadPlanDetails(planId, { force: true, background: true })
     await loadPendingPlanApprovalCount()
@@ -4774,7 +4778,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           <div class="summary-row">
             <span class="summary-label">审批流程：</span>
             <span class="summary-value">
-              {{ approvalWorkflowPreview?.workflowName || PLAN_APPROVAL_WORKFLOW_CODE }}
+              {{ approvalWorkflowPreview?.workflowName || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE }}
             </span>
           </div>
         </div>
@@ -4822,7 +4826,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       :plan-name="currentPlan?.taskName || currentPlan?.name || selectedDepartment"
       :show-plan-approvals="true"
       :show-approval-section="true"
-      :workflow-code="PLAN_APPROVAL_WORKFLOW_CODE"
+      :workflow-code="PLAN_APPROVAL_HISTORY_WORKFLOW_CODES"
       approval-type="submission"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"

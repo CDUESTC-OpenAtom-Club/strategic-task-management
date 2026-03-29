@@ -598,6 +598,10 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 })
 
 const currentPlanTaskId = computed(() => {
+  if (['已撤回', '已驳回'].includes(planWorkflowStatusTag.value.label)) {
+    return 0
+  }
+
   const pendingTask = planWorkflowTasks.value.find(task => {
     return (
       String(task.status || '')
@@ -616,6 +620,10 @@ const currentPlanTaskId = computed(() => {
   }
 
   return 0
+})
+
+const isPlanWorkflowTerminated = computed(() => {
+  return ['已撤回', '已驳回'].includes(planWorkflowStatusTag.value.label)
 })
 
 const currentPlanInstanceId = computed(() => {
@@ -733,6 +741,9 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
   if (normalizedStatus === 'WAITING') {
     return 'waiting'
   }
+  if (normalizedStatus === 'PENDING' && isPlanWorkflowTerminated.value) {
+    return 'waiting'
+  }
   if (
     normalizedStatus === 'PENDING' &&
     planWorkflowStatusTag.value.label === '已撤回' &&
@@ -770,6 +781,9 @@ function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
   }
   if (normalizedStatus === 'REJECTED') {
     return '已驳回'
+  }
+  if (normalizedStatus === 'PENDING' && isPlanWorkflowTerminated.value) {
+    return '等待中'
   }
   if (
     normalizedStatus === 'PENDING' &&
@@ -910,9 +924,15 @@ function resolveHistoryStatusTag(status?: string): {
   return { label: normalized || '未知', type: 'info' }
 }
 
+function isTerminalHistoryStatus(status?: string): boolean {
+  const normalized = String(status || '').trim().toUpperCase()
+  return ['APPROVED', 'REJECTED', 'WITHDRAWN', 'CANCELLED', 'COMPLETED'].includes(normalized)
+}
+
 const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   return planWorkflowHistoryCards.value
     .filter(item => matchesExpectedWorkflowCode(item.flowCode))
+    .filter(item => isTerminalHistoryStatus(item.status) || Boolean(item.completedAt))
     .map((item, index) => {
       const statusTag = resolveHistoryStatusTag(item.status)
       return {
@@ -1632,12 +1652,15 @@ const showPlanHistoryCard = computed(() => {
 })
 
 const showHistoryTimeline = computed(() => {
+  if (props.showPlanApprovals) {
+    return false
+  }
   return props.historyViewMode !== 'card-only' && !showPlanHistoryCard.value
 })
 
 const showCardHistoryEmptyState = computed(() => {
   return (
-    props.historyViewMode === 'card-only' && props.showPlanApprovals && !showPlanHistoryCard.value
+    props.showPlanApprovals && !showPlanHistoryCard.value
   )
 })
 
