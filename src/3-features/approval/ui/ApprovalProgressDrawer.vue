@@ -499,11 +499,22 @@ function resolveExpectedApproverRoleCodes(): string[] {
 }
 
 function resolveExpectedApproverOrgId(): number | null {
+  const stepName = String(activePlanWorkflow.value?.currentStepName || '').trim()
   const currentTaskId = String(activePlanWorkflow.value?.currentTaskId || '').trim()
   if (currentTaskId && Array.isArray(planWorkflowDetail.value?.tasks)) {
     const currentTask = planWorkflowDetail.value.tasks.find(
       task => String(task.taskId || '').trim() === currentTaskId
     )
+
+    if (stepName.includes('职能部门终审')) {
+      const sourceOrgId = Number(
+        planWorkflowDetail.value?.sourceOrgId ?? activePlanWorkflow.value?.sourceOrgId ?? 0
+      )
+      if (Number.isFinite(sourceOrgId) && sourceOrgId > 0) {
+        return sourceOrgId
+      }
+    }
+
     const approverOrgId = Number(currentTask?.approverOrgId ?? 0)
     if (Number.isFinite(approverOrgId) && approverOrgId > 0) {
       return approverOrgId

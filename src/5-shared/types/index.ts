@@ -686,6 +686,13 @@ export interface IndicatorFillForm {
   content: string
   attachments?: File[]
   milestone_id?: string | number
+  batch_items?: Array<{
+    indicator_id: string | number
+    indicator_name?: string
+    progress: number
+    content: string
+    milestone_id?: string | number
+  }>
 }
 
 /**

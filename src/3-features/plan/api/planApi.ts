@@ -1866,54 +1866,84 @@ export const indicatorFillApi = {
       }
     }
 
-    const upsertPayload = {
-      title: context.indicatorName,
-      indicatorId: context.indicatorId,
-      content: form.content,
-      summary: form.content,
-      progress: form.progress,
-      issues: form.content,
-      nextPlan: form.content,
-      operatorUserId:
-        Number(useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId) || undefined
+    const operatorUserId =
+      Number(useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId) || undefined
+
+    const normalizedBatchItems = (
+      Array.isArray(form.batch_items) && form.batch_items.length > 0
+        ? form.batch_items
+        : [
+            {
+              indicator_id: form.indicator_id,
+              indicator_name: context.indicatorName,
+              progress: form.progress,
+              content: form.content,
+              milestone_id: form.milestone_id
+            }
+          ]
+    )
+      .map(item => ({
+        indicatorId: Number(item.indicator_id),
+        indicatorName: String(item.indicator_name || ''),
+        progress: Number(item.progress),
+        content: String(item.content || ''),
+        milestoneId: item.milestone_id
+      }))
+      .filter(item => Number.isFinite(item.indicatorId) && Number.isFinite(item.progress))
+      .filter(
+        (item, index, list) => list.findIndex(candidate => candidate.indicatorId === item.indicatorId) === index
+      )
+
+    const ensureCurrentMonthReport = async (): Promise<PlanReportSimpleResponse> => {
+      if (editableExistingReport) {
+        return editableExistingReport
+      }
+
+      const createResponse = await apiClient.post<ApiResponse<PlanReportSimpleResponse>>('/reports', {
+        reportMonth: context.reportMonth,
+        reportOrgId: context.reportOrgId,
+        reportOrgType: context.reportOrgType,
+        planId: context.planId,
+        createdBy: operatorUserId
+      })
+      if (!hasApiData(createResponse) || !createResponse.data) {
+        throw new Error(createResponse.message || '创建填报草稿失败')
+      }
+      return createResponse.data
     }
 
-    const savedReport = editableExistingReport
-      ? await apiClient
-          .put<ApiResponse<PlanReportSimpleResponse>>(
-            `/reports/${editableExistingReport.id}`,
-            upsertPayload
-          )
-          .then(response => {
-            if (!hasApiData(response) || !response.data) {
-              throw new Error(typeof response.message === 'string' ? response.message || '保存指标填报失败' : '保存指标填报失败')
-            }
-            return response.data
-          })
-      : await apiClient
-          .post<ApiResponse<PlanReportSimpleResponse>>('/reports', {
-            reportMonth: context.reportMonth,
-            reportOrgId: context.reportOrgId,
-            reportOrgType: context.reportOrgType,
-            planId: context.planId,
-            createdBy:
-              Number(useAuthStore().user?.id ?? (useAuthStore().user as { userId?: number } | null)?.userId) ||
-              undefined
-          })
-          .then(async createResponse => {
-            if (!hasApiData(createResponse) || !createResponse.data) {
-              throw new Error(createResponse.message || '创建填报草稿失败')
-            }
-
-            const updateResponse = await apiClient.put<ApiResponse<PlanReportSimpleResponse>>(
-              `/reports/${createResponse.data.id}`,
-              upsertPayload
-            )
-            if (!hasApiData(updateResponse) || !updateResponse.data) {
-              throw new Error(updateResponse.message || '保存指标填报失败')
-            }
-            return updateResponse.data
-          })
+    const reportDraft = await ensureCurrentMonthReport()
+    const updateResponse = await apiClient.put<ApiResponse<PlanReportSimpleResponse>>(
+      `/reports/${reportDraft.id}`,
+      {
+        title: context.indicatorName,
+        indicatorId: context.indicatorId,
+        content: form.content,
+        summary: form.content,
+        progress: form.progress,
+        issues: form.content,
+        nextPlan: form.content,
+        operatorUserId,
+        indicatorDetails: normalizedBatchItems.map(item => ({
+          indicatorId: item.indicatorId,
+          title: item.indicatorName || context.indicatorName,
+          content: item.content,
+          summary: item.content,
+          progress: item.progress,
+          issues: item.content,
+          nextPlan: item.content,
+          milestoneNote: item.milestoneId ? String(item.milestoneId) : null
+        }))
+      }
+    )
+    if (!hasApiData(updateResponse) || !updateResponse.data) {
+      throw new Error(
+        typeof updateResponse.message === 'string'
+          ? updateResponse.message || '保存指标填报失败'
+          : '保存指标填报失败'
+      )
+    }
+    const savedReport = updateResponse.data
 
     return {
       code: 200,

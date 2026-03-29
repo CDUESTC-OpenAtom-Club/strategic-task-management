@@ -779,6 +779,11 @@ const currentPlanReportSummary = ref<{
   currentStepName?: string | null
   canWithdraw?: boolean
   status?: string | null
+  indicatorDetails?: Array<{
+    indicatorId?: number | string | null
+    progress?: number | string | null
+    comment?: string | null
+  }> | null
 } | null>(null)
 
 const normalizedCurrentPlanReportStatus = computed(() => {
@@ -1410,6 +1415,40 @@ const indicators = computed(() => {
     id: String(i.id)
   }))
 
+  if (isSecondaryCollege.value && Array.isArray(currentPlanReportSummary.value?.indicatorDetails)) {
+    const reportId = Number(currentPlanReportSummary.value?.id ?? NaN)
+    const reportStatus = String(currentPlanReportSummary.value?.status || '').trim().toUpperCase()
+    const detailMap = new Map(
+      currentPlanReportSummary.value.indicatorDetails.map(detail => [
+        String(detail?.indicatorId ?? ''),
+        detail
+      ])
+    )
+
+    list = list.map(indicator => {
+      const detail = detailMap.get(String(indicator.id))
+      if (!detail) {
+        return indicator
+      }
+
+      const detailProgress = Number(detail.progress)
+      const nextProgress = Number.isFinite(detailProgress) ? detailProgress : indicator.pendingProgress
+      const nextRemark = String(detail.comment || '').trim() || indicator.pendingRemark || null
+
+      return {
+        ...indicator,
+        currentReportId: Number.isFinite(reportId) && reportId > 0 ? reportId : indicator.currentReportId,
+        reportProgress: nextProgress,
+        pendingProgress: nextProgress,
+        pendingRemark: nextRemark,
+        progressApprovalStatus:
+          reportStatus === 'SUBMITTED' || reportStatus === 'IN_REVIEW'
+            ? 'PENDING'
+            : indicator.progressApprovalStatus ?? 'DRAFT'
+      }
+    })
+  }
+
   // 按当前年份过滤
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
@@ -1462,55 +1501,6 @@ const indicators = computed(() => {
 
 const indicatorWorkflowCache = ref<Record<string, IndicatorWorkflowSnapshot | null>>({})
 const indicatorWorkflowLoadingMap = ref<Record<string, boolean>>({})
-const indicatorDraftHydratedMap = ref<Record<string, boolean>>({})
-const indicatorDraftHydratingMap = ref<Record<string, boolean>>({})
-
-async function hydrateIndicatorDraftState(indicatorId: number | string): Promise<void> {
-  const cacheKey = String(indicatorId)
-  if (indicatorDraftHydratedMap.value[cacheKey]) {
-    return
-  }
-
-  if (indicatorDraftHydratingMap.value[cacheKey]) {
-    return
-  }
-
-  indicatorDraftHydratingMap.value = {
-    ...indicatorDraftHydratingMap.value,
-    [cacheKey]: true
-  }
-
-  try {
-    const persistedDraft = readPersistedIndicatorDraft(indicatorId)
-
-    if (!persistedDraft) {
-      indicatorDraftHydratedMap.value = {
-        ...indicatorDraftHydratedMap.value,
-        [cacheKey]: true
-      }
-      return
-    }
-
-    strategicStore.patchIndicator(String(indicatorId), {
-      pendingProgress: persistedDraft.progress,
-      pendingRemark: persistedDraft.remark,
-      pendingAttachments: persistedDraft.attachments,
-      progressApprovalStatus: 'DRAFT'
-    })
-
-    indicatorDraftHydratedMap.value = {
-      ...indicatorDraftHydratedMap.value,
-      [cacheKey]: true
-    }
-  } catch (error) {
-    logger.warn('[IndicatorListView] 加载指标最近填报草稿失败:', { indicatorId, error })
-  } finally {
-    indicatorDraftHydratingMap.value = {
-      ...indicatorDraftHydratingMap.value,
-      [cacheKey]: false
-    }
-  }
-}
 
 const loadIndicatorWorkflowSnapshot = async (
   indicatorId: number | string,
@@ -1622,10 +1612,7 @@ watch(
     if (!ids) {
       return
     }
-    void Promise.all([
-      ...indicators.value.map(indicator => loadIndicatorWorkflowSnapshot(indicator.id)),
-      ...indicators.value.map(indicator => hydrateIndicatorDraftState(indicator.id))
-    ])
+    void Promise.all(indicators.value.map(indicator => loadIndicatorWorkflowSnapshot(indicator.id)))
   },
   { immediate: true }
 )
@@ -2617,9 +2604,9 @@ const handleOpenReportDialog = (row: StrategicIndicator) => {
   const reportedProgress = getDisplayedReportedProgress(row)
   reportForm.value = {
     newProgress:
+      (reportedProgress !== null ? reportedProgress : null) ??
       row.pendingProgress ??
       persistedDraft?.progress ??
-      (reportedProgress !== null ? reportedProgress : null) ??
       row.progress ??
       0,
     remark: row.pendingRemark ?? persistedDraft?.remark ?? '',
@@ -2639,14 +2626,15 @@ const closeReportDialog = () => {
   }
 }
 
-const syncLocalReportedProgress = (
+const syncBackendReportedProgress = (
   indicatorId: number | string,
   payload: {
-    progressApprovalStatus: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE'
+    progressApprovalStatus?: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE'
     reportProgress: number
-    pendingProgress: number
-    pendingRemark: string
-    pendingAttachments: string[]
+    pendingProgress?: number | null
+    pendingRemark?: string | null
+    pendingAttachments?: string[]
+    currentReportId?: number | null
   }
 ) => {
   strategicStore.patchIndicator(String(indicatorId), payload)
@@ -2669,11 +2657,12 @@ const syncLocalReportedProgress = (
 
         return {
           ...item,
-          progressApprovalStatus: payload.progressApprovalStatus,
+          ...(payload.progressApprovalStatus ? { progressApprovalStatus: payload.progressApprovalStatus } : {}),
           reportProgress: payload.reportProgress,
           pendingProgress: payload.pendingProgress,
           pendingRemark: payload.pendingRemark,
-          pendingAttachments: payload.pendingAttachments
+          pendingAttachments: payload.pendingAttachments,
+          currentReportId: payload.currentReportId
         }
       })
     }
@@ -2710,12 +2699,45 @@ const submitProgressReport = async () => {
   try {
     isSavingReport.value = true
 
-    await planStore.saveIndicatorFill({
+    const batchSourceIndicators =
+      currentPlanIndicators.value.length > 0 ? currentPlanIndicators.value : indicators.value
+
+    const batchItems = batchSourceIndicators
+      .map(item => {
+        const itemId = String(item.id)
+        const isCurrentIndicator = itemId === String(indicator.id)
+        const reportProgress = isCurrentIndicator
+          ? reportForm.value.newProgress
+          : item.pendingProgress ?? getDisplayedReportedProgress(item)
+        const reportRemark = isCurrentIndicator
+          ? reportForm.value.remark
+          : String(item.pendingRemark || '').trim()
+
+        if (reportProgress === null || reportProgress === undefined || !Number.isFinite(Number(reportProgress))) {
+          return null
+        }
+
+        if (!isCurrentIndicator && !reportRemark && getDisplayedReportedProgress(item) === null) {
+          return null
+        }
+
+        return {
+          indicator_id: item.id,
+          indicator_name: item.name,
+          progress: Number(reportProgress),
+          content: reportRemark,
+          milestone_id: isCurrentIndicator ? nearestMilestone.value?.id : undefined
+        }
+      })
+      .filter(Boolean)
+
+    const savedFill = await planStore.saveIndicatorFill({
       indicator_id: indicator.id,
       progress: reportForm.value.newProgress,
       content: reportForm.value.remark,
       attachments: [],
-      milestone_id: nearestMilestone.value?.id
+      milestone_id: nearestMilestone.value?.id,
+      batch_items: batchItems
     })
 
     persistIndicatorDraft(indicator.id, {
@@ -2724,13 +2746,23 @@ const submitProgressReport = async () => {
       attachments: reportForm.value.attachments
     })
 
-    syncLocalReportedProgress(indicator.id, {
-      progressApprovalStatus: 'DRAFT',
-      reportProgress: reportForm.value.newProgress,
-      pendingProgress: reportForm.value.newProgress,
-      pendingRemark: reportForm.value.remark,
-      pendingAttachments: reportForm.value.attachments
-    })
+    const savedReportId = Number(savedFill?.id ?? 0) || null
+    for (const item of batchItems) {
+      const matchedIndicator = batchSourceIndicators.find(
+        candidate => String(candidate.id) === String(item.indicator_id)
+      )
+      syncBackendReportedProgress(item.indicator_id, {
+        progressApprovalStatus: matchedIndicator?.progressApprovalStatus ?? 'DRAFT',
+        reportProgress: Number(item.progress),
+        pendingProgress: Number(item.progress),
+        pendingRemark: item.content,
+        pendingAttachments:
+          String(item.indicator_id) === String(indicator.id)
+            ? reportForm.value.attachments
+            : matchedIndicator?.pendingAttachments ?? [],
+        currentReportId: savedReportId
+      })
+    }
 
     ElMessage.success('进度已保存，可在批量操作中提交')
     closeReportDialog()
