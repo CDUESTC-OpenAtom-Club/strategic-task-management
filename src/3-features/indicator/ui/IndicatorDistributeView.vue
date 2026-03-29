@@ -536,17 +536,33 @@ const loadCurrentDepartmentPlanTaskTypeMap = async (planId: number | string | un
 }
 
 const normalizedCurrentDepartmentPlanStatus = computed(() => {
-  return normalizePlanStatus(currentDepartmentPlanDetails.value?.status || currentDepartmentPlan.value?.status || null)
+  const stableDepartmentPlanDetails = matchesCurrentDepartmentPlanContext(currentDepartmentPlanDetails.value)
+    ? currentDepartmentPlanDetails.value
+    : null
+
+  return normalizePlanStatus(stableDepartmentPlanDetails?.status || currentDepartmentPlan.value?.status || null)
 })
 
 const normalizedSelectedCollegePlanStatus = computed(() => {
+  const stableSelectedCollegePlanDetails = matchesCurrentSelectedCollegePlanContext(
+    currentSelectedCollegePlanDetails.value
+  )
+    ? currentSelectedCollegePlanDetails.value
+    : null
+
   return normalizePlanStatus(
-    currentSelectedCollegePlanDetails.value?.status || currentSelectedCollegePlan.value?.status || null
+    stableSelectedCollegePlanDetails?.status || currentSelectedCollegePlan.value?.status || null
   )
 })
 
 const currentActiveCollegePlan = computed<Plan | null>(() => {
-  return currentSelectedCollegePlanDetails.value || currentSelectedCollegePlan.value || null
+  const stableSelectedCollegePlanDetails = matchesCurrentSelectedCollegePlanContext(
+    currentSelectedCollegePlanDetails.value
+  )
+    ? currentSelectedCollegePlanDetails.value
+    : null
+
+  return stableSelectedCollegePlanDetails || currentSelectedCollegePlan.value || null
 })
 
 const normalizedCurrentActiveCollegeWorkflowStatus = computed(() => {

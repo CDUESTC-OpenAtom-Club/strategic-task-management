@@ -12,7 +12,7 @@ if (existsSync(viteCacheDir)) {
   console.log('[dev] Cleared Vite optimize-deps cache:', viteCacheDir)
 }
 
-const viteArgs = ['vite', ...process.argv.slice(2)]
+const viteArgs = ['vite', '--force', ...process.argv.slice(2)]
 const child = spawn('npx', viteArgs, {
   cwd: projectRoot,
   stdio: 'inherit',
