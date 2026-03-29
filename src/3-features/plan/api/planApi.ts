@@ -131,9 +131,28 @@ async function silentApiGet<T>(url: string): Promise<SilentApiResult<T>> {
     _skipBusinessErrorThrow: true
   })
 
+  // `getAxiosInstance()` 仍会经过共享响应拦截器。
+  // 在当前客户端实现下，这里拿到的可能已经不是原始 AxiosResponse，
+  // 而是业务层 envelope（{ success, code, data, message }）或直接 data。
+  // 因此需要同时兼容：
+  // 1. 原始 AxiosResponse
+  // 2. 规范化后的 ApiResponse
+  // 3. 直接返回的数据对象
+  if (
+    response &&
+    typeof response === 'object' &&
+    ('success' in response || 'code' in response || 'message' in response) &&
+    !('status' in response)
+  ) {
+    return {
+      status: Number((response as ApiResponse<T>).code ?? 200),
+      data: response as ApiResponse<T>
+    }
+  }
+
   return {
-    status: response.status,
-    data: response.data
+    status: (response as { status?: number }).status,
+    data: (response as { data?: ApiResponse<T> | T }).data
   }
 }
 
@@ -209,6 +228,12 @@ function convertBackendPlanToPlan(
 ): Plan {
   const inferredYear = resolvePlanYear(raw, resolveCycleYear)
   const cycleLabel = raw.year ?? inferredYear ?? raw.cycle ?? ''
+  const resolvedTargetOrgName =
+    typeof raw.targetOrgName === 'string' && raw.targetOrgName.trim()
+      ? raw.targetOrgName.trim()
+      : typeof raw.orgName === 'string' && raw.orgName.trim()
+        ? raw.orgName.trim()
+        : undefined
   // Business views must follow the persisted plan status.
   // workflowStatus is retained separately for approval detail rendering,
   // but it must not override DRAFT after a withdraw.
@@ -232,7 +257,7 @@ function convertBackendPlanToPlan(
     completedIndicators: raw.completionPercentage,
     // Preserve backend fields used by existing views during the migration period.
     ...(('targetOrgId' in raw || 'orgId' in raw) ? { targetOrgId: raw.targetOrgId ?? raw.orgId } : {}),
-    ...('targetOrgName' in raw ? { targetOrgName: raw.targetOrgName } : {}),
+    ...(resolvedTargetOrgName ? { targetOrgName: resolvedTargetOrgName } : {}),
     ...('orgName' in raw ? { orgName: raw.orgName } : {}),
     ...('cycleId' in raw ? { cycleId: raw.cycleId } : {}),
     ...(inferredYear != null ? { year: inferredYear } : {}),

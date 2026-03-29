@@ -214,16 +214,34 @@ export const usePlanStore = defineStore('plan', () => {
       const response = await planApi.getPlanDetails(planId)
 
       if (hasApiData(response) && response.data) {
-        currentPlan.value = response.data
+        const existingPlan = plans.value.find(p => p.id === planId)
+        const mergedPlan = {
+          ...(existingPlan || {}),
+          ...response.data,
+          targetOrgName:
+            response.data.targetOrgName ||
+            (existingPlan as Plan & { targetOrgName?: string } | undefined)?.targetOrgName,
+          targetOrgId:
+            response.data.targetOrgId ??
+            (existingPlan as Plan & { targetOrgId?: number | string } | undefined)?.targetOrgId,
+          year:
+            (response.data as Plan & { year?: number | string }).year ??
+            (existingPlan as Plan & { year?: number | string } | undefined)?.year,
+          cycleId:
+            response.data.cycleId ??
+            (existingPlan as Plan & { cycleId?: number | string } | undefined)?.cycleId
+        } as Plan
+
+        currentPlan.value = mergedPlan
         // 更新 plans 列表中的数据
         const index = plans.value.findIndex(p => p.id === planId)
         if (index !== -1) {
-          plans.value[index] = response.data
+          plans.value[index] = mergedPlan
         } else {
-          plans.value.push(response.data)
+          plans.value.push(mergedPlan)
         }
         logger.info(`[Plan Store] Loaded plan details ${planId} with ${response.data.tasks?.length || 0} tasks`)
-        return response.data
+        return mergedPlan
       } else {
         currentPlan.value = null
         error.value = '计划不存在'

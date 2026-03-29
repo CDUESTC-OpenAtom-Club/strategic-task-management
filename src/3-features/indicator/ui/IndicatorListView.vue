@@ -505,24 +505,16 @@ const normalizedCurrentPlanWorkflowStatus = computed(() => {
     .toUpperCase()
 })
 
-const hasUnfinishedPlanWorkflowInstance = computed(() => {
-  return ['SUBMITTED', 'PENDING', 'IN_REVIEW', 'WAITING'].includes(
-    normalizedCurrentPlanWorkflowStatus.value
-  )
-})
-
 const canViewReceivedPlanContent = computed(() => {
   if (isStrategicDept.value) {
     return true
   }
 
-  // 非战略发展部场景下，只要当前计划还挂着未结束的流程实例，
-  // 就说明上级下发流程尚未走完，此时不应提前展示任何内容。
-  if (hasUnfinishedPlanWorkflowInstance.value) {
-    return false
-  }
-
-  return ['DRAFT', 'DISTRIBUTED', 'PENDING'].includes(normalizedCurrentPlanStatus.value ?? '')
+  // 接收方页面的核心前提是“当前部门已经匹配到自己的接收 plan”，
+  // 不应再额外卡死在“必须已下发/流程已完结”。
+  // 上级部门 -> 下级部门链路中，plan 仍处于草稿或流程中时，
+  // 下级仍需要先看到并接收指标进行填报。
+  return hasCurrentUserPlanData.value
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
@@ -1210,7 +1202,7 @@ const planWarningMessage = computed(() => {
   const departmentName = effectiveViewingDept.value || authStore.userDepartment || '当前部门'
 
   if (hasCurrentUserPlanData.value && !canViewReceivedPlanContent.value) {
-    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但当前仍未进入可查看阶段。请先完成上级下发后再查看。`
+    return `当前部门（${departmentName}）已存在 ${timeContext.currentYear} 年度计划，但当前计划数据暂不可见，请刷新后重试。`
   }
 
   if (isSecondaryCollege.value) {
