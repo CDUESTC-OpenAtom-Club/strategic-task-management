@@ -50,7 +50,7 @@ import type {
 import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 import { normalizePlanStatus } from '@/features/task/lib/planStatus'
 import { logger } from '@/shared/lib/utils/logger'
-import { apiService } from '@/shared/api'
+import { apiClient, apiService } from '@/shared/api'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
@@ -262,6 +262,11 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  reportAttachmentObjectUrls.forEach(url => {
+    window.URL.revokeObjectURL(url)
+  })
+  reportAttachmentObjectUrls.clear()
+
   if (planApprovalPollTimer) {
     clearInterval(planApprovalPollTimer)
     planApprovalPollTimer = null
@@ -3131,6 +3136,106 @@ const syncReportAttachmentUrls = () => {
     .filter(Boolean)
 }
 
+const reportAttachmentObjectUrls = new Set<string>()
+
+const previewableAttachmentExtensions = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'gif',
+  'webp',
+  'bmp',
+  'svg',
+  'pdf',
+  'txt',
+  'md',
+  'json',
+  'csv'
+])
+
+const getAttachmentExtension = (name?: string, url?: string) => {
+  const source = String(name || url || '').trim().toLowerCase()
+  const cleanSource = source.split('?')[0]?.split('#')[0] || ''
+  const matched = cleanSource.match(/\.([a-z0-9]+)$/)
+  return matched?.[1] || ''
+}
+
+const openBlobInNewTab = (blob: Blob) => {
+  const objectUrl = window.URL.createObjectURL(blob)
+  reportAttachmentObjectUrls.add(objectUrl)
+  window.open(objectUrl, '_blank', 'noopener,noreferrer')
+}
+
+const triggerBlobDownload = (blob: Blob, filename: string) => {
+  const objectUrl = window.URL.createObjectURL(blob)
+  reportAttachmentObjectUrls.add(objectUrl)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = filename || 'download'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+const openLocalAttachmentFile = (file: ReportUploadFile) => {
+  const rawFile = file.raw
+  if (!(rawFile instanceof File)) {
+    return false
+  }
+
+  const extension = getAttachmentExtension(file.name, rawFile.name)
+  if (previewableAttachmentExtensions.has(extension)) {
+    openBlobInNewTab(rawFile)
+    return true
+  }
+
+  triggerBlobDownload(rawFile, file.name || rawFile.name || 'download')
+  return true
+}
+
+const openRemoteAttachmentFile = async (file: ReportUploadFile) => {
+  const targetUrl = String(file.url || '').trim()
+  if (!targetUrl) {
+    return false
+  }
+
+  const response = await apiClient.getAxiosInstance().get(targetUrl, {
+    responseType: 'blob'
+  })
+
+  const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+  const extension = getAttachmentExtension(file.name, targetUrl)
+  if (previewableAttachmentExtensions.has(extension)) {
+    openBlobInNewTab(blob)
+    return true
+  }
+
+  triggerBlobDownload(blob, file.name || 'download')
+  return true
+}
+
+const handleReportAttachmentOpen = async (file: ReportUploadFile) => {
+  try {
+    if (openLocalAttachmentFile(file)) {
+      return
+    }
+
+    if (await openRemoteAttachmentFile(file)) {
+      return
+    }
+
+    ElMessage.warning('当前附件暂时无法打开')
+  } catch (error) {
+    logger.error('[IndicatorListView] 打开附件失败:', error)
+    ElMessage.error('打开附件失败，请稍后重试')
+  }
+}
+
+const handleInlineAttachmentRemove = (targetFile: UploadUserFile) => {
+  reportUploadFiles.value = reportUploadFiles.value.filter(file => file.uid !== targetFile.uid)
+  syncReportAttachmentUrls()
+}
+
 const handleReportFileChange: UploadProps['onChange'] = (_uploadFile, uploadFiles) => {
   reportUploadFiles.value = uploadFiles as ReportUploadFile[]
   syncReportAttachmentUrls()
@@ -4426,7 +4531,27 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               <template #tip>
                 <div class="upload-tip">
                   支持 PDF、Word、Excel、图片格式，单个文件不超过
-                  30MB，最多5个文件。选择后仅暂存，保存时才会上传并关联。
+                  30MB，最多5个文件。选择后仅暂存，保存时才会上传并关联。双击文件名可预览或下载。
+                </div>
+              </template>
+              <template #file="{ file }">
+                <div class="custom-upload-file">
+                  <button
+                    type="button"
+                    class="custom-upload-file__name"
+                    :title="`双击打开 ${file.name || '附件'}`"
+                    @dblclick.prevent.stop="handleReportAttachmentOpen(file as ReportUploadFile)"
+                  >
+                    {{ file.name || '附件' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="custom-upload-file__remove"
+                    aria-label="移除附件"
+                    @click.prevent.stop="handleInlineAttachmentRemove(file)"
+                  >
+                    ×
+                  </button>
                 </div>
               </template>
             </el-upload>
@@ -5150,6 +5275,48 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   font-size: 12px;
   color: var(--text-placeholder);
   margin-top: var(--spacing-xs);
+}
+
+.report-form .custom-upload-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-page);
+}
+
+.report-form .custom-upload-file__name {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.report-form .custom-upload-file__name:hover {
+  text-decoration: underline;
+}
+
+.report-form .custom-upload-file__remove {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.report-form .custom-upload-file__remove:hover {
+  color: var(--color-danger);
 }
 
 .report-tips {
