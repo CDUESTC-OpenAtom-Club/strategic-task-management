@@ -1024,7 +1024,9 @@ const isPlanDistributed = computed(() => {
 // 撤回权限只跟当前部门填报人走，不在前端额外放宽跨部门管理权限。
 const canWithdrawPlan = computed(() => {
   const status = currentPlanStatus.value
-  return status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
+  return (
+    status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
+  )
 })
 
 // 判断当前页面指标是否已进入“不可编辑”的流程阶段
@@ -2606,14 +2608,10 @@ const saveNewRow = async () => {
       await persistNewIndicatorMilestones(createdIndicatorId, newRow.value.milestones)
     }
 
-    // 🔧 修复：强制从后端重新加载指标数据，确保前端显示的是包含正式ID的数据
-    logger.info(
-      `[StrategicTaskView] Reloading indicators after successful save to sync backend IDs...`
-    )
-    await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-    await loadBackendTaskTypeMap()
-    await loadCurrentPlanTaskScope()
-    logger.info(`[StrategicTaskView] Indicators reloaded successfully`)
+    // 统一走“变更后刷新”链路，避免新增后被旧缓存覆盖，导致主页仍显示上一版状态。
+    logger.info('[StrategicTaskView] Refreshing task page after successful indicator creation...')
+    await refreshTaskPageAfterIndicatorMutation()
+    logger.info('[StrategicTaskView] Task page refreshed successfully after indicator creation')
 
     // 成功：关闭表单并更新 UI
     cancelAdd()

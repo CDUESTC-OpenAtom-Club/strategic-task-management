@@ -4671,7 +4671,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
 .action-cell {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   gap: 8px;
   width: 100%;
@@ -4680,7 +4680,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
 .action-buttons {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
   flex-wrap: wrap;
   width: 100%;
