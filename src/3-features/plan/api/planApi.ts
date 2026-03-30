@@ -646,6 +646,7 @@ interface PlanReportIndicatorDetailResponse {
   progress?: number | null
   comment?: string | null
   milestoneNote?: string | null
+  attachments?: Attachment[] | null
 }
 
 interface IndicatorReportContext {
@@ -699,7 +700,7 @@ function mapPlanReportToIndicatorFill(
     fill_date: fillDate,
     progress: Number.isFinite(normalizedProgress) ? normalizedProgress : 0,
     content: resolvedDetail?.comment || report.content || report.summary || report.title || '',
-    attachments: [],
+    attachments: Array.isArray(resolvedDetail?.attachments) ? resolvedDetail.attachments : [],
     filled_by: report.submittedBy != null ? String(report.submittedBy) : '',
     filled_by_name: report.submittedBy != null ? `用户${report.submittedBy}` : '当前部门',
     created_at: report.createdAt || fillDate,
@@ -796,8 +797,59 @@ function getNormalizedReportStatus(status?: string | null): string {
     .toUpperCase()
 }
 
+function isActiveCurrentReportStatus(status?: string | null): boolean {
+  const normalizedStatus = getNormalizedReportStatus(status)
+  return (
+    normalizedStatus === 'DRAFT' ||
+    normalizedStatus === 'PENDING' ||
+    normalizedStatus === 'IN_REVIEW' ||
+    normalizedStatus === 'SUBMITTED'
+  )
+}
+
 function isLockedPlanReportStatus(status?: string | null): boolean {
   return ['SUBMITTED', 'IN_REVIEW', 'APPROVED'].includes(getNormalizedReportStatus(status))
+}
+
+async function resolveIndicatorFillSaveContext(indicatorId: number | string): Promise<{
+  context: IndicatorReportContext
+  currentMonthReports: PlanReportSimpleResponse[]
+  latestCurrentMonthReport?: PlanReportSimpleResponse
+  editableExistingReport?: PlanReportSimpleResponse
+}> {
+  const context = await resolveIndicatorReportContext(indicatorId)
+  const reports = await loadPlanReportsByPlanId(context.planId)
+  const currentMonthReports = reports
+    .filter(
+      report =>
+        Number(report.reportOrgId) === context.reportOrgId &&
+        report.reportMonth === context.reportMonth
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() -
+        new Date(a.updatedAt || a.createdAt || 0).getTime()
+    )
+
+  const latestCurrentMonthReport = currentMonthReports[0]
+  const editableExistingReport = currentMonthReports.find(report => {
+    const normalizedStatus = getNormalizedReportStatus(report.status)
+    return normalizedStatus === 'DRAFT'
+  })
+
+  if (latestCurrentMonthReport && !editableExistingReport) {
+    const lockedStatus = getNormalizedReportStatus(latestCurrentMonthReport.status)
+    if (lockedStatus === 'IN_REVIEW' || lockedStatus === 'SUBMITTED') {
+      throw new Error('本月已有上报正在审批中，暂时不能重复保存或提交')
+    }
+  }
+
+  return {
+    context,
+    currentMonthReports,
+    latestCurrentMonthReport,
+    editableExistingReport
+  }
 }
 
 async function resolveIndicatorReportContext(
@@ -1766,6 +1818,14 @@ export const indicatorFillApi = {
   // 使用模拟数据标志（后端就绪后设为 false）
   useMockData: USE_MOCK,
 
+  async ensureEditable(indicatorId: number | string): Promise<void> {
+    if (this.useMockData) {
+      return
+    }
+
+    await resolveIndicatorFillSaveContext(indicatorId)
+  },
+
   /**
    * 获取指标的所有填报历史
    */
@@ -1917,32 +1977,9 @@ export const indicatorFillApi = {
       }
     }
 
-    const context = await resolveIndicatorReportContext(form.indicator_id)
-    const reports = await loadPlanReportsByPlanId(context.planId)
-    const currentMonthReports = reports
-      .filter(
-        report =>
-          Number(report.reportOrgId) === context.reportOrgId &&
-          report.reportMonth === context.reportMonth
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt || 0).getTime() -
-          new Date(a.updatedAt || a.createdAt || 0).getTime()
-      )
-
-    const latestCurrentMonthReport = currentMonthReports[0]
-    const editableExistingReport = currentMonthReports.find(report => {
-      const normalizedStatus = getNormalizedReportStatus(report.status)
-      return normalizedStatus === 'DRAFT' || normalizedStatus === 'REJECTED'
-    })
-
-    if (latestCurrentMonthReport && !editableExistingReport) {
-      const lockedStatus = getNormalizedReportStatus(latestCurrentMonthReport.status)
-      if (lockedStatus === 'IN_REVIEW' || lockedStatus === 'SUBMITTED') {
-        throw new Error('本月已有上报正在审批中，暂时不能重复保存或提交')
-      }
-    }
+    const { context, editableExistingReport } = await resolveIndicatorFillSaveContext(
+      form.indicator_id
+    )
 
     const operatorUserId =
       Number(
@@ -1958,7 +1995,8 @@ export const indicatorFillApi = {
               indicator_name: context.indicatorName,
               progress: form.progress,
               content: form.content,
-              milestone_id: form.milestone_id
+              milestone_id: form.milestone_id,
+              attachment_ids: []
             }
           ]
     )
@@ -1967,7 +2005,12 @@ export const indicatorFillApi = {
         indicatorName: String(item.indicator_name || ''),
         progress: Number(item.progress),
         content: String(item.content || ''),
-        milestoneId: item.milestone_id
+        milestoneId: item.milestone_id,
+        attachmentIds: Array.isArray((item as { attachment_ids?: unknown[] }).attachment_ids)
+          ? ((item as { attachment_ids?: unknown[] }).attachment_ids ?? [])
+              .map(value => Number(value))
+              .filter(value => Number.isFinite(value) && value > 0)
+          : []
       }))
       .filter(item => Number.isFinite(item.indicatorId) && Number.isFinite(item.progress))
       .filter(
@@ -2016,7 +2059,8 @@ export const indicatorFillApi = {
           progress: item.progress,
           issues: item.content,
           nextPlan: item.content,
-          milestoneNote: item.milestoneId ? String(item.milestoneId) : null
+          milestoneNote: item.milestoneId ? String(item.milestoneId) : null,
+          attachmentIds: item.attachmentIds
         }))
       }
     )
@@ -2162,7 +2206,7 @@ export const indicatorFillApi = {
           new Date(a.updatedAt || a.createdAt || 0).getTime()
       )
 
-    return currentMonthReports[0] || null
+    return currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) || null
   },
 
   async submitCurrentMonthPlanReport(

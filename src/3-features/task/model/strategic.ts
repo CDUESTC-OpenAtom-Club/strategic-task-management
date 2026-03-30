@@ -555,6 +555,24 @@ function mergePreferredTaskFields(
   return nextIndicator
 }
 
+function mergePreferredTaskCategory(
+  baseIndicator: StrategicIndicator,
+  fallbackIndicator: Partial<StrategicIndicator>
+): StrategicIndicator {
+  const nextIndicator = {
+    ...baseIndicator
+  }
+
+  const currentType2 = String(nextIndicator.type2 || '').trim()
+  const fallbackType2 = String(fallbackIndicator.type2 || '').trim()
+
+  if ((!currentType2 || currentType2 === '其他') && fallbackType2 && fallbackType2 !== '其他') {
+    nextIndicator.type2 = fallbackType2 as StrategicIndicator['type2']
+  }
+
+  return nextIndicator
+}
+
 function buildDepartmentResolver(departments: Department[]) {
   const idToName = new Map<string, string>()
   const aliasToCanonical = new Map<string, string>()
@@ -803,11 +821,17 @@ export const useStrategicStore = defineStore('strategic', () => {
             ...data,
             ...(normalized || {})
           }
-          indicators.value[index] = mergePreferredTaskFields(mergedIndicator, {
+          const preferredTaskFields = mergePreferredTaskFields(mergedIndicator, {
             taskId: getRuntimeTaskId(currentIndicator as StrategicIndicator & { taskId?: string | number }),
             taskContent:
               currentIndicator?.taskContent ||
               (typeof data.taskContent === 'string' ? data.taskContent : '')
+          })
+          indicators.value[index] = mergePreferredTaskCategory(preferredTaskFields, {
+            type2:
+              typeof data.type2 === 'string'
+                ? data.type2
+                : currentIndicator?.type2
           })
         }
       } else {

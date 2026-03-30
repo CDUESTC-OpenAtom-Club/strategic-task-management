@@ -531,8 +531,8 @@ const hasPlanWorkflowData = computed(() => {
 
   return Boolean(
     normalizeDisplayName(planWorkflowDetail.value?.currentStepName) ||
-    normalizeDisplayName(planWorkflowDetail.value?.flowCode) ||
-    normalizeDisplayName(planWorkflowDetail.value?.status)
+      normalizeDisplayName(planWorkflowDetail.value?.flowCode) ||
+      normalizeDisplayName(planWorkflowDetail.value?.status)
   )
 })
 
@@ -696,6 +696,10 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 })
 
 const currentPlanTaskId = computed(() => {
+  if (['已撤回', '已驳回'].includes(planWorkflowStatusTag.value.label)) {
+    return 0
+  }
+
   const pendingTask = planWorkflowTasks.value.find(task => {
     return (
       String(task.status || '')
@@ -714,6 +718,10 @@ const currentPlanTaskId = computed(() => {
   }
 
   return 0
+})
+
+const isPlanWorkflowTerminated = computed(() => {
+  return ['已撤回', '已驳回'].includes(planWorkflowStatusTag.value.label)
 })
 
 const currentPlanInstanceId = computed(() => {
@@ -831,6 +839,9 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
     return 'withdrawn'
   }
   if (normalizedStatus === 'WAITING') {
+    return 'waiting'
+  }
+  if (normalizedStatus === 'PENDING' && isPlanWorkflowTerminated.value) {
     return 'waiting'
   }
   if (

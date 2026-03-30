@@ -15,13 +15,15 @@ import {
   Refresh
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadProps, UploadUserFile } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
-import type { StrategicTask as _StrategicTask, StrategicIndicator, Plan } from '@/shared/types'
+import type { StrategicTask as _StrategicTask, StrategicIndicator, Plan, Attachment } from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
+import { useApprovalStore } from '@/features/approval/model/store'
 import {
   getProgressStatus,
   getProgressColor as _getProgressColor,
@@ -32,9 +34,18 @@ import { usePlanStore } from '@/features/plan/model/store'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
 import { ApprovalProgressDrawer } from '@/features/approval'
 import { approveTask, rejectTask } from '@/features/workflow/api'
+import {
+  getWorkflowInstanceDetail,
+  getWorkflowInstanceDetailByBusiness
+} from '@/features/workflow/api/queries'
+import type {
+  WorkflowInstanceDetailResponse,
+  WorkflowTaskResponse
+} from '@/features/workflow/api/types'
 import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 import { normalizePlanStatus } from '@/features/task/lib/planStatus'
 import { logger } from '@/shared/lib/utils/logger'
+import { apiService } from '@/shared/api'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
@@ -63,7 +74,18 @@ interface PersistedIndicatorDraft {
   progress: number
   remark: string
   attachments: string[]
+  attachmentDetails?: Attachment[]
   savedAt: string
+}
+
+interface ReportUploadFile extends UploadUserFile {
+  attachmentId?: number
+}
+
+interface DisplayAttachmentItem {
+  name: string
+  url: string
+  attachmentId?: number
 }
 
 // --- 自定义指令，用于自动聚焦 ---
@@ -82,6 +104,7 @@ const vFocus = {
 const strategicStore = useStrategicStore()
 const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
+const approvalStore = useApprovalStore()
 const planStore = usePlanStore()
 const orgStore = useOrgStore()
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
@@ -102,6 +125,17 @@ const currentUserPermissionCodes = computed(() => {
   return permissions
     .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
     .filter(Boolean)
+})
+const currentUserRoleCodes = computed(() => {
+  const roles = (authStore.user as { roles?: unknown[] } | null)?.roles
+  if (!Array.isArray(roles)) {
+    return []
+  }
+  return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
+})
+const currentUserOrgId = computed(() => {
+  const rawOrgId = Number((authStore.user as { orgId?: string | number } | null)?.orgId ?? NaN)
+  return Number.isFinite(rawOrgId) && rawOrgId > 0 ? rawOrgId : 0
 })
 
 const isCurrentUserReporter = computed(() => {
@@ -155,6 +189,9 @@ function readPersistedIndicatorDraft(indicatorId: number | string): PersistedInd
       attachments: Array.isArray(parsed.attachments)
         ? parsed.attachments.map(item => String(item))
         : [],
+      attachmentDetails: Array.isArray(parsed.attachmentDetails)
+        ? (parsed.attachmentDetails as Attachment[])
+        : [],
       savedAt: String(parsed.savedAt ?? '')
     }
   } catch (error) {
@@ -177,6 +214,7 @@ function persistIndicatorDraft(
       progress: Number(draft.progress) || 0,
       remark: draft.remark || '',
       attachments: Array.isArray(draft.attachments) ? draft.attachments : [],
+      attachmentDetails: Array.isArray(draft.attachmentDetails) ? draft.attachmentDetails : [],
       savedAt: new Date().toISOString()
     }
     window.localStorage.setItem(getIndicatorDraftStorageKey(indicatorId), JSON.stringify(payload))
@@ -409,6 +447,46 @@ async function refreshCurrentPlanDetails(planId: number): Promise<void> {
     }
   }
   await loadCurrentPlanReportSummary(planId)
+  await loadCurrentPlanWorkflowDetail(planId)
+}
+
+async function loadCurrentPlanWorkflowDetail(planId?: number | null): Promise<void> {
+  const resolvedPlanId = Number(planId ?? getCurrentPlanId() ?? NaN)
+  const reportId = Number(currentPlanReportSummary.value?.id ?? NaN)
+  const workflowInstanceId = Number(
+    currentPlanReportSummary.value?.workflowInstanceId ??
+      currentPlanDetails.value?.workflowInstanceId ??
+      NaN
+  )
+
+  try {
+    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+      currentPlanWorkflowDetail.value = response.data ?? null
+      return
+    }
+
+    if (isSecondaryCollege.value && Number.isFinite(reportId) && reportId > 0) {
+      const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
+      currentPlanWorkflowDetail.value = response.data ?? null
+      return
+    }
+
+    if (Number.isFinite(resolvedPlanId) && resolvedPlanId > 0) {
+      const response = await getWorkflowInstanceDetailByBusiness('PLAN', resolvedPlanId)
+      currentPlanWorkflowDetail.value = response.data ?? null
+      return
+    }
+  } catch (error) {
+    logger.warn('[IndicatorListView] 加载当前计划工作流详情失败:', {
+      planId: resolvedPlanId,
+      reportId,
+      workflowInstanceId,
+      error
+    })
+  }
+
+  currentPlanWorkflowDetail.value = null
 }
 
 function clearCurrentPlanReportDerivedState(): void {
@@ -549,11 +627,12 @@ const canViewReceivedPlanContent = computed(() => {
     return true
   }
 
-  // 接收方页面的核心前提是“当前部门已经匹配到自己的接收 plan”，
-  // 不应再额外卡死在“必须已下发/流程已完结”。
-  // 上级部门 -> 下级部门链路中，plan 仍处于草稿或流程中时，
-  // 下级仍需要先看到并接收指标进行填报。
-  return hasCurrentUserPlanData.value
+  if (!hasCurrentUserPlanData.value) {
+    return false
+  }
+
+  const planStatus = normalizePlanStatus(currentPlanStatus.value)
+  return planStatus === 'DISTRIBUTED'
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
@@ -810,6 +889,7 @@ const currentUserPlanId = computed(() => {
 
 // 存储当前 Plan 的详情（包含指标数据）
 const currentPlanDetails = ref<any>(null)
+const currentPlanWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
 const currentPlanReportSummary = ref<{
   id: number
   workflowInstanceId?: number | null
@@ -822,6 +902,7 @@ const currentPlanReportSummary = ref<{
     indicatorId?: number | string | null
     progress?: number | string | null
     comment?: string | null
+    attachments?: Attachment[] | null
   }> | null
 } | null>(null)
 
@@ -895,13 +976,15 @@ function getPlanIndicatorAttachments(indicator: Record<string, unknown>): string
         return (
           getPlanIndicatorText(
             record,
+            'fileName',
+            'originalName',
+            'original_name',
+            'name',
             'url',
             'publicUrl',
             'public_url',
             'objectKey',
-            'object_key',
-            'name',
-            'originalName'
+            'object_key'
           ) || ''
         )
       }
@@ -1019,10 +1102,12 @@ watch(
         }
       }
       await loadCurrentPlanReportSummary(newPlanId)
+      await loadCurrentPlanWorkflowDetail(newPlanId)
       isLoadingPlanDetails.value = false
     } else if (!newPlanId) {
       currentPlanDetails.value = null
       currentPlanReportSummary.value = null
+      currentPlanWorkflowDetail.value = null
       isLoadingPlanDetails.value = false
     }
 
@@ -1087,6 +1172,11 @@ const currentPlanIndicators = computed(() => {
       'currentReportId',
       'current_report_id'
     )
+    const pendingAttachmentDetails =
+      Array.isArray(source.pendingAttachmentDetails) && source.pendingAttachmentDetails.length > 0
+        ? (source.pendingAttachmentDetails as Attachment[])
+        : ((storeIndicator as StrategicIndicator & { pendingAttachmentDetails?: Attachment[] })
+            ?.pendingAttachmentDetails ?? [])
     const sourceApprovalStatus = getPlanIndicatorText(
       source,
       'progressApprovalStatus',
@@ -1143,6 +1233,7 @@ const currentPlanIndicators = computed(() => {
       pendingProgress: pendingProgress ?? storeIndicator?.pendingProgress ?? null,
       pendingRemark: pendingRemark || storeIndicator?.pendingRemark || null,
       pendingAttachments: pendingAttachments ?? storeIndicator?.pendingAttachments ?? [],
+      pendingAttachmentDetails,
       milestones:
         normalizedMilestones.length > 0 ? normalizedMilestones : storeIndicator?.milestones || [],
       createdAt:
@@ -1379,6 +1470,177 @@ const _pendingApprovalCount = computed(() => {
 
 const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
 
+const pagePlanWorkflowStatus = computed(() => {
+  return String(
+    currentPlanWorkflowDetail.value?.status ||
+      currentPlanReportSummary.value?.workflowStatus ||
+      currentPlanDetails.value?.workflowStatus ||
+      currentPlanDetails.value?.status ||
+      ''
+  )
+    .trim()
+    .toUpperCase()
+})
+
+const hasPagePlanWorkflowData = computed(() => {
+  return Boolean(
+    currentPlanWorkflowDetail.value &&
+      (currentPlanWorkflowDetail.value.instanceId ||
+        currentPlanWorkflowDetail.value.status ||
+        currentPlanWorkflowDetail.value.currentTaskId ||
+        currentPlanWorkflowDetail.value.currentStepName ||
+        (Array.isArray(currentPlanWorkflowDetail.value.history) &&
+          currentPlanWorkflowDetail.value.history.length > 0))
+  )
+})
+
+const isPagePlanPendingApproval = computed(() => {
+  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(pagePlanWorkflowStatus.value)
+})
+
+const hasPagePlanApprovalPermission = computed(() => {
+  return ['BTN_STRATEGY_TASK_REPORT_APPROVE', 'BTN_INDICATOR_REPORT_APPROVE'].some(code =>
+    currentUserPermissionCodes.value.includes(code)
+  )
+})
+
+const pagePlanWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {
+  return Array.isArray(currentPlanWorkflowDetail.value?.tasks)
+    ? currentPlanWorkflowDetail.value.tasks
+    : []
+})
+
+const currentPagePlanTaskId = computed(() => {
+  const pendingTask = pagePlanWorkflowTasks.value.find(
+    task => String(task.status || '').trim().toUpperCase() === 'PENDING'
+  )
+  const pendingTaskId = Number(pendingTask?.taskId ?? 0)
+  if (Number.isFinite(pendingTaskId) && pendingTaskId > 0) {
+    return pendingTaskId
+  }
+
+  const rawTaskId = Number(
+    currentPlanWorkflowDetail.value?.currentTaskId ??
+      currentPlanReportSummary.value?.currentTaskId ??
+      currentPlanDetails.value?.currentTaskId ??
+      0
+  )
+  return Number.isFinite(rawTaskId) && rawTaskId > 0 ? rawTaskId : 0
+})
+
+const currentPagePendingPlanTask = computed<WorkflowTaskResponse | null>(() => {
+  const currentTaskId = String(currentPagePlanTaskId.value || '').trim()
+  if (!currentTaskId) {
+    return null
+  }
+
+  return (
+    pagePlanWorkflowTasks.value.find(task => {
+      const taskId = String(task.taskId || '').trim()
+      const status = String(task.status || '').trim().toUpperCase()
+      return taskId === currentTaskId && status === 'PENDING'
+    }) || null
+  )
+})
+
+function resolveExpectedApproverRoleCodesForPage(): string[] {
+  const stepName = String(
+    currentPlanWorkflowDetail.value?.currentStepName ||
+      currentPlanReportSummary.value?.currentStepName ||
+      currentPlanDetails.value?.currentStepName ||
+      ''
+  ).trim()
+
+  if (!stepName) {
+    return []
+  }
+
+  if (
+    stepName.includes('职能部门审批') ||
+    stepName.includes('职能部门终审') ||
+    stepName.includes('二级学院审批')
+  ) {
+    return ['ROLE_APPROVER']
+  }
+
+  if (stepName.includes('战略发展部')) {
+    return ['ROLE_STRATEGY_DEPT_HEAD']
+  }
+
+  if (stepName.includes('分管校领导') || stepName.includes('学院院长')) {
+    return ['ROLE_VICE_PRESIDENT']
+  }
+
+  return []
+}
+
+function resolveExpectedApproverOrgIdForPage(): number | null {
+  const stepName = String(
+    currentPlanWorkflowDetail.value?.currentStepName ||
+      currentPlanReportSummary.value?.currentStepName ||
+      currentPlanDetails.value?.currentStepName ||
+      ''
+  ).trim()
+  const currentTaskId = String(currentPagePlanTaskId.value || '').trim()
+
+  if (currentTaskId && Array.isArray(currentPlanWorkflowDetail.value?.tasks)) {
+    const currentTask = currentPlanWorkflowDetail.value.tasks.find(
+      task => String(task.taskId || '').trim() === currentTaskId
+    )
+
+    if (stepName.includes('职能部门终审')) {
+      const sourceOrgId = Number(
+        currentPlanWorkflowDetail.value?.sourceOrgId ?? currentPlanDetails.value?.sourceOrgId ?? 0
+      )
+      if (Number.isFinite(sourceOrgId) && sourceOrgId > 0) {
+        return sourceOrgId
+      }
+    }
+
+    const approverOrgId = Number(currentTask?.approverOrgId ?? 0)
+    if (Number.isFinite(approverOrgId) && approverOrgId > 0) {
+      return approverOrgId
+    }
+  }
+
+  return null
+}
+
+const canCurrentUserHandlePlanApprovalOnPage = computed(() => {
+  if (
+    !hasPagePlanWorkflowData.value ||
+    !isPagePlanPendingApproval.value ||
+    !hasPagePlanApprovalPermission.value ||
+    !currentPagePendingPlanTask.value
+  ) {
+    return false
+  }
+
+  const expectedApproverRoleCodes = resolveExpectedApproverRoleCodesForPage()
+  if (expectedApproverRoleCodes.length > 0) {
+    const hasExpectedRole = expectedApproverRoleCodes.some(roleCode =>
+      currentUserRoleCodes.value.includes(roleCode)
+    )
+    if (!hasExpectedRole) {
+      return false
+    }
+  }
+
+  const expectedApproverOrgId = resolveExpectedApproverOrgIdForPage()
+  if (
+    Number.isFinite(currentUserOrgId.value) &&
+    currentUserOrgId.value > 0 &&
+    Number.isFinite(expectedApproverOrgId) &&
+    (expectedApproverOrgId as number) > 0
+  ) {
+    return currentUserOrgId.value === expectedApproverOrgId
+  }
+
+  return false
+})
+
+const approvalBadgeCount = computed(() => (canCurrentUserHandlePlanApprovalOnPage.value ? 1 : 0))
+
 const approvalEntryButtonText = computed(() => {
   if (isSecondaryCollege.value) {
     return isCurrentPlanReportLocked.value ? '待审批' : '审批记录'
@@ -1521,6 +1783,11 @@ const indicators = computed(() => {
         ? detailProgress
         : indicator.pendingProgress
       const nextRemark = String(detail.comment || '').trim() || indicator.pendingRemark || null
+      const nextAttachments = Array.isArray(detail.attachments)
+        ? detail.attachments
+            .map(attachment => attachment?.fileName || attachment?.url || '')
+            .filter(Boolean)
+        : indicator.pendingAttachments ?? []
 
       return {
         ...indicator,
@@ -1529,6 +1796,8 @@ const indicators = computed(() => {
         reportProgress: nextProgress,
         pendingProgress: nextProgress,
         pendingRemark: nextRemark,
+        pendingAttachments: nextAttachments,
+        pendingAttachmentDetails: Array.isArray(detail.attachments) ? detail.attachments : [],
         progressApprovalStatus:
           reportStatus === 'SUBMITTED' || reportStatus === 'IN_REVIEW'
             ? 'PENDING'
@@ -2655,6 +2924,8 @@ const _handleTableScroll = (e: Event) => {
 const reportDialogVisible = ref(false)
 const currentReportIndicator = ref<StrategicIndicator | null>(null)
 const isSavingReport = ref(false)
+const isUploadingReportFiles = ref(false)
+const reportUploadFiles = ref<ReportUploadFile[]>([])
 
 // 填报表单数据
 const reportForm = ref({
@@ -2713,11 +2984,40 @@ const formatMilestoneDate = (deadline: string) => {
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
+function resolveDialogAttachments(row: StrategicIndicator, persistedDraft?: PersistedIndicatorDraft | null): DisplayAttachmentItem[] {
+  const rawAttachments = (row as StrategicIndicator & {
+    pendingAttachmentDetails?: Attachment[]
+  }).pendingAttachmentDetails
+
+  if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
+    return rawAttachments.map(attachment => ({
+      name: attachment.fileName || '附件',
+      url: attachment.url,
+      attachmentId: Number(attachment.id)
+    }))
+  }
+
+  if (Array.isArray(persistedDraft?.attachmentDetails) && persistedDraft.attachmentDetails.length > 0) {
+    return persistedDraft.attachmentDetails.map((attachment, index) => ({
+      name: attachment.fileName || `附件${index + 1}`,
+      url: attachment.url,
+      attachmentId: Number(attachment.id)
+    }))
+  }
+
+  const attachmentUrls = row.pendingAttachments ?? persistedDraft?.attachments ?? []
+  return attachmentUrls.map((url, index) => ({
+    name: String(url).split('/').pop() || `附件${index + 1}`,
+    url
+  }))
+}
+
 // 打开填报弹窗
 const handleOpenReportDialog = (row: StrategicIndicator) => {
   currentReportIndicator.value = row
   const persistedDraft = readPersistedIndicatorDraft(row.id)
   const reportedProgress = getDisplayedReportedProgress(row)
+  const attachmentItems = resolveDialogAttachments(row, persistedDraft)
   reportForm.value = {
     newProgress:
       (reportedProgress !== null ? reportedProgress : null) ??
@@ -2726,8 +3026,15 @@ const handleOpenReportDialog = (row: StrategicIndicator) => {
       row.progress ??
       0,
     remark: row.pendingRemark ?? persistedDraft?.remark ?? '',
-    attachments: row.pendingAttachments ?? persistedDraft?.attachments ?? []
+    attachments: attachmentItems.map(item => item.url)
   }
+  reportUploadFiles.value = attachmentItems.map((item, index) => ({
+    name: item.name || `附件${index + 1}`,
+    url: item.url,
+    attachmentId: item.attachmentId,
+    status: 'success',
+    uid: `${row.id}-${index}-${item.url}`
+  }))
   reportDialogVisible.value = true
 }
 
@@ -2740,6 +3047,110 @@ const closeReportDialog = () => {
     remark: '',
     attachments: []
   }
+  reportUploadFiles.value = []
+}
+
+const syncReportAttachmentUrls = () => {
+  reportForm.value.attachments = reportUploadFiles.value
+    .map(file => file.url || file.name || '')
+    .filter(Boolean)
+}
+
+const handleReportFileChange: UploadProps['onChange'] = (_uploadFile, uploadFiles) => {
+  reportUploadFiles.value = uploadFiles as ReportUploadFile[]
+  syncReportAttachmentUrls()
+}
+
+const handleReportFileRemove: UploadProps['onRemove'] = (_uploadFile, uploadFiles) => {
+  reportUploadFiles.value = uploadFiles as ReportUploadFile[]
+  syncReportAttachmentUrls()
+  return true
+}
+
+const beforeReportUpload: UploadProps['beforeUpload'] = file => {
+  const isLt30M = file.size / 1024 / 1024 < 30
+  if (!isLt30M) {
+    ElMessage.error('附件大小不能超过 30MB')
+  }
+  return isLt30M
+}
+
+const uploadReportAttachments = async (): Promise<{
+  attachmentIds: number[]
+  attachmentUrls: string[]
+  attachmentDetails: Attachment[]
+}> => {
+  const currentUserId =
+    Number(authStore.user?.id ?? (authStore.user as { userId?: number } | null)?.userId) || 0
+
+  const attachmentIds: number[] = []
+  const attachmentUrls: string[] = []
+  const attachmentDetails: Attachment[] = []
+  isUploadingReportFiles.value = true
+
+  try {
+    for (const file of reportUploadFiles.value) {
+      if (file.attachmentId) {
+        attachmentIds.push(file.attachmentId)
+        attachmentUrls.push(file.url || file.name)
+        attachmentDetails.push({
+          id: String(file.attachmentId),
+          fileName: file.name || '附件',
+          fileSize: Number(file.size || 0),
+          fileType: '',
+          url: file.url || file.name || '',
+          uploadedBy: currentUserId,
+          uploadedAt: ''
+        })
+        continue
+      }
+
+      const rawFile = file.raw
+      if (!(rawFile instanceof File)) {
+        if (file.url) {
+          attachmentUrls.push(file.url)
+        }
+        continue
+      }
+
+      file.status = 'uploading'
+
+      const response = await apiService.upload<{
+        code: number
+        data: Attachment
+        message: string
+      }>('/attachments/upload', rawFile, {
+        uploadedBy: currentUserId
+      })
+
+      const uploaded = response.data
+      if (!uploaded?.id) {
+        throw new Error(response.message || '附件上传失败')
+      }
+
+      file.attachmentId = Number(uploaded.id)
+      file.url = uploaded.url
+      file.name = uploaded.fileName || file.name
+      file.status = 'success'
+
+      attachmentIds.push(Number(uploaded.id))
+      attachmentUrls.push(uploaded.url || uploaded.fileName)
+      attachmentDetails.push({
+        id: String(uploaded.id),
+        fileName: uploaded.fileName || file.name || '附件',
+        fileSize: Number(uploaded.fileSize || 0),
+        fileType: uploaded.fileType || '',
+        url: uploaded.url || uploaded.fileName || '',
+        uploadedBy: Number(uploaded.uploadedBy || currentUserId),
+        uploadedAt: uploaded.uploadedAt || ''
+      })
+    }
+  } finally {
+    isUploadingReportFiles.value = false
+  }
+
+  reportForm.value.attachments = attachmentUrls
+  return { attachmentIds, attachmentUrls, attachmentDetails }
 }
 
 const syncBackendReportedProgress = (
@@ -2750,6 +3161,7 @@ const syncBackendReportedProgress = (
     pendingProgress?: number | null
     pendingRemark?: string | null
     pendingAttachments?: string[]
+    pendingAttachmentDetails?: Attachment[]
     currentReportId?: number | null
   }
 ) => {
@@ -2780,6 +3192,7 @@ const syncBackendReportedProgress = (
           pendingProgress: payload.pendingProgress,
           pendingRemark: payload.pendingRemark,
           pendingAttachments: payload.pendingAttachments,
+          pendingAttachmentDetails: payload.pendingAttachmentDetails,
           currentReportId: payload.currentReportId
         }
       })
@@ -2816,6 +3229,9 @@ const submitProgressReport = async () => {
 
   try {
     isSavingReport.value = true
+    const { indicatorFillApi } = await import('@/features/plan/api/planApi')
+    await indicatorFillApi.ensureEditable(indicator.id)
+    const { attachmentIds, attachmentUrls, attachmentDetails } = await uploadReportAttachments()
 
     const batchSourceIndicators =
       currentPlanIndicators.value.length > 0 ? currentPlanIndicators.value : indicators.value
@@ -2848,7 +3264,8 @@ const submitProgressReport = async () => {
           indicator_name: item.name,
           progress: Number(reportProgress),
           content: reportRemark,
-          milestone_id: isCurrentIndicator ? nearestMilestone.value?.id : undefined
+          milestone_id: isCurrentIndicator ? nearestMilestone.value?.id : undefined,
+          attachment_ids: isCurrentIndicator ? attachmentIds : []
         }
       })
       .filter(Boolean)
@@ -2858,6 +3275,7 @@ const submitProgressReport = async () => {
       progress: reportForm.value.newProgress,
       content: reportForm.value.remark,
       attachments: [],
+      // Attachments are uploaded first and linked by attachment_ids in batch_items.
       milestone_id: nearestMilestone.value?.id,
       batch_items: batchItems
     })
@@ -2865,7 +3283,8 @@ const submitProgressReport = async () => {
     persistIndicatorDraft(indicator.id, {
       progress: reportForm.value.newProgress,
       remark: reportForm.value.remark,
-      attachments: reportForm.value.attachments
+      attachments: attachmentUrls,
+      attachmentDetails
     })
 
     const savedReportId = Number(savedFill?.id ?? 0) || null
@@ -2880,8 +3299,13 @@ const submitProgressReport = async () => {
         pendingRemark: item.content,
         pendingAttachments:
           String(item.indicator_id) === String(indicator.id)
-            ? reportForm.value.attachments
+            ? attachmentUrls
             : (matchedIndicator?.pendingAttachments ?? []),
+        pendingAttachmentDetails:
+          String(item.indicator_id) === String(indicator.id)
+            ? attachmentDetails
+            : ((matchedIndicator as StrategicIndicator & { pendingAttachmentDetails?: Attachment[] })
+                ?.pendingAttachmentDetails ?? []),
         currentReportId: savedReportId
       })
     }
@@ -2912,6 +3336,7 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
   if (planId) {
     await refreshCurrentPlanDetails(planId)
   }
+  await approvalStore.loadPendingApprovals()
 }
 
 const handleApproveIndicatorWorkflow = async (row: StrategicIndicator) => {
@@ -2972,11 +3397,7 @@ const handleRejectIndicatorWorkflow = async (row: StrategicIndicator) => {
 // 检查指标是否已有真实填报内容
 // 业务要求：按钮文案只根据当前轮次的 pendingProgress 判断。
 const hasReportContent = (row: StrategicIndicator): boolean => {
-  if (row.pendingProgress !== undefined && row.pendingProgress !== null) {
-    return true
-  }
-
-  return getDisplayedReportedProgress(row) !== null
+  return row.pendingProgress !== undefined && row.pendingProgress !== null
 }
 
 // 检查所有指标是否都已填报
@@ -3293,15 +3714,14 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               </el-button>
               <!-- 一键撤回按钮（有任何待审批指标时显示） -->
               <el-tooltip
+                v-if="showWithdrawAllButton"
                 :content="withdrawTooltip"
                 :disabled="timeContext.isReadOnly || canWithdrawAny"
                 effect="dark"
                 placement="top"
               >
                 <span style="display: inline-block">
-                  <!-- Tooltip 需要一个包裹元素来处理 disabled 状态 -->
                   <el-button
-                    v-if="showWithdrawAllButton"
                     type="warning"
                     size="small"
                     :disabled="timeContext.isReadOnly || !canWithdrawAny"
@@ -3312,11 +3732,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   </el-button>
                 </span>
               </el-tooltip>
-              <el-badge
-                v-if="pendingApprovalCount > 0"
-                :value="pendingApprovalCount"
-                class="approval-badge"
-              >
+              <el-badge v-if="approvalBadgeCount > 0" :value="approvalBadgeCount" class="approval-badge">
                 <el-button
                   size="small"
                   type="warning"
@@ -3479,10 +3895,12 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                     <span class="progress-number" :class="getProgressStatusClass(row)">
                       {{ getDisplayProgress(row) }}%
                     </span>
-                    <el-tooltip content="填报进度" placement="top">
-                      <span v-if="shouldShowReportedProgress(row)" class="reported-progress">
-                        ({{ getDisplayedReportedProgress(row) }}%)
-                      </span>
+                    <el-tooltip
+                      v-if="shouldShowReportedProgress(row)"
+                      content="填报进度"
+                      placement="top"
+                    >
+                      <span class="reported-progress">({{ getDisplayedReportedProgress(row) }}%)</span>
                     </el-tooltip>
                   </div>
                 </template>
@@ -3812,14 +4230,19 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           </el-form-item>
           <el-form-item label="附件（可选）">
             <el-upload
+              v-model:file-list="reportUploadFiles"
               action="#"
               :auto-upload="false"
               :limit="5"
+              :disabled="isUploadingReportFiles || isSavingReport"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+              :on-change="handleReportFileChange"
+              :on-remove="handleReportFileRemove"
+              :before-upload="beforeReportUpload"
             >
               <el-button size="small" type="primary" plain>选择文件</el-button>
               <template #tip>
-                <div class="upload-tip">支持 PDF、Word、Excel、图片格式，最多5个文件</div>
+                <div class="upload-tip">支持 PDF、Word、Excel、图片格式，单个文件不超过 30MB，最多5个文件。选择后仅暂存，保存时才会上传并关联。</div>
               </template>
             </el-upload>
           </el-form-item>
@@ -3840,8 +4263,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
         <el-button :disabled="isSavingReport" @click="closeReportDialog">取消</el-button>
         <el-button
           type="primary"
-          :loading="isSavingReport"
-          :disabled="isSavingReport"
+          :loading="isSavingReport || isUploadingReportFiles"
+          :disabled="isSavingReport || isUploadingReportFiles"
           @click="submitProgressReport"
           >保存</el-button
         >

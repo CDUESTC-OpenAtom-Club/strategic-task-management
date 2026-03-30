@@ -541,7 +541,7 @@ function resolveExpectedApproverRoleCodes(): string[] {
 
 function resolveExpectedApproverOrgId(): number | null {
   const stepName = String(activePlanWorkflow.value?.currentStepName || '').trim()
-  const currentTaskId = String(activePlanWorkflow.value?.currentTaskId || '').trim()
+  const currentTaskId = String(currentPlanTaskId.value || '').trim()
   if (currentTaskId && Array.isArray(planWorkflowDetail.value?.tasks)) {
     const currentTask = planWorkflowDetail.value.tasks.find(
       task => String(task.taskId || '').trim() === currentTaskId
@@ -565,12 +565,33 @@ function resolveExpectedApproverOrgId(): number | null {
   return null
 }
 
+const currentPendingPlanTask = computed<WorkflowTaskResponse | null>(() => {
+  const currentTaskId = String(currentPlanTaskId.value || '').trim()
+  if (!currentTaskId) {
+    return null
+  }
+
+  return (
+    planWorkflowTasks.value.find(task => {
+      const taskId = String(task.taskId || '').trim()
+      const status = String(task.status || '')
+        .trim()
+        .toUpperCase()
+      return taskId === currentTaskId && status === 'PENDING'
+    }) || null
+  )
+})
+
 const canCurrentUserHandlePlanApproval = computed(() => {
   if (
     !hasPlanWorkflowData.value ||
     !isPlanPendingApproval.value ||
     !hasPlanApprovalPermission.value
   ) {
+    return false
+  }
+
+  if (!currentPendingPlanTask.value) {
     return false
   }
 
@@ -1210,26 +1231,6 @@ async function loadPlanWorkflowDetail() {
     return
   }
 
-  const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
-  if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
-    try {
-      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
-      if (
-        response.success &&
-        response.data &&
-        matchesExpectedWorkflowCode(response.data.flowCode)
-      ) {
-        planWorkflowDetail.value = response.data
-        return
-      }
-    } catch (error) {
-      logger.warn('[ApprovalProgressDrawer] 旧实例ID详情加载失败，转按业务实体兜底:', {
-        workflowInstanceId,
-        error
-      })
-    }
-  }
-
   try {
     const businessEntityType = props.workflowEntityType || 'PLAN'
     const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
@@ -1247,7 +1248,31 @@ async function loadPlanWorkflowDetail() {
         return
       }
     }
+  } catch (error) {
+    logger.warn('[ApprovalProgressDrawer] 按业务实体加载计划工作流详情失败，回退旧实例ID:', error)
+  }
 
+  const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+  if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+    try {
+      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+      if (
+        response.success &&
+        response.data &&
+        matchesExpectedWorkflowCode(response.data.flowCode)
+      ) {
+        planWorkflowDetail.value = response.data
+        return
+      }
+    } catch (error) {
+      logger.warn('[ApprovalProgressDrawer] 旧实例ID详情加载失败:', {
+        workflowInstanceId,
+        error
+      })
+    }
+  }
+
+  try {
     planWorkflowDetail.value = null
   } catch (error) {
     planWorkflowDetail.value = null

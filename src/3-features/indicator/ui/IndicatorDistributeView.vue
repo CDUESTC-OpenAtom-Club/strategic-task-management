@@ -609,6 +609,7 @@ const canEditCurrentCollegePlan = computed(() => {
 const canWithdrawCurrentCollegePlan = computed(() => {
   return (
     ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value) &&
+    isCurrentUserReporter.value &&
     Boolean(currentActiveCollegePlan.value?.canWithdraw)
   )
 })
@@ -670,6 +671,27 @@ const currentUserRoleCodes = computed(() => {
     return []
   }
   return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
+})
+
+const isCurrentUserReporter = computed(() => {
+  const user = authStore.user as {
+    username?: unknown
+    realName?: unknown
+    name?: unknown
+    roles?: unknown[]
+  } | null
+
+  const username = String(user?.username ?? '').trim().toLowerCase()
+  const realName = String(user?.realName ?? user?.name ?? '').trim()
+  const roles = Array.isArray(user?.roles)
+    ? user.roles
+        .map(role => (typeof role === 'string' ? role.trim().toUpperCase() : ''))
+        .filter(Boolean)
+    : []
+
+  return (
+    roles.includes('ROLE_REPORTER') || username.endsWith('_report') || realName.includes('填报人')
+  )
 })
 
 const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
@@ -760,6 +782,45 @@ const distributionApprovalButtonText = computed(() => {
     return '待审批'
   }
   return '查看审批进度'
+})
+
+const withdrawButtonVisible = computed(() => {
+  if (!selectedCollege.value) {
+    return false
+  }
+
+  return ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'DISTRIBUTED'].includes(
+    selectedCollegePlanUiStatus.value
+  )
+})
+
+const withdrawButtonType = computed(() => {
+  return canWithdrawCurrentCollegePlan.value ? 'warning' : 'info'
+})
+
+const withdrawButtonDisabledReason = computed(() => {
+  if (timeContext.isReadOnly) {
+    return '历史快照为只读状态'
+  }
+
+  const status = selectedCollegePlanUiStatus.value
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(status) && !canWithdrawCurrentCollegePlan.value) {
+    return isCurrentUserReporter.value ? '当前审批进度不支持撤回' : '当前登录身份不是填报人，不能撤回'
+  }
+
+  if (status === 'DISTRIBUTED') {
+    return '当前计划已下发，无法撤回'
+  }
+
+  if (!withdrawButtonVisible.value) {
+    return '当前状态不可撤回'
+  }
+
+  return ''
+})
+
+const withdrawButtonDisabled = computed(() => {
+  return isBatchDistributing.value || Boolean(withdrawButtonDisabledReason.value)
 })
 
 const distributionSubmitButtonText = computed(() => {
@@ -3580,11 +3641,17 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 </el-button>
               </template>
               <template v-else>
-                <el-button :type="distributionApprovalButtonType" @click="handleOpenApproval">
-                  <el-icon><Check /></el-icon>
-                  {{ distributionApprovalButtonText
-                  }}{{ pendingApprovalCount > 0 ? ` (${pendingApprovalCount})` : '' }}
-                </el-button>
+                <div class="approval-entry-wrapper">
+                  <span
+                    v-if="canCurrentUserApproveCurrentPlan"
+                    class="approval-entry-dot"
+                    aria-hidden="true"
+                  ></span>
+                  <el-button :type="distributionApprovalButtonType" @click="handleOpenApproval">
+                    <el-icon><Check /></el-icon>
+                    {{ distributionApprovalButtonText }}
+                  </el-button>
+                </div>
                 <template v-if="collegeOverallStatus.label === '草稿' && canEditChild">
                   <el-button type="primary" @click="openAddIndicatorForm">
                     <el-icon><Plus /></el-icon>
@@ -3600,15 +3667,12 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     {{ distributionSubmitButtonText }}
                   </el-button>
                 </template>
-                <template
-                  v-else-if="
-                    collegeOverallStatus.label === '待审批' && canWithdrawCurrentCollegePlan
-                  "
-                >
+                <template v-else-if="withdrawButtonVisible">
                   <el-button
-                    type="warning"
+                    :type="withdrawButtonType"
                     :loading="isBatchDistributing"
-                    :disabled="isBatchDistributing"
+                    :disabled="withdrawButtonDisabled"
+                    :title="withdrawButtonDisabledReason"
                     @click="handleBatchWithdraw(selectedCollege)"
                   >
                     <el-icon><Promotion /></el-icon>
@@ -6003,6 +6067,24 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
 .action-text {
   color: var(--text-main);
+}
+
+.approval-entry-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.approval-entry-dot {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #f04438;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(240, 68, 56, 0.18);
+  z-index: 2;
 }
 
 .timeline-comment {

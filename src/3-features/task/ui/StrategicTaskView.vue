@@ -46,6 +46,7 @@ import {
 } from '@/shared/lib/utils/indicatorStatus'
 import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib'
 import { ApprovalProgressDrawer } from '@/features/approval'
+import { useApprovalStore } from '@/features/approval/model/store'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
 import { indicatorApi } from '@/features/indicator/api'
 import { usePlanStore } from '@/features/plan/model/store'
@@ -68,6 +69,7 @@ const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
 const planStore = usePlanStore()
+const approvalStore = useApprovalStore()
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
 const currentUserPermissionCodes = computed(() => {
   const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
@@ -80,26 +82,18 @@ const currentUserPermissionCodes = computed(() => {
 })
 
 const isCurrentUserReporter = computed(() => {
-  const user = authStore.user as {
-    username?: unknown
-    realName?: unknown
-    name?: unknown
-    roles?: unknown
-  } | null
-
-  const username = String(user?.username ?? '')
-    .trim()
-    .toLowerCase()
-  const realName = String(user?.realName ?? user?.name ?? '').trim()
-  const roles = Array.isArray(user?.roles)
-    ? user!.roles
+  const roles = Array.isArray(authStore.user?.roles)
+    ? authStore.user.roles
         .map(role => (typeof role === 'string' ? role.trim().toUpperCase() : ''))
         .filter(Boolean)
     : []
 
-  return (
-    roles.includes('ROLE_REPORTER') || username.endsWith('_report') || realName.includes('填报人')
-  )
+  return roles.includes('ROLE_REPORTER')
+})
+
+const currentUserOrgId = computed(() => {
+  const rawOrgId = Number((authStore.user as { orgId?: string | number } | null)?.orgId ?? NaN)
+  return Number.isFinite(rawOrgId) && rawOrgId > 0 ? rawOrgId : null
 })
 
 // 只读模式（历史年份为只读）
@@ -234,6 +228,26 @@ const findCurrentPlanByDepartment = () => {
         orgName === normalizeDepartmentName(selectedDepartment.value)
 
       return sameDepartment && planYear === timeContext.currentYear
+    }) || null
+  )
+}
+
+const findCurrentPlanByOrgId = (orgId?: number | null) => {
+  if (!orgId || !Number.isFinite(orgId)) {
+    return null
+  }
+
+  return (
+    planStore.plans.find(p => {
+      const planAny = p as Record<string, unknown>
+      const planYear = resolvePlanYear(planAny)
+      const planCreatedByOrgId = Number(planAny.createdByOrgId ?? planAny.created_by_org_id ?? NaN)
+
+      return (
+        planYear === timeContext.currentYear &&
+        Number.isFinite(planCreatedByOrgId) &&
+        planCreatedByOrgId === orgId
+      )
     }) || null
   )
 }
@@ -823,6 +837,35 @@ const resolveDepartmentIdByName = (departmentName?: string | null): number | nul
   return departmentNameIdMap.value.get(normalized) ?? null
 }
 
+const canCurrentUserSubmitCurrentPlan = computed(() => {
+  const plan = currentPlan.value as
+    | (typeof currentPlan.value & {
+        createdByOrgId?: string | number
+        createdByOrgName?: string
+        targetOrgId?: string | number
+        orgId?: string | number
+        targetOrgName?: string
+        orgName?: string
+      })
+    | null
+
+  if (!plan || !currentUserOrgId.value || !isCurrentUserReporter.value) {
+    return false
+  }
+
+  const planOrgId = Number(plan.createdByOrgId ?? NaN)
+  if (Number.isFinite(planOrgId) && planOrgId > 0) {
+    return currentUserOrgId.value === planOrgId
+  }
+
+  const planOrgName = normalizeDepartmentName(plan.createdByOrgName || '')
+  const currentUserOrgName = normalizeDepartmentName(
+    departmentIdNameMap.value.get(String(currentUserOrgId.value)) || ''
+  )
+
+  return Boolean(planOrgName) && planOrgName === currentUserOrgName
+})
+
 const getTaskTypeForPersistence = (taskCategory?: string): 'BASIC' | 'DEVELOPMENT' => {
   return String(taskCategory || '').trim() === '基础性' ? 'BASIC' : 'DEVELOPMENT'
 }
@@ -981,9 +1024,7 @@ const isPlanDistributed = computed(() => {
 // 撤回权限只跟当前部门填报人走，不在前端额外放宽跨部门管理权限。
 const canWithdrawPlan = computed(() => {
   const status = currentPlanStatus.value
-  return (
-    status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
-  )
+  return status === 'PENDING' && isCurrentUserReporter.value && Boolean(currentPlan.value?.canWithdraw)
 })
 
 // 判断当前页面指标是否已进入“不可编辑”的流程阶段
@@ -1109,6 +1150,10 @@ const distributeButtonDisabledReason = computed(() => {
 
   const status = currentPlanStatus.value
   const isSubmittingStatus = status === 'DRAFT' || !status
+
+  if (isSubmittingStatus && !canCurrentUserSubmitCurrentPlan.value) {
+    return '只有当前计划归属部门的填报人才可以发起审批'
+  }
 
   if (isSubmittingStatus && departmentTotalWeight.value !== 100) {
     return `基础性任务指标权重合计必须为100%，当前为${departmentTotalWeight.value}`
@@ -1368,6 +1413,7 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
     await planStore.loadPlanDetails(planId, { force: true, background: true })
   }
   await loadPendingPlanApprovalCount()
+  await approvalStore.loadPendingApprovals()
 }
 
 const refreshTaskPageAfterIndicatorMutation = async () => {
@@ -2806,16 +2852,16 @@ const handleOpenApproval = () => {
       const latestPlan = currentPlan.value
       if (latestPlan) {
         try {
-          const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
-          if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
-            const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+          const businessEntityId = Number(latestPlan.id ?? 0)
+          if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
+            const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
             if (response.success && response.data) {
               preloadedPlanWorkflowDetail.value = response.data
             }
           } else {
-            const businessEntityId = Number(latestPlan.id ?? 0)
-            if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
-              const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
+            const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
+            if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+              const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
               if (response.success && response.data) {
                 preloadedPlanWorkflowDetail.value = response.data
               }
@@ -3222,7 +3268,7 @@ const closeDistributeDialog = () => {
 const _handleWithdraw = async (row: StrategicIndicator) => {
   // 检查 Plan 状态：是否可以撤回
   if (!canWithdrawPlan.value) {
-    if (isPlanDistributed.value) {
+    if (currentPlanStatus.value === 'DISTRIBUTED') {
       ElMessage.warning('当前 Plan 已下发，无法撤回')
     } else if (currentPlanStatus.value === 'PENDING') {
       ElMessage.warning('当前审批进度不支持撤回')
@@ -4772,7 +4818,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           <div class="summary-row">
             <span class="summary-label">当前计划：</span>
             <span class="summary-value">{{
-              currentPlan.name || selectedDepartment || '当前计划'
+              currentPlan.name || currentPlan.taskName || selectedDepartment || '当前计划'
             }}</span>
           </div>
           <div class="summary-row">

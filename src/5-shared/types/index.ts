@@ -692,6 +692,7 @@ export interface IndicatorFillForm {
     progress: number
     content: string
     milestone_id?: string | number
+    attachment_ids?: number[]
   }>
 }
 
