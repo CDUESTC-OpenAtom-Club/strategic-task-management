@@ -93,6 +93,16 @@ interface DisplayAttachmentItem {
   attachmentId?: number
 }
 
+class AttachmentUploadError extends Error {
+  cause: unknown
+
+  constructor(message: string, cause: unknown) {
+    super(message)
+    this.name = 'AttachmentUploadError'
+    this.cause = cause
+  }
+}
+
 // --- 自定义指令，用于自动聚焦 ---
 const vFocus = {
   mounted: (el: HTMLElement) => {
@@ -3140,6 +3150,31 @@ const beforeReportUpload: UploadProps['beforeUpload'] = file => {
   return isLt30M
 }
 
+const normalizeUploadedAttachment = (
+  payload: Record<string, unknown>,
+  fallbackName: string,
+  currentUserId: number
+): Attachment => {
+  const id = String(payload.id ?? '')
+  const resolvedFileName = payload.fileName ?? payload.originalName ?? fallbackName
+  const fileName = String(resolvedFileName || '附件')
+  const url = String(payload.url ?? payload.publicUrl ?? fileName)
+  const fileSize = Number(payload.fileSize ?? payload.sizeBytes ?? 0)
+  const fileType = String(payload.fileType ?? payload.contentType ?? '')
+  const uploadedBy = Number(payload.uploadedBy ?? currentUserId)
+  const uploadedAt = String(payload.uploadedAt ?? '')
+
+  return {
+    id,
+    fileName,
+    fileSize: Number.isFinite(fileSize) ? fileSize : 0,
+    fileType,
+    url,
+    uploadedBy: Number.isFinite(uploadedBy) ? uploadedBy : currentUserId,
+    uploadedAt
+  }
+}
+
 const uploadReportAttachments = async (): Promise<{
   attachmentIds: number[]
   attachmentUrls: string[]
@@ -3180,17 +3215,32 @@ const uploadReportAttachments = async (): Promise<{
 
       file.status = 'uploading'
 
-      const response = await apiService.upload<{
-        code: number
-        data: Attachment
-        message: string
-      }>('/attachments/upload', rawFile, {
-        uploadedBy: currentUserId
-      })
+      let uploaded: Attachment
+      try {
+        const response = await apiService.upload<{
+          code: number
+          data: Record<string, unknown>
+          message: string
+        }>('/attachments/upload', rawFile, {
+          uploadedBy: currentUserId
+        })
 
-      const uploaded = response.data
-      if (!uploaded?.id) {
-        throw new Error(response.message || '附件上传失败')
+        const rawUploaded =
+          response &&
+          typeof response === 'object' &&
+          response.data &&
+          typeof response.data === 'object'
+            ? response.data
+            : null
+
+        if (!rawUploaded?.id) {
+          throw new Error(response.message || '附件上传失败')
+        }
+
+        uploaded = normalizeUploadedAttachment(rawUploaded, file.name || rawFile.name, currentUserId)
+      } catch (error) {
+        file.status = 'fail'
+        throw new AttachmentUploadError('附件上传失败', error)
       }
 
       file.attachmentId = Number(uploaded.id)
@@ -3317,7 +3367,24 @@ const submitProgressReport = async () => {
     isSavingReport.value = true
     const { indicatorFillApi } = await import('@/features/plan/api/planApi')
     await indicatorFillApi.ensureEditable(indicator.id)
-    const { attachmentIds, attachmentUrls, attachmentDetails } = await uploadReportAttachments()
+    let attachmentIds: number[] = []
+    let attachmentUrls: string[] = []
+    let attachmentDetails: Attachment[] = []
+
+    try {
+      ;({ attachmentIds, attachmentUrls, attachmentDetails } = await uploadReportAttachments())
+    } catch (error) {
+      if (!(error instanceof AttachmentUploadError)) {
+        throw error
+      }
+
+      logger.warn('[IndicatorListView] 附件上传失败，降级为无附件保存:', error.cause ?? error)
+      reportForm.value.attachments = []
+      attachmentIds = []
+      attachmentUrls = []
+      attachmentDetails = []
+      ElMessage.warning('当前后端附件上传不可用，本次将忽略附件，仅保存进度填报内容')
+    }
 
     const batchSourceIndicators =
       currentPlanIndicators.value.length > 0 ? currentPlanIndicators.value : indicators.value
@@ -3397,7 +3464,9 @@ const submitProgressReport = async () => {
       })
     }
 
-    ElMessage.success('进度已保存，可在批量操作中提交')
+    ElMessage.success(
+      attachmentUrls.length > 0 ? '进度已保存，可在批量操作中提交' : '进度已保存（未关联附件），可在批量操作中提交'
+    )
     closeReportDialog()
   } catch (error) {
     logger.error('[IndicatorListView] 保存进度填报失败:', error)
@@ -3424,6 +3493,27 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
     await refreshCurrentPlanDetails(planId)
   }
   await approvalStore.loadPendingApprovals()
+}
+
+const refreshIndicatorListAfterMutation = async () => {
+  const planId = getCurrentPlanId()
+
+  invalidateQueries([
+    'indicator.list',
+    'task.list',
+    'task.scope',
+    'plan.list',
+    'plan.detail',
+    'dashboard.overview',
+    buildQueryKey('task', 'list', { year: timeContext.currentYear })
+  ])
+
+  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+  if (planId) {
+    await refreshCurrentPlanDetails(planId)
+  }
+  await approvalStore.loadPendingApprovals()
+  await approvalStore.refreshStats()
 }
 
 const handleApproveIndicatorWorkflow = async (row: StrategicIndicator) => {
@@ -3619,11 +3709,8 @@ const handleSubmitAll = () => {
         })
       }
 
-      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-      await refreshCurrentPlanDetails(planId)
+      await refreshIndicatorListAfterMutation()
       currentPlanWorkflowDetail.value = null
-      await approvalStore.loadPendingApprovals()
-      await approvalStore.refreshStats()
       ElMessage.success(
         submitComment?.trim() ? `已提交上报审批：${submitComment.trim()}` : '已发起本次上报审批'
       )
@@ -3682,8 +3769,7 @@ const handleWithdrawAllProgressApprovals = () => {
         await planStore.withdrawPlan(planId)
       }
 
-      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-      await refreshCurrentPlanDetails(planId)
+      await refreshIndicatorListAfterMutation()
       ElMessage.success('已撤回当前上报审批')
     } catch (error) {
       logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)

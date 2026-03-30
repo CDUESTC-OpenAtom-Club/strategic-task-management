@@ -287,7 +287,10 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const item = getRecord(raw)
   const id = getString(item, 'id', 'indicatorId')
   const taskId = getString(item, 'taskId', 'task_id', 'planId', 'strategicTaskId')
-  const taskContentRaw = getString(item, 'taskContent', 'taskName', 'indicatorName', 'indicatorDesc')
+  // 任务名只能来自任务字段本身，不能回退到指标名称/描述。
+  // 否则新增指标时如果后端响应里暂时缺少 taskName，就会把新指标内容误显示成“战略任务”，
+  // 看起来像把原任务标题覆盖了。
+  const taskContentRaw = getString(item, 'taskContent', 'taskName')
   const taskContent = taskContentRaw || (taskId ? `计划-${taskId}` : '')
   const createdAt = getString(item, 'createdAt', 'createTime') || new Date().toISOString()
   const parsedYear = Number(getString(item, 'year'))

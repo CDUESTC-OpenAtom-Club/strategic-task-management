@@ -35,6 +35,7 @@ import { normalizePlanStatus } from '@/features/task/lib/planStatus'
 import { strategicApi } from '@/features/task/api/strategicApi'
 import { getWorkflowDefinitionPreviewByCode } from '@/features/workflow/api'
 import type { WorkflowDefinitionPreviewResponse } from '@/features/workflow/api/types'
+import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 
 // 接收父组件传递的视角角色和部门
 const props = defineProps<{
@@ -1050,21 +1051,32 @@ const refreshDistributionData = async () => {
   }
 
   refreshDistributionPromise.value = (async () => {
-    const reloadJobs: Array<Promise<unknown>> = [
-      planStore.loadPlans({ force: true, background: true })
+    invalidateQueries([
+      'indicator.list',
+      'task.list',
+      'task.scope',
+      'plan.list',
+      'plan.detail',
+      'dashboard.overview',
+      buildQueryKey('task', 'list', { year: timeContext.currentYear })
+    ])
+
+    const reloadJobs: Array<{ source: string; job: Promise<unknown> }> = [
+      {
+        source: 'indicators',
+        job: strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+      },
+      {
+        source: 'plans',
+        job: planStore.loadPlans({ force: true, background: true })
+      }
     ]
 
-    // 职能部门分发页不再请求全量年度指标接口。
-    // 该接口当前对教务处等账号无权限，继续调用只会产生 403/500 噪音。
-    if (isStrategicDept.value) {
-      reloadJobs.unshift(strategicStore.loadIndicatorsByYear(timeContext.currentYear))
-    }
-
-    const results = await Promise.allSettled(reloadJobs)
+    const results = await Promise.allSettled(reloadJobs.map(item => item.job))
 
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        const source = isStrategicDept.value && index === 0 ? 'indicators' : 'plans'
+        const source = reloadJobs[index]?.source || 'unknown'
         logger.warn(`[IndicatorDistributeView] 加载 ${source} 数据失败:`, result.reason)
       }
     })
@@ -1913,7 +1925,7 @@ const saveNewIndicator = async () => {
       ElMessage.warning('指标已创建，但里程碑保存失败，请重新编辑里程碑')
     }
     cancelAddIndicator()
-    void refreshDistributionData()
+    await refreshDistributionData()
   } catch (error: any) {
     logger.error('[IndicatorDistributeView] saveNewIndicator failed:', error)
     ElMessage.error(error?.message || '保存指标失败，请重试')
@@ -3271,7 +3283,7 @@ const _getCurrentMonthTargetProgress = (child: StrategicIndicator | NewChildIndi
 }
 
 // 处理子指标类型变更
-const _handleChildTypeChange = (
+const _handleChildTypeChange = async (
   child: NewChildIndicator | StrategicIndicator,
   newType: '定量' | '定性'
 ) => {
@@ -3307,7 +3319,8 @@ const _handleChildTypeChange = (
       targetValue: newType === '定量' ? 100 : 0,
       milestones: newMilestones
     }
-    strategicStore.updateIndicator(indicator.id.toString(), updates)
+    await strategicStore.updateIndicator(indicator.id.toString(), updates)
+    await refreshDistributionData()
   }
 
   ElMessage.success(`已切换为${newType}指标`)
@@ -3474,18 +3487,17 @@ const saveMilestones = async () => {
       ElMessage.success('里程碑已更新')
 
       logger.info(`[IndicatorDistributionView] Reloading indicators after milestone update...`)
-      void refreshDistributionData()
-        .then(() => {
-          const reloadedIndicator = strategicStore.indicators.find(i => i.id === indicator.id)
-          if (reloadedIndicator) {
-            logger.info(
-              `[IndicatorDistributionView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`
-            )
-          }
-        })
-        .catch(error => {
-          logger.warn('[IndicatorDistributionView] Refresh after milestone update failed:', error)
-        })
+      try {
+        await refreshDistributionData()
+        const reloadedIndicator = strategicStore.indicators.find(i => i.id === indicator.id)
+        if (reloadedIndicator) {
+          logger.info(
+            `[IndicatorDistributionView] After reload, indicator ${reloadedIndicator.id} has ${reloadedIndicator.milestones?.length || 0} milestones`
+          )
+        }
+      } catch (error) {
+        logger.warn('[IndicatorDistributionView] Refresh after milestone update failed:', error)
+      }
     } catch (error) {
       console.error('Failed to save milestones:', error)
       ElMessage.error('里程碑更新失败')

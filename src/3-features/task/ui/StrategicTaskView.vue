@@ -1740,6 +1740,7 @@ const _handleWithdrawTask = async (row: StrategicIndicator) => {
           distributedRows.map(r => strategicStore.withdrawIndicator(r.id.toString()))
         )
 
+        await refreshTaskPageAfterIndicatorMutation()
         loading.close()
         ElMessage.success(`已成功撤回 ${distributedRows.length} 个指标`)
         updateEditTime()
@@ -2678,12 +2679,12 @@ const _calculateMilestoneStatus = (
   }
 
   const _currentDate = new Date()
-  const _currentYear = currentDate.getFullYear()
+  const _currentYear = _currentDate.getFullYear()
 
   // 检查是否有逾期未完成的里程碑
   const hasOverdueMilestone = indicator.milestones.some(milestone => {
     const deadlineDate = new Date(milestone.deadline)
-    return milestone.status === 'pending' && deadlineDate < currentDate
+    return milestone.status === 'pending' && deadlineDate < _currentDate
   })
 
   // 检查是否有即将到期的里程碑（30天内）
@@ -2693,7 +2694,7 @@ const _calculateMilestoneStatus = (
     }
     const deadlineDate = new Date(milestone.deadline)
     const daysUntilDeadline = Math.ceil(
-      (deadlineDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)
+      (deadlineDate.getTime() - _currentDate.getTime()) / (1000 * 60 * 60 * 24)
     )
     return daysUntilDeadline > 0 && daysUntilDeadline <= 30
   })
@@ -2725,7 +2726,7 @@ const _getMilestoneProgressText = (indicator: StrategicIndicator): string => {
       return false
     }
     const deadlineDate = new Date(m.deadline)
-    return deadlineDate < currentDate
+    return deadlineDate < _currentDate
   }).length
 
   if (overdueMilestonesCount > 0) {
@@ -2943,8 +2944,7 @@ const approveIndicatorReview = async (indicatorId: string) => {
           await indicatorApi.approveIndicatorReview(indicatorId)
           ElMessage.success('审核通过')
 
-          // 重新加载指标数据
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          await refreshTaskPageAfterIndicatorMutation()
           updateEditTime()
         } catch (error) {
           logger.error('审核通过失败:', error)
@@ -2995,8 +2995,7 @@ const rejectIndicatorReview = async (indicatorId: string) => {
           await indicatorApi.rejectIndicatorReview(indicatorId, reason)
           ElMessage.info('已驳回审核')
 
-          // 重新加载指标数据
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          await refreshTaskPageAfterIndicatorMutation()
           updateEditTime()
         } catch (error) {
           logger.error('驳回审核失败:', error)
@@ -3153,8 +3152,7 @@ const confirmDistribute = () => {
             `已成功下发 ${pendingRows.length} 个指标到 ${distributeTarget.value.length} 个部门`
           )
           closeDistributeDialog()
-          // 重新加载数据以确保前端状态与后端一致
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          await refreshTaskPageAfterIndicatorMutation()
           updateEditTime()
         } catch (error) {
           logger.error('Failed to distribute indicators:', error)
@@ -3241,8 +3239,7 @@ const confirmDistribute = () => {
           ElMessage.warning(`下发成功，但审批未触发（${approvalTriggerResult.reason}）`)
         }
         closeDistributeDialog()
-        // 重新加载数据以确保前端状态与后端一致
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
         updateEditTime()
       } catch (error) {
         logger.error('Failed to distribute indicator:', error)
@@ -3284,8 +3281,7 @@ const _handleWithdraw = async (row: StrategicIndicator) => {
     .then(async () => {
       try {
         await strategicStore.withdrawIndicator(row.id.toString())
-        // 重新从后端加载数据，确保前端状态与后端一致
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
         ElMessage.info('指标已撤回')
         updateEditTime()
       } catch (err) {
@@ -3296,8 +3292,7 @@ const _handleWithdraw = async (row: StrategicIndicator) => {
           showClose: true
         })
         logger.error('Withdraw failed:', err)
-        // 重新加载数据以回滚本地状态
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
       }
     })
     .catch(() => {
@@ -3377,7 +3372,7 @@ const handleDistributeAll = async () => {
         }
 
         // 重新从后端加载数据，确保前端状态与后端一致
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
 
         loading.close()
         ElMessage.success({
@@ -3409,8 +3404,7 @@ const handleDistributeAll = async () => {
           showClose: true
         })
         logger.error('Distribute all failed:', err)
-        // 重新加载数据以回滚本地状态
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
       }
     })
     .catch(() => {
@@ -3462,7 +3456,7 @@ const handleWithdrawAll = async () => {
         ElMessage.success('已成功撤回当前 Plan')
 
         try {
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+          await refreshTaskPageAfterIndicatorMutation()
         } catch (refreshError) {
           logger.warn('[StrategicTaskView] Plan 撤回成功，但刷新指标列表失败:', refreshError)
           ElMessage.warning('Plan 已撤回成功，但指标列表刷新失败，请手动刷新页面确认最新状态')
@@ -3478,8 +3472,7 @@ const handleWithdrawAll = async () => {
           showClose: true
         })
         logger.error('Withdraw failed:', err)
-        // 重新加载数据以回滚本地状态
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
       }
     })
     .catch(() => {
@@ -3542,8 +3535,7 @@ const _handleBatchWithdrawByTask = async (group: {
           distributedRows.map(row => strategicStore.withdrawIndicator(row.id.toString()))
         )
 
-        // 2. 重新从后端加载数据，确保前端状态与后端一致
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
 
         loading.close()
         ElMessage.success(`已成功撤回 ${distributedRows.length} 个指标`)
@@ -3557,8 +3549,7 @@ const _handleBatchWithdrawByTask = async (group: {
           showClose: true
         })
         logger.error('Batch withdraw failed:', err)
-        // 重新加载数据以回滚本地状态
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        await refreshTaskPageAfterIndicatorMutation()
       }
     })
     .catch(() => {
@@ -3730,7 +3721,7 @@ const getProgressColor = (row: StrategicIndicator): string => {
     const lastMilestone = row.milestones[row.milestones.length - 1]
     if (lastMilestone.deadline) {
       const deadlineDate = new Date(lastMilestone.deadline)
-      isOverdue = currentDate > deadlineDate
+      isOverdue = _currentDate > deadlineDate
     }
   }
 
