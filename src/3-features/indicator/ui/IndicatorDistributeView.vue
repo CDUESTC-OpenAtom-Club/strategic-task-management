@@ -105,6 +105,11 @@ const currentDepartmentOrgId = computed(() => {
   return Number.isFinite(authOrgId) && authOrgId > 0 ? authOrgId : null
 })
 
+const currentDepartmentOrgIdFromTable = computed(() => {
+  const matchedOrgId = getOrgIdByDeptName(currentDept.value)
+  return matchedOrgId != null ? matchedOrgId : null
+})
+
 const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
   const raw = indicator as StrategicIndicator & {
     taskId?: string | number
@@ -697,30 +702,27 @@ const currentUserRoleCodes = computed(() => {
   return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
 })
 
-const isCurrentUserReporter = computed(() => {
-  const user = authStore.user as {
-    username?: unknown
-    realName?: unknown
-    name?: unknown
-    roles?: unknown[]
-  } | null
-
-  const username = String(user?.username ?? '')
-    .trim()
-    .toLowerCase()
-  const realName = String(user?.realName ?? user?.name ?? '').trim()
-  const roles = Array.isArray(user?.roles)
-    ? user.roles
-        .map(role => (typeof role === 'string' ? role.trim().toUpperCase() : ''))
-        .filter(Boolean)
-    : []
-
-  return (
-    roles.includes('ROLE_REPORTER') || username.endsWith('_report') || realName.includes('填报人')
-  )
+const currentUserNormalizedRoleCodes = computed(() => {
+  return currentUserRoleCodes.value.map(role => role.trim().toUpperCase()).filter(Boolean)
 })
 
-const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
+const isCurrentUserReporter = computed(() => {
+  return currentUserNormalizedRoleCodes.value.includes('ROLE_REPORTER')
+})
+
+const currentUserOrgId = computed(() => {
+  const rawOrgId = Number(authStore.user?.orgId ?? NaN)
+  return Number.isFinite(rawOrgId) && rawOrgId > 0 ? rawOrgId : null
+})
+
+const canCurrentUserSubmitCurrentDepartmentDistribution = computed(() => {
+  const currentOrgId = currentDepartmentOrgIdFromTable.value
+  if (!currentOrgId || !currentUserOrgId.value || !isCurrentUserReporter.value) {
+    return false
+  }
+
+  return currentUserOrgId.value === currentOrgId
+})
 
 const requiredApprovalPermissionCodes = computed(() => {
   return currentApprovalType.value === 'distribution'
@@ -856,6 +858,34 @@ const withdrawButtonDisabledReason = computed(() => {
 
 const withdrawButtonDisabled = computed(() => {
   return isBatchDistributing.value || Boolean(withdrawButtonDisabledReason.value)
+})
+
+const distributionSubmitButtonDisabledReason = computed(() => {
+  if (timeContext.isReadOnly) {
+    return '历史快照为只读状态'
+  }
+
+  if (!currentDepartmentOrgIdFromTable.value) {
+    return '当前部门未在组织表中匹配到有效组织，暂不能下发'
+  }
+
+  if (!canCurrentUserSubmitCurrentDepartmentDistribution.value) {
+    return '只有当前部门组织下的填报人才可以下发'
+  }
+
+  if (collegeTotalWeight.value !== 100) {
+    return `基础性任务下子指标权重合计必须为100，当前为${collegeTotalWeight.value}`
+  }
+
+  if (isBatchDistributing.value) {
+    return '正在下发中，请稍候'
+  }
+
+  return ''
+})
+
+const distributionSubmitButtonType = computed(() => {
+  return distributionSubmitButtonDisabledReason.value ? 'info' : 'success'
 })
 
 const distributionSubmitButtonText = computed(() => {
@@ -2637,6 +2667,11 @@ const handleBatchDistribute = async (college: string) => {
     return
   }
 
+  if (!canCurrentUserSubmitCurrentDepartmentDistribution.value) {
+    ElMessage.warning('只有当前部门组织下的填报人才可以下发')
+    return
+  }
+
   if (!canEditCurrentCollegePlan.value) {
     ElMessage.warning('当前计划审批中，暂不能继续下发')
     return
@@ -3693,9 +3728,10 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     新增指标
                   </el-button>
                   <el-button
-                    type="success"
+                    :type="distributionSubmitButtonType"
                     :loading="isBatchDistributing"
-                    :disabled="collegeTotalWeight !== 100 || isBatchDistributing"
+                    :disabled="Boolean(distributionSubmitButtonDisabledReason)"
+                    :title="distributionSubmitButtonDisabledReason"
                     @click="handleBatchDistribute(selectedCollege)"
                   >
                     <el-icon><Promotion /></el-icon>
