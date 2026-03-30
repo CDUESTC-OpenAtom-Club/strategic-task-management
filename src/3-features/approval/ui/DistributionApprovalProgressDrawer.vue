@@ -531,8 +531,8 @@ const hasPlanWorkflowData = computed(() => {
 
   return Boolean(
     normalizeDisplayName(planWorkflowDetail.value?.currentStepName) ||
-      normalizeDisplayName(planWorkflowDetail.value?.flowCode) ||
-      normalizeDisplayName(planWorkflowDetail.value?.status)
+    normalizeDisplayName(planWorkflowDetail.value?.flowCode) ||
+    normalizeDisplayName(planWorkflowDetail.value?.status)
   )
 })
 
@@ -1325,26 +1325,6 @@ async function loadPlanWorkflowDetail() {
     return
   }
 
-  const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
-  if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
-    try {
-      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
-      if (
-        response.success &&
-        response.data &&
-        matchesExpectedWorkflowCode(response.data.flowCode)
-      ) {
-        planWorkflowDetail.value = response.data
-        return
-      }
-    } catch (error) {
-      logger.warn('[ApprovalProgressDrawer] 旧实例ID详情加载失败，转按业务实体兜底:', {
-        workflowInstanceId,
-        error
-      })
-    }
-  }
-
   try {
     const businessEntityType = props.workflowEntityType || 'PLAN'
     const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
@@ -1353,6 +1333,19 @@ async function loadPlanWorkflowDetail() {
         businessEntityType,
         businessEntityId
       )
+      if (
+        response.success &&
+        response.data &&
+        matchesExpectedWorkflowCode(response.data.flowCode)
+      ) {
+        planWorkflowDetail.value = response.data
+        return
+      }
+    }
+
+    const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
       if (
         response.success &&
         response.data &&

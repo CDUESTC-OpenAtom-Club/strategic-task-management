@@ -790,6 +790,63 @@ function resolveWorkflowTaskOperatorName(task: WorkflowTaskResponse): string | u
   return normalizeDisplayName(task.assigneeName) || normalizeDisplayName(task.approverOrgName)
 }
 
+function resolveSourceDepartmentDisplayName(): string {
+  const detailSourceOrgName = normalizeDisplayName(planWorkflowDetail.value?.sourceOrgName)
+  if (detailSourceOrgName) {
+    return detailSourceOrgName
+  }
+
+  const activeSourceOrgName = normalizeDisplayName(
+    (activePlanWorkflow.value as { sourceOrgName?: unknown } | null)?.sourceOrgName
+  )
+  if (activeSourceOrgName) {
+    return activeSourceOrgName
+  }
+
+  const planSourceOrgName = normalizeDisplayName(
+    (props.plan as { sourceOrgName?: unknown } | null)?.sourceOrgName
+  )
+  if (planSourceOrgName) {
+    return planSourceOrgName
+  }
+
+  const ownerDeptName = props.indicators
+    .map(indicator => normalizeDisplayName((indicator as { ownerDept?: unknown }).ownerDept))
+    .find(Boolean)
+  if (ownerDeptName) {
+    return ownerDeptName
+  }
+
+  return '来源部门'
+}
+
+function resolveWorkflowTaskDisplayName(task: WorkflowTaskResponse): string {
+  const rawStepName =
+    normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || '审批节点'
+
+  if (rawStepName.includes('职能部门终审')) {
+    return `${resolveSourceDepartmentDisplayName()}终审人审批`
+  }
+
+  return rawStepName
+}
+
+function resolveWorkflowTaskDisplayOperatorName(task: WorkflowTaskResponse): string | undefined {
+  const resolvedOperatorName = resolveWorkflowTaskOperatorName(task)
+  if (resolvedOperatorName) {
+    return resolvedOperatorName
+  }
+
+  const rawStepName =
+    normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || ''
+
+  if (rawStepName.includes('职能部门终审')) {
+    return resolveSourceDepartmentDisplayName()
+  }
+
+  return undefined
+}
+
 function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
   const normalizedStatus = String(task.status || '')
     .trim()
@@ -946,7 +1003,9 @@ function resolveHistoryStatusTag(status?: string): {
 }
 
 function isTerminalHistoryStatus(status?: string): boolean {
-  const normalized = String(status || '').trim().toUpperCase()
+  const normalized = String(status || '')
+    .trim()
+    .toUpperCase()
   return ['APPROVED', 'REJECTED', 'WITHDRAWN', 'CANCELLED', 'COMPLETED'].includes(normalized)
 }
 
@@ -1032,12 +1091,9 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
   if (hasPlanWorkflowData.value && props.plan) {
     return planWorkflowTasks.value.map(task => ({
       id: String(task.taskId || task.taskKey || task.currentStepName || task.taskName),
-      name:
-        normalizeDisplayName(task.currentStepName) ||
-        normalizeDisplayName(task.taskName) ||
-        '审批节点',
+      name: resolveWorkflowTaskDisplayName(task),
       status: mapWorkflowTaskStatusToNodeStatus(task),
-      operatorName: resolveWorkflowTaskOperatorName(task),
+      operatorName: resolveWorkflowTaskDisplayOperatorName(task),
       operateTime: task.approvedAt
         ? new Date(task.approvedAt)
         : task.createdTime
@@ -1684,9 +1740,7 @@ const showHistoryTimeline = computed(() => {
 })
 
 const showCardHistoryEmptyState = computed(() => {
-  return (
-    props.showPlanApprovals && !showPlanHistoryCard.value
-  )
+  return props.showPlanApprovals && !showPlanHistoryCard.value
 })
 
 const showArchivedPlanWorkflowEmptyState = computed(() => {

@@ -18,7 +18,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadProps, UploadUserFile } from 'element-plus'
 import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
-import type { StrategicTask as _StrategicTask, StrategicIndicator, Plan, Attachment } from '@/shared/types'
+import type {
+  StrategicTask as _StrategicTask,
+  StrategicIndicator,
+  Plan,
+  Attachment
+} from '@/shared/types'
 /* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
@@ -1309,6 +1314,53 @@ const currentPlanIndicators = computed(() => {
     return normalizedIndicator
   })
 
+  if (isSecondaryCollege.value && Array.isArray(currentPlanReportSummary.value?.indicatorDetails)) {
+    const reportId = Number(currentPlanReportSummary.value?.id ?? NaN)
+    const detailMap = new Map(
+      currentPlanReportSummary.value.indicatorDetails.map(detail => [
+        String(detail?.indicatorId ?? ''),
+        detail
+      ])
+    )
+
+    const mergedIndicators = mappedIndicators.map(indicator => {
+      const detail = detailMap.get(String(indicator.id))
+      if (!detail) {
+        return indicator
+      }
+
+      const detailProgress = Number(detail.progress)
+      const nextProgress = Number.isFinite(detailProgress)
+        ? detailProgress
+        : indicator.pendingProgress
+      const nextRemark = String(detail.comment || '').trim() || indicator.pendingRemark || null
+      const nextAttachmentDetails = Array.isArray(detail.attachments) ? detail.attachments : []
+      const nextAttachments =
+        nextAttachmentDetails.length > 0
+          ? nextAttachmentDetails
+              .map(attachment => attachment?.fileName || attachment?.url || '')
+              .filter(Boolean)
+          : (indicator.pendingAttachments ?? [])
+
+      return {
+        ...indicator,
+        currentReportId:
+          Number.isFinite(reportId) && reportId > 0 ? reportId : indicator.currentReportId,
+        reportProgress: nextProgress,
+        pendingProgress: nextProgress,
+        pendingRemark: nextRemark,
+        pendingAttachments: nextAttachments,
+        pendingAttachmentDetails:
+          nextAttachmentDetails.length > 0
+            ? nextAttachmentDetails
+            : ((indicator as StrategicIndicator & { pendingAttachmentDetails?: Attachment[] })
+                .pendingAttachmentDetails ?? [])
+      }
+    })
+
+    return filterIndicatorsForCurrentViewer(mergedIndicators)
+  }
+
   return filterIndicatorsForCurrentViewer(mappedIndicators)
 })
 
@@ -1485,12 +1537,12 @@ const pagePlanWorkflowStatus = computed(() => {
 const hasPagePlanWorkflowData = computed(() => {
   return Boolean(
     currentPlanWorkflowDetail.value &&
-      (currentPlanWorkflowDetail.value.instanceId ||
-        currentPlanWorkflowDetail.value.status ||
-        currentPlanWorkflowDetail.value.currentTaskId ||
-        currentPlanWorkflowDetail.value.currentStepName ||
-        (Array.isArray(currentPlanWorkflowDetail.value.history) &&
-          currentPlanWorkflowDetail.value.history.length > 0))
+    (currentPlanWorkflowDetail.value.instanceId ||
+      currentPlanWorkflowDetail.value.status ||
+      currentPlanWorkflowDetail.value.currentTaskId ||
+      currentPlanWorkflowDetail.value.currentStepName ||
+      (Array.isArray(currentPlanWorkflowDetail.value.history) &&
+        currentPlanWorkflowDetail.value.history.length > 0))
   )
 })
 
@@ -1512,7 +1564,10 @@ const pagePlanWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {
 
 const currentPagePlanTaskId = computed(() => {
   const pendingTask = pagePlanWorkflowTasks.value.find(
-    task => String(task.status || '').trim().toUpperCase() === 'PENDING'
+    task =>
+      String(task.status || '')
+        .trim()
+        .toUpperCase() === 'PENDING'
   )
   const pendingTaskId = Number(pendingTask?.taskId ?? 0)
   if (Number.isFinite(pendingTaskId) && pendingTaskId > 0) {
@@ -1537,7 +1592,9 @@ const currentPagePendingPlanTask = computed<WorkflowTaskResponse | null>(() => {
   return (
     pagePlanWorkflowTasks.value.find(task => {
       const taskId = String(task.taskId || '').trim()
-      const status = String(task.status || '').trim().toUpperCase()
+      const status = String(task.status || '')
+        .trim()
+        .toUpperCase()
       return taskId === currentTaskId && status === 'PENDING'
     }) || null
   )
@@ -1787,7 +1844,7 @@ const indicators = computed(() => {
         ? detail.attachments
             .map(attachment => attachment?.fileName || attachment?.url || '')
             .filter(Boolean)
-        : indicator.pendingAttachments ?? []
+        : (indicator.pendingAttachments ?? [])
 
       return {
         ...indicator,
@@ -2984,10 +3041,15 @@ const formatMilestoneDate = (deadline: string) => {
   return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
-function resolveDialogAttachments(row: StrategicIndicator, persistedDraft?: PersistedIndicatorDraft | null): DisplayAttachmentItem[] {
-  const rawAttachments = (row as StrategicIndicator & {
-    pendingAttachmentDetails?: Attachment[]
-  }).pendingAttachmentDetails
+function resolveDialogAttachments(
+  row: StrategicIndicator,
+  persistedDraft?: PersistedIndicatorDraft | null
+): DisplayAttachmentItem[] {
+  const rawAttachments = (
+    row as StrategicIndicator & {
+      pendingAttachmentDetails?: Attachment[]
+    }
+  ).pendingAttachmentDetails
 
   if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
     return rawAttachments.map(attachment => ({
@@ -2997,7 +3059,10 @@ function resolveDialogAttachments(row: StrategicIndicator, persistedDraft?: Pers
     }))
   }
 
-  if (Array.isArray(persistedDraft?.attachmentDetails) && persistedDraft.attachmentDetails.length > 0) {
+  if (
+    Array.isArray(persistedDraft?.attachmentDetails) &&
+    persistedDraft.attachmentDetails.length > 0
+  ) {
     return persistedDraft.attachmentDetails.map((attachment, index) => ({
       name: attachment.fileName || `附件${index + 1}`,
       url: attachment.url,
@@ -3198,6 +3263,27 @@ const syncBackendReportedProgress = (
       })
     }
   }
+
+  if (Array.isArray(currentPlanReportSummary.value?.indicatorDetails)) {
+    currentPlanReportSummary.value = {
+      ...currentPlanReportSummary.value,
+      indicatorDetails: currentPlanReportSummary.value.indicatorDetails.map(detail => {
+        const detailIndicatorId = String(detail?.indicatorId ?? '')
+        if (detailIndicatorId !== String(indicatorId)) {
+          return detail
+        }
+
+        return {
+          ...detail,
+          progress: payload.pendingProgress ?? payload.reportProgress,
+          comment: payload.pendingRemark ?? '',
+          attachments: Array.isArray(payload.pendingAttachmentDetails)
+            ? payload.pendingAttachmentDetails
+            : []
+        }
+      })
+    }
+  }
 }
 
 // 保存进度填报（设为待提交状态）
@@ -3304,8 +3390,9 @@ const submitProgressReport = async () => {
         pendingAttachmentDetails:
           String(item.indicator_id) === String(indicator.id)
             ? attachmentDetails
-            : ((matchedIndicator as StrategicIndicator & { pendingAttachmentDetails?: Attachment[] })
-                ?.pendingAttachmentDetails ?? []),
+            : ((
+                matchedIndicator as StrategicIndicator & { pendingAttachmentDetails?: Attachment[] }
+              )?.pendingAttachmentDetails ?? []),
         currentReportId: savedReportId
       })
     }
@@ -3534,6 +3621,9 @@ const handleSubmitAll = () => {
 
       await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
       await refreshCurrentPlanDetails(planId)
+      currentPlanWorkflowDetail.value = null
+      await approvalStore.loadPendingApprovals()
+      await approvalStore.refreshStats()
       ElMessage.success(
         submitComment?.trim() ? `已提交上报审批：${submitComment.trim()}` : '已发起本次上报审批'
       )
@@ -3732,7 +3822,11 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   </el-button>
                 </span>
               </el-tooltip>
-              <el-badge v-if="approvalBadgeCount > 0" :value="approvalBadgeCount" class="approval-badge">
+              <el-badge
+                v-if="approvalBadgeCount > 0"
+                :value="approvalBadgeCount"
+                class="approval-badge"
+              >
                 <el-button
                   size="small"
                   type="warning"
@@ -3900,7 +3994,9 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                       content="填报进度"
                       placement="top"
                     >
-                      <span class="reported-progress">({{ getDisplayedReportedProgress(row) }}%)</span>
+                      <span class="reported-progress"
+                        >({{ getDisplayedReportedProgress(row) }}%)</span
+                      >
                     </el-tooltip>
                   </div>
                 </template>
@@ -4242,7 +4338,10 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
             >
               <el-button size="small" type="primary" plain>选择文件</el-button>
               <template #tip>
-                <div class="upload-tip">支持 PDF、Word、Excel、图片格式，单个文件不超过 30MB，最多5个文件。选择后仅暂存，保存时才会上传并关联。</div>
+                <div class="upload-tip">
+                  支持 PDF、Word、Excel、图片格式，单个文件不超过
+                  30MB，最多5个文件。选择后仅暂存，保存时才会上传并关联。
+                </div>
               </template>
             </el-upload>
           </el-form-item>

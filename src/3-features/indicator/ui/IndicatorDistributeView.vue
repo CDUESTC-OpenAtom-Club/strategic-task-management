@@ -583,12 +583,36 @@ const currentActiveCollegePlan = computed<Plan | null>(() => {
 })
 
 const normalizedCurrentActiveCollegeWorkflowStatus = computed(() => {
+  const reportWorkflowStatus = String(
+    currentCollegePlanReportSummary.value?.workflowStatus ||
+      currentCollegePlanReportSummary.value?.status ||
+      ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (reportWorkflowStatus) {
+    return reportWorkflowStatus
+  }
+
   return String(currentActiveCollegePlan.value?.workflowStatus || '')
     .trim()
     .toUpperCase()
 })
 
 const selectedCollegePlanUiStatus = computed(() => {
+  const reportWorkflowStatus = String(
+    currentCollegePlanReportSummary.value?.workflowStatus ||
+      currentCollegePlanReportSummary.value?.status ||
+      ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportWorkflowStatus)) {
+    return reportWorkflowStatus
+  }
+
   const planStatus = normalizedSelectedCollegePlanStatus.value
   if (['DRAFT', 'RETURNED', 'DISTRIBUTED'].includes(planStatus)) {
     return planStatus
@@ -681,7 +705,9 @@ const isCurrentUserReporter = computed(() => {
     roles?: unknown[]
   } | null
 
-  const username = String(user?.username ?? '').trim().toLowerCase()
+  const username = String(user?.username ?? '')
+    .trim()
+    .toLowerCase()
   const realName = String(user?.realName ?? user?.name ?? '').trim()
   const roles = Array.isArray(user?.roles)
     ? user.roles
@@ -739,7 +765,11 @@ const canCurrentUserApproveCurrentPlan = computed(() => {
     return false
   }
 
-  const currentApproverId = Number(currentActiveCollegePlan.value?.currentApproverId ?? 0)
+  const currentApproverId = Number(
+    currentCollegePlanReportSummary.value?.currentApproverId ??
+      currentActiveCollegePlan.value?.currentApproverId ??
+      0
+  )
   const currentUserId = Number(authStore.user?.userId ?? authStore.user?.id ?? 0)
   if (currentApproverId > 0 && currentUserId > 0) {
     return currentApproverId === currentUserId
@@ -804,8 +834,13 @@ const withdrawButtonDisabledReason = computed(() => {
   }
 
   const status = selectedCollegePlanUiStatus.value
-  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(status) && !canWithdrawCurrentCollegePlan.value) {
-    return isCurrentUserReporter.value ? '当前审批进度不支持撤回' : '当前登录身份不是填报人，不能撤回'
+  if (
+    ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(status) &&
+    !canWithdrawCurrentCollegePlan.value
+  ) {
+    return isCurrentUserReporter.value
+      ? '当前审批进度不支持撤回'
+      : '当前登录身份不是填报人，不能撤回'
   }
 
   if (status === 'DISTRIBUTED') {
