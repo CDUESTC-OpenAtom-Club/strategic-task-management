@@ -64,8 +64,10 @@ import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import type { WorkflowTaskResponse, WorkflowInstanceDetailResponse } from '@/features/workflow/api'
 
-const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
-const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
+import { usePermission } from '@/5-shared/lib/permissions'
+import type { PermissionCode } from '@/shared/types'
+
+const permissionUtil = usePermission()
 
 interface PendingApprovalInstance {
   id: number
@@ -130,10 +132,10 @@ const formatTime = (raw?: string | null) => {
 const resolveRequiredPermissionCode = (entityType?: string | null): string | null => {
   const normalizedEntityType = String(entityType || '').trim().toUpperCase()
   if (normalizedEntityType === 'PLAN') {
-    return PLAN_DISPATCH_APPROVE_PERMISSION
+    return 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
   }
   if (normalizedEntityType === 'PLAN_REPORT') {
-    return PLAN_REPORT_APPROVE_PERMISSION
+    return 'BTN_STRATEGY_TASK_REPORT_APPROVE'
   }
   return null
 }

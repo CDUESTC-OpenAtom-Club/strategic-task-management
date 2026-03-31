@@ -342,23 +342,42 @@ function isApprovalStatus(
   // @requirement: Plan-centric - 使用 Plan 的状态作为当前页面的提交态来源。
   // 对职能部门/学院页面来说，DISTRIBUTED 代表“已下发，待本部门填写并提交”，
   // 不能误判为已经审批通过或不可再次填报。
-  const planStatus = normalizedCurrentPlanStatus.value
   let effectiveStatus: ProgressApprovalStatusValue = 'DRAFT'
 
-  switch (planStatus) {
-    case 'PENDING':
-      effectiveStatus = 'PENDING'
-      break
-    case 'DISTRIBUTED':
-    case 'DRAFT':
-    case null:
-      effectiveStatus = 'DRAFT'
-      break
-    case 'active':
-      effectiveStatus = 'APPROVED'
-      break
-    default:
-      effectiveStatus = 'DRAFT'
+  if (usePlanReportFlow.value) {
+    const reportStatus = normalizedCurrentPlanReportStatus.value
+    switch (reportStatus) {
+      case 'PENDING':
+      case 'IN_REVIEW':
+      case 'SUBMITTED':
+        effectiveStatus = 'PENDING'
+        break
+      case 'APPROVED':
+        effectiveStatus = 'APPROVED'
+        break
+      case 'REJECTED':
+        effectiveStatus = 'REJECTED'
+        break
+      default:
+        effectiveStatus = 'DRAFT'
+    }
+  } else {
+    const planStatus = normalizedCurrentPlanStatus.value
+    switch (planStatus) {
+      case 'PENDING':
+        effectiveStatus = 'PENDING'
+        break
+      case 'DISTRIBUTED':
+      case 'DRAFT':
+      case null:
+        effectiveStatus = 'DRAFT'
+        break
+      case 'active':
+        effectiveStatus = 'APPROVED'
+        break
+      default:
+        effectiveStatus = 'DRAFT'
+    }
   }
 
   if (Array.isArray(targetStatus)) {
@@ -388,6 +407,16 @@ const isStrategicDept = computed(() => {
 // 判断当前是否为二级学院角色
 const isSecondaryCollege = computed(() => {
   return effectiveViewingRole.value === 'secondary_college'
+})
+
+// 判断当前是否为职能部门角色
+const isFunctionalDept = computed(() => {
+  return effectiveViewingRole.value === 'functional_dept'
+})
+
+// 判断当前角色是否走 PlanReport 提交/撤回流程（二级学院 + 职能部门都走 PlanReport，不碰 Plan 状态）
+const usePlanReportFlow = computed(() => {
+  return isSecondaryCollege.value || isFunctionalDept.value
 })
 
 // 当前计划的状态
@@ -474,9 +503,11 @@ async function loadCurrentPlanWorkflowDetail(planId?: number | null): Promise<vo
   const resolvedPlanId = Number(planId ?? getCurrentPlanId() ?? NaN)
   const reportId = Number(currentPlanReportSummary.value?.id ?? NaN)
   const workflowInstanceId = Number(
-    currentPlanReportSummary.value?.workflowInstanceId ??
-      currentPlanDetails.value?.workflowInstanceId ??
-      NaN
+    usePlanReportFlow.value
+      ? (currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+      : (currentPlanReportSummary.value?.workflowInstanceId ??
+          currentPlanDetails.value?.workflowInstanceId ??
+          NaN)
   )
 
   try {
@@ -486,9 +517,14 @@ async function loadCurrentPlanWorkflowDetail(planId?: number | null): Promise<vo
       return
     }
 
-    if (isSecondaryCollege.value && Number.isFinite(reportId) && reportId > 0) {
+    if (usePlanReportFlow.value && Number.isFinite(reportId) && reportId > 0) {
       const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
       currentPlanWorkflowDetail.value = response.data ?? null
+      return
+    }
+
+    if (usePlanReportFlow.value) {
+      currentPlanWorkflowDetail.value = null
       return
     }
 
@@ -538,8 +574,9 @@ function clearCurrentPlanReportDerivedState(): void {
 }
 
 async function loadCurrentPlanReportSummary(planId?: number | null): Promise<void> {
-  if (!isSecondaryCollege.value) {
+  if (!usePlanReportFlow.value) {
     currentPlanReportSummary.value = null
+    latestPlanReportSummary.value = null
     return
   }
 
@@ -552,6 +589,7 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
     reportOrgId <= 0
   ) {
     currentPlanReportSummary.value = null
+    latestPlanReportSummary.value = null
     return
   }
 
@@ -560,11 +598,16 @@ async function loadCurrentPlanReportSummary(planId?: number | null): Promise<voi
       resolvedPlanId,
       reportOrgId
     )
+    latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+      resolvedPlanId,
+      reportOrgId
+    )
     if (!currentPlanReportSummary.value) {
       clearCurrentPlanReportDerivedState()
     }
   } catch (error) {
     currentPlanReportSummary.value = null
+    latestPlanReportSummary.value = null
     clearCurrentPlanReportDerivedState()
     logger.warn('[IndicatorListView] 加载当前上报摘要失败:', {
       planId: resolvedPlanId,
@@ -642,6 +685,17 @@ const normalizedCurrentPlanWorkflowStatus = computed(() => {
     .toUpperCase()
 })
 
+const viewableReceivedPlanStatuses = new Set([
+  'DISTRIBUTED',
+  'PENDING',
+  'IN_REVIEW',
+  'SUBMITTED',
+  'APPROVED',
+  'REJECTED',
+  'RETURNED',
+  'WITHDRAWN'
+])
+
 const canViewReceivedPlanContent = computed(() => {
   if (isStrategicDept.value) {
     return true
@@ -652,7 +706,15 @@ const canViewReceivedPlanContent = computed(() => {
   }
 
   const planStatus = normalizePlanStatus(currentPlanStatus.value)
-  return planStatus === 'DISTRIBUTED'
+  if (planStatus === 'DRAFT') {
+    const workflowStatus = normalizedCurrentPlanWorkflowStatus.value
+    // 撤回/退回后的计划会回落到 DRAFT，但目标部门仍需看到原计划与已填报内容继续编辑。
+    if (workflowStatus === 'WITHDRAWN' || workflowStatus === 'REJECTED') {
+      return true
+    }
+  }
+
+  return Boolean(planStatus) && viewableReceivedPlanStatuses.has(planStatus)
 })
 
 // 判断是否可以编辑（只有战略发展部可以编辑，且计划处于草稿状态，历史年份只读）
@@ -925,6 +987,26 @@ const currentPlanReportSummary = ref<{
     attachments?: Attachment[] | null
   }> | null
 } | null>(null)
+const latestPlanReportSummary = ref<{ id: number } | null>(null)
+
+const approvalWorkflowReportSummary = computed(() => {
+  const currentWorkflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+  const currentStatus = String(
+    currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (
+    currentPlanReportSummary.value?.id &&
+    (Number.isFinite(currentWorkflowInstanceId) && currentWorkflowInstanceId > 0) &&
+    currentStatus !== 'DRAFT'
+  ) {
+    return currentPlanReportSummary.value
+  }
+
+  return latestPlanReportSummary.value
+})
 
 const normalizedCurrentPlanReportStatus = computed(() => {
   return String(
@@ -1380,7 +1462,7 @@ const currentPlanIndicators = computed(() => {
 })
 
 // 判断当前是否存在可供当前页面展示的 Plan 数据
-// 只有“Plan 有指标”且“Plan 已下发”时，职能部门/学院界面才允许展示
+// 职能部门/学院在计划进入下发或审批流程后，都应继续看到计划内容。
 const hasCurrentUserPlanData = computed(() => {
   const plan = currentPlanDetails.value
   return plan && plan.indicators && plan.indicators.length > 0
@@ -1538,6 +1620,17 @@ const _pendingApprovalCount = computed(() => {
 const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
 
 const pagePlanWorkflowStatus = computed(() => {
+  if (usePlanReportFlow.value) {
+    return String(
+      currentPlanWorkflowDetail.value?.status ||
+        currentPlanReportSummary.value?.workflowStatus ||
+        currentPlanReportSummary.value?.status ||
+        ''
+    )
+      .trim()
+      .toUpperCase()
+  }
+
   return String(
     currentPlanWorkflowDetail.value?.status ||
       currentPlanReportSummary.value?.workflowStatus ||
@@ -1592,7 +1685,7 @@ const currentPagePlanTaskId = computed(() => {
   const rawTaskId = Number(
     currentPlanWorkflowDetail.value?.currentTaskId ??
       currentPlanReportSummary.value?.currentTaskId ??
-      currentPlanDetails.value?.currentTaskId ??
+      (usePlanReportFlow.value ? 0 : currentPlanDetails.value?.currentTaskId) ??
       0
   )
   return Number.isFinite(rawTaskId) && rawTaskId > 0 ? rawTaskId : 0
@@ -1714,7 +1807,7 @@ const canCurrentUserHandlePlanApprovalOnPage = computed(() => {
 const approvalBadgeCount = computed(() => (canCurrentUserHandlePlanApprovalOnPage.value ? 1 : 0))
 
 const approvalEntryButtonText = computed(() => {
-  if (isSecondaryCollege.value) {
+  if (usePlanReportFlow.value) {
     return isCurrentPlanReportLocked.value ? '待审批' : '审批记录'
   }
 
@@ -1728,18 +1821,39 @@ const approvalEntryButtonText = computed(() => {
   return '审批进度'
 })
 
-const secondaryApprovalWorkflowEntityType = computed<'PLAN' | undefined>(() => {
-  return isSecondaryCollege.value && currentPlanReportSummary.value?.id ? 'PLAN' : undefined
+const primaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
+  return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
+})
+
+const primaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
+  return approvalWorkflowReportSummary.value?.id || currentPlanDetails.value?.id
+})
+
+const secondaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
+  if (approvalWorkflowReportSummary.value?.id) {
+    return 'PLAN'
+  }
+
+  return latestPlanReportSummary.value?.id ? 'PLAN_REPORT' : undefined
 })
 
 const secondaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
-  return isSecondaryCollege.value && currentPlanReportSummary.value?.id
-    ? currentUserPlanId.value
-    : undefined
+  if (approvalWorkflowReportSummary.value?.id) {
+    return currentUserPlanId.value
+  }
+
+  return latestPlanReportSummary.value?.id
 })
 
 const handleOpenApproval = () => {
-  approvalDrawerVisible.value = true
+  void (async () => {
+    const planId = Number(getCurrentPlanId() ?? NaN)
+    if (Number.isFinite(planId) && planId > 0) {
+      await loadCurrentPlanReportSummary(planId)
+      await loadCurrentPlanWorkflowDetail(planId)
+    }
+    approvalDrawerVisible.value = true
+  })()
 }
 
 interface TaskListItem {
@@ -2081,7 +2195,7 @@ const overallStatus = computed(() => {
     return 'draft'
   }
 
-  if (isSecondaryCollege.value) {
+  if (usePlanReportFlow.value) {
     return isCurrentPlanReportLocked.value ? 'pending' : 'draft'
   }
 
@@ -2111,6 +2225,7 @@ const overallStatus = computed(() => {
 const showPlanBatchActions = computed(() => {
   return (
     !isStrategicDept.value &&
+    isCurrentUserReporter.value &&
     canViewReceivedPlanContent.value &&
     Boolean(currentUserPlanId.value) &&
     indicators.value.length > 0
@@ -2118,14 +2233,19 @@ const showPlanBatchActions = computed(() => {
 })
 
 const showSubmitAllButton = computed(() => {
-  return showPlanBatchActions.value && !allIndicatorsSubmitted.value && !canWithdrawAny.value
+  return (
+    showPlanBatchActions.value &&
+    !allIndicatorsSubmitted.value &&
+    !canWithdrawAny.value &&
+    !isPagePlanPendingApproval.value
+  )
 })
 
 const showWithdrawAllButton = computed(() => {
   return showPlanBatchActions.value && canWithdrawAny.value
 })
 
-const showStrategicTaskColumn = computed(() => !isSecondaryCollege.value)
+const showStrategicTaskColumn = computed(() => !usePlanReportFlow.value)
 
 // 计算单元格合并信息
 const getSpanMethod = ({
@@ -3231,6 +3351,72 @@ const handleReportAttachmentOpen = async (file: ReportUploadFile) => {
   }
 }
 
+const openDisplayAttachmentItem = async (item: DisplayAttachmentItem) => {
+  try {
+    const targetUrl = String(item.url || '').trim()
+    if (!targetUrl) {
+      ElMessage.warning('当前附件暂时无法打开')
+      return
+    }
+
+    const response = await apiClient.getAxiosInstance().get(targetUrl, {
+      responseType: 'blob'
+    })
+
+    const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+    const extension = getAttachmentExtension(item.name, targetUrl)
+    if (previewableAttachmentExtensions.has(extension)) {
+      openBlobInNewTab(blob)
+      return
+    }
+
+    triggerBlobDownload(blob, item.name || 'download')
+  } catch (error) {
+    logger.error('[IndicatorListView] 打开历史附件失败:', error)
+    ElMessage.error('打开附件失败，请稍后重试')
+  }
+}
+
+const resolveIndicatorAttachmentItems = (
+  indicator:
+    | (StrategicIndicator & {
+        pendingAttachmentDetails?: Attachment[]
+        pendingAttachments?: string[]
+      })
+    | null
+): DisplayAttachmentItem[] => {
+  if (!indicator) {
+    return []
+  }
+
+  const rawAttachmentDetails = Array.isArray(indicator.pendingAttachmentDetails)
+    ? indicator.pendingAttachmentDetails
+    : []
+
+  if (rawAttachmentDetails.length > 0) {
+    return rawAttachmentDetails.map((attachment, index) => ({
+      name: attachment.fileName || `附件${index + 1}`,
+      url: attachment.url,
+      attachmentId: Number(attachment.id)
+    }))
+  }
+
+  const rawAttachments = Array.isArray(indicator.pendingAttachments) ? indicator.pendingAttachments : []
+  return rawAttachments.map((url, index) => ({
+    name: String(url).split('/').pop() || `附件${index + 1}`,
+    url: String(url)
+  }))
+}
+
+const currentDetailAttachmentItems = computed(() =>
+  resolveIndicatorAttachmentItems(
+    currentDetail.value as (StrategicIndicator & {
+      pendingAttachmentDetails?: Attachment[]
+      pendingAttachments?: string[]
+    }) | null
+  )
+)
+
 const handleInlineAttachmentRemove = (targetFile: UploadUserFile) => {
   reportUploadFiles.value = reportUploadFiles.value.filter(file => file.uid !== targetFile.uid)
   syncReportAttachmentUrls()
@@ -3603,6 +3789,16 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
 const refreshIndicatorListAfterMutation = async () => {
   const planId = getCurrentPlanId()
 
+  const tasks: Promise<any>[] = [
+    strategicStore.loadIndicatorsByYear(timeContext.currentYear),
+    approvalStore.loadPendingApprovals(),
+    approvalStore.refreshStats()
+  ]
+
+  if (planId) {
+    tasks.push(refreshCurrentPlanDetails(planId))
+  }
+
   invalidateQueries([
     'indicator.list',
     'task.list',
@@ -3613,12 +3809,51 @@ const refreshIndicatorListAfterMutation = async () => {
     buildQueryKey('task', 'list', { year: timeContext.currentYear })
   ])
 
-  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-  if (planId) {
-    await refreshCurrentPlanDetails(planId)
+  await Promise.allSettled(tasks)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+async function settleCurrentPlanReportState(target: 'submitted' | 'withdrawn'): Promise<void> {
+  if (!usePlanReportFlow.value) {
+    await refreshIndicatorListAfterMutation()
+    return
   }
-  await approvalStore.loadPendingApprovals()
-  await approvalStore.refreshStats()
+
+  const maxAttempts = 6
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await refreshIndicatorListAfterMutation()
+
+    const reportStatus = String(
+      currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
+    )
+      .trim()
+      .toUpperCase()
+    const workflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+    const hasAuditInstance = Number.isFinite(workflowInstanceId) && workflowInstanceId > 0
+
+    if (
+      target === 'submitted' &&
+      hasAuditInstance &&
+      ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(reportStatus)
+    ) {
+      return
+    }
+
+    if (target === 'withdrawn' && !hasAuditInstance && (!reportStatus || reportStatus === 'DRAFT')) {
+      currentPlanWorkflowDetail.value = null
+      return
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await delay(400)
+    }
+  }
 }
 
 const handleApproveIndicatorWorkflow = async (row: StrategicIndicator) => {
@@ -3700,7 +3935,7 @@ const allIndicatorsSubmitted = computed(() => {
 })
 
 const canWithdrawCurrentPlan = computed(() => {
-  if (isSecondaryCollege.value) {
+  if (usePlanReportFlow.value) {
     return isCurrentUserReporter.value && Boolean(currentPlanReportSummary.value?.canWithdraw)
   }
 
@@ -3722,13 +3957,13 @@ const canWithdrawAny = computed(() => {
 })
 
 const isCurrentPlanReportLocked = computed(() => {
-  if (!isSecondaryCollege.value) {
+  if (!usePlanReportFlow.value) {
     return false
   }
 
   const reportStatus = normalizedCurrentPlanReportStatus.value
-  const auditInstanceId = Number(currentPlanReportSummary.value?.auditInstanceId ?? NaN)
-  const hasAuditInstance = Number.isFinite(auditInstanceId) && auditInstanceId > 0
+  const workflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+  const hasAuditInstance = Number.isFinite(workflowInstanceId) && workflowInstanceId > 0
 
   return hasAuditInstance && ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(reportStatus)
 })
@@ -3801,10 +4036,10 @@ const handleSubmitAll = () => {
     }
   ).then(async ({ value: submitComment }) => {
     try {
-      if (isSecondaryCollege.value) {
+      if (usePlanReportFlow.value) {
         const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
         if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
-          ElMessage.warning('无法识别当前学院组织，不能提交上报')
+          ElMessage.warning('无法识别当前组织，不能提交上报')
           return
         }
         await indicatorFillApi.submitCurrentMonthPlanReport(planId, reportOrgId)
@@ -3814,8 +4049,12 @@ const handleSubmitAll = () => {
         })
       }
 
-      await refreshIndicatorListAfterMutation()
-      currentPlanWorkflowDetail.value = null
+      await settleCurrentPlanReportState(usePlanReportFlow.value ? 'submitted' : 'withdrawn')
+      // 仅战略部流程需要清除工作流详情（等待后端异步同步）
+      // PlanReport 路径（职能部门/二级学院）refresh 后已有最新数据，不需要清除
+      if (!usePlanReportFlow.value) {
+        currentPlanWorkflowDetail.value = null
+      }
       ElMessage.success(
         submitComment?.trim() ? `已提交上报审批：${submitComment.trim()}` : '已发起本次上报审批'
       )
@@ -3863,10 +4102,10 @@ const handleWithdrawAllProgressApprovals = () => {
     }
   ).then(async () => {
     try {
-      if (isSecondaryCollege.value) {
+      if (usePlanReportFlow.value) {
         const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
         if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
-          ElMessage.warning('无法识别当前学院组织，不能撤回上报')
+          ElMessage.warning('无法识别当前组织，不能撤回上报')
           return
         }
         await indicatorFillApi.withdrawCurrentMonthPlanReport(planId, reportOrgId)
@@ -3874,7 +4113,7 @@ const handleWithdrawAllProgressApprovals = () => {
         await planStore.withdrawPlan(planId)
       }
 
-      await refreshIndicatorListAfterMutation()
+      await settleCurrentPlanReportState(usePlanReportFlow.value ? 'withdrawn' : 'withdrawn')
       ElMessage.success('已撤回当前上报审批')
     } catch (error) {
       logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
@@ -4013,6 +4252,16 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
                   </el-button>
                 </span>
               </el-tooltip>
+            </template>
+
+            <template
+              v-if="
+                !isStrategicDept &&
+                canViewReceivedPlanContent &&
+                Boolean(currentUserPlanId) &&
+                indicators.length > 0
+              "
+            >
               <el-badge
                 v-if="approvalBadgeCount > 0"
                 :value="approvalBadgeCount"
@@ -4402,6 +4651,23 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
           }}</el-descriptions-item>
         </el-descriptions>
 
+        <div v-if="currentDetailAttachmentItems.length > 0" class="detail-attachments">
+          <div class="divider"></div>
+          <h4>相关附件</h4>
+          <div class="detail-attachments__list">
+            <button
+              v-for="(attachment, index) in currentDetailAttachmentItems"
+              :key="`${attachment.attachmentId || attachment.url}-${index}`"
+              type="button"
+              class="detail-attachments__item"
+              :title="`双击打开 ${attachment.name}`"
+              @dblclick.prevent.stop="openDisplayAttachmentItem(attachment)"
+            >
+              {{ attachment.name }}
+            </button>
+          </div>
+        </div>
+
         <div v-if="canHandleIndicatorWorkflow(currentDetail)" class="detail-workflow-actions">
           <el-button
             type="success"
@@ -4596,10 +4862,8 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       :show-plan-approvals="true"
       :show-approval-section="true"
       :workflow-code="resolvePlanApprovalWorkflowCode()"
-      :workflow-entity-type="isSecondaryCollege ? 'PLAN_REPORT' : 'PLAN'"
-      :workflow-entity-id="
-        isSecondaryCollege ? currentPlanReportSummary?.id : currentPlanDetails?.id
-      "
+      :workflow-entity-type="primaryApprovalWorkflowEntityType"
+      :workflow-entity-id="primaryApprovalWorkflowEntityId"
       :secondary-workflow-entity-type="secondaryApprovalWorkflowEntityType"
       :secondary-workflow-entity-id="secondaryApprovalWorkflowEntityId"
       history-view-mode="card-only"
@@ -5143,6 +5407,31 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   margin-top: var(--spacing-sm);
   color: var(--text-regular);
   font-size: 13px;
+}
+
+.detail-attachments {
+  margin-top: var(--spacing-lg);
+}
+
+.detail-attachments__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.detail-attachments__item {
+  border: 1px solid var(--border-color-light);
+  background: var(--bg-page);
+  color: var(--color-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.detail-attachments__item:hover {
+  border-color: var(--color-primary-light-5);
+  background: var(--color-primary-light-9);
 }
 
 /* ========================================

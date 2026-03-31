@@ -14,12 +14,13 @@ import {
   ElLoading
 } from 'element-plus'
 import { Document, User, Timer, Right } from '@element-plus/icons-vue'
-import type { StrategicIndicator, Plan } from '@/shared/types'
+import { PermissionCode, type StrategicIndicator, type Plan } from '@/shared/types'
 import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { getUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
+import { usePermission } from '@/shared/lib/permissions'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
 import {
@@ -96,8 +97,7 @@ const emit = defineEmits<Emits>()
 const authStore = useAuthStore()
 const planStore = usePlanStore()
 const timeContext = useTimeContextStore()
-const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
-const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
+const permissionUtil = usePermission()
 const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'
 const INDICATOR_REPORT_APPROVE_PERMISSION = 'BTN_INDICATOR_REPORT_APPROVE'
 const currentUserId = computed(() => Number(authStore.user?.userId ?? authStore.user?.id ?? 0))
@@ -598,8 +598,8 @@ const currentPlanOperationLabel = computed(() => {
 
 const requiredPlanApprovalPermissionCodes = computed(() => {
   return props.approvalType === 'distribution'
-    ? [PLAN_DISPATCH_APPROVE_PERMISSION, INDICATOR_DISPATCH_APPROVE_PERMISSION]
-    : [PLAN_REPORT_APPROVE_PERMISSION, INDICATOR_REPORT_APPROVE_PERMISSION]
+    ? [PermissionCode.BTN_STRATEGY_TASK_DISPATCH_APPROVE, INDICATOR_DISPATCH_APPROVE_PERMISSION]
+    : [PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE, INDICATOR_REPORT_APPROVE_PERMISSION]
 })
 
 const requiredPlanApprovalPermissionCode = computed(() => {
@@ -1885,7 +1885,7 @@ watch(
 </script>
 
 <template>
-  <ElDrawer
+  <el-drawer
     :model-value="modelValue"
     title="审批进度"
     direction="rtl"
@@ -1897,24 +1897,24 @@ watch(
       <div class="drawer-header">
         <h3 class="drawer-title">{{ showPlanApprovals ? '审批中心' : '审批进度' }}</h3>
         <div class="stats-tags">
-          <ElTag v-if="showPlanApprovals && scopedPendingPlanCount > 0" type="warning" size="small">
+          <el-tag v-if="showPlanApprovals && scopedPendingPlanCount > 0" type="warning" size="small">
             当前计划待审批: {{ scopedPendingPlanCount }}
-          </ElTag>
-          <ElTag v-if="!hasPlanWorkflowData && pendingCount > 0" type="warning" size="small">
+          </el-tag>
+          <el-tag v-if="!hasPlanWorkflowData && pendingCount > 0" type="warning" size="small">
             待审批: {{ pendingCount }}
-          </ElTag>
-          <ElTag v-if="!hasPlanWorkflowData && approvedCount > 0" type="success" size="small">
+          </el-tag>
+          <el-tag v-if="!hasPlanWorkflowData && approvedCount > 0" type="success" size="small">
             已通过: {{ approvedCount }}
-          </ElTag>
-          <ElTag v-if="!hasPlanWorkflowData && rejectedCount > 0" type="danger" size="small">
+          </el-tag>
+          <el-tag v-if="!hasPlanWorkflowData && rejectedCount > 0" type="danger" size="small">
             已驳回: {{ rejectedCount }}
-          </ElTag>
+          </el-tag>
         </div>
       </div>
     </template>
 
     <!-- 空状态 -->
-    <ElEmpty
+    <el-empty
       v-if="!showPlanApprovals && !hasDisplayableApprovalContent"
       description="暂无审批数据"
       :image-size="120"
@@ -1923,14 +1923,14 @@ watch(
     <!-- 审批内容 -->
     <div v-else class="approval-content">
       <!-- 标签页 -->
-      <ElTabs v-model="activeTab" class="approval-tabs">
-        <ElTabPane
+      <el-tabs v-model="activeTab" class="approval-tabs">
+        <el-tab-pane
           v-if="showPlanApprovals"
           name="pending-plans"
           :label="hasPlanWorkflowData ? '计划审批' : `待审批 (${scopedPendingPlanCount})`"
         >
           <div v-loading="planApprovalsLoading" class="plan-approval-pane">
-            <ElEmpty
+            <el-empty
               v-if="!planApprovalsLoading && !showPlanPendingCard"
               description="暂无待审批的计划"
               :image-size="120"
@@ -1955,12 +1955,12 @@ watch(
                       </div>
                     </div>
                   </div>
-                  <ElTag
+                  <el-tag
                     :type="hasPlanWorkflowData ? planWorkflowStatusTag.type : 'warning'"
                     size="small"
                   >
                     {{ hasPlanWorkflowData ? planWorkflowStatusTag.label : '待审批' }}
-                  </ElTag>
+                  </el-tag>
                 </div>
                 <div class="submit-info">
                   <div class="info-row">
@@ -1992,8 +1992,8 @@ watch(
                   </div>
                 </div>
                 <div class="card-actions">
-                  <ElButton @click="openPlanApprovalDetails">查看详情</ElButton>
-                  <ElButton
+                  <el-button @click="openPlanApprovalDetails">查看详情</el-button>
+                  <el-button
                     v-if="
                       hasPlanWorkflowData &&
                       isPlanPendingApproval &&
@@ -2003,8 +2003,8 @@ watch(
                     @click="handleApprovePlanBatch"
                   >
                     审批通过
-                  </ElButton>
-                  <ElButton
+                  </el-button>
+                  <el-button
                     v-if="
                       hasPlanWorkflowData &&
                       isPlanPendingApproval &&
@@ -2014,38 +2014,38 @@ watch(
                     @click="handleRejectPlanBatch"
                   >
                     审批驳回
-                  </ElButton>
+                  </el-button>
                   <template v-if="!hasPlanWorkflowData">
-                    <ElButton
+                    <el-button
                       v-if="hasPlanApprovalPermission"
                       type="success"
                       @click="handleApprovePlanBatch"
                     >
                       一键通过
-                    </ElButton>
-                    <ElButton
+                    </el-button>
+                    <el-button
                       v-if="hasPlanApprovalPermission"
                       type="danger"
                       @click="handleRejectPlanBatch"
                     >
                       一键驳回
-                    </ElButton>
+                    </el-button>
                   </template>
                 </div>
               </div>
             </div>
           </div>
-        </ElTabPane>
+        </el-tab-pane>
 
         <!-- 审批流程视图（使用CustomApprovalFlow组件） -->
-        <ElTabPane name="workflow" label="审批流程">
-          <ElEmpty
+        <el-tab-pane name="workflow" label="审批流程">
+          <el-empty
             v-if="showArchivedPlanWorkflowEmptyState || workflowNodes.length === 0"
             description="暂无审批数据"
             :image-size="120"
           />
           <template v-else>
-            <ElAlert
+            <el-alert
               v-if="rejectionReason"
               type="error"
               :title="'驳回原因：' + rejectionReason"
@@ -2053,7 +2053,7 @@ watch(
               :closable="false"
               style="margin-bottom: 16px"
             />
-            <ElAlert
+            <el-alert
               v-if="hasPlanWorkflowData"
               type="info"
               title="审批人由后端流程定义自动决定，当前页面仅展示当前节点和审批结果。"
@@ -2061,7 +2061,7 @@ watch(
               :closable="false"
               style="margin-bottom: 16px"
             />
-            <ElAlert
+            <el-alert
               v-if="hasPlanWorkflowData && isPlanPendingApproval && !hasPlanApprovalPermission"
               type="warning"
               :title="`当前账号缺少权限码 ${requiredPlanApprovalPermissionCode}，仅可查看审批进度和历史。`"
@@ -2069,7 +2069,7 @@ watch(
               :closable="false"
               style="margin-bottom: 16px"
             />
-            <ElAlert
+            <el-alert
               v-if="
                 hasPlanWorkflowData && isPlanPendingApproval && !canCurrentUserHandlePlanApproval
               "
@@ -2092,11 +2092,11 @@ watch(
               @apply-template="handleApplyTemplate"
             />
           </template>
-        </ElTabPane>
+        </el-tab-pane>
 
         <!-- 历史记录视图 -->
-        <ElTabPane name="history" label="审批历史">
-          <ElEmpty
+        <el-tab-pane name="history" label="审批历史">
+          <el-empty
             v-if="approvalHistory.length === 0 && !showPlanHistoryCard"
             description="暂无审批历史"
             :image-size="120"
@@ -2118,9 +2118,9 @@ watch(
                       </div>
                     </div>
                   </div>
-                  <ElTag :type="item.statusType || 'success'" size="small">
+                  <el-tag :type="item.statusType || 'success'" size="small">
                     {{ item.statusLabel || '已通过' }}
-                  </ElTag>
+                  </el-tag>
                 </div>
                 <div class="submit-info">
                   <div class="info-row">
@@ -2145,11 +2145,11 @@ watch(
                   </div>
                 </div>
                 <div class="card-actions">
-                  <ElButton @click="openPlanApprovalDetails(item)">查看详情</ElButton>
+                  <el-button @click="openPlanApprovalDetails(item)">查看详情</el-button>
                 </div>
               </div>
             </div>
-            <ElEmpty
+            <el-empty
               v-else-if="showCardHistoryEmptyState"
               description="暂无审批历史"
               :image-size="120"
@@ -2160,11 +2160,11 @@ watch(
               :approval-type="approvalType"
             />
           </template>
-        </ElTabPane>
-      </ElTabs>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
-    <ElDialog
+    <el-dialog
       v-model="planDetailDialogVisible"
       title="审批实例详情"
       width="680px"
@@ -2211,13 +2211,13 @@ watch(
           >
             <div class="detail-item-header">
               <div class="detail-item-title">{{ item.routeTitle || item.title }}</div>
-              <ElTag
+              <el-tag
                 :type="item.statusType || detailDialogStatusTag.type"
                 effect="light"
                 size="small"
               >
                 {{ item.statusLabel || detailDialogStatusTag.label }}
-              </ElTag>
+              </el-tag>
             </div>
             <div class="detail-item-meta">
               <div v-if="item.flowName" class="detail-meta-row">
@@ -2253,7 +2253,7 @@ watch(
             </div>
           </div>
         </div>
-        <ElEmpty v-else description="暂无审批实例详情" :image-size="100" />
+        <el-empty v-else description="暂无审批实例详情" :image-size="100" />
 
         <div
           v-if="(selectedHistoryInstanceDetail?.history?.length || planWorkflowHistory.length) > 0"
@@ -2283,10 +2283,10 @@ watch(
       </div>
 
       <template #footer>
-        <ElButton @click="planDetailDialogVisible = false">关闭</ElButton>
+        <el-button @click="planDetailDialogVisible = false">关闭</el-button>
       </template>
-    </ElDialog>
-  </ElDrawer>
+    </el-dialog>
+  </el-drawer>
 </template>
 
 <style scoped>

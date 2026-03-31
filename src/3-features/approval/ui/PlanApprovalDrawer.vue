@@ -8,6 +8,8 @@ import { Check, Close, Document, User, Timer, Right } from '@element-plus/icons-
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { useAuthStore } from '@/features/auth/model/store'
+import { usePermission } from '@/5-shared/lib/permissions'
+import { PermissionCode } from '@/shared/types'
 import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import type { PendingApproval } from '@/shared/types'
@@ -32,19 +34,11 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
-const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
-const currentUserPermissionCodes = computed(() => {
-  const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
-  if (!Array.isArray(permissions)) {
-    return []
-  }
-  return permissions
-    .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
-    .filter(Boolean)
+const permissionUtil = usePermission()
+const PLAN_DISPATCH_APPROVE_PERMISSION = PermissionCode.BTN_STRATEGY_TASK_DISPATCH_APPROVE
+const canApprovePlan = computed(() => {
+  return permissionUtil.hasPermission(PLAN_DISPATCH_APPROVE_PERMISSION)
 })
-const canApprovePlan = computed(() =>
-  currentUserPermissionCodes.value.includes(PLAN_DISPATCH_APPROVE_PERMISSION)
-)
 
 // 计算 drawer 可见性
 const drawerVisible = computed({

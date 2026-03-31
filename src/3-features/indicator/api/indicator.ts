@@ -59,7 +59,8 @@ export const indicatorApi = {
    */
   async getAllIndicators(
     year?: number,
-    pagination?: { page?: number; size?: number }
+    pagination?: { page?: number; size?: number },
+    options: { force?: boolean } = {}
   ): Promise<ApiResponse<IndicatorVO[]>> {
     const params: Record<string, number> = {}
     if (typeof year === 'number') {
@@ -81,6 +82,7 @@ export const indicatorApi = {
         dedupeWindowMs: 1000,
         tags: ['indicator.list']
       },
+      force: options.force === true,
       fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', params)
     })
   },

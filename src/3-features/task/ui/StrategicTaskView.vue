@@ -21,10 +21,12 @@ import type { ElTable } from 'element-plus'
 // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types
 import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/shared/types'
 import { IndicatorStatus } from '@/shared/types/entities'
+import { PermissionCode } from '@/shared/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
+import { usePermission } from '@/5-shared/lib/permissions'
 import { logger } from '@/shared/lib/utils/logger'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
@@ -80,6 +82,13 @@ const currentUserPermissionCodes = computed(() => {
     .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
     .filter(Boolean)
 })
+const currentUserRoleCodes = computed(() => {
+  const roles = (authStore.user as { roles?: unknown[] } | null)?.roles
+  if (!Array.isArray(roles)) {
+    return []
+  }
+  return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
+})
 
 const isCurrentUserReporter = computed(() => {
   const roles = Array.isArray(authStore.user?.roles)
@@ -90,6 +99,9 @@ const isCurrentUserReporter = computed(() => {
 
   return roles.includes('ROLE_REPORTER')
 })
+
+// 使用统一的权限管理工具
+const permissionUtil = usePermission()
 
 const currentUserOrgId = computed(() => {
   const rawOrgId = Number((authStore.user as { orgId?: string | number } | null)?.orgId ?? NaN)
@@ -214,22 +226,39 @@ const findCurrentPlanByDepartment = () => {
   }
 
   const selectedDepartmentId = resolveDepartmentIdByName(selectedDepartment.value)
+  const normalizedDepartmentName = normalizeDepartmentName(selectedDepartment.value)
 
-  return (
-    planStore.plans.find(p => {
-      const planAny = p as any
-      const planYear = resolvePlanYear(planAny)
-      const planTargetOrgId = Number(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId ?? NaN)
-      const orgName = normalizeDepartmentName(planAny.targetOrgName || planAny.orgName || '')
-      const sameDepartment =
-        (selectedDepartmentId != null &&
-          Number.isFinite(planTargetOrgId) &&
-          planTargetOrgId === selectedDepartmentId) ||
-        orgName === normalizeDepartmentName(selectedDepartment.value)
+  const sameDepartment = (planAny: Record<string, unknown>) => {
+    const planTargetOrgId = Number(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId ?? NaN)
+    const orgName = normalizeDepartmentName(String(planAny.targetOrgName || planAny.orgName || ''))
+    return (
+      (selectedDepartmentId != null &&
+        Number.isFinite(planTargetOrgId) &&
+        planTargetOrgId === selectedDepartmentId) ||
+      orgName === normalizedDepartmentName
+    )
+  }
 
-      return sameDepartment && planYear === timeContext.currentYear
+  const plans = planStore.plans.filter(p => {
+    const planAny = p as Record<string, unknown>
+    const planYear = resolvePlanYear(planAny)
+    return sameDepartment(planAny) && planYear === timeContext.currentYear
+  })
+
+  const strictMatch =
+    plans.find(p => {
+      const planAny = p as Record<string, unknown>
+      const candidateCreatedByOrgId = Number(
+        planAny.createdByOrgId ?? planAny.created_by_org_id ?? NaN
+      )
+      const candidatePlanLevel = String(planAny.planLevel || planAny.plan_level || '')
+        .trim()
+        .toUpperCase()
+
+      return candidateCreatedByOrgId === 35 && candidatePlanLevel === 'STRAT_TO_FUNC'
     }) || null
-  )
+
+  return strictMatch || plans[0] || null
 }
 
 const findCurrentPlanByOrgId = (orgId?: number | null) => {
@@ -282,7 +311,7 @@ const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
   }
 
   const directTaskId = normalizeTaskId(
-    raw.taskId ?? raw.task_id ?? raw.planId ?? raw.strategicTaskId
+    raw.taskId ?? raw.task_id ?? raw.strategicTaskId
   )
   if (directTaskId) {
     return directTaskId
@@ -306,7 +335,7 @@ const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
       parentIndicatorId?: string | number
     }
     const parentTaskId = normalizeTaskId(
-      parentRaw.taskId ?? parentRaw.task_id ?? parentRaw.planId ?? parentRaw.strategicTaskId
+      parentRaw.taskId ?? parentRaw.task_id ?? parentRaw.strategicTaskId
     )
     if (parentTaskId) {
       return parentTaskId
@@ -391,10 +420,12 @@ const buildTaskIdSet = (tasks: Array<Record<string, unknown>>): string[] => {
     .filter(Boolean)
 }
 
-const loadBackendTaskTypeMap = async () => {
+const loadBackendTaskTypeMap = async (options: { force?: boolean } = {}) => {
   taskTypeMapLoading.value = true
   try {
-    const byYearResponse = await strategicApi.getTasksByYear(timeContext.currentYear)
+    const byYearResponse = await strategicApi.getTasksByYear(timeContext.currentYear, {
+      force: options.force
+    })
     if (
       byYearResponse?.success &&
       Array.isArray(byYearResponse.data) &&
@@ -407,7 +438,7 @@ const loadBackendTaskTypeMap = async () => {
     }
 
     // 兼容回退：部分环境按年查询任务为空（周期口径不一致），改用全量任务建立映射
-    const allTasksResponse = await strategicApi.getAllTasks()
+    const allTasksResponse = await strategicApi.getAllTasks({ force: options.force })
     if (allTasksResponse?.success && Array.isArray(allTasksResponse.data)) {
       backendTaskTypeMap.value = buildTaskTypeMap(
         allTasksResponse.data as Array<Record<string, unknown>>
@@ -424,7 +455,7 @@ const loadBackendTaskTypeMap = async () => {
   }
 }
 
-const loadCurrentPlanTaskScope = async () => {
+const loadCurrentPlanTaskScope = async (options: { force?: boolean } = {}) => {
   const dept = selectedDepartment.value
   if (!dept) {
     currentPlanScopeLoading.value = false
@@ -455,6 +486,7 @@ const loadCurrentPlanTaskScope = async () => {
         dedupeWindowMs: 1000,
         tags: ['task.scope', `task.scope.${planId}`, 'plan.detail']
       },
+      force: options.force === true,
       fetcher: async () => {
         const response = await strategicApi.getTasksByPlanId(planId)
         if (!response?.success || !Array.isArray(response.data)) {
@@ -728,7 +760,7 @@ const overallStatus = computed(() => {
     return { label: '暂无指标', type: 'info' }
   }
 
-  return getPlanStatusDisplay(planStatus)
+  return getPlanStatusDisplay(planStatus) || { label: String(planStatus), type: 'info' }
 })
 
 // 获取当前选中部门对应的 Plan（包含审批实例信息）
@@ -736,10 +768,115 @@ const currentPlan = computed(() => {
   return findCurrentPlanByDepartment()
 })
 
+const currentDepartmentOrgId = computed(() => resolveDepartmentIdByName(selectedDepartment.value))
+
+const currentPlanReportSummary = ref<{
+  id: number
+  workflowInstanceId?: number | null
+  currentTaskId?: number | null
+  workflowStatus?: string | null
+  currentStepName?: string | null
+  canWithdraw?: boolean
+  status?: string | null
+} | null>(null)
+const latestPlanReportSummary = ref<{ id: number } | null>(null)
+
+const approvalWorkflowReportSummary = computed(() => {
+  const currentWorkflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+  const currentStatus = String(
+    currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (
+    currentPlanReportSummary.value?.id &&
+    (Number.isFinite(currentWorkflowInstanceId) && currentWorkflowInstanceId > 0) &&
+    currentStatus !== 'DRAFT'
+  ) {
+    return currentPlanReportSummary.value
+  }
+
+  return latestPlanReportSummary.value
+})
+
 // 获取当前选中部门对应的 Plan 状态
 const currentPlanStatus = computed(() => {
   return normalizePlanStatus(currentPlan.value?.status)
 })
+
+const currentApprovalWorkflowStatus = computed(() => {
+  return String(
+    approvalWorkflowReportSummary.value?.workflowStatus ||
+      approvalWorkflowReportSummary.value?.status ||
+      currentPlan.value?.workflowStatus ||
+      currentPlan.value?.status ||
+      ''
+  )
+    .trim()
+    .toUpperCase()
+})
+
+function resolveExpectedApproverRoleCodesForCurrentPlan(): string[] {
+  const stepName = String(
+    approvalWorkflowReportSummary.value?.currentStepName ||
+      (currentPlan.value as { currentStepName?: string } | null)?.currentStepName ||
+      ''
+  ).trim()
+
+  if (!stepName) {
+    return []
+  }
+
+  if (
+    stepName.includes('职能部门审批') ||
+    stepName.includes('职能部门终审') ||
+    stepName.includes('二级学院审批')
+  ) {
+    return ['ROLE_APPROVER']
+  }
+
+  if (stepName.includes('战略发展部')) {
+    return ['ROLE_STRATEGY_DEPT_HEAD']
+  }
+
+  if (stepName.includes('分管校领导') || stepName.includes('学院院长')) {
+    return ['ROLE_VICE_PRESIDENT']
+  }
+
+  return []
+}
+
+function resolveExpectedApproverOrgIdForCurrentPlan(): number | null {
+  const plan = currentPlan.value as
+    | ({
+        currentStepName?: string
+        createdByOrgId?: string | number
+        targetOrgId?: string | number
+      } & Record<string, unknown>)
+    | null
+
+  const stepName = String(approvalWorkflowReportSummary.value?.currentStepName || plan?.currentStepName || '').trim()
+  if (!stepName) {
+    return null
+  }
+
+  if (stepName.includes('战略发展部')) {
+    const sourceOrgId = Number(plan?.createdByOrgId ?? NaN)
+    return Number.isFinite(sourceOrgId) && sourceOrgId > 0 ? sourceOrgId : null
+  }
+
+  if (
+    stepName.includes('职能部门审批') ||
+    stepName.includes('职能部门终审') ||
+    stepName.includes('二级学院审批')
+  ) {
+    const targetOrgId = Number(plan?.targetOrgId ?? NaN)
+    return Number.isFinite(targetOrgId) && targetOrgId > 0 ? targetOrgId : null
+  }
+
+  return null
+}
 
 const hydratingPlanDetail = ref(false)
 const departmentViewRequestId = ref(0)
@@ -783,7 +920,9 @@ const hydrateCurrentPlanWorkflowState = async (options: { force?: boolean } = {}
   }
 }
 
-const refreshCurrentDepartmentView = async (options: { showLoading?: boolean } = {}) => {
+const refreshCurrentDepartmentView = async (
+  options: { showLoading?: boolean; force?: boolean } = {}
+) => {
   const requestId = departmentViewRequestId.value + 1
   departmentViewRequestId.value = requestId
 
@@ -793,7 +932,20 @@ const refreshCurrentDepartmentView = async (options: { showLoading?: boolean } =
 
   try {
     await hydrateCurrentPlanWorkflowState()
-    await loadCurrentPlanTaskScope()
+    await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: options.force })
+    await loadCurrentPlanTaskScope({ force: options.force })
+    const planId = Number(currentPlan.value?.id ?? NaN)
+    const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
+    if (Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0) {
+      currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(planId, reportOrgId)
+      latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+        planId,
+        reportOrgId
+      )
+    } else {
+      currentPlanReportSummary.value = null
+      latestPlanReportSummary.value = null
+    }
   } finally {
     if (options.showLoading && departmentViewRequestId.value === requestId) {
       pageTransitionLoading.value = false
@@ -890,11 +1042,18 @@ const ensurePersistedTaskIdForIndicator = async (
   indicator: Pick<
     StrategicIndicator,
     'taskContent' | 'type2' | 'remark' | 'responsibleDept' | 'ownerDept'
-  >
+  > & {
+    taskId?: string | number | null
+  }
 ): Promise<number> => {
   const trimmedTaskName = String(indicator.taskContent || '').trim()
   if (!trimmedTaskName) {
     throw new Error('请先填写战略任务')
+  }
+
+  const explicitTaskId = Number(indicator.taskId ?? NaN)
+  if (Number.isFinite(explicitTaskId) && explicitTaskId > 0) {
+    return explicitTaskId
   }
 
   const plan = currentPlan.value as Record<string, unknown> | null
@@ -1071,17 +1230,63 @@ const canDeleteIndicator = (indicator: StrategicIndicator): boolean => {
 // @requirement: Plan-centric status - 使用 Plan 状态判断待审批数量
 // Plan 处于 PENDING 状态时，表示有待审批的内容
 const pendingApprovalCount = computed(() => {
-  return currentPlanStatus.value === 'PENDING' ? 1 : 0
+  const expectedApproverRoleCodes = resolveExpectedApproverRoleCodesForCurrentPlan()
+  const hasExpectedRole =
+    expectedApproverRoleCodes.length === 0 ||
+    expectedApproverRoleCodes.some(roleCode => currentUserRoleCodes.value.includes(roleCode))
+  const expectedApproverOrgId = resolveExpectedApproverOrgIdForCurrentPlan()
+  const hasExpectedOrg =
+    !Number.isFinite(expectedApproverOrgId) ||
+    (expectedApproverOrgId as number) <= 0 ||
+    currentUserOrgId.value === expectedApproverOrgId
+
+  return (
+    ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentApprovalWorkflowStatus.value) &&
+    permissionUtil.hasPermission(PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE) &&
+    hasExpectedRole &&
+    hasExpectedOrg
+      ? 1
+      : 0
+  )
 })
 
 const approvalEntryButtonText = computed(() => {
-  if (currentPlanStatus.value === 'PENDING') {
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentApprovalWorkflowStatus.value)) {
     return '审批中'
   }
-  if (currentPlanStatus.value === 'DISTRIBUTED') {
+  if (
+    approvalWorkflowReportSummary.value?.id ||
+    currentPlanStatus.value === 'DISTRIBUTED' ||
+    currentApprovalWorkflowStatus.value === 'APPROVED'
+  ) {
     return '查看审批'
   }
   return '审批进度'
+})
+
+const primaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
+  return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
+})
+
+const primaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
+  return approvalWorkflowReportSummary.value?.id || currentPlan.value?.id
+})
+
+const secondaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
+  // 战略任务页既要支持当前上报审批，也要保留原来的下发审批历史。
+  if (approvalWorkflowReportSummary.value?.id) {
+    return 'PLAN'
+  }
+
+  return latestPlanReportSummary.value?.id ? 'PLAN_REPORT' : undefined
+})
+
+const secondaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
+  if (approvalWorkflowReportSummary.value?.id) {
+    return currentPlan.value?.id
+  }
+
+  return latestPlanReportSummary.value?.id
 })
 
 // ==================== 下发/撤回按钮逻辑 ====================
@@ -2069,11 +2274,33 @@ const taskTypeMap = computed(() => {
   return map
 })
 
+const preservePrefilledTaskBindingOnce = ref(false)
+
 // 选择战略任务时自动更新任务类型
 const handleTaskSelect = (taskName: string) => {
+  if (preservePrefilledTaskBindingOnce.value && String(newRow.value.taskId || '').trim()) {
+    preservePrefilledTaskBindingOnce.value = false
+    return
+  }
+
+  newRow.value.taskId = ''
+
   if (taskTypeMap.value[taskName]) {
     newRow.value.type2 = taskTypeMap.value[taskName]
   }
+
+  void (async () => {
+    const plan = currentPlan.value as Record<string, unknown> | null
+    const planId = Number(plan?.id ?? plan?.taskId ?? NaN)
+    if (!Number.isFinite(planId) || planId <= 0) {
+      return
+    }
+
+    const existingTaskId = await findExistingTaskIdByName(planId, taskName)
+    if (existingTaskId) {
+      newRow.value.taskId = String(existingTaskId)
+    }
+  })()
 }
 
 // 战略任务选择器ref
@@ -2089,12 +2316,14 @@ const handleTaskVisibleChange = (visible: boolean) => {
     const inputValue = inputEl?.value || ''
     if (inputValue.trim() && !newRow.value.taskContent) {
       newRow.value.taskContent = inputValue.trim()
+      newRow.value.taskId = ''
     }
   }
 }
 
 // 新增行数据
 const newRow = ref({
+  taskId: '',
   taskContent: '',
   name: '',
   type1: '定量' as '定性' | '定量',
@@ -2381,12 +2610,10 @@ const handleGlobalClick = (event: MouseEvent) => {
 onMounted(async () => {
   await Promise.all([
     (async () => {
-      if (strategicStore.indicators.length === 0) {
-        try {
-          await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-        } catch (error) {
-          logger.error('[StrategicTaskView] 初始加载指标失败:', error)
-        }
+      try {
+        await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: true })
+      } catch (error) {
+        logger.error('[StrategicTaskView] 初始加载指标失败:', error)
       }
     })(),
     (async () => {
@@ -2405,10 +2632,10 @@ onMounted(async () => {
         logger.error('[StrategicTaskView] 初始加载 Plan 失败:', error)
       }
     })(),
-    loadBackendTaskTypeMap()
+    loadBackendTaskTypeMap({ force: true })
   ])
 
-  await refreshCurrentDepartmentView()
+  await refreshCurrentDepartmentView({ force: true })
   isBootstrappingPage.value = false
 
   void loadMilestonesForCurrentScope()
@@ -2426,8 +2653,8 @@ watch(
     if (isBootstrappingPage.value) {
       return
     }
-    await loadBackendTaskTypeMap()
-    await refreshCurrentDepartmentView({ showLoading: true })
+    await loadBackendTaskTypeMap({ force: true })
+    await refreshCurrentDepartmentView({ showLoading: true, force: true })
   }
 )
 
@@ -2435,7 +2662,7 @@ watch([selectedDepartment, () => planStore.plans.length], async () => {
   if (isBootstrappingPage.value) {
     return
   }
-  await refreshCurrentDepartmentView({ showLoading: true })
+  await refreshCurrentDepartmentView({ showLoading: true, force: true })
   void loadMilestonesForCurrentScope()
 })
 
@@ -2457,12 +2684,15 @@ watch(
 // 方法
 const resetNewRow = (
   overrides: Partial<{
+    taskId: string
     taskContent: string
     type1: '定性' | '定量'
     type2: '发展性' | '基础性'
   }> = {}
 ) => {
+  preservePrefilledTaskBindingOnce.value = false
   newRow.value = {
+    taskId: overrides.taskId ?? '',
     taskContent: overrides.taskContent ?? '',
     name: '',
     type1: overrides.type1 ?? '定量',
@@ -2475,12 +2705,16 @@ const resetNewRow = (
 
 const openNewRowDialog = (
   overrides: Partial<{
+    taskId: string
     taskContent: string
     type1: '定性' | '定量'
     type2: '发展性' | '基础性'
   }> = {}
 ) => {
   resetNewRow(overrides)
+  if (overrides.taskId !== undefined) {
+    newRow.value.taskId = overrides.taskId
+  }
   isAddingOrEditing.value = true
 
   if (newRow.value.type1 === '定量') {
@@ -2500,7 +2734,9 @@ const _addIndicatorToCategory = (category: '发展性' | '基础性') => {
 
 // 为指定任务新增指标（点击单元格右下角加号）
 const handleAddIndicatorToTask = (row: StrategicIndicator) => {
+  preservePrefilledTaskBindingOnce.value = true
   openNewRowDialog({
+    taskId: getIndicatorTaskId(row),
     taskContent: row.taskContent || '',
     type2: row.type2 === '基础性' ? '基础性' : '发展性'
   })
@@ -2564,6 +2800,7 @@ const saveNewRow = async () => {
 
   try {
     const persistedTaskId = await ensurePersistedTaskIdForIndicator({
+      taskId: newRow.value.taskId || null,
       taskContent: newRow.value.taskContent,
       type2: newRow.value.type2,
       remark: newRow.value.remark,
@@ -2844,33 +3081,60 @@ const _hasPendingApprovalForDept = computed(() => {
 const handleOpenApproval = () => {
   void (async () => {
     preloadedPlanWorkflowDetail.value = null
-    const planId = currentPlan.value?.id
-    if (planId !== undefined && planId !== null && planId !== '') {
-      await planStore.loadPlanDetails(planId, { force: true, background: true })
+    const planId = Number(currentPlan.value?.id ?? NaN)
+    const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
+    if (Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0) {
+      currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(planId, reportOrgId)
+      latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+        planId,
+        reportOrgId
+      )
+    } else {
+      currentPlanReportSummary.value = null
+      latestPlanReportSummary.value = null
+    }
+    const reportId = Number(approvalWorkflowReportSummary.value?.id ?? NaN)
+    if (Number.isFinite(reportId) && reportId > 0) {
+      try {
+        const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
+        if (response.success && response.data) {
+          preloadedPlanWorkflowDetail.value = response.data
+        }
+      } catch (error) {
+        logger.warn('[StrategicTaskView] 预加载 PlanReport 审批抽屉工作流详情失败:', {
+          reportId,
+          error
+        })
+      }
+    } else {
+      const planId = currentPlan.value?.id
+      if (planId !== undefined && planId !== null && planId !== '') {
+        await planStore.loadPlanDetails(planId, { force: true, background: true })
 
-      const latestPlan = currentPlan.value
-      if (latestPlan) {
-        try {
-          const businessEntityId = Number(latestPlan.id ?? 0)
-          if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
-            const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
-            if (response.success && response.data) {
-              preloadedPlanWorkflowDetail.value = response.data
-            }
-          } else {
-            const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
-            if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
-              const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+        const latestPlan = currentPlan.value
+        if (latestPlan) {
+          try {
+            const businessEntityId = Number(latestPlan.id ?? 0)
+            if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
+              const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
               if (response.success && response.data) {
                 preloadedPlanWorkflowDetail.value = response.data
               }
+            } else {
+              const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
+              if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+                const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+                if (response.success && response.data) {
+                  preloadedPlanWorkflowDetail.value = response.data
+                }
+              }
             }
+          } catch (error) {
+            logger.warn('[StrategicTaskView] 预加载审批抽屉工作流详情失败:', {
+              planId,
+              error
+            })
           }
-        } catch (error) {
-          logger.warn('[StrategicTaskView] 预加载审批抽屉工作流详情失败:', {
-            planId,
-            error
-          })
         }
       }
     }
@@ -2885,6 +3149,26 @@ const handleApprovalRefresh = async () => {
   const planId = currentPlan.value?.id
   if (planId !== undefined && planId !== null && planId !== '') {
     await planStore.loadPlanDetails(planId, { force: true, background: true })
+  }
+  const reportPlanId = Number(currentPlan.value?.id ?? NaN)
+  const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
+  if (
+    Number.isFinite(reportPlanId) &&
+    reportPlanId > 0 &&
+    Number.isFinite(reportOrgId) &&
+    reportOrgId > 0
+  ) {
+    currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(
+      reportPlanId,
+      reportOrgId
+    )
+    latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+      reportPlanId,
+      reportOrgId
+    )
+  } else {
+    currentPlanReportSummary.value = null
+    latestPlanReportSummary.value = null
   }
   // 强制关闭并重新打开抽屉以刷新数据
   taskApprovalVisible.value = false
@@ -4862,6 +5146,10 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       :show-plan-approvals="true"
       :show-approval-section="true"
       :workflow-code="PLAN_APPROVAL_HISTORY_WORKFLOW_CODES"
+      :workflow-entity-type="primaryApprovalWorkflowEntityType"
+      :workflow-entity-id="primaryApprovalWorkflowEntityId"
+      :secondary-workflow-entity-type="secondaryApprovalWorkflowEntityType"
+      :secondary-workflow-entity-id="secondaryApprovalWorkflowEntityId"
       approval-type="submission"
       @close="taskApprovalVisible = false"
       @refresh="handleApprovalRefresh"

@@ -1006,12 +1006,12 @@ function isTerminalHistoryStatus(status?: string): boolean {
   const normalized = String(status || '')
     .trim()
     .toUpperCase()
-  return ['APPROVED', 'REJECTED', 'WITHDRAWN', 'CANCELLED', 'COMPLETED'].includes(normalized)
+  // 业务约定：审批历史只展示已审批完成的结果，不包含撤回中的流程。
+  return ['APPROVED', 'REJECTED'].includes(normalized)
 }
 
 const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
   return planWorkflowHistoryCards.value
-    .filter(item => matchesExpectedWorkflowCode(item.flowCode))
     .filter(item => isTerminalHistoryStatus(item.status) || Boolean(item.completedAt))
     .map((item, index) => {
       const statusTag = resolveHistoryStatusTag(item.status)
@@ -1723,9 +1723,7 @@ const showPlanPendingCard = computed(() => {
   if (isPlanHistoryOnlyMode.value) {
     return false
   }
-  return Boolean(
-    currentPlanApprovalSummary.value && (!hasPlanWorkflowData.value || isPlanPendingApproval.value)
-  )
+  return Boolean(currentPlanApprovalSummary.value)
 })
 
 const showPlanHistoryCard = computed(() => {
@@ -1788,6 +1786,10 @@ watch(
     props.plan?.workflowStatus,
     props.plan?.canWithdraw,
     props.plan?.currentStepName,
+    props.workflowEntityType,
+    props.workflowEntityId,
+    props.secondaryWorkflowEntityType,
+    props.secondaryWorkflowEntityId,
     JSON.stringify(props.plan?.workflowHistory ?? []),
     expectedWorkflowCodes.value.join('|')
   ],

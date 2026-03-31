@@ -286,7 +286,7 @@ function normalizeStatusAudit(rawStatusAudit: unknown): Array<Record<string, unk
 export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const item = getRecord(raw)
   const id = getString(item, 'id', 'indicatorId')
-  const taskId = getString(item, 'taskId', 'task_id', 'planId', 'strategicTaskId')
+  const taskId = getString(item, 'taskId', 'task_id', 'strategicTaskId')
   // 任务名只能来自任务字段本身，不能回退到指标名称/描述。
   // 否则新增指标时如果后端响应里暂时缺少 taskName，就会把新指标内容误显示成“战略任务”，
   // 看起来像把原任务标题覆盖了。
@@ -719,7 +719,7 @@ export const useStrategicStore = defineStore('strategic', () => {
 
   // ============ Actions ============
 
-  async function loadIndicatorsByYear(year: number) {
+  async function loadIndicatorsByYear(year: number, options: { force?: boolean } = {}) {
     if (loadingYearPromise.value && loadingYear.value === year) {
       return loadingYearPromise.value
     }
@@ -736,7 +736,7 @@ export const useStrategicStore = defineStore('strategic', () => {
         const [response, tasksResponse] = await withExponentialRetry(
           () =>
             Promise.all([
-              indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }),
+              indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }, { force: options.force }),
               strategicApi.getTasksByYear(year)
             ]),
           {
@@ -788,8 +788,8 @@ export const useStrategicStore = defineStore('strategic', () => {
     return request
   }
 
-  async function fetchIndicators() {
-    return loadIndicatorsByYear(new Date().getFullYear())
+  async function fetchIndicators(options: { force?: boolean } = {}) {
+    return loadIndicatorsByYear(new Date().getFullYear(), options)
   }
 
   async function updateIndicator(id: string, data: Record<string, unknown>) {

@@ -9,8 +9,8 @@
 
 import { computed, type ComputedRef } from 'vue'
 import { useAuthStore } from '@/features/auth/model/store'
+import { PermissionCode } from '@/shared/types'
 import type {
-  PermissionCode,
   UserRoleWithPermission as _UserRoleWithPermission,
   Plan,
   PlanFill,

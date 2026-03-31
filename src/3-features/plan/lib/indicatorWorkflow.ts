@@ -1,6 +1,5 @@
 import type { IndicatorFill } from '@/shared/types'
-
-export const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
+import { PermissionCode } from '@/shared/types'
 
 export interface IndicatorWorkflowSnapshot {
   fillId: string | number
@@ -134,6 +133,6 @@ export function canCurrentUserHandleIndicatorWorkflow(
 
   return (
     snapshot.currentApproverId === userId &&
-    permissionCodes.includes(PLAN_REPORT_APPROVE_PERMISSION)
+    permissionCodes.includes(PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE)
   )
 }

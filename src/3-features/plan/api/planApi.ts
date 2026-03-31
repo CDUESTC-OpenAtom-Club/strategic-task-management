@@ -2209,6 +2209,37 @@ export const indicatorFillApi = {
     return currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) || null
   },
 
+  async getLatestCurrentMonthPlanReport(
+    planId: number | string,
+    reportOrgId: number,
+    reportMonth: string = getCurrentReportMonth()
+  ): Promise<PlanReportSimpleResponse | null> {
+    const reports = await loadPlanReportsByPlanId(Number(planId))
+    const currentMonthReports = reports
+      .filter(
+        report =>
+          Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt || 0).getTime() -
+          new Date(a.updatedAt || a.createdAt || 0).getTime()
+      )
+
+    const latestWorkflowBackedReport =
+      currentMonthReports.find(report => {
+        const normalizedStatus = getNormalizedReportStatus(report.status)
+        return (
+          Boolean(report.workflowInstanceId ?? report.auditInstanceId) ||
+          ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(
+            normalizedStatus
+          )
+        )
+      }) || null
+
+    return latestWorkflowBackedReport || currentMonthReports[0] || null
+  },
+
   async submitCurrentMonthPlanReport(
     planId: number | string,
     reportOrgId: number,

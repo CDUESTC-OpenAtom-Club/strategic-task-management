@@ -357,7 +357,10 @@ export const strategicApi = {
    * 获取指定年份的战略任务（通过 cycle）
    */
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-  async getTasksByYear(year: number): Promise<ApiResponse<StrategicTaskVO[]>> {
+  async getTasksByYear(
+    year: number,
+    options: { force?: boolean } = {}
+  ): Promise<ApiResponse<StrategicTaskVO[]>> {
     try {
       return fetchWithCache({
         key: buildQueryKey('task', 'list', withTaskCacheContext({ year })),
@@ -369,6 +372,7 @@ export const strategicApi = {
           dedupeWindowMs: 1000,
           tags: ['task.list', `task.list.${year}`]
         },
+        force: options.force === true,
         fetcher: async () => {
           const cycleResponse = await this.getCycleByYear(year)
           if (!cycleResponse.success || !cycleResponse.data) {
@@ -422,7 +426,7 @@ export const strategicApi = {
    * 获取所有战略任务
    */
   // eslint-disable-next-line no-restricted-syntax -- Backend API returns StrategicTaskVO
-  async getAllTasks(): Promise<ApiResponse<StrategicTaskVO[]>> {
+  async getAllTasks(options: { force?: boolean } = {}): Promise<ApiResponse<StrategicTaskVO[]>> {
     return fetchWithCache({
       key: buildQueryKey('task', 'list', withTaskCacheContext()),
       policy: {
@@ -433,6 +437,7 @@ export const strategicApi = {
         dedupeWindowMs: 1000,
         tags: ['task.list']
       },
+      force: options.force === true,
       fetcher: () => apiClient.get<ApiResponse<StrategicTaskVO[]>>('/tasks')
     })
   },

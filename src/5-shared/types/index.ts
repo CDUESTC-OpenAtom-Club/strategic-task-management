@@ -67,33 +67,6 @@ export type {
 
 export { TaskType } from './backend-aligned'
 
-// ============================================================================
-// Zod 运行时验证 Schema 重新导出
-// ============================================================================
-/* eslint-disable no-restricted-syntax -- Backend-aligned schemas must use backend terminology */
-export {
-  UserRoleSchema,
-  ApprovalStatusSchema,
-  ProgressApprovalStatusSchema,
-  IndicatorTypeSchema,
-  AlertLevelSchema,
-  MessageTypeSchema,
-  AuditActionSchema,
-  UserSchema,
-  LoginCredentialsSchema,
-  MilestoneSchema,
-  StatusAuditEntrySchema,
-  StrategicIndicatorSchema,
-  StrategicTaskSchema,
-  DashboardDataSchema,
-  DistributionStatusSchema,
-  validateUser,
-  validateIndicator,
-  validateMilestone,
-  validateLoginCredentials
-} from './schemas'
-/* eslint-enable no-restricted-syntax */
-
 // 重新导出从 Schema 推断的类型
 /* eslint-disable no-restricted-syntax -- Backend-aligned types inferred from schemas */
 export type { LoginCredentials, StrategicIndicator } from './schemas'
@@ -673,7 +646,11 @@ export const PermissionCode = {
   // Task 相关
   TASK_CREATE: 'task.create',
   TASK_EDIT: 'task.edit',
-  TASK_DELETE: 'task.delete'
+  TASK_DELETE: 'task.delete',
+
+  // 战略任务审批相关权限
+  BTN_STRATEGY_TASK_DISPATCH_APPROVE: 'BTN_STRATEGY_TASK_DISPATCH_APPROVE',
+  BTN_STRATEGY_TASK_REPORT_APPROVE: 'BTN_STRATEGY_TASK_REPORT_APPROVE'
 } as const
 export type PermissionCode = (typeof PermissionCode)[keyof typeof PermissionCode]
 
