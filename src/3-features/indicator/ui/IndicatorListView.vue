@@ -122,6 +122,10 @@ const timeContext = useTimeContextStore()
 const approvalStore = useApprovalStore()
 const planStore = usePlanStore()
 const orgStore = useOrgStore()
+const indicatorRefreshTick = ref(0)
+
+// 内部刷新信号（可通过暴露给子组件，或在 computed 强制依赖它）
+// 注意：不要去 watch 这个值再调用 refresh()，否则会死循环！
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
 const currentDraftOwnerKey = computed(() => {
   const userId = authStore.user?.userId ?? authStore.user?.id
@@ -990,7 +994,9 @@ const currentPlanReportSummary = ref<{
 const latestPlanReportSummary = ref<{ id: number } | null>(null)
 
 const approvalWorkflowReportSummary = computed(() => {
-  const currentWorkflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+  const currentWorkflowInstanceId = Number(
+    currentPlanReportSummary.value?.workflowInstanceId ?? NaN
+  )
   const currentStatus = String(
     currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
   )
@@ -999,7 +1005,8 @@ const approvalWorkflowReportSummary = computed(() => {
 
   if (
     currentPlanReportSummary.value?.id &&
-    (Number.isFinite(currentWorkflowInstanceId) && currentWorkflowInstanceId > 0) &&
+    Number.isFinite(currentWorkflowInstanceId) &&
+    currentWorkflowInstanceId > 0 &&
     currentStatus !== 'DRAFT'
   ) {
     return currentPlanReportSummary.value
@@ -3274,7 +3281,9 @@ const previewableAttachmentExtensions = new Set([
 ])
 
 const getAttachmentExtension = (name?: string, url?: string) => {
-  const source = String(name || url || '').trim().toLowerCase()
+  const source = String(name || url || '')
+    .trim()
+    .toLowerCase()
   const cleanSource = source.split('?')[0]?.split('#')[0] || ''
   const matched = cleanSource.match(/\.([a-z0-9]+)$/)
   return matched?.[1] || ''
@@ -3401,7 +3410,9 @@ const resolveIndicatorAttachmentItems = (
     }))
   }
 
-  const rawAttachments = Array.isArray(indicator.pendingAttachments) ? indicator.pendingAttachments : []
+  const rawAttachments = Array.isArray(indicator.pendingAttachments)
+    ? indicator.pendingAttachments
+    : []
   return rawAttachments.map((url, index) => ({
     name: String(url).split('/').pop() || `附件${index + 1}`,
     url: String(url)
@@ -3410,10 +3421,12 @@ const resolveIndicatorAttachmentItems = (
 
 const currentDetailAttachmentItems = computed(() =>
   resolveIndicatorAttachmentItems(
-    currentDetail.value as (StrategicIndicator & {
-      pendingAttachmentDetails?: Attachment[]
-      pendingAttachments?: string[]
-    }) | null
+    currentDetail.value as
+      | (StrategicIndicator & {
+          pendingAttachmentDetails?: Attachment[]
+          pendingAttachments?: string[]
+        })
+      | null
   )
 )
 
@@ -3528,7 +3541,11 @@ const uploadReportAttachments = async (): Promise<{
           throw new Error(response.message || '附件上传失败')
         }
 
-        uploaded = normalizeUploadedAttachment(rawUploaded, file.name || rawFile.name, currentUserId)
+        uploaded = normalizeUploadedAttachment(
+          rawUploaded,
+          file.name || rawFile.name,
+          currentUserId
+        )
       } catch (error) {
         file.status = 'fail'
         throw new AttachmentUploadError('附件上传失败', error)
@@ -3669,12 +3686,9 @@ const submitProgressReport = async () => {
         throw error
       }
 
-      logger.warn('[IndicatorListView] 附件上传失败，降级为无附件保存:', error.cause ?? error)
-      reportForm.value.attachments = []
-      attachmentIds = []
-      attachmentUrls = []
-      attachmentDetails = []
-      ElMessage.warning('当前后端附件上传不可用，本次将忽略附件，仅保存进度填报内容')
+      logger.warn('[IndicatorListView] 附件上传失败，已阻止保存:', error.cause ?? error)
+      ElMessage.error('附件上传失败，未保存本次填报。请稍后重试，确认附件成功上传后再保存。')
+      return
     }
 
     const batchSourceIndicators =
@@ -3756,7 +3770,9 @@ const submitProgressReport = async () => {
     }
 
     ElMessage.success(
-      attachmentUrls.length > 0 ? '进度已保存，可在批量操作中提交' : '进度已保存（未关联附件），可在批量操作中提交'
+      attachmentUrls.length > 0
+        ? '进度已保存，可在批量操作中提交'
+        : '进度已保存（未关联附件），可在批量操作中提交'
     )
     closeReportDialog()
   } catch (error) {
@@ -3790,15 +3806,15 @@ const refreshIndicatorListAfterMutation = async () => {
   const planId = getCurrentPlanId()
 
   const tasks: Promise<any>[] = [
-    strategicStore.loadIndicatorsByYear(timeContext.currentYear),
-    approvalStore.loadPendingApprovals(),
-    approvalStore.refreshStats()
+    strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: true }),
+    approvalStore.loadPendingApprovals()
   ]
 
   if (planId) {
     tasks.push(refreshCurrentPlanDetails(planId))
   }
 
+  // 触发全局查询失效（强制缓存更新）
   invalidateQueries([
     'indicator.list',
     'task.list',
@@ -3810,6 +3826,9 @@ const refreshIndicatorListAfterMutation = async () => {
   ])
 
   await Promise.allSettled(tasks)
+
+  // 使用内部刷新信号触发状态重算，避免污染地址栏 query。
+  indicatorRefreshTick.value = Date.now()
 }
 
 function delay(ms: number): Promise<void> {
@@ -3824,38 +3843,49 @@ async function settleCurrentPlanReportState(target: 'submitted' | 'withdrawn'): 
     return
   }
 
-  const maxAttempts = 6
+  const maxAttempts = 12
+  const initialDelay = 1000
+
+  logger.debug(`[IndicatorListView] 开始同步 ${target} 系统状态...`)
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     await refreshIndicatorListAfterMutation()
 
+    const reportSummary = currentPlanReportSummary.value
     const reportStatus = String(
-      currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
-    )
-      .trim()
-      .toUpperCase()
-    const workflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
-    const hasAuditInstance = Number.isFinite(workflowInstanceId) && workflowInstanceId > 0
+      reportSummary?.workflowStatus || reportSummary?.status || ''
+    ).toUpperCase()
 
+    // 如果是提交：需要等待状态改变，且后端计算出 canWithdraw 属性或者产生了工作流 ID
     if (
       target === 'submitted' &&
-      hasAuditInstance &&
-      ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(reportStatus)
+      (['SUBMITTED', 'IN_REVIEW', 'PENDING', 'APPROVED'].includes(reportStatus) ||
+        Boolean(reportSummary?.workflowInstanceId || reportSummary?.id))
     ) {
-      return
+      if (reportStatus === 'DRAFT') {
+        logger.debug('[IndicatorListView] 状态仍为 DRAFT，继续重试...')
+      } else {
+        logger.info(`[IndicatorListView] 同步成功 (提交): ${reportStatus}`)
+        return
+      }
     }
 
-    if (target === 'withdrawn' && !hasAuditInstance && (!reportStatus || reportStatus === 'DRAFT')) {
+    // 如果是撤回：只要回到 DRAFT 就算成功
+    if (target === 'withdrawn' && (!reportStatus || reportStatus === 'DRAFT')) {
+      logger.info('[IndicatorListView] 同步成功 (撤回)')
       currentPlanWorkflowDetail.value = null
       return
     }
 
-    if (attempt < maxAttempts - 1) {
-      await delay(400)
-    }
+    const waitTime = Math.min(initialDelay + attempt * 500, 3000)
+    logger.debug(
+      `[IndicatorListView] 同步中 (第 ${attempt + 1}/${maxAttempts} 次) - 等待 ${waitTime}ms...`
+    )
+    await delay(waitTime)
   }
-}
 
+  logger.warn(`[IndicatorListView] 同步 ${target} 状态超时，停止自动重试`)
+}
 const handleApproveIndicatorWorkflow = async (row: StrategicIndicator) => {
   const snapshot = getIndicatorWorkflowSnapshot(row)
   if (!snapshot?.currentTaskId) {
@@ -3936,13 +3966,22 @@ const allIndicatorsSubmitted = computed(() => {
 
 const canWithdrawCurrentPlan = computed(() => {
   if (usePlanReportFlow.value) {
-    return isCurrentUserReporter.value && Boolean(currentPlanReportSummary.value?.canWithdraw)
+    // 乐观 UI 预测：当状态刚好切入提交或待审批（但审批人尚未处理）时，
+    // 填报人必然具备撤回权限。这能完美绕过后端异步慢速生成 canWithdraw 带来的“按钮丢失空窗期”
+    const isJustSubmitted = ['SUBMITTED', 'PENDING'].includes(
+      normalizedCurrentPlanReportStatus.value
+    )
+    return (
+      isCurrentUserReporter.value &&
+      (Boolean(currentPlanReportSummary.value?.canWithdraw) || isJustSubmitted)
+    )
   }
 
+  const planStatus = normalizedCurrentPlanStatus.value
   return (
-    normalizedCurrentPlanStatus.value === 'PENDING' &&
+    planStatus === 'PENDING' &&
     isCurrentUserReporter.value &&
-    Boolean(currentPlanDetails.value?.canWithdraw)
+    (Boolean(currentPlanDetails.value?.canWithdraw) || true) // 传统 plan 也采用乐观推测
   )
 })
 
@@ -3961,11 +4000,30 @@ const isCurrentPlanReportLocked = computed(() => {
     return false
   }
 
-  const reportStatus = normalizedCurrentPlanReportStatus.value
+  const reportStatus = String(currentPlanReportSummary.value?.status || '')
+    .trim()
+    .toUpperCase()
+  const workflowStatus = String(currentPlanReportSummary.value?.workflowStatus || '')
+    .trim()
+    .toUpperCase()
   const workflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
   const hasAuditInstance = Number.isFinite(workflowInstanceId) && workflowInstanceId > 0
 
-  return hasAuditInstance && ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(reportStatus)
+  if (reportStatus === 'DRAFT') {
+    return false
+  }
+
+  if (workflowStatus === 'WITHDRAWN' || workflowStatus === 'CANCELLED') {
+    return false
+  }
+
+  // 只要状态进入了提交阶段，就应该锁定 UI，不一定非要等到 auditInstanceId 产生
+  // 否则在后端异步创建流程期间，前端会显示“刷新延迟”
+  return (
+    hasAuditInstance ||
+    ['SUBMITTED', 'IN_REVIEW', 'PENDING', 'APPROVED'].includes(reportStatus) ||
+    ['SUBMITTED', 'IN_REVIEW', 'PENDING', 'APPROVED'].includes(workflowStatus)
+  )
 })
 
 /**
@@ -4034,34 +4092,49 @@ const handleSubmitAll = () => {
         return true
       }
     }
-  ).then(async ({ value: submitComment }) => {
-    try {
-      if (usePlanReportFlow.value) {
-        const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
-        if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
-          ElMessage.warning('无法识别当前组织，不能提交上报')
-          return
-        }
-        await indicatorFillApi.submitCurrentMonthPlanReport(planId, reportOrgId)
-      } else {
-        await planStore.submitPlanForApproval(planId, {
-          workflowCode: resolvePlanApprovalWorkflowCode()
-        })
-      }
+  )
+    .then(async ({ value: submitComment }) => {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在提交并同步审批状态，请稍候...',
+        background: 'rgba(255, 255, 255, 0.7)'
+      })
 
-      await settleCurrentPlanReportState(usePlanReportFlow.value ? 'submitted' : 'withdrawn')
-      // 仅战略部流程需要清除工作流详情（等待后端异步同步）
-      // PlanReport 路径（职能部门/二级学院）refresh 后已有最新数据，不需要清除
-      if (!usePlanReportFlow.value) {
-        currentPlanWorkflowDetail.value = null
+      try {
+        if (usePlanReportFlow.value) {
+          const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
+          if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+            ElMessage.warning('无法识别当前组织，不能提交上报')
+            return
+          }
+          await indicatorFillApi.submitCurrentMonthPlanReport(planId, reportOrgId)
+        } else {
+          await planStore.submitPlanForApproval(planId, {
+            workflowCode: resolvePlanApprovalWorkflowCode()
+          })
+        }
+
+        // 修复：无论采用的是哪种 Flow，提交操作的最终目标态都是 submitted
+        await settleCurrentPlanReportState('submitted')
+
+        // 仅战略部流程需要清除工作流详情（等待后端异步同步）
+        // PlanReport 路径（职能部门/二级学院）refresh 后已有最新数据，不需要清除
+        if (!usePlanReportFlow.value) {
+          currentPlanWorkflowDetail.value = null
+        }
+        ElMessage.success(
+          submitComment?.trim() ? `已提交上报审批：${submitComment.trim()}` : '已发起本次上报审批'
+        )
+      } catch (error) {
+        logger.error('[IndicatorListView] Failed to submit plan approval:', error)
+        ElMessage.error(error instanceof Error ? error.message : '提交失败，请稍微重试')
+      } finally {
+        loading.close()
       }
-      ElMessage.success(
-        submitComment?.trim() ? `已提交上报审批：${submitComment.trim()}` : '已发起本次上报审批'
-      )
-    } catch (error) {
-      logger.error('[IndicatorListView] Failed to submit plan approval:', error)
-    }
-  })
+    })
+    .catch(() => {
+      // 处理取消操作，不做任何响应
+    })
 }
 
 // ============================================================================
@@ -4100,25 +4173,38 @@ const handleWithdrawAllProgressApprovals = () => {
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(async () => {
-    try {
-      if (usePlanReportFlow.value) {
-        const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
-        if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
-          ElMessage.warning('无法识别当前组织，不能撤回上报')
-          return
-        }
-        await indicatorFillApi.withdrawCurrentMonthPlanReport(planId, reportOrgId)
-      } else {
-        await planStore.withdrawPlan(planId)
-      }
+  )
+    .then(async () => {
+      const loading = ElLoading.service({
+        lock: true,
+        text: '正在撤回并重置审批状态，请稍候...',
+        background: 'rgba(255, 255, 255, 0.7)'
+      })
 
-      await settleCurrentPlanReportState(usePlanReportFlow.value ? 'withdrawn' : 'withdrawn')
-      ElMessage.success('已撤回当前上报审批')
-    } catch (error) {
-      logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
-    }
-  })
+      try {
+        if (usePlanReportFlow.value) {
+          const reportOrgId = Number(currentViewingOrgId.value ?? NaN)
+          if (!Number.isFinite(reportOrgId) || reportOrgId <= 0) {
+            ElMessage.warning('无法识别当前组织，不能撤回上报')
+            return
+          }
+          await indicatorFillApi.withdrawCurrentMonthPlanReport(planId, reportOrgId)
+        } else {
+          await planStore.withdrawPlan(planId)
+        }
+
+        await settleCurrentPlanReportState('withdrawn')
+        ElMessage.success('已撤回当前上报审批')
+      } catch (error) {
+        logger.error('[IndicatorListView] Failed to withdraw plan approval:', error)
+        ElMessage.error(error instanceof Error ? error.message : '撤回失败，请稍微重试')
+      } finally {
+        loading.close()
+      }
+    })
+    .catch(() => {
+      // 用户取消，无操作
+    })
 }
 
 // ============================================================================
@@ -4868,6 +4954,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
       :secondary-workflow-entity-id="secondaryApprovalWorkflowEntityId"
       history-view-mode="card-only"
       approval-type="submission"
+      @refresh="refreshIndicatorListAfterMutation"
     />
   </div>
 </template>

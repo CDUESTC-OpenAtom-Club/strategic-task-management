@@ -801,6 +801,7 @@ function isActiveCurrentReportStatus(status?: string | null): boolean {
   const normalizedStatus = getNormalizedReportStatus(status)
   return (
     normalizedStatus === 'DRAFT' ||
+    normalizedStatus === 'REJECTED' ||
     normalizedStatus === 'PENDING' ||
     normalizedStatus === 'IN_REVIEW' ||
     normalizedStatus === 'SUBMITTED'
@@ -990,7 +991,9 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
 }
 
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
-  const result = await silentApiGet<PlanReportSimpleResponse>(`/reports/${reportId}`)
+  const result = await silentApiGet<PlanReportSimpleResponse>(
+    `/reports/${reportId}?_t=${Date.now()}`
+  )
   const response = result.data as ApiResponse<PlanReportSimpleResponse> | undefined
   if (result.status >= 500 || !response || !hasApiData(response) || !response.data) {
     throw new Error(
