@@ -49,6 +49,7 @@ interface Props {
   modelValue: boolean
   indicators?: StrategicIndicator[]
   plan?: Plan | null
+  initialPlanWorkflowDetail?: WorkflowInstanceDetailResponse | null
   indicatorId?: string | number
   departmentName?: string
   planName?: string
@@ -75,6 +76,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: false,
   indicators: () => [],
   plan: null,
+  initialPlanWorkflowDetail: null,
   indicatorId: undefined,
   departmentName: '',
   planName: '',
@@ -234,7 +236,7 @@ const activeTab = ref('workflow')
 const planApprovalsLoading = ref(false)
 const pendingPlanApprovals = ref<Record<string, any>[]>([])
 const planDetailDialogVisible = ref(false)
-const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
+const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(props.initialPlanWorkflowDetail)
 const planWorkflowHistoryCards = ref<WorkflowHistoryCardResponse[]>([])
 const selectedHistoryInstanceId = ref<string | null>(null)
 const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)

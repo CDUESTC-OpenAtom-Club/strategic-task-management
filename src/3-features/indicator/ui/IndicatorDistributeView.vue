@@ -637,16 +637,24 @@ const canEditCurrentCollegePlan = computed(() => {
 })
 
 const canWithdrawCurrentCollegePlan = computed(() => {
+  const canWithdraw =
+    currentCollegePlanReportSummary.value?.canWithdraw ?? currentActiveCollegePlan.value?.canWithdraw
+
   return (
     ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value) &&
     isCurrentUserReporter.value &&
-    Boolean(currentActiveCollegePlan.value?.canWithdraw)
+    Boolean(canWithdraw)
   )
 })
 
 // 是否可以编辑子指标（只有职能部门可以，审批中锁定）
 const canEditChild = computed(() => {
-  return isFunctionalDept.value && !timeContext.isReadOnly && canEditCurrentCollegePlan.value
+  return (
+    isFunctionalDept.value &&
+    !timeContext.isReadOnly &&
+    canEditCurrentCollegePlan.value &&
+    canCurrentUserSubmitCurrentDepartmentDistribution.value
+  )
 })
 
 const approvalDrawerPlan = computed<Plan | null>(() => {
@@ -1064,11 +1072,19 @@ const refreshDistributionData = async () => {
     const reloadJobs: Array<{ source: string; job: Promise<unknown> }> = [
       {
         source: 'indicators',
-        job: strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+        job: strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: true })
       },
       {
         source: 'plans',
         job: planStore.loadPlans({ force: true, background: true })
+      },
+      {
+        source: 'reportSummary',
+        job: loadCurrentCollegePlanReportSummary()
+      },
+      {
+        source: 'taskTypeMap',
+        job: loadCurrentDepartmentPlanTaskTypeMap(currentActiveCollegePlan.value?.id)
       }
     ]
 
@@ -1120,7 +1136,10 @@ const loadCurrentCollegePlanReportSummary = async () => {
   }
 
   try {
-    currentCollegePlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(
+    // 展示态优先取“当前月份最新的工作流报告”。
+    // 否则当同月同时存在一个可编辑草稿和一个审批中的历史轮次时，
+    // 页面外层会误显示为草稿，而审批抽屉仍会命中真实的待审批实例。
+    currentCollegePlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
       planId,
       reportOrgId
     )
@@ -2887,7 +2906,7 @@ const collegeOverallStatus = computed(() => {
 
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
-  const currentPlanStatus = normalizedSelectedCollegePlanStatus.value
+  const currentPlanStatus = selectedCollegePlanUiStatus.value
 
   if (currentPlanStatus === 'DRAFT') {
     return { label: '草稿', type: 'info' }
@@ -2897,7 +2916,7 @@ const collegeOverallStatus = computed(() => {
     return { label: '已下发', type: 'success' }
   }
 
-  if (currentPlanStatus === 'PENDING') {
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentPlanStatus)) {
     return { label: '待审批', type: 'warning' }
   }
 

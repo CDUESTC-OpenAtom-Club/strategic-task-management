@@ -976,7 +976,8 @@ async function resolveIndicatorReportContext(
 
 async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
   const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(
-    `/reports/plan/${planId}`
+    `/reports/plan/${planId}`,
+    { _t: Date.now() }
   )
   if (!hasApiData(response)) {
     throw new Error(
