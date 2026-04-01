@@ -1645,9 +1645,15 @@ const refreshTaskPageAfterIndicatorMutation = async () => {
   }
 
   invalidateQueries(invalidateTargets)
-  await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
-  await loadBackendTaskTypeMap()
-  await loadCurrentPlanTaskScope()
+
+  // 开始全量并发刷新各维度数据
+  await Promise.all([
+    strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: true }),
+    loadBackendTaskTypeMap(),
+    loadCurrentPlanTaskScope({ force: true }),
+    loadPendingPlanApprovalCount(),
+    refreshCurrentDepartmentView({ force: true })
+  ])
 }
 
 const handleApproveCurrentIndicatorWorkflow = async () => {
@@ -3144,33 +3150,16 @@ const handleOpenApproval = () => {
 
 // 审批后刷新
 const handleApprovalRefresh = async () => {
-  // 刷新待审批计划数量
-  await loadPendingPlanApprovalCount()
+  // 使用统一的变更后刷新逻辑，确保指标列表、计划详情、上报摘要、待办数量全部同步
+  await refreshTaskPageAfterIndicatorMutation()
+
+  // 额外刷新 planStore 的详情（与 strategicStore 不同步）
   const planId = currentPlan.value?.id
   if (planId !== undefined && planId !== null && planId !== '') {
     await planStore.loadPlanDetails(planId, { force: true, background: true })
   }
-  const reportPlanId = Number(currentPlan.value?.id ?? NaN)
-  const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
-  if (
-    Number.isFinite(reportPlanId) &&
-    reportPlanId > 0 &&
-    Number.isFinite(reportOrgId) &&
-    reportOrgId > 0
-  ) {
-    currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(
-      reportPlanId,
-      reportOrgId
-    )
-    latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
-      reportPlanId,
-      reportOrgId
-    )
-  } else {
-    currentPlanReportSummary.value = null
-    latestPlanReportSummary.value = null
-  }
-  // 强制关闭并重新打开抽屉以刷新数据
+
+  // 强制关闭抽屉以避免旧数据残留
   taskApprovalVisible.value = false
   nextTick(() => {
     updateEditTime()

@@ -49,6 +49,7 @@ interface Props {
   modelValue: boolean
   indicators?: StrategicIndicator[]
   plan?: Plan | null
+  initialPlanWorkflowDetail?: WorkflowInstanceDetailResponse | null
   indicatorId?: string | number
   departmentName?: string
   planName?: string
@@ -75,6 +76,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: false,
   indicators: () => [],
   plan: null,
+  initialPlanWorkflowDetail: null,
   indicatorId: undefined,
   departmentName: '',
   planName: '',
@@ -234,7 +236,7 @@ const activeTab = ref('workflow')
 const planApprovalsLoading = ref(false)
 const pendingPlanApprovals = ref<Record<string, any>[]>([])
 const planDetailDialogVisible = ref(false)
-const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
+const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(props.initialPlanWorkflowDetail)
 const planWorkflowHistoryCards = ref<WorkflowHistoryCardResponse[]>([])
 const selectedHistoryInstanceId = ref<string | null>(null)
 const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)
@@ -619,7 +621,7 @@ const canCurrentUserHandlePlanApproval = computed(() => {
 })
 
 const currentPlanTaskId = computed(() => {
-  if (['已撤回', '已驳回'].includes(planWorkflowStatusTag.value.label)) {
+  if (isPlanWorkflowTerminated.value) {
     return 0
   }
 
@@ -643,8 +645,35 @@ const currentPlanTaskId = computed(() => {
   return 0
 })
 
+const currentPlanInstanceStatus = computed(() => {
+  return String(activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || '')
+    .trim()
+    .toUpperCase()
+})
+
+const latestPlanTask = computed(() => {
+  if (planWorkflowTasks.value.length === 0) {
+    return null
+  }
+
+  const sorted = [...planWorkflowTasks.value].sort((left, right) => {
+    const leftId = Number(left.taskId ?? 0)
+    const rightId = Number(right.taskId ?? 0)
+    if (leftId !== rightId) {
+      return leftId - rightId
+    }
+    const leftTime = new Date(left.createdTime || 0).getTime()
+    const rightTime = new Date(right.createdTime || 0).getTime()
+    return leftTime - rightTime
+  })
+
+  return sorted[sorted.length - 1] || null
+})
+
 const isPlanWorkflowTerminated = computed(() => {
-  return ['已撤回', '已驳回'].includes(planWorkflowStatusTag.value.label)
+  return ['WITHDRAWN', 'REJECTED', 'RETURNED', 'CANCELLED'].includes(
+    currentPlanInstanceStatus.value
+  )
 })
 
 const currentPlanInstanceId = computed(() => {
@@ -657,6 +686,20 @@ const currentPlanInstanceId = computed(() => {
 })
 
 const planWorkflowStatusTag = computed(() => {
+  const rawStatus = currentPlanInstanceStatus.value
+  if (rawStatus === 'DISTRIBUTED' || rawStatus === 'APPROVED') {
+    return { label: '已通过', type: 'success' as const }
+  }
+  if (rawStatus === 'RETURNED' || rawStatus === 'REJECTED') {
+    return { label: '已驳回', type: 'danger' as const }
+  }
+  if (rawStatus === 'WITHDRAWN' || rawStatus === 'CANCELLED') {
+    return { label: '已撤回', type: 'info' as const }
+  }
+  if (rawStatus === 'PENDING' || rawStatus === 'IN_REVIEW' || rawStatus === 'SUBMITTED') {
+    return { label: '审批中', type: 'warning' as const }
+  }
+
   const allTaskStatuses = new Set(
     planWorkflowTasks.value.map(task =>
       String(task.status || '')
@@ -675,16 +718,7 @@ const planWorkflowStatusTag = computed(() => {
     return { label: '草稿', type: 'info' as const }
   }
 
-  const latestTaskStatus = String(
-    [...planWorkflowTasks.value].sort((left, right) => {
-      const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
-      const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
-      if (leftStepNo !== rightStepNo) {
-        return rightStepNo - leftStepNo
-      }
-      return String(right.taskId || '').localeCompare(String(left.taskId || ''))
-    })[0]?.status || ''
-  )
+  const latestTaskStatus = String(latestPlanTask.value?.status || '')
     .trim()
     .toUpperCase()
 
@@ -693,22 +727,6 @@ const planWorkflowStatusTag = computed(() => {
   }
   if (latestTaskStatus === 'REJECTED') {
     return { label: '已驳回', type: 'danger' as const }
-  }
-
-  const rawStatus = String(
-    activePlanWorkflow.value?.workflowStatus || activePlanWorkflow.value?.status || ''
-  ).toUpperCase()
-  if (rawStatus === 'DISTRIBUTED' || rawStatus === 'APPROVED') {
-    return { label: '已通过', type: 'success' as const }
-  }
-  if (rawStatus === 'RETURNED' || rawStatus === 'REJECTED') {
-    return { label: '已驳回', type: 'danger' as const }
-  }
-  if (rawStatus === 'WITHDRAWN') {
-    return { label: '已撤回', type: 'info' as const }
-  }
-  if (rawStatus === 'PENDING' || rawStatus === 'IN_REVIEW' || rawStatus === 'SUBMITTED') {
-    return { label: '审批中', type: 'warning' as const }
   }
   return { label: rawStatus || '未发起', type: 'info' as const }
 })
@@ -767,7 +785,7 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
   }
   if (
     normalizedStatus === 'PENDING' &&
-    planWorkflowStatusTag.value.label === '已撤回' &&
+    currentPlanInstanceStatus.value === 'WITHDRAWN' &&
     String(task.taskId || '') !== String(currentPlanTaskId.value || '')
   ) {
     return 'waiting'
@@ -865,7 +883,7 @@ function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
   }
   if (
     normalizedStatus === 'PENDING' &&
-    planWorkflowStatusTag.value.label === '已撤回' &&
+    currentPlanInstanceStatus.value === 'WITHDRAWN' &&
     String(task.taskId || '') !== String(currentPlanTaskId.value || '')
   ) {
     return '等待中'
@@ -877,19 +895,29 @@ function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
 }
 
 const latestPlanTaskDisplayLabel = computed(() => {
-  const latestTask = [...planWorkflowTasks.value].sort((left, right) => {
-    const leftStepNo = Number(left.stepNo ?? Number.MIN_SAFE_INTEGER)
-    const rightStepNo = Number(right.stepNo ?? Number.MIN_SAFE_INTEGER)
-    if (leftStepNo !== rightStepNo) {
-      return rightStepNo - leftStepNo
-    }
-    return String(right.taskId || '').localeCompare(String(left.taskId || ''))
-  })[0]
-
-  return latestTask ? resolveTaskStatusLabel(latestTask) : ''
+  return latestPlanTask.value ? resolveTaskStatusLabel(latestPlanTask.value) : ''
 })
 
 const currentPlanStepDisplay = computed(() => {
+  if (
+    currentPlanInstanceStatus.value === 'WITHDRAWN' ||
+    currentPlanInstanceStatus.value === 'CANCELLED'
+  ) {
+    return '已撤回'
+  }
+  if (
+    currentPlanInstanceStatus.value === 'REJECTED' ||
+    currentPlanInstanceStatus.value === 'RETURNED'
+  ) {
+    return '已退回'
+  }
+  if (
+    currentPlanInstanceStatus.value === 'APPROVED' ||
+    currentPlanInstanceStatus.value === 'DISTRIBUTED'
+  ) {
+    return '已通过'
+  }
+
   if (normalizedPlanBusinessStatus.value === 'DRAFT') {
     if (planWorkflowStatusTag.value.label === '已撤回') {
       return '已撤回'
