@@ -329,6 +329,7 @@ type CurrentCollegePlanReportSummary = Awaited<
   ReturnType<typeof indicatorFillApi.getCurrentMonthPlanReport>
 >
 const currentCollegePlanReportSummary = ref<CurrentCollegePlanReportSummary>(null)
+const latestCollegePlanReportSummary = ref<{ id: number } | null>(null)
 const isBatchDistributing = ref(false)
 const pageBootstrapPromise = ref<Promise<void> | null>(null)
 const refreshDistributionPromise = ref<Promise<void> | null>(null)
@@ -674,7 +675,8 @@ const canWithdrawCurrentCollegePlan = computed(() => {
   }
 
   const canWithdraw =
-    currentCollegePlanReportSummary.value?.canWithdraw ?? currentActiveCollegePlan.value?.canWithdraw
+    currentCollegePlanReportSummary.value?.canWithdraw ??
+    currentActiveCollegePlan.value?.canWithdraw
 
   return (
     ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value) &&
@@ -697,8 +699,32 @@ const approvalDrawerPlan = computed<Plan | null>(() => {
   return currentActiveCollegePlan.value
 })
 
+const approvalWorkflowReportSummary = computed(() => {
+  const currentWorkflowInstanceId = Number(
+    currentCollegePlanReportSummary.value?.workflowInstanceId ?? NaN
+  )
+  const currentStatus = String(
+    currentCollegePlanReportSummary.value?.workflowStatus ||
+      currentCollegePlanReportSummary.value?.status ||
+      ''
+  )
+    .trim()
+    .toUpperCase()
+
+  if (
+    currentCollegePlanReportSummary.value?.id &&
+    Number.isFinite(currentWorkflowInstanceId) &&
+    currentWorkflowInstanceId > 0 &&
+    currentStatus !== 'DRAFT'
+  ) {
+    return currentCollegePlanReportSummary.value
+  }
+
+  return latestCollegePlanReportSummary.value
+})
+
 const currentApprovalWorkflowCode = computed<string | string[]>(() => {
-  if (currentCollegePlanReportSummary.value?.id) {
+  if (approvalWorkflowReportSummary.value?.id) {
     return ['PLAN_APPROVAL_COLLEGE', currentDispatchWorkflowCode.value]
   }
 
@@ -706,27 +732,35 @@ const currentApprovalWorkflowCode = computed<string | string[]>(() => {
 })
 
 const currentApprovalEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
-  return currentCollegePlanReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
+  return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
 })
 
 const currentApprovalEntityId = computed<number | string | undefined>(() => {
-  if (currentCollegePlanReportSummary.value?.id) {
-    return currentCollegePlanReportSummary.value.id
+  if (approvalWorkflowReportSummary.value?.id) {
+    return approvalWorkflowReportSummary.value.id
   }
 
   return currentActiveCollegePlan.value?.id
 })
 
-const secondaryApprovalEntityType = computed<'PLAN' | undefined>(() => {
-  return currentCollegePlanReportSummary.value?.id ? 'PLAN' : undefined
+const secondaryApprovalEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
+  if (approvalWorkflowReportSummary.value?.id) {
+    return 'PLAN'
+  }
+
+  return latestCollegePlanReportSummary.value?.id ? 'PLAN_REPORT' : undefined
 })
 
 const secondaryApprovalEntityId = computed<number | string | undefined>(() => {
-  return currentCollegePlanReportSummary.value?.id ? currentActiveCollegePlan.value?.id : undefined
+  if (approvalWorkflowReportSummary.value?.id) {
+    return currentActiveCollegePlan.value?.id
+  }
+
+  return latestCollegePlanReportSummary.value?.id
 })
 
 const currentApprovalType = computed<'distribution' | 'submission'>(() => {
-  return currentCollegePlanReportSummary.value?.id ? 'submission' : 'distribution'
+  return approvalWorkflowReportSummary.value?.id ? 'submission' : 'distribution'
 })
 
 const currentUserPermissionCodes = computed(() => {
@@ -1145,6 +1179,7 @@ const waitForPageBootstrap = async () => {
 const loadCurrentCollegePlanReportSummary = async () => {
   if (!selectedCollege.value) {
     currentCollegePlanReportSummary.value = null
+    latestCollegePlanReportSummary.value = null
     return
   }
 
@@ -1158,6 +1193,7 @@ const loadCurrentCollegePlanReportSummary = async () => {
     reportOrgId <= 0
   ) {
     currentCollegePlanReportSummary.value = null
+    latestCollegePlanReportSummary.value = null
     return
   }
 
@@ -1169,8 +1205,13 @@ const loadCurrentCollegePlanReportSummary = async () => {
       planId,
       reportOrgId
     )
+    latestCollegePlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+      planId,
+      reportOrgId
+    )
   } catch (error) {
     currentCollegePlanReportSummary.value = null
+    latestCollegePlanReportSummary.value = null
     logger.warn('[IndicatorDistributeView] 加载当前学院 plan_report 失败:', {
       planId,
       reportOrgId,
