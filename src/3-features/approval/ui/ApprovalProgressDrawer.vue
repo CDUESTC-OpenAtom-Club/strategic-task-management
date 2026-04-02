@@ -1779,6 +1779,17 @@ const showArchivedPlanWorkflowEmptyState = computed(() => {
 
 // ============ 监听 ============
 watch(
+  () => props.initialPlanWorkflowDetail,
+  detail => {
+    if (!props.modelValue) {
+      return
+    }
+
+    planWorkflowDetail.value = detail ?? null
+  }
+)
+
+watch(
   () => props.modelValue,
   val => {
     if (val) {

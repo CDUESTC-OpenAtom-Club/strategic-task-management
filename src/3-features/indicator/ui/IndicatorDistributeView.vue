@@ -606,17 +606,33 @@ const normalizedCurrentActiveCollegeWorkflowStatus = computed(() => {
     .toUpperCase()
 })
 
-const selectedCollegePlanUiStatus = computed(() => {
-  const reportWorkflowStatus = String(
-    currentCollegePlanReportSummary.value?.workflowStatus ||
-      currentCollegePlanReportSummary.value?.status ||
-      ''
-  )
+const currentCollegePlanReportUiStatus = computed(() => {
+  const reportBusinessStatus = String(currentCollegePlanReportSummary.value?.status || '')
     .trim()
     .toUpperCase()
+  if (reportBusinessStatus === 'DRAFT') {
+    return 'DRAFT'
+  }
+
+  const reportWorkflowStatus = String(currentCollegePlanReportSummary.value?.workflowStatus || '')
+    .trim()
+    .toUpperCase()
+  if (reportWorkflowStatus) {
+    return reportWorkflowStatus
+  }
+
+  return reportBusinessStatus
+})
+
+const selectedCollegePlanUiStatus = computed(() => {
+  const reportWorkflowStatus = currentCollegePlanReportUiStatus.value
 
   if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportWorkflowStatus)) {
     return reportWorkflowStatus
+  }
+
+  if (reportWorkflowStatus === 'DRAFT') {
+    return 'DRAFT'
   }
 
   const planStatus = normalizedSelectedCollegePlanStatus.value
@@ -632,11 +648,31 @@ const selectedCollegePlanUiStatus = computed(() => {
   return planStatus || workflowStatus
 })
 
+const currentCollegePlanActionState = computed<
+  'draft' | 'pending_withdrawable' | 'pending_locked' | 'distributed'
+>(() => {
+  const uiStatus = selectedCollegePlanUiStatus.value
+
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(uiStatus)) {
+    return canWithdrawCurrentCollegePlan.value ? 'pending_withdrawable' : 'pending_locked'
+  }
+
+  if (uiStatus === 'DISTRIBUTED') {
+    return 'distributed'
+  }
+
+  return 'draft'
+})
+
 const canEditCurrentCollegePlan = computed(() => {
-  return !['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)
+  return currentCollegePlanActionState.value === 'draft'
 })
 
 const canWithdrawCurrentCollegePlan = computed(() => {
+  if (currentCollegePlanReportUiStatus.value === 'DRAFT') {
+    return false
+  }
+
   const canWithdraw =
     currentCollegePlanReportSummary.value?.canWithdraw ?? currentActiveCollegePlan.value?.canWithdraw
 
@@ -807,11 +843,7 @@ const canCurrentUserApproveCurrentPlan = computed(() => {
 })
 
 const hasCurrentCollegePendingApproval = computed(() => {
-  if (pendingApprovalCount.value > 0) {
-    return true
-  }
-
-  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)
+  return currentCollegePlanActionState.value.startsWith('pending')
 })
 
 const distributionApprovalButtonType = computed(() => {
@@ -819,7 +851,7 @@ const distributionApprovalButtonType = computed(() => {
 })
 
 const distributionApprovalButtonText = computed(() => {
-  if (hasCurrentCollegePendingApproval.value) {
+  if (currentCollegePlanActionState.value.startsWith('pending')) {
     return '待审批'
   }
   return '查看审批进度'
@@ -830,9 +862,7 @@ const withdrawButtonVisible = computed(() => {
     return false
   }
 
-  return ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'DISTRIBUTED'].includes(
-    selectedCollegePlanUiStatus.value
-  )
+  return currentCollegePlanActionState.value === 'pending_withdrawable'
 })
 
 const withdrawButtonType = computed(() => {
@@ -852,10 +882,6 @@ const withdrawButtonDisabledReason = computed(() => {
     return isCurrentUserReporter.value
       ? '当前审批进度不支持撤回'
       : '当前登录身份不是填报人，不能撤回'
-  }
-
-  if (status === 'DISTRIBUTED') {
-    return '当前计划已下发，无法撤回'
   }
 
   if (!withdrawButtonVisible.value) {
@@ -1136,10 +1162,10 @@ const loadCurrentCollegePlanReportSummary = async () => {
   }
 
   try {
-    // 展示态优先取“当前月份最新的工作流报告”。
-    // 否则当同月同时存在一个可编辑草稿和一个审批中的历史轮次时，
-    // 页面外层会误显示为草稿，而审批抽屉仍会命中真实的待审批实例。
-    currentCollegePlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+    // 页面态与 /strategic-tasks 对齐：
+    // 优先展示当前轮次 report 的业务状态（如退回后回到草稿），
+    // 审批中心再通过 workflow 详情补足历史轨迹。
+    currentCollegePlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(
       planId,
       reportOrgId
     )
@@ -2906,17 +2932,15 @@ const collegeOverallStatus = computed(() => {
 
   const status = getCollegeStatus(selectedCollege.value)
   const total = status.draft + status.distributed + status.pending + status.approved
-  const currentPlanStatus = selectedCollegePlanUiStatus.value
-
-  if (currentPlanStatus === 'DRAFT') {
+  if (currentCollegePlanActionState.value === 'draft') {
     return { label: '草稿', type: 'info' }
   }
 
-  if (currentPlanStatus === 'DISTRIBUTED') {
+  if (currentCollegePlanActionState.value === 'distributed') {
     return { label: '已下发', type: 'success' }
   }
 
-  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentPlanStatus)) {
+  if (currentCollegePlanActionState.value.startsWith('pending')) {
     return { label: '待审批', type: 'warning' }
   }
 

@@ -1049,6 +1049,13 @@ const latestPlanReportSummary = ref<{ id: number } | null>(null)
 const pendingPlanReportUiState = ref<null | 'submitted' | 'withdrawn'>(readPlanReportUiState())
 
 const currentPlanReportUiStatus = computed(() => {
+  const reportBusinessStatus = String(currentPlanReportSummary.value?.status || '')
+    .trim()
+    .toUpperCase()
+  if (reportBusinessStatus === 'DRAFT') {
+    return 'DRAFT'
+  }
+
   const rawStatus = String(
     currentPlanWorkflowDetail.value?.status ||
       currentPlanReportSummary.value?.workflowStatus ||
@@ -1078,6 +1085,24 @@ const currentPlanReportUiStatus = computed(() => {
 const isCurrentPlanReportInApproval = computed(() =>
   ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(currentPlanReportUiStatus.value)
 )
+
+const currentPlanReportActionState = computed<
+  'draft' | 'pending_withdrawable' | 'pending_locked' | 'approved'
+>(() => {
+  if (!usePlanReportFlow.value) {
+    return 'draft'
+  }
+
+  if (currentPlanReportUiStatus.value === 'APPROVED') {
+    return 'approved'
+  }
+
+  if (isCurrentPlanReportInApproval.value) {
+    return canWithdrawCurrentPlan.value ? 'pending_withdrawable' : 'pending_locked'
+  }
+
+  return 'draft'
+})
 
 const approvalWorkflowReportSummary = computed(() => {
   const currentWorkflowInstanceId = Number(
@@ -1706,14 +1731,7 @@ const pendingApprovalCount = computed(() => _pendingApprovalCount.value)
 
 const pagePlanWorkflowStatus = computed(() => {
   if (usePlanReportFlow.value) {
-    return String(
-      currentPlanWorkflowDetail.value?.status ||
-        currentPlanReportSummary.value?.workflowStatus ||
-        currentPlanReportSummary.value?.status ||
-        ''
-    )
-      .trim()
-      .toUpperCase()
+    return currentPlanReportUiStatus.value
   }
 
   return String(
@@ -2281,7 +2299,7 @@ const overallStatus = computed(() => {
   }
 
   if (usePlanReportFlow.value) {
-    return isCurrentPlanReportInApproval.value ? 'pending' : 'draft'
+    return currentPlanReportActionState.value.startsWith('pending') ? 'pending' : 'draft'
   }
 
   const planStatus = currentPlanStatus.value
@@ -2321,12 +2339,17 @@ const showSubmitAllButton = computed(() => {
   return (
     showPlanBatchActions.value &&
     allIndicatorsFilled.value &&
-    !isCurrentPlanReportInApproval.value
+    (!usePlanReportFlow.value || currentPlanReportActionState.value === 'draft')
   )
 })
 
 const showWithdrawAllButton = computed(() => {
-  return showPlanBatchActions.value && canWithdrawAny.value
+  return (
+    showPlanBatchActions.value &&
+    (!usePlanReportFlow.value
+      ? canWithdrawAny.value
+      : currentPlanReportActionState.value === 'pending_withdrawable')
+  )
 })
 
 const showStrategicTaskColumn = computed(() => !usePlanReportFlow.value)

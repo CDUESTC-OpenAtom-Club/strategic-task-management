@@ -435,16 +435,27 @@ export const usePlanStore = defineStore('plan', () => {
       const response = await planApi.submitPlanForApproval(planId, payload)
 
       if (hasApiData(response)) {
+        // 乐观更新本地 Plan 状态，避免等待后端异步工作流回写时按钮和表格仍停留在草稿态。
+        const optimisticPatch = {
+          status: 'PENDING',
+          workflowStatus: 'IN_REVIEW',
+          canWithdraw: true
+        }
+        const mergedPlan = {
+          ...optimisticPatch,
+          ...response.data
+        }
+
         // 更新本地 Plan 状态
         const index = plans.value.findIndex(p => p.id === planId)
         if (index !== -1) {
-          plans.value[index] = { ...plans.value[index], ...response.data }
+          plans.value[index] = { ...plans.value[index], ...mergedPlan }
         }
         if (currentPlan.value?.id === planId) {
-          currentPlan.value = { ...currentPlan.value, ...response.data }
+          currentPlan.value = { ...currentPlan.value, ...mergedPlan }
         }
         ElMessage.success('已提交审批')
-        return response.data
+        return mergedPlan
       }
 
       throw new Error(response.message || '提交审批失败')

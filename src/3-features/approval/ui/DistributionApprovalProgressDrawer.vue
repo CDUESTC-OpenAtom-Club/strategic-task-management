@@ -872,11 +872,6 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
     .trim()
     .toUpperCase()
   const isCurrentTask = String(task.taskId || '') === String(currentPlanTaskId.value || '')
-  const matchesCurrentStepName =
-    normalizeDisplayName(task.currentStepName || task.taskName) !== '' &&
-    normalizeDisplayName(task.currentStepName || task.taskName) ===
-      normalizeDisplayName(activePlanWorkflow.value?.currentStepName)
-  const isActivePlanPending = !isPlanWorkflowTerminated.value && isPlanPendingApproval.value
 
   if (normalizedStatus === 'COMPLETED') {
     return 'completed'
@@ -888,21 +883,12 @@ function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): Workflow
     return 'withdrawn'
   }
   if (normalizedStatus === 'WAITING') {
-    if (
-      isActivePlanPending &&
-      (isCurrentTask || (!currentPlanTaskId.value && matchesCurrentStepName))
-    ) {
-      return 'current'
-    }
     return 'waiting'
   }
   if (normalizedStatus === 'PENDING' && isPlanWorkflowTerminated.value) {
     return 'waiting'
   }
-  if (
-    isCurrentTask ||
-    (!currentPlanTaskId.value && isActivePlanPending && matchesCurrentStepName)
-  ) {
+  if (isCurrentTask) {
     return 'current'
   }
   return 'pending'
