@@ -2210,6 +2210,15 @@ export const indicatorFillApi = {
           new Date(a.updatedAt || a.createdAt || 0).getTime()
       )
 
+    const latestEditableDraft =
+      currentMonthReports.find(
+        report => getNormalizedReportStatus(report.status) === 'DRAFT'
+      ) || null
+
+    if (latestEditableDraft) {
+      return latestEditableDraft
+    }
+
     return currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) || null
   },
 

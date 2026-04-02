@@ -1461,6 +1461,8 @@ const confirmPlanApprovalSubmission = async () => {
       workflowCode: preview.workflowCode || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
     })
     await planStore.loadPlanDetails(planId, { force: true, background: true })
+    await refreshCurrentDepartmentView({ force: true })
+    await preloadApprovalWorkflowDetail()
     await loadPendingPlanApprovalCount()
     handleCloseApprovalSetupDialog()
     ElMessage.success('已发起整体计划审批')
@@ -3083,67 +3085,82 @@ const _hasPendingApprovalForDept = computed(() => {
   return approvalIndicators.value.some(i => i.progressApprovalStatus === 'PENDING')
 })
 
+async function refreshApprovalWorkflowSummaries(): Promise<void> {
+  const planId = Number(currentPlan.value?.id ?? NaN)
+  const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
+  if (Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0) {
+    currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(planId, reportOrgId)
+    latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
+      planId,
+      reportOrgId
+    )
+  } else {
+    currentPlanReportSummary.value = null
+    latestPlanReportSummary.value = null
+  }
+}
+
+async function preloadApprovalWorkflowDetail(): Promise<void> {
+  preloadedPlanWorkflowDetail.value = null
+
+  const reportId = Number(approvalWorkflowReportSummary.value?.id ?? NaN)
+  if (Number.isFinite(reportId) && reportId > 0) {
+    try {
+      const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
+      if (response.success && response.data) {
+        preloadedPlanWorkflowDetail.value = response.data
+      }
+    } catch (error) {
+      logger.warn('[StrategicTaskView] 预加载 PlanReport 审批抽屉工作流详情失败:', {
+        reportId,
+        error
+      })
+    }
+    return
+  }
+
+  const planId = currentPlan.value?.id
+  if (planId === undefined || planId === null || planId === '') {
+    return
+  }
+
+  await planStore.loadPlanDetails(planId, { force: true, background: true })
+
+  const latestPlan = currentPlan.value
+  if (!latestPlan) {
+    return
+  }
+
+  try {
+    const businessEntityId = Number(latestPlan.id ?? 0)
+    if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
+      const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
+      if (response.success && response.data) {
+        preloadedPlanWorkflowDetail.value = response.data
+      }
+      return
+    }
+
+    const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
+    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+      const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
+      if (response.success && response.data) {
+        preloadedPlanWorkflowDetail.value = response.data
+      }
+    }
+  } catch (error) {
+    logger.warn('[StrategicTaskView] 预加载审批抽屉工作流详情失败:', {
+      planId,
+      error
+    })
+  }
+}
+
 // 打开任务审批抽屉
 const handleOpenApproval = () => {
   void (async () => {
-    preloadedPlanWorkflowDetail.value = null
-    const planId = Number(currentPlan.value?.id ?? NaN)
-    const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
-    if (Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0) {
-      currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(planId, reportOrgId)
-      latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
-        planId,
-        reportOrgId
-      )
-    } else {
-      currentPlanReportSummary.value = null
-      latestPlanReportSummary.value = null
-    }
-    const reportId = Number(approvalWorkflowReportSummary.value?.id ?? NaN)
-    if (Number.isFinite(reportId) && reportId > 0) {
-      try {
-        const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
-        if (response.success && response.data) {
-          preloadedPlanWorkflowDetail.value = response.data
-        }
-      } catch (error) {
-        logger.warn('[StrategicTaskView] 预加载 PlanReport 审批抽屉工作流详情失败:', {
-          reportId,
-          error
-        })
-      }
-    } else {
-      const planId = currentPlan.value?.id
-      if (planId !== undefined && planId !== null && planId !== '') {
-        await planStore.loadPlanDetails(planId, { force: true, background: true })
-
-        const latestPlan = currentPlan.value
-        if (latestPlan) {
-          try {
-            const businessEntityId = Number(latestPlan.id ?? 0)
-            if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
-              const response = await getWorkflowInstanceDetailByBusiness('PLAN', businessEntityId)
-              if (response.success && response.data) {
-                preloadedPlanWorkflowDetail.value = response.data
-              }
-            } else {
-              const workflowInstanceId = Number(latestPlan.workflowInstanceId ?? 0)
-              if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
-                const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
-                if (response.success && response.data) {
-                  preloadedPlanWorkflowDetail.value = response.data
-                }
-              }
-            }
-          } catch (error) {
-            logger.warn('[StrategicTaskView] 预加载审批抽屉工作流详情失败:', {
-              planId,
-              error
-            })
-          }
-        }
-      }
-    }
+    await refreshApprovalWorkflowSummaries()
+    await preloadApprovalWorkflowDetail()
     taskApprovalVisible.value = true
   })()
 }
