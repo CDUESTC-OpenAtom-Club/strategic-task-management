@@ -53,8 +53,37 @@ export function isCollegePlanCandidate(plan: PlanLike, context: CollegePlanMatch
   }
 
   const normalizedStatus = normalizeText(plan.status).toUpperCase()
-  if (normalizedStatus === 'DRAFT') {
+  if (normalizedStatus === 'ARCHIVED') {
     return false
+  }
+
+  if (normalizedStatus === 'DRAFT') {
+    const workflowStatus = normalizeText(
+      (plan as PlanLike & { workflowStatus?: unknown }).workflowStatus
+    ).toUpperCase()
+    const workflowInstanceId = toPositiveNumber(
+      (plan as PlanLike & { workflowInstanceId?: unknown }).workflowInstanceId
+    )
+    const currentTaskId = toPositiveNumber(
+      (plan as PlanLike & { currentTaskId?: unknown }).currentTaskId
+    )
+
+    // 兼容历史异常数据：
+    // 旧链路会把已下发且学院已填报过的计划误撤回到 DRAFT。
+    // 只要存在“进入过流程”的痕迹，就允许继续作为学院可见计划。
+    const isWorkflowBackedDraft =
+      workflowStatus === 'WITHDRAWN' ||
+      workflowStatus === 'REJECTED' ||
+      workflowStatus === 'PENDING' ||
+      workflowStatus === 'IN_REVIEW' ||
+      workflowStatus === 'SUBMITTED' ||
+      workflowStatus === 'APPROVED' ||
+      Boolean(workflowInstanceId) ||
+      Boolean(currentTaskId)
+
+    if (!isWorkflowBackedDraft) {
+      return false
+    }
   }
 
   const targetOrgId = toPositiveNumber(plan.targetOrgId ?? plan.orgId ?? plan.org_id)
@@ -85,10 +114,6 @@ export function resolveCollegePlanSourceDept(plan: PlanLike | null | undefined):
 
 export function listCollegePlanSourceDepts(plans: PlanLike[]): string[] {
   return Array.from(
-    new Set(
-      plans
-        .map(plan => resolveCollegePlanSourceDept(plan))
-        .filter(Boolean)
-    )
+    new Set(plans.map(plan => resolveCollegePlanSourceDept(plan)).filter(Boolean))
   ).sort()
 }

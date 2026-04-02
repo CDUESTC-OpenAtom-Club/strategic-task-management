@@ -2953,6 +2953,10 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
   margin-top: var(--spacing-lg);
 }
 
+.report-form :deep(.el-form-item__content) {
+  min-width: 0;
+}
+
 .report-form .form-hint {
   margin-left: var(--spacing-sm);
   color: var(--text-secondary);
@@ -2963,6 +2967,40 @@ const showApprovalBadge = (indicator: StrategicIndicator): boolean => {
   font-size: 12px;
   color: var(--text-placeholder);
   margin-top: var(--spacing-xs);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.report-form :deep(.el-upload) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.report-form :deep(.el-upload-list) {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.report-form :deep(.el-upload-list__item) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding-right: 28px;
+  overflow: hidden;
+}
+
+.report-form :deep(.el-upload-list__item-name) {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .report-tips {

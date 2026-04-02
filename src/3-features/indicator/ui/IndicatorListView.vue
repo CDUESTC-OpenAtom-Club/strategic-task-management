@@ -428,7 +428,9 @@ const props = defineProps<{
 }>()
 
 // 当前有效角色与部门（支持独立页面直接访问，不依赖外层传参）
-const effectiveViewingRole = computed(() => props.viewingRole || authStore.userRole || '')
+const effectiveViewingRole = computed(
+  () => props.viewingRole || authStore.effectiveRole || authStore.userRole || ''
+)
 const effectiveViewingDept = computed(() => {
   return props.viewingDept || authStore.effectiveDepartment || authStore.userDepartment || ''
 })
@@ -448,9 +450,10 @@ const isFunctionalDept = computed(() => {
   return effectiveViewingRole.value === 'functional_dept'
 })
 
-// 判断当前角色是否走 PlanReport 提交/撤回流程（二级学院 + 职能部门都走 PlanReport，不碰 Plan 状态）
+// 判断当前角色是否走 PlanReport 提交/撤回流程。
+// 规则：除战略发展部外，其它视角统一走 PlanReport，避免误操作 Plan 生命周期状态。
 const usePlanReportFlow = computed(() => {
-  return isSecondaryCollege.value || isFunctionalDept.value
+  return !isStrategicDept.value
 })
 
 // 当前计划的状态
@@ -767,7 +770,14 @@ const canViewReceivedPlanContent = computed(() => {
   if (planStatus === 'DRAFT') {
     const workflowStatus = normalizedCurrentPlanWorkflowStatus.value
     // 撤回/退回后的计划会回落到 DRAFT，但目标部门仍需看到原计划与已填报内容继续编辑。
-    if (workflowStatus === 'WITHDRAWN' || workflowStatus === 'REJECTED') {
+    if (
+      workflowStatus === 'WITHDRAWN' ||
+      workflowStatus === 'REJECTED' ||
+      workflowStatus === 'PENDING' ||
+      workflowStatus === 'IN_REVIEW' ||
+      workflowStatus === 'SUBMITTED' ||
+      workflowStatus === 'APPROVED'
+    ) {
       return true
     }
   }
@@ -899,14 +909,10 @@ const resetFilters = () => {
 const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartmentNames())
 
 const currentViewingOrgId = computed(() => {
-  const rawUserOrgId = Number(authStore.user?.orgId ?? NaN)
-  if (Number.isFinite(rawUserOrgId) && rawUserOrgId > 0) {
-    return rawUserOrgId
-  }
-
   const viewingDept = effectiveViewingDept.value || authStore.userDepartment || ''
   if (!viewingDept) {
-    return null
+    const rawUserOrgId = Number(authStore.user?.orgId ?? NaN)
+    return Number.isFinite(rawUserOrgId) && rawUserOrgId > 0 ? rawUserOrgId : null
   }
 
   const matchedDepartment = orgStore.getDepartmentByName(viewingDept)
@@ -915,7 +921,8 @@ const currentViewingOrgId = computed(() => {
     return matchedOrgId
   }
 
-  return null
+  const rawUserOrgId = Number(authStore.user?.orgId ?? NaN)
+  return Number.isFinite(rawUserOrgId) && rawUserOrgId > 0 ? rawUserOrgId : null
 })
 
 async function loadCollegePlanDetails(options: { force?: boolean } = {}): Promise<void> {
@@ -1575,7 +1582,16 @@ const currentPlanIndicators = computed(() => {
 // 职能部门/学院在计划进入下发或审批流程后，都应继续看到计划内容。
 const hasCurrentUserPlanData = computed(() => {
   const plan = currentPlanDetails.value
-  return plan && plan.indicators && plan.indicators.length > 0
+  if (!plan) {
+    return false
+  }
+
+  if (Array.isArray(plan.indicators) && plan.indicators.length > 0) {
+    return true
+  }
+
+  const indicatorCount = Number(plan.indicatorCount ?? plan.indicator_count ?? NaN)
+  return Number.isFinite(indicatorCount) && indicatorCount > 0
 })
 
 const hasCurrentUserPlan = computed(() => {
@@ -5756,6 +5772,10 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   margin-top: var(--spacing-lg);
 }
 
+.report-form :deep(.el-form-item__content) {
+  min-width: 0;
+}
+
 .report-form .form-hint {
   margin-left: var(--spacing-sm);
   color: var(--text-secondary);
@@ -5766,21 +5786,58 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
   font-size: 12px;
   color: var(--text-placeholder);
   margin-top: var(--spacing-xs);
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.report-form :deep(.el-upload) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.report-form :deep(.el-upload-list) {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.report-form :deep(.el-upload-list__item) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.report-form :deep(.el-upload-list__item-name) {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .report-form .custom-upload-file {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--spacing-sm);
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
   background: var(--bg-page);
+  box-sizing: border-box;
 }
 
 .report-form .custom-upload-file__name {
   flex: 1;
+  display: block;
   min-width: 0;
   border: 0;
   background: transparent;
@@ -5798,6 +5855,12 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
 }
 
 .report-form .custom-upload-file__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
