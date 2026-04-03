@@ -31,6 +31,20 @@
             {{ passwordStrength.text }}
           </div>
         </div>
+        <div v-if="form.newPassword && passwordStrength.score < 4" class="password-requirements">
+          <div class="requirement-item" :class="{ met: /[a-z]/.test(form.newPassword) }">
+            ✓ 包含小写字母
+          </div>
+          <div class="requirement-item" :class="{ met: /[A-Z]/.test(form.newPassword) }">
+            ✓ 包含大写字母
+          </div>
+          <div class="requirement-item" :class="{ met: /[0-9]/.test(form.newPassword) }">
+            ✓ 包含数字
+          </div>
+          <div class="requirement-item" :class="{ met: /[^A-Za-z0-9]/.test(form.newPassword) }">
+            ✓ 包含特殊字符
+          </div>
+        </div>
       </el-form-item>
 
       <el-form-item label="确认新密码" prop="confirmPassword">
@@ -61,7 +75,6 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
@@ -196,7 +209,18 @@ const handleSubmit = async () => {
     }
   } catch (error: unknown) {
     logger.error('修改密码失败:', error)
-    ElMessage.error(error.response?.data?.message || error.message || '修改密码失败，请重试')
+
+    const errorMap = {
+      'Current password is incorrect': '原密码错误',
+      'New password and confirm password do not match': '两次输入的密码不一致',
+      'Password must be at least 8 characters': '密码长度至少8个字符',
+      WEAK_PASSWORD: '密码强度不足，请包含大小写字母、数字和特殊字符'
+    }
+
+    const errorMsg = error.response?.data?.message || error.message || ''
+    const friendlyMsg = errorMap[errorMsg] || errorMsg || '修改密码失败，请重试'
+
+    ElMessage.error(friendlyMsg)
   } finally {
     loading.value = false
   }
@@ -278,6 +302,20 @@ const handleReset = () => {
 }
 
 .strength-text.strong {
+  color: #67c23a;
+}
+
+.password-requirements {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.requirement-item {
+  color: #f56c6c;
+  margin-bottom: 4px;
+}
+
+.requirement-item.met {
   color: #67c23a;
 }
 
