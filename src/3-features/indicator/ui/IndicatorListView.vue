@@ -3335,19 +3335,66 @@ function resolveDialogAttachments(
   }))
 }
 
+const refreshReportIndicatorSnapshot = async (
+  indicator: StrategicIndicator
+): Promise<StrategicIndicator> => {
+  try {
+    const { indicatorApi } = await import('@/features/indicator/api')
+    const response = await indicatorApi.getIndicatorById(String(indicator.id))
+    const latest =
+      response && typeof response === 'object' && 'data' in response ? response.data : response
+
+    if (!latest || typeof latest !== 'object') {
+      return indicator
+    }
+
+    const latestRecord = latest as Record<string, unknown>
+    const normalizedMilestones = Array.isArray(latestRecord.milestones)
+      ? normalizePlanMilestones(latestRecord.milestones)
+      : indicator.milestones
+
+    const mergedIndicator = {
+      ...indicator,
+      ...(latest as Partial<StrategicIndicator>),
+      milestones: normalizedMilestones,
+      reportProgress: (indicator as StrategicIndicator & { reportProgress?: number | null })
+        .reportProgress,
+      pendingProgress: indicator.pendingProgress,
+      pendingRemark: indicator.pendingRemark,
+      pendingAttachments: indicator.pendingAttachments,
+      pendingAttachmentDetails: (
+        indicator as StrategicIndicator & { pendingAttachmentDetails?: Attachment[] }
+      ).pendingAttachmentDetails,
+      currentReportId: (indicator as StrategicIndicator & { currentReportId?: number | null })
+        .currentReportId
+    } as StrategicIndicator
+
+    currentReportIndicator.value = mergedIndicator
+    return mergedIndicator
+  } catch (error) {
+    logger.warn('[IndicatorListView] 刷新填报弹窗指标快照失败，继续使用列表数据:', {
+      indicatorId: indicator.id,
+      error
+    })
+    return indicator
+  }
+}
+
 // 打开填报弹窗
-const handleOpenReportDialog = (row: StrategicIndicator) => {
-  currentReportIndicator.value = row
+const handleOpenReportDialog = async (row: StrategicIndicator) => {
+  const latestIndicator = await refreshReportIndicatorSnapshot(row)
   const persistedDraft = readPersistedIndicatorDraft(row.id)
   const reportedProgress = getDisplayedReportedProgress(row)
   const attachmentItems = resolveDialogAttachments(row, persistedDraft)
+  const actualProgress = Number(latestIndicator.progress || 0)
+  const preferredProgress =
+    (reportedProgress !== null ? reportedProgress : null) ??
+    row.pendingProgress ??
+    persistedDraft?.progress ??
+    latestIndicator.progress ??
+    0
   reportForm.value = {
-    newProgress:
-      (reportedProgress !== null ? reportedProgress : null) ??
-      row.pendingProgress ??
-      persistedDraft?.progress ??
-      row.progress ??
-      0,
+    newProgress: Math.max(actualProgress, Number(preferredProgress) || 0),
     remark: row.pendingRemark ?? persistedDraft?.remark ?? '',
     attachments: attachmentItems.map(item => item.url)
   }
@@ -3766,7 +3813,7 @@ const submitProgressReport = async () => {
     return
   }
 
-  const indicator = currentReportIndicator.value
+  const indicator = await refreshReportIndicatorSnapshot(currentReportIndicator.value)
   const currentProgress = indicator.progress || 0
 
   // 验证：填报进度必须严格大于真实进度
@@ -3816,7 +3863,7 @@ const submitProgressReport = async () => {
         const isCurrentIndicator = itemId === String(indicator.id)
         const reportProgress = isCurrentIndicator
           ? reportForm.value.newProgress
-          : (item.pendingProgress ?? getDisplayedReportedProgress(item))
+          : item.pendingProgress
         const reportRemark = isCurrentIndicator
           ? reportForm.value.remark
           : String(item.pendingRemark || '').trim()
