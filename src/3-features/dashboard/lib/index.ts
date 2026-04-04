@@ -6,3 +6,4 @@
 
 export { DashboardDataService, useDashboardDataService } from './DashboardDataService'
 export * from './helpers'
+export * from './summaryMetrics'

@@ -27,9 +27,9 @@ const chartOption = computed(() => ({
     trigger: 'item',
     formatter: (params: { name: string; value: number; percent: number }) => {
       const levelMap: Record<string, string> = {
-        严重预警: '进度 < 30%',
-        中度预警: '30% ≤ 进度 < 60%',
-        正常: '进度 ≥ 60%'
+        严重预警: '当月底前应完成的里程碑未达标',
+        中度预警: '当月里程碑未达目标但尚未逾期',
+        正常: '当月状态正常或已超前完成'
       }
       return `${params.name}<br/>数量: ${params.value}个<br/>占比: ${params.percent}%<br/>${levelMap[params.name] || ''}`
     }
