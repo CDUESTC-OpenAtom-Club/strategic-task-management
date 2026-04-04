@@ -16,6 +16,7 @@ import { logger } from '@/shared/lib/utils/logger'
 import { useOrgStore } from '@/features/organization/model/store'
 import { withExponentialRetry } from '@/shared/lib/api/wrappers'
 import type { Department } from '@/features/organization/api'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 
 type BackendIndicatorListPayload =
   | StrategicIndicator[]
@@ -691,19 +692,20 @@ export const useStrategicStore = defineStore('strategic', () => {
 
     indicators.value.forEach(indicator => {
       const taskKey = indicator.taskContent || indicator.id || indicator.name
+      const resolvedYear = resolveIndicatorYear(indicator, new Date().getFullYear())
       if (!taskMap.has(taskKey)) {
         taskMap.set(taskKey, {
           id: taskKey,
           title: indicator.taskContent || indicator.name || '未命名任务',
           desc: indicator.remark || '',
           createTime: indicator.createTime || new Date().toISOString(),
-          cycle: `${indicator.year || new Date().getFullYear()}年度`,
-          startDate: new Date(`${indicator.year || new Date().getFullYear()}-01-01`),
-          endDate: new Date(`${indicator.year || new Date().getFullYear()}-12-31`),
+          cycle: `${resolvedYear}年度`,
+          startDate: new Date(`${resolvedYear}-01-01`),
+          endDate: new Date(`${resolvedYear}-12-31`),
           status: 'active',
           createdBy: indicator.ownerDept || 'system',
           indicators: [],
-          year: indicator.year || new Date().getFullYear(),
+          year: resolvedYear,
           isRecurring: false
         })
       }

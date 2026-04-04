@@ -30,6 +30,7 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { useLoadingState } from '@/shared/lib/loading/useLoadingState'
 import { logger } from '@/shared/lib/utils/logger'
 import { buildDashboardSummary, getIndicatorStatusAtMonth } from '@/features/dashboard/lib'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 
 // 动态导入 echarts，避免初始加载时打包
 let echarts: typeof import('echarts') | null = null
@@ -282,7 +283,7 @@ const selectedDeptIndicators = computed(() => {
   // 筛选该部门接收的指标（responsibleDept === 选中的部门）
   return strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear && i.responsibleDept === selectedBenchmarkDept.value
     })
     .map(i => ({
@@ -331,7 +332,7 @@ const _getDeptStats = (deptName: string) => {
 
   const indicators = strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear && i.responsibleDept === deptName
     })
     .map(i => ({
@@ -357,7 +358,7 @@ const getDeptStatsAtMonth = (deptName: string, month: number, year: number) => {
 
   const indicators = strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear && i.responsibleDept === deptName
     })
     .map(i => ({
@@ -436,7 +437,7 @@ const monthIndicators = computed(() => {
 
   return strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear && i.responsibleDept === drilledDept.value
     })
     .map(i => ({
@@ -488,7 +489,7 @@ const getCollegeStatsForFunctionalDept = (ownerDept: string, month: number, year
   // 筛选：ownerDept === 职能部门 && responsibleDept 是二级学院
   const indicators = strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return (
         indicatorYear === currentYear &&
         i.ownerDept === ownerDept &&
@@ -550,7 +551,7 @@ const collegeBarData = computed(() => {
     // 筛选：responsibleDept 是二级学院
     const indicators = strategicStore.indicators
       .filter(i => {
-        const indicatorYear = i.year || realYear
+        const indicatorYear = resolveIndicatorYear(i, realYear)
         return indicatorYear === currentYear && isSecondaryCollege(i.responsibleDept)
       })
       .map(i => ({
@@ -614,7 +615,7 @@ const collegeMonthlyStackedData = computed(() => {
 
     let indicators = strategicStore.indicators
       .filter(i => {
-        const indicatorYear = i.year || realYear
+        const indicatorYear = resolveIndicatorYear(i, realYear)
         return indicatorYear === currentYear && i.responsibleDept === drilledCollege.value
       })
       .map(i => ({
@@ -658,7 +659,7 @@ const collegeMonthIndicators = computed(() => {
 
   let indicators = strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear && i.responsibleDept === drilledCollege.value
     })
     .map(i => ({
@@ -723,7 +724,7 @@ const getCollegeRankingData = computed(() => {
   // 筛选指标：responsibleDept 是二级学院
   let indicators = strategicStore.indicators
     .filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear && isSecondaryCollege(i.responsibleDept)
     })
     .map(i => ({

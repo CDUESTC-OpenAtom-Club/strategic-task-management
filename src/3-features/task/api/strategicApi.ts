@@ -132,6 +132,8 @@ function convertTaskVOToStrategicTask(vo: StrategicTaskVO): StrategicTask {
  * 将后端 VO 转换为前端 StrategicIndicator 类型
  */
 function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndicator {
+  const resolvedYear = typeof vo.year === 'number' ? vo.year : new Date().getFullYear()
+
   // 转换里程碑状态
   const convertMilestoneStatus = (status: string): 'pending' | 'completed' | 'overdue' => {
     if (status === 'COMPLETED') {
@@ -219,7 +221,7 @@ function convertIndicatorVOToStrategicIndicator(vo: IndicatorVO): StrategicIndic
     status: vo.status === 'ACTIVE' ? 'active' : 'archived',
     isStrategic: vo.isStrategic ?? vo.level === 'STRAT_TO_FUNC',
     ownerDept: vo.ownerDept ?? vo.ownerOrgName,
-    year: vo.year,
+    year: resolvedYear,
     parentIndicatorId: vo.parentIndicatorId ? String(vo.parentIndicatorId) : undefined,
     progressApprovalStatus: convertProgressApprovalStatus(vo.progressApprovalStatus),
     pendingProgress: vo.pendingProgress,
@@ -447,7 +449,7 @@ export const strategicApi = {
    */
   async getIndicatorsByYear(year: number): Promise<ApiResponse<IndicatorVO[]>> {
     try {
-      const response = await fetchWithCache({
+      return await fetchWithCache({
         key: buildQueryKey('indicator', 'list', withTaskCacheContext({ year })),
         policy: {
           ttlMs: 2 * 60 * 1000,
@@ -457,13 +459,8 @@ export const strategicApi = {
           dedupeWindowMs: 1000,
           tags: ['indicator.list']
         },
-        fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators')
+        fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators', { year })
       })
-      if (response.success && response.data) {
-        const filteredIndicators = response.data.filter(i => i.year === year)
-        return { ...response, data: filteredIndicators }
-      }
-      return response
     } catch {
       return {
         success: false,

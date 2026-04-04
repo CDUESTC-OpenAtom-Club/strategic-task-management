@@ -527,6 +527,7 @@ export interface IndicatorVO {
   indicatorId: number
   parentIndicatorId?: number
   indicatorDesc: string
+  year?: number | null
   type?: 'QUANTITATIVE' | 'QUALITATIVE' | '定量' | '定性'
   progress?: number
   reportProgress?: number | null

@@ -1,4 +1,5 @@
 import type { StrategicIndicator } from '@/shared/types'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 
 export const RECEIVED_PLAN_VISIBLE_STATUSES = ['DISTRIBUTED'] as const
 
@@ -39,7 +40,7 @@ export function isVisibleReceivedStrategicIndicator({
     return false
   }
 
-  const indicatorYear = indicator.year || realCurrentYear
+  const indicatorYear = resolveIndicatorYear(indicator, realCurrentYear)
   if (indicatorYear !== currentYear) {
     return false
   }

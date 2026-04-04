@@ -26,6 +26,7 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { logger } from '@/shared/lib/utils/logger'
 import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitoringApi'
 import { dashboardApi } from '@/features/dashboard/api/dashboardApi'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -90,7 +91,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const currentYear = timeContext.currentYear
     const realYear = timeContext.realCurrentYear
     result = result.filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear
     })
 
@@ -287,7 +288,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const currentYear = timeContext.currentYear
     const realYear = timeContext.realCurrentYear
     indicators = indicators.filter(i => {
-      const indicatorYear = i.year || realYear
+      const indicatorYear = resolveIndicatorYear(i, realYear)
       return indicatorYear === currentYear
     })
 

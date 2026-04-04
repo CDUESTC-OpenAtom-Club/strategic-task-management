@@ -34,24 +34,43 @@ function withTaskCacheContext(params?: Record<string, unknown>): Record<string, 
 /**
  * Get tasks by year
  *
- * API: GET /api/v1/tasks (client-side filter by year)
+ * API: GET /api/v1/cycles?year=... -> GET /api/v1/tasks/by-cycle/{cycleId}
  *
  * @param year - Year
  * @returns Tasks for the year
  */
 export async function getTasksByYear(year: number): Promise<ApiResponse<StrategicTask[]>> {
-  const response = await fetchWithCache<ApiResponse<StrategicTask[]>>({
+  const cycleResponse = await api.get<
+    ApiResponse<{
+      content?: Array<{ cycleId?: number; id?: number }>
+    }>
+  >('/cycles', {
+    year,
+    page: 0,
+    size: 1
+  })
+
+  const cycle = cycleResponse?.data?.content?.[0]
+  const cycleId = cycle?.cycleId ?? cycle?.id
+
+  if (!cycleResponse?.success || !cycleId) {
+    return {
+      success: false,
+      code: cycleResponse?.code ?? 404,
+      message: cycleResponse?.message || `No cycle found for year ${year}`,
+      data: [],
+      timestamp: cycleResponse?.timestamp ?? new Date().toISOString()
+    }
+  }
+
+  return fetchWithCache<ApiResponse<StrategicTask[]>>({
     key: buildQueryKey('task', 'list', withTaskCacheContext({ year })),
     policy: {
       ...TASK_LIST_POLICY,
       tags: ['task.list', `task.year.${year}`]
     },
-    fetcher: () => api.get('/tasks')
+    fetcher: () => api.get(`/tasks/by-cycle/${cycleId}`)
   })
-  if (response.success && response.data) {
-    return { ...response, data: response.data.filter(task => task.year === year) }
-  }
-  return response
 }
 
 /**
