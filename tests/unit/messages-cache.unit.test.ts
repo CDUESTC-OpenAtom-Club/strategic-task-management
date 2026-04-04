@@ -145,4 +145,31 @@ describe('messages cache integration', () => {
     expect(store.messages[0]?.type).toBe('reminder')
     expect(store.unreadCount.reminders).toBe(1)
   })
+
+  it('reads paged notification payloads returned directly under data.content', async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        content: [
+          {
+            id: 4,
+            type: 'REMINDER',
+            title: '滞后任务催办提醒',
+            content: '任务“测试”当前进度滞后，请尽快处理并更新进展。',
+            isRead: false,
+            createdAt: '2026-04-05T02:03:05.203605',
+            relatedEntityId: 2049
+          }
+        ],
+        totalElements: 1
+      }
+    })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+
+    expect(store.messages).toHaveLength(1)
+    expect(store.messages[0]?.type).toBe('reminder')
+    expect(store.reminderMessages).toHaveLength(1)
+    expect(store.messages[0]?.title).toBe('滞后任务催办提醒')
+  })
 })

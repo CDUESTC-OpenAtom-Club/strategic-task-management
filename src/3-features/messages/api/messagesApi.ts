@@ -50,6 +50,35 @@ function invalidateMessageCaches(): void {
   invalidateQueries(['messages.list', 'messages.unread'])
 }
 
+function normalizeNotificationList(payload: unknown): MessageItem[] {
+  if (Array.isArray(payload)) {
+    return payload as MessageItem[]
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return []
+  }
+
+  const directContent = (payload as { content?: unknown }).content
+  if (Array.isArray(directContent)) {
+    return directContent as MessageItem[]
+  }
+
+  const nestedData = (payload as { data?: unknown }).data
+  if (Array.isArray(nestedData)) {
+    return nestedData as MessageItem[]
+  }
+
+  if (nestedData && typeof nestedData === 'object') {
+    const nestedContent = (nestedData as { content?: unknown }).content
+    if (Array.isArray(nestedContent)) {
+      return nestedContent as MessageItem[]
+    }
+  }
+
+  return []
+}
+
 export const messagesApi = {
   /**
    * 获取所有消息（包括通知、预警、告警）
@@ -69,12 +98,7 @@ export const messagesApi = {
           const messages: MessageItem[] = []
 
           if (notifications.status === 'fulfilled') {
-            const payload = notifications.value?.data?.data
-            const notificationList = Array.isArray(payload)
-              ? payload
-              : Array.isArray(payload?.content)
-                ? payload.content
-                : []
+            const notificationList = normalizeNotificationList(notifications.value?.data)
 
             messages.push(
               ...notificationList.map((msg: MessageItem) => ({
@@ -131,12 +155,7 @@ export const messagesApi = {
           logger.error('获取消息失败:', error)
           try {
             const response = await this.getMessages()
-            const payload = response.data?.data
-            const notificationList = Array.isArray(payload)
-              ? payload
-              : Array.isArray(payload?.content)
-                ? payload.content
-                : []
+            const notificationList = normalizeNotificationList(response.data)
             return notificationList.map((msg: MessageItem) => ({
               ...msg,
               isRead:
