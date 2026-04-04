@@ -29,6 +29,7 @@ import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useApprovalStore } from '@/features/approval/model/store'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 import {
   getProgressStatus,
   getProgressColor as _getProgressColor,
@@ -852,7 +853,7 @@ const availableOwnerDepts = computed(() => {
   // 获取当前学院作为责任部门的所有指标的来源部门
   const ownerDepts = new Set<string>()
   strategicStore.indicators.forEach(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     if (
       indicatorYear === currentYear &&
       i.responsibleDept === effectiveViewingDept.value &&
@@ -1683,7 +1684,7 @@ const approvalIndicators = computed(() => {
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     return indicatorYear === currentYear
   })
 
@@ -1724,7 +1725,7 @@ const _pendingApprovalCount = computed(() => {
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     return indicatorYear === currentYear
   })
 
@@ -2115,7 +2116,7 @@ const indicators = computed(() => {
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     return indicatorYear === currentYear
   })
 

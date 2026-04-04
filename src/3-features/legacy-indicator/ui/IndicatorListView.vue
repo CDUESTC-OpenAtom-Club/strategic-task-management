@@ -22,6 +22,7 @@ import type { ElTable } from 'element-plus'
 /* eslint-disable no-restricted-syntax -- Backend-aligned types */
 import type { StrategicTask as _StrategicTask, StrategicIndicator, Milestone } from '@/shared/types'
 import { IndicatorStatus } from '@/shared/types/entities'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 /* eslint-enable no-restricted-syntax */
 import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
@@ -238,7 +239,7 @@ const availableOwnerDepts = computed(() => {
   // 获取当前学院作为责任部门的所有指标的来源部门
   const ownerDepts = new Set<string>()
   strategicStore.indicators.forEach(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     if (indicatorYear === currentYear && i.responsibleDept === props.viewingDept && i.ownerDept) {
       ownerDepts.add(i.ownerDept)
     }
@@ -290,7 +291,7 @@ const approvalIndicators = computed(() => {
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     return indicatorYear === currentYear
   })
 
@@ -327,7 +328,7 @@ const _pendingApprovalCount = computed(() => {
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     return indicatorYear === currentYear
   })
 
@@ -384,7 +385,7 @@ const indicators = computed(() => {
   const currentYear = timeContext.currentYear
   const realYear = timeContext.realCurrentYear
   list = list.filter(i => {
-    const indicatorYear = i.year || realYear
+    const indicatorYear = resolveIndicatorYear(i, realYear)
     return indicatorYear === currentYear
   })
 

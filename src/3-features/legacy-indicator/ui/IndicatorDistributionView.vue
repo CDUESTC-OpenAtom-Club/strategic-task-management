@@ -21,6 +21,7 @@ import { useStrategicStore } from '@/stores/strategic'
 import { useAuthStore } from '@/stores/auth'
 import { useTimeContextStore } from '@/stores/timeContext'
 import { useOrgStore } from '@/stores/org'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 import AuditLogDrawer from '@/components/task/AuditLogDrawer.vue'
 import TaskApprovalDrawer from '@/components/task/TaskApprovalDrawer.vue'
 import indicatorApi from '@/shared/api/indicator'
@@ -1067,7 +1068,7 @@ const handleBatchDistribute = async (college: string) => {
           sortOrder: 0,
           remark: indicator.remark || '',
           progress: indicator.progress || 0,
-          year: indicator.year || new Date().getFullYear(),
+          year: resolveIndicatorYear(indicator, new Date().getFullYear()),
           canWithdraw: false,
           parentIndicatorId: indicator.parentIndicatorId
             ? Number(indicator.parentIndicatorId)

@@ -28,6 +28,7 @@ import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
 import { usePermission } from '@/5-shared/lib/permissions'
 import { logger } from '@/shared/lib/utils/logger'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
@@ -1780,7 +1781,9 @@ const _currentTask = computed(
 // 从 Store 获取指标列表（带里程碑），按年份和部门过滤，按任务类型和战略任务分组排序
 const indicators = computed(() => {
   // 过滤当前年份的指标
-  let list = normalizedIndicators.value.filter(i => !i.year || i.year === timeContext.currentYear)
+  let list = normalizedIndicators.value.filter(
+    i => resolveIndicatorYear(i, timeContext.currentYear) === timeContext.currentYear
+  )
 
   // 根据选中的部门筛选指标
   if (selectedDepartment.value) {
@@ -3072,7 +3075,7 @@ const approvalIndicators = computed(() => {
     return []
   }
   return normalizedIndicators.value
-    .filter(i => !i.year || i.year === timeContext.currentYear)
+    .filter(i => resolveIndicatorYear(i, timeContext.currentYear) === timeContext.currentYear)
     .filter(i => i.responsibleDept === selectedDepartment.value) // 只显示当前选中部门的指标
     .filter(i => i.isStrategic === true) // 只显示战略指标（一级指标）
 })

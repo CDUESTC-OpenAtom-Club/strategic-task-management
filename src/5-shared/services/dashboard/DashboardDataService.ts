@@ -12,6 +12,7 @@ import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
 import { logger } from '@/shared/lib/utils/logger'
+import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 
 export class DashboardDataService {
   private strategicStore: ReturnType<typeof useStrategicStore>
@@ -73,7 +74,7 @@ export class DashboardDataService {
 
     return indicators.filter(indicator => {
       // 年份过滤
-      const indicatorYear = indicator.year || currentYear
+      const indicatorYear = resolveIndicatorYear(indicator, currentYear)
       if (indicatorYear !== currentYear) {
         return false
       }

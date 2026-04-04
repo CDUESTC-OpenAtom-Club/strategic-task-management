@@ -231,7 +231,7 @@ export const allMockIndicators: StrategicIndicator[] = [
  * 按年份获取指标
  */
 export function getMockIndicatorsByYear(year: number): StrategicIndicator[] {
-  return allMockIndicators.filter(ind => ind.year === year)
+  return allMockIndicators.filter(ind => (typeof ind.year === 'number' ? ind.year : year) === year)
 }
 
 /**
