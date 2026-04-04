@@ -11,8 +11,10 @@ import {
 } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole, Indicator } from '@/shared/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
+import { dashboardApi } from '@/features/dashboard/api/dashboardApi'
 import { useDashboardStore } from '@/features/dashboard/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
+import { useMessageStore } from '@/features/messages/model/message'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import BreadcrumbNav from '@/shared/ui/layout/BreadcrumbNav.vue'
 import ScoreCompositionChart from '@/shared/ui/charts/ScoreCompositionChart.vue'
@@ -847,6 +849,7 @@ const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
+const messageStore = useMessageStore()
 
 // ============================================================================
 // 加载状态管理 - Requirements 1.5, 1.6
@@ -925,6 +928,17 @@ const reloadData = async () => {
     endLoading()
   }
 }
+
+type ReminderStatusItem = {
+  indicatorId: number
+  canRemind: boolean
+  lastRemindedAt?: string | null
+  remindCount: number
+  cooldownUntil?: string | null
+}
+
+const reminderStatuses = ref<Record<number, ReminderStatusItem>>({})
+const remindingMap = ref<Record<number, boolean>>({})
 
 // ============================================================================
 // 降级模式检测 - Requirements 1.4, 10.5
@@ -1277,30 +1291,96 @@ const _kpiCards = computed(() => {
   ]
 })
 
-// 滞后任务列表
-const delayedTasks = computed(() => {
+const baseDelayedTasks = computed(() => {
   const indicators = dashboardStore.visibleIndicators
   return indicators
-    .filter(i => i.progress < 50)
-    .sort((a, b) => a.progress - b.progress)
+    .filter(i => (i.progress ?? 0) < 50)
+    .sort((a, b) => (a.progress ?? 0) - (b.progress ?? 0))
     .slice(0, 5)
     .map(i => ({
       id: i.id,
       name: i.name || i.indicator || '未命名任务',
       dept: i.responsibleDept,
-      progress: i.progress,
-      days: Math.floor((50 - i.progress) / 5) + 1,
-      reminded: false
+      progress: i.progress ?? 0,
+      days: Math.floor((50 - (i.progress ?? 0)) / 5) + 1
     }))
 })
 
-// 催办任务
-const handleUrge = (task: { dept: string; progress: number; reminded: boolean }) => {
-  if (task.reminded) {
+const loadReminderStatuses = async () => {
+  const indicatorIds = baseDelayedTasks.value.map(task => Number(task.id)).filter(Number.isFinite)
+  if (indicatorIds.length === 0) {
+    reminderStatuses.value = {}
     return
   }
-  task.reminded = true
-  ElMessage.success(`已向 ${task.dept} 发送催办通知`)
+
+  try {
+    const statuses = await dashboardApi.getReminderStatuses(indicatorIds)
+    reminderStatuses.value = Object.fromEntries(
+      statuses.map((status: ReminderStatusItem) => [status.indicatorId, status])
+    )
+  } catch (error) {
+    logger.warn('[Dashboard] Failed to load reminder statuses:', error)
+  }
+}
+
+watch(
+  () => baseDelayedTasks.value.map(task => task.id).join(','),
+  () => {
+    void loadReminderStatuses()
+  },
+  { immediate: true }
+)
+
+// 滞后任务列表
+const delayedTasks = computed(() => {
+  return baseDelayedTasks.value.map(task => {
+    const status = reminderStatuses.value[task.id]
+    const reminded = Boolean(status?.lastRemindedAt) && !(status?.canRemind ?? true)
+
+    return {
+      ...task,
+      reminded,
+      canRemind: status?.canRemind ?? true,
+      reminding: Boolean(remindingMap.value[task.id]),
+      lastRemindedAt: status?.lastRemindedAt ?? null,
+      remindCount: status?.remindCount ?? 0,
+      cooldownUntil: status?.cooldownUntil ?? null
+    }
+  })
+})
+
+// 催办任务
+const handleUrge = async (task: {
+  id: number
+  dept: string
+  progress: number
+  reminded: boolean
+  canRemind: boolean
+  reminding: boolean
+}) => {
+  if (task.reminded || !task.canRemind || task.reminding) {
+    return
+  }
+
+  remindingMap.value = {
+    ...remindingMap.value,
+    [task.id]: true
+  }
+
+  try {
+    await dashboardApi.sendReminder(task.id)
+    await Promise.all([loadReminderStatuses(), messageStore.fetchMessages()])
+    ElMessage.success(`已向 ${task.dept} 发送催办通知`)
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message || error?.message || `向 ${task.dept} 发送催办通知失败`
+    ElMessage.error(message)
+  } finally {
+    remindingMap.value = {
+      ...remindingMap.value,
+      [task.id]: false
+    }
+  }
 }
 
 // 雷达图数据（支持历史数据）
@@ -3327,11 +3407,11 @@ onUnmounted(() => {
             <template #default="{ row }">
               <button
                 class="urge-btn"
-                :class="{ disabled: row.reminded }"
-                :disabled="row.reminded"
+                :class="{ disabled: row.reminded || row.reminding }"
+                :disabled="row.reminded || row.reminding"
                 @click="handleUrge(row)"
               >
-                {{ row.reminded ? '已催办' : '一键催办' }}
+                {{ row.reminding ? '发送中...' : row.reminded ? '已催办' : '一键催办' }}
               </button>
             </template>
           </el-table-column>

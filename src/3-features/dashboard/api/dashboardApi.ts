@@ -16,9 +16,7 @@ import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
 import { logger } from '@/shared/lib/utils/logger'
 import type { DashboardData, DepartmentProgress, AlertSummary } from '@/shared/types'
 
-function summarizeAlerts(
-  alerts: Array<{ severity?: string; status?: string }>
-): AlertSummary {
+function summarizeAlerts(alerts: Array<{ severity?: string; status?: string }>): AlertSummary {
   const summary: AlertSummary = {
     severe: 0,
     moderate: 0,
@@ -50,6 +48,25 @@ function summarizeAlerts(
  * 注意：后端API位于 /api/v1/analytics/ 路径下
  */
 export const dashboardApi = {
+  async sendReminder(indicatorId: number, reason?: string) {
+    return await apiClient.post(`/indicators/${indicatorId}/reminders`, {
+      source: 'DASHBOARD',
+      reason: reason ?? '任务进度滞后，请尽快更新进展'
+    })
+  },
+
+  async getReminderStatuses(indicatorIds: number[]) {
+    if (indicatorIds.length === 0) {
+      return []
+    }
+
+    const response = await apiClient.post('/indicators/reminders/statuses', {
+      indicatorIds
+    })
+    const payload = response?.data?.data
+    return Array.isArray(payload) ? payload : []
+  },
+
   /**
    * Get dashboard overview data
    * 使用正确的后端API路径：/api/v1/analytics/dashboard/overview

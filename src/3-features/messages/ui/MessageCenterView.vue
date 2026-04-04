@@ -36,6 +36,28 @@
             />
           </transition>
         </el-tab-pane>
+        <el-tab-pane name="reminders">
+          <template #label>
+            <span class="tab-label">
+              催办通知
+              <el-badge
+                v-if="unreadCount.reminders > 0"
+                :value="unreadCount.reminders"
+                :max="99"
+                class="tab-badge"
+                type="primary"
+              />
+            </span>
+          </template>
+          <transition name="tab-fade" mode="out-in">
+            <MessageList
+              v-if="activeTab === 'reminders'"
+              :messages="reminderMessages"
+              @read="handleMessageRead"
+              @view="handleMessageView"
+            />
+          </transition>
+        </el-tab-pane>
         <el-tab-pane name="alerts">
           <template #label>
             <span class="tab-label">
@@ -123,6 +145,7 @@ const activeTab = ref('all')
 
 // 从 store 获取消息数据
 const allMessages = computed(() => messageStore.visibleMessages)
+const reminderMessages = computed(() => messageStore.reminderMessages)
 const alertMessages = computed(() => messageStore.alertMessages)
 const approvalMessages = computed(() => messageStore.approvalMessages)
 const systemMessages = computed(() => messageStore.systemMessages)
@@ -159,10 +182,7 @@ const clearReadMessages = () => {
 }
 
 onMounted(() => {
-  // 确保消息已初始化
-  if (messageStore.messages.length === 0) {
-    messageStore.initializeMessages()
-  }
+  void messageStore.fetchMessages()
 })
 </script>
 
