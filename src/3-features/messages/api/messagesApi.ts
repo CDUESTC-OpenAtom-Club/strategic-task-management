@@ -13,7 +13,7 @@ import { logger } from '@/shared/lib/utils/logger'
 /**
  * 消息类型
  */
-export type MessageType = 'NOTIFICATION' | 'WARNING' | 'ALERT' | 'SYSTEM'
+export type MessageType = 'NOTIFICATION' | 'WARNING' | 'ALERT' | 'SYSTEM' | 'REMINDER'
 
 /**
  * 消息项
@@ -79,6 +79,10 @@ export const messagesApi = {
             messages.push(
               ...notificationList.map((msg: MessageItem) => ({
                 ...msg,
+                isRead:
+                  typeof msg.isRead === 'boolean'
+                    ? msg.isRead
+                    : String(msg.status || '').toUpperCase() === 'READ',
                 type: (msg.type || 'NOTIFICATION') as MessageType
               }))
             )
@@ -135,6 +139,10 @@ export const messagesApi = {
                 : []
             return notificationList.map((msg: MessageItem) => ({
               ...msg,
+              isRead:
+                typeof msg.isRead === 'boolean'
+                  ? msg.isRead
+                  : String(msg.status || '').toUpperCase() === 'READ',
               type: (msg.type || 'NOTIFICATION') as MessageType
             }))
           } catch {
@@ -162,7 +170,7 @@ export const messagesApi = {
    * 使用POST方法（后端文档定义）
    */
   async markAsRead(id: string | number) {
-    const result = await apiClient.patch(`/notifications/${id}/status?newStatus=READ`)
+    const result = await apiClient.post(`/notifications/${id}/read`)
     invalidateMessageCaches()
     return result
   },
@@ -208,16 +216,7 @@ export const messagesApi = {
    * 使用POST方法（后端文档定义）
    */
   async markAllAsRead() {
-    const messages = await this.getMessages()
-    const payload = messages?.data?.data
-    const notificationList = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.content)
-        ? payload.content
-        : []
-    const result = await Promise.allSettled(
-      notificationList.map((msg: MessageItem) => this.markAsRead(msg.id))
-    )
+    const result = await apiClient.post('/notifications/read-all')
     invalidateMessageCaches()
     return result
   },

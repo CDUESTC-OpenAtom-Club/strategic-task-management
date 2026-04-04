@@ -45,6 +45,9 @@ export const useMessageStore = defineStore('message', () => {
   const loading = ref(false)
 
   const visibleMessages = computed(() => messages.value)
+  const reminderMessages = computed(() =>
+    messages.value.filter(message => message.type === 'reminder')
+  )
   const alertMessages = computed(() => messages.value.filter(message => message.type === 'alert'))
   const approvalMessages = computed(() =>
     messages.value.filter(message => message.type === 'approval')
@@ -53,6 +56,7 @@ export const useMessageStore = defineStore('message', () => {
 
   const unreadCount = computed(() => ({
     all: messages.value.filter(message => !message.isRead).length,
+    reminders: reminderMessages.value.filter(message => !message.isRead).length,
     alerts: alertMessages.value.filter(message => !message.isRead).length,
     approvals: approvalMessages.value.filter(message => !message.isRead).length,
     system: systemMessages.value.filter(message => !message.isRead).length
@@ -64,16 +68,18 @@ export const useMessageStore = defineStore('message', () => {
         ? 'alert'
         : message.type === 'WARNING'
           ? 'alert'
-          : message.type === 'SYSTEM'
-            ? 'system'
-            : message.type === 'NOTIFICATION' &&
-                String(message.status || '')
-                  .toUpperCase()
-                  .includes('APPRO')
-              ? 'approval'
-              : message.type === 'NOTIFICATION'
-                ? 'system'
-                : String(message.type || 'system').toLowerCase()
+          : message.type === 'REMINDER'
+            ? 'reminder'
+            : message.type === 'SYSTEM'
+              ? 'system'
+              : message.type === 'NOTIFICATION' &&
+                  String(message.status || '')
+                    .toUpperCase()
+                    .includes('APPRO')
+                ? 'approval'
+                : message.type === 'NOTIFICATION'
+                  ? 'system'
+                  : String(message.type || 'system').toLowerCase()
 
     return {
       id: String(message.id),
@@ -162,6 +168,7 @@ export const useMessageStore = defineStore('message', () => {
     messages,
     loading,
     visibleMessages,
+    reminderMessages,
     alertMessages,
     approvalMessages,
     systemMessages,

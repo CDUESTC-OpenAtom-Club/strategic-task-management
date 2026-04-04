@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import {
   Download,
@@ -12,8 +11,10 @@ import {
 } from '@element-plus/icons-vue'
 import type { DashboardData, UserRole, Indicator } from '@/shared/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
+import { dashboardApi } from '@/features/dashboard/api/dashboardApi'
 import { useDashboardStore } from '@/features/dashboard/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
+import { useMessageStore } from '@/features/messages/model/message'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import BreadcrumbNav from '@/shared/ui/layout/BreadcrumbNav.vue'
 import ScoreCompositionChart from '@/shared/ui/charts/ScoreCompositionChart.vue'
@@ -28,6 +29,7 @@ import { useOrgStore } from '@/features/organization/model/store'
 // 加载状态管理 - Requirements 1.5, 1.6
 import { useLoadingState } from '@/shared/lib/loading/useLoadingState'
 import { logger } from '@/shared/lib/utils/logger'
+import { buildDashboardSummary, getIndicatorStatusAtMonth } from '@/features/dashboard/lib'
 
 // 动态导入 echarts，避免初始加载时打包
 let echarts: typeof import('echarts') | null = null
@@ -53,11 +55,12 @@ const helpTexts = {
     '总得分 = 基础性指标得分 + 发展性指标得分，满分120分。基础性指标满分100分，发展性指标满分20分。',
   basicScore: '基础性指标是必须完成的核心指标，根据各指标完成进度加权计算得分，满分100分。',
   developmentScore: '发展性指标是鼓励性指标，完成后可获得额外加分，满分20分。',
-  warningCount: '预警任务指进度低于50%的指标数量，需要重点关注和推进。',
+  warningCount:
+    '预警任务按所选月份的里程碑状态计算：延期视为严重预警，未逾期但未达标视为中度预警。',
   scoreComposition: '展示基础性指标和发展性指标的得分占比，帮助了解整体得分构成。',
   alertDistribution:
-    '按预警级别统计指标数量：严重（进度<30%）、中度（30%-60%）、正常（≥60%）。点击可筛选对应级别的指标。',
-  completionRate: '完成率 = 已完成指标数 / 总指标数 × 100%，反映整体任务完成情况。',
+    '按所选月份统计指标状态：严重预警表示该月底前应完成的里程碑未达标，中度预警表示当月目标未达标但尚未逾期。',
+  completionRate: '完成率 = 所选月份状态为正常或超前完成的指标数 / 总指标数 × 100%。',
   departmentProgress:
     '展示各部门的指标完成进度，进度条颜色表示状态：绿色（≥80%）、黄色（50%-80%）、红色（<50%）。',
   benchmark: '展示各部门执行进度与基准线对比，红色表示低于基准线，蓝色表示达标。',
@@ -343,67 +346,6 @@ const _getDeptStats = (deptName: string) => {
     normal: indicators.filter(i => i.status === 'normal').length,
     total: indicators.length
   }
-}
-
-// 计算指标在指定月份的状态（用于堆叠柱状图）
-const getIndicatorStatusAtMonth = (
-  indicator: Indicator,
-  month: number,
-  year: number
-): IndicatorStatus => {
-  const milestones = indicator.milestones || []
-  if (milestones.length === 0) {
-    return 'normal'
-  }
-
-  // 计算该月的最后一天
-  const monthEnd = new Date(year, month, 0) // month的0日就是上个月的最后一天
-  monthEnd.setHours(23, 59, 59, 999)
-
-  // 按 dueDate 排序里程碑
-  const sortedMilestones = [...milestones].sort(
-    (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
-  )
-
-  // 筛选截止到该月底的里程碑
-  const milestonesUpToMonth = sortedMilestones.filter(m => {
-    const deadlineDate = new Date(m.dueDate)
-    deadlineDate.setHours(23, 59, 59, 999)
-    return deadlineDate <= monthEnd
-  })
-
-  if (milestonesUpToMonth.length === 0) {
-    // 如果该月没有里程碑，返回正常（或者不统计）
-    return 'normal'
-  }
-
-  // 检查是否有已过期但未达标的里程碑（延期）
-  for (const milestone of milestonesUpToMonth) {
-    const deadlineDate = new Date(milestone.dueDate)
-    deadlineDate.setHours(23, 59, 59, 999)
-    if (deadlineDate < monthEnd && (indicator.progress || 0) < milestone.targetProgress) {
-      return 'delayed'
-    }
-  }
-
-  // 找到该月内最后一个里程碑
-  const lastMilestoneInMonth = milestonesUpToMonth[milestonesUpToMonth.length - 1]
-  const currentProgress = indicator.progress || 0
-
-  if (currentProgress >= lastMilestoneInMonth.targetProgress) {
-    return 'ahead'
-  }
-
-  // 检查是否预警（该月最后一个里程碑后的3天内）
-  const nextMonthStart = new Date(year, month, 1)
-  const daysAfterMonth = Math.ceil(
-    (nextMonthStart.getTime() - monthEnd.getTime()) / (1000 * 60 * 60 * 24)
-  )
-  if (daysAfterMonth <= 3 && currentProgress < lastMilestoneInMonth.targetProgress) {
-    return 'warning'
-  }
-
-  return 'normal'
 }
 
 // 获取部门在指定月份的指标状态统计
@@ -907,6 +849,7 @@ const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
+const messageStore = useMessageStore()
 
 // ============================================================================
 // 加载状态管理 - Requirements 1.5, 1.6
@@ -986,6 +929,17 @@ const reloadData = async () => {
   }
 }
 
+type ReminderStatusItem = {
+  indicatorId: number
+  canRemind: boolean
+  lastRemindedAt?: string | null
+  remindCount: number
+  cooldownUntil?: string | null
+}
+
+const reminderStatuses = ref<Record<number, ReminderStatusItem>>({})
+const remindingMap = ref<Record<number, boolean>>({})
+
 // ============================================================================
 // 降级模式检测 - Requirements 1.4, 10.5
 // ============================================================================
@@ -1057,44 +1011,8 @@ const _departmentOptions = computed(() => {
 
 // 从 store 计算仪表盘数据
 const dashboardData = computed<DashboardData>(() => {
-  // 使用 visibleIndicators（已按角色和年份过滤）
   const indicators = dashboardStore.visibleIndicators
-  const totalIndicators = indicators.length
-  const completedIndicators = indicators.filter(i => i.progress >= 100).length
-
-  const basicIndicators = indicators.filter(i => i.type2 === '基础性')
-  const developmentIndicators = indicators.filter(i => i.type2 === '发展性')
-
-  const basicScore =
-    basicIndicators.length > 0
-      ? Math.round(basicIndicators.reduce((sum, i) => sum + i.progress, 0) / basicIndicators.length)
-      : 0
-  const developmentScore =
-    developmentIndicators.length > 0
-      ? Math.round(
-          (developmentIndicators.reduce((sum, i) => sum + i.progress, 0) /
-            developmentIndicators.length) *
-            0.2
-        )
-      : 0
-
-  const warningCount = indicators.filter(i => i.progress < 50).length
-
-  return {
-    totalScore: basicScore + developmentScore,
-    basicScore,
-    developmentScore,
-    completionRate:
-      totalIndicators > 0 ? Math.round((completedIndicators / totalIndicators) * 100) : 0,
-    warningCount,
-    totalIndicators,
-    completedIndicators,
-    alertIndicators: {
-      severe: indicators.filter(i => i.progress < 30).length,
-      moderate: indicators.filter(i => i.progress >= 30 && i.progress < 60).length,
-      normal: indicators.filter(i => i.progress >= 60).length
-    }
-  }
+  return buildDashboardSummary(indicators, selectedMonth.value, timeContext.currentYear)
 })
 
 // 应用筛选
@@ -1373,30 +1291,96 @@ const _kpiCards = computed(() => {
   ]
 })
 
-// 滞后任务列表
-const delayedTasks = computed(() => {
+const baseDelayedTasks = computed(() => {
   const indicators = dashboardStore.visibleIndicators
   return indicators
-    .filter(i => i.progress < 50)
-    .sort((a, b) => a.progress - b.progress)
+    .filter(i => (i.progress ?? 0) < 50)
+    .sort((a, b) => (a.progress ?? 0) - (b.progress ?? 0))
     .slice(0, 5)
     .map(i => ({
       id: i.id,
       name: i.name || i.indicator || '未命名任务',
       dept: i.responsibleDept,
-      progress: i.progress,
-      days: Math.floor((50 - i.progress) / 5) + 1,
-      reminded: false
+      progress: i.progress ?? 0,
+      days: Math.floor((50 - (i.progress ?? 0)) / 5) + 1
     }))
 })
 
-// 催办任务
-const handleUrge = (task: { dept: string; progress: number; reminded: boolean }) => {
-  if (task.reminded) {
+const loadReminderStatuses = async () => {
+  const indicatorIds = baseDelayedTasks.value.map(task => Number(task.id)).filter(Number.isFinite)
+  if (indicatorIds.length === 0) {
+    reminderStatuses.value = {}
     return
   }
-  task.reminded = true
-  ElMessage.success(`已向 ${task.dept} 发送催办通知`)
+
+  try {
+    const statuses = await dashboardApi.getReminderStatuses(indicatorIds)
+    reminderStatuses.value = Object.fromEntries(
+      statuses.map((status: ReminderStatusItem) => [status.indicatorId, status])
+    )
+  } catch (error) {
+    logger.warn('[Dashboard] Failed to load reminder statuses:', error)
+  }
+}
+
+watch(
+  () => baseDelayedTasks.value.map(task => task.id).join(','),
+  () => {
+    void loadReminderStatuses()
+  },
+  { immediate: true }
+)
+
+// 滞后任务列表
+const delayedTasks = computed(() => {
+  return baseDelayedTasks.value.map(task => {
+    const status = reminderStatuses.value[task.id]
+    const reminded = Boolean(status?.lastRemindedAt) && !(status?.canRemind ?? true)
+
+    return {
+      ...task,
+      reminded,
+      canRemind: status?.canRemind ?? true,
+      reminding: Boolean(remindingMap.value[task.id]),
+      lastRemindedAt: status?.lastRemindedAt ?? null,
+      remindCount: status?.remindCount ?? 0,
+      cooldownUntil: status?.cooldownUntil ?? null
+    }
+  })
+})
+
+// 催办任务
+const handleUrge = async (task: {
+  id: number
+  dept: string
+  progress: number
+  reminded: boolean
+  canRemind: boolean
+  reminding: boolean
+}) => {
+  if (task.reminded || !task.canRemind || task.reminding) {
+    return
+  }
+
+  remindingMap.value = {
+    ...remindingMap.value,
+    [task.id]: true
+  }
+
+  try {
+    await dashboardApi.sendReminder(task.id)
+    await Promise.all([loadReminderStatuses(), messageStore.fetchMessages()])
+    ElMessage.success(`已向 ${task.dept} 发送催办通知`)
+  } catch (error: any) {
+    const message =
+      error?.response?.data?.message || error?.message || `向 ${task.dept} 发送催办通知失败`
+    ElMessage.error(message)
+  } finally {
+    remindingMap.value = {
+      ...remindingMap.value,
+      [task.id]: false
+    }
+  }
 }
 
 // 雷达图数据（支持历史数据）
@@ -1467,7 +1451,9 @@ const _radarStats = computed(() => {
 })
 
 const isChartContainerReady = (element: HTMLElement | null): element is HTMLElement => {
-  return !!element && element.isConnected && document.body.contains(element) && element.clientWidth > 0
+  return (
+    !!element && element.isConnected && document.body.contains(element) && element.clientWidth > 0
+  )
 }
 
 const createChartInstance = async (
@@ -1575,7 +1561,10 @@ const initBenchmarkChart = async () => {
   // 设置容器高度（固定高度用于堆叠柱状图）
   benchmarkChartRef.value.style.height = `350px`
 
-  benchmarkChartInstance = await createChartInstance(benchmarkChartRef.value, benchmarkChartInstance)
+  benchmarkChartInstance = await createChartInstance(
+    benchmarkChartRef.value,
+    benchmarkChartInstance
+  )
   if (!benchmarkChartInstance) {
     return
   }
@@ -2436,14 +2425,16 @@ onUnmounted(() => {
             全校战略执行总分 <span class="highlight-primary">{{ dashboardData.totalScore }}</span
             >。
             <template v-if="dashboardData.alertIndicators.severe > 0">
-              本月存在
+              {{ selectedMonth }}月存在
               <span class="highlight-danger"
                 >{{ dashboardData.alertIndicators.severe }} 项严重预警</span
               >
               任务需重点关注。
             </template>
             <template v-else>
-              整体执行状态良好，<span class="highlight-success">无严重预警</span>。
+              {{ selectedMonth }}月整体执行状态良好，<span class="highlight-success"
+                >无严重预警</span
+              >。
             </template>
             完成率达 <span class="highlight-success">{{ dashboardData.completionRate }}%</span>，
             {{ dashboardData.completionRate >= 80 ? '进度符合预期' : '建议加快推进滞后任务' }}。
@@ -3416,11 +3407,11 @@ onUnmounted(() => {
             <template #default="{ row }">
               <button
                 class="urge-btn"
-                :class="{ disabled: row.reminded }"
-                :disabled="row.reminded"
+                :class="{ disabled: row.reminded || row.reminding }"
+                :disabled="row.reminded || row.reminding"
                 @click="handleUrge(row)"
               >
-                {{ row.reminded ? '已催办' : '一键催办' }}
+                {{ row.reminding ? '发送中...' : row.reminded ? '已催办' : '一键催办' }}
               </button>
             </template>
           </el-table-column>

@@ -6,7 +6,6 @@ import { useMessageStore } from '@/features/messages/model/message'
 
 const apiClientMock = vi.hoisted(() => ({
   get: vi.fn(),
-  patch: vi.fn(),
   post: vi.fn()
 }))
 
@@ -87,14 +86,18 @@ describe('messages cache integration', () => {
         ]
       }
     })
-    apiClientMock.patch.mockResolvedValue({ success: true })
+    apiClientMock.post.mockResolvedValue({ success: true })
 
     await messagesApi.getUnreadCount()
-    expect(cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))).toBeDefined()
+    expect(
+      cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))
+    ).toBeDefined()
 
     await messagesApi.markAsRead('n-1')
 
-    expect(cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))).toBeUndefined()
+    expect(
+      cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))
+    ).toBeUndefined()
   })
 
   it('message store fetches remote messages before falling back to mock data', async () => {
@@ -118,5 +121,28 @@ describe('messages cache integration', () => {
 
     expect(store.messages).toHaveLength(1)
     expect(store.messages[0]?.title).toBe('远程消息')
+  })
+
+  it('maps reminder notifications into reminder message type', async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 'n-3',
+            type: 'REMINDER',
+            title: '催办提醒',
+            content: '请尽快处理',
+            isRead: false,
+            createdAt: '2026-03-24T09:30:00Z'
+          }
+        ]
+      }
+    })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+
+    expect(store.messages[0]?.type).toBe('reminder')
+    expect(store.unreadCount.reminders).toBe(1)
   })
 })

@@ -11,6 +11,7 @@
             :show-file-list="false"
             :before-upload="beforeAvatarUpload"
             :http-request="uploadAvatar"
+            accept="image/jpeg,image/png,image/gif,image/webp"
           >
             <el-button size="small" type="primary"> 更换头像 </el-button>
           </el-upload>
@@ -102,11 +103,12 @@ const rules = {
 }
 
 const beforeAvatarUpload = (file: File) => {
-  const isJpgOrPng = file.type === 'image/jpeg' || file.type === 'image/png'
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  const isImage = allowedTypes.includes(file.type)
   const isLt2M = file.size / 1024 / 1024 < 2
 
-  if (!isJpgOrPng) {
-    ElMessage.error('头像只能是 JPG/PNG 格式!')
+  if (!isImage) {
+    ElMessage.error('头像只能是 JPG/PNG/GIF/WebP 格式的图片!')
     return false
   }
   if (!isLt2M) {
