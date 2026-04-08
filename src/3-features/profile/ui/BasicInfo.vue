@@ -13,7 +13,9 @@
             :http-request="uploadAvatar"
             accept="image/jpeg,image/png,image/gif,image/webp"
           >
-            <el-button size="small" type="primary"> 更换头像 </el-button>
+            <el-button size="small" type="primary" :loading="uploading">
+              {{ uploading ? '上传中...' : '更换头像' }}
+            </el-button>
           </el-upload>
         </div>
       </div>
@@ -55,6 +57,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
 import { validateEmail, validatePhone, getRoleLabel } from '@/shared/lib/utils'
+import { profileApi } from '@/features/profile/api'
 import type { User as _User, UserRole } from '@/shared/types'
 
 const formRef = ref<FormInstance>()
@@ -69,6 +72,8 @@ const form = reactive({
   phone: '',
   avatar: ''
 })
+
+const uploading = ref(false)
 
 const rules = {
   name: [
@@ -120,13 +125,34 @@ const beforeAvatarUpload = (file: File) => {
 
 const uploadAvatar = async (options: UploadRequestOptions) => {
   const { file } = options
-  // TODO: Implement actual file upload
+  const selectedFile = file as File
+  const previousAvatar = form.avatar
+
+  // 本地预览
   const reader = new FileReader()
   reader.onload = e => {
     form.avatar = e.target?.result as string
-    ElMessage.success('头像上传成功')
   }
-  reader.readAsDataURL(file as File)
+  reader.readAsDataURL(selectedFile)
+
+  // 上传到服务器
+  try {
+    uploading.value = true
+    const response = await profileApi.uploadAvatar(selectedFile)
+
+    // 更新本地状态
+    form.avatar = response.avatarUrl
+    authStore.updateUserAvatar(response.avatarUrl)
+    options.onSuccess?.(response)
+
+    ElMessage.success('头像上传成功')
+  } catch (error) {
+    form.avatar = previousAvatar
+    options.onError?.(error as Error)
+    ElMessage.error('头像上传失败，请重试')
+  } finally {
+    uploading.value = false
+  }
 }
 
 const handleSubmit = async () => {
@@ -155,6 +181,9 @@ const handleReset = () => {
 const loadUserInfo = () => {
   if (authStore.user) {
     Object.assign(form, authStore.user)
+    form.avatar = (authStore.user as { avatar?: string; avatarUrl?: string }).avatar ||
+      (authStore.user as { avatar?: string; avatarUrl?: string }).avatarUrl ||
+      ''
   }
 }
 

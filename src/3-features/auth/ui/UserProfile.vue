@@ -85,10 +85,6 @@
         <el-form-item label="创建时间">
           <span class="info-text">{{ formatDate(user?.createdAt) }}</span>
         </el-form-item>
-
-        <el-form-item label="最后登录">
-          <span class="info-text">{{ formatDate(user?.lastLoginAt) }}</span>
-        </el-form-item>
       </el-form>
     </el-card>
 

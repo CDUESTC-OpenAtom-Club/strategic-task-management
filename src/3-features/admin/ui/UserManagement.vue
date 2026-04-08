@@ -342,7 +342,6 @@ const loadUsers = async () => {
           )
         : [],
       status: (user.status ?? 'active') as UserManagementItem['status'],
-      lastLoginAt: String(user.lastLoginAt ?? ''),
       createdAt: String(user.createdAt ?? ''),
       updatedAt: String(user.updatedAt ?? '')
     }))
@@ -823,13 +822,6 @@ onMounted(() => {
             <ElTag :type="getStatusConfig(row.status).type as any" effect="light" size="small">
               {{ getStatusConfig(row.status).label }}
             </ElTag>
-          </template>
-        </ElTableColumn>
-
-        <ElTableColumn prop="lastLoginAt" label="最后登录" width="160">
-          <template #default="{ row }">
-            <span v-if="row.lastLoginAt" class="last-login">{{ row.lastLoginAt }}</span>
-            <span v-else class="no-data">从未登录</span>
           </template>
         </ElTableColumn>
 

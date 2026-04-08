@@ -455,6 +455,22 @@ export const useAuthStore = defineStore('auth', () => {
     viewingAsDepartment.value = null
   }
 
+  /**
+   * Update user avatar
+   * 更新用户头像URL
+   */
+  const updateUserAvatar = (avatarUrl: string) => {
+    if (user.value) {
+      user.value = {
+        ...user.value,
+        avatar: avatarUrl,
+        avatarUrl: avatarUrl
+      }
+      persistUser(user.value)
+      logger.debug('[Auth] 用户头像已更新:', avatarUrl)
+    }
+  }
+
   return {
     // State
     user,
@@ -478,6 +494,7 @@ export const useAuthStore = defineStore('auth', () => {
     fetchUser,
     hasPermission,
     setViewingAs,
-    resetViewingAs
+    resetViewingAs,
+    updateUserAvatar
   }
 })

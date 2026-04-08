@@ -143,7 +143,6 @@ const mockAdminUsers = mockUsers.map((user, index) => ({
   orgName: user.department || '',
   roles: [{ roleCode: user.role }],
   status: user.isActive ? 'active' : 'disabled',
-  lastLoginAt: '2026-03-15T10:00:00Z',
   createdAt: user.createdAt,
   updatedAt: user.updatedAt
 }))
@@ -508,7 +507,6 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
             ? body.roles.map((roleCode: string) => ({ roleCode }))
             : [{ roleCode: 'secondary_college' }],
           status: body.status === 'disabled' ? 'disabled' : 'active',
-          lastLoginAt: '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
@@ -627,6 +625,25 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           success: true,
           data: { deleted: true },
           message: '删除用户成功',
+          timestamp: Date.now()
+        })
+      } else if (normalizedPath === '/api/profile/avatar' && method === 'POST') {
+        // Mock avatar upload - 返回模拟的头像URL
+        const mockAvatarUrl = `/uploads/avatars/mock_avatar_${Date.now()}.png`
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: { avatarUrl: mockAvatarUrl },
+          message: '头像上传成功',
+          timestamp: Date.now()
+        })
+      } else if (normalizedPath === '/api/profile' && method === 'PUT') {
+        // Mock profile update
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: { updated: true },
+          message: '个人信息更新成功',
           timestamp: Date.now()
         })
       } else {

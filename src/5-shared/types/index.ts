@@ -717,7 +717,6 @@ export interface UserManagementItem {
   orgName: string // 所属组织名称
   roles: string[] // 用户角色列表 (支持多角色)
   status: 'active' | 'disabled' | 'locked'
-  lastLoginAt?: string
   createdAt: string
   updatedAt: string
 }

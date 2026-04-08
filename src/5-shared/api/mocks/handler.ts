@@ -84,7 +84,6 @@ const mockAdminUsers = mockUsers.map((user, index) => ({
   orgName: user.department || '',
   roles: [{ roleCode: user.role }],
   status: user.isActive ? 'active' : 'disabled',
-  lastLoginAt: '2026-03-15T10:00:00Z',
   createdAt: user.createdAt,
   updatedAt: user.updatedAt
 }))
@@ -725,7 +724,6 @@ export class MockApiHandler {
         ? (data.roleIds as string[]).map(roleCode => ({ roleCode }))
         : [{ roleCode: 'secondary_college' }],
       status: data.status === 'disabled' ? 'disabled' : 'active',
-      lastLoginAt: '',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
