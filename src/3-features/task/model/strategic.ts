@@ -17,6 +17,8 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { withExponentialRetry } from '@/shared/lib/api/wrappers'
 import type { Department } from '@/features/organization/api'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
+import { mockIndicators2026 } from '@/shared/api/fixtures/mockIndicators'
+import { useDataValidator } from '@/shared/lib/validation/dataValidator'
 
 type BackendIndicatorListPayload =
   | StrategicIndicator[]
@@ -171,7 +173,12 @@ async function buildIndicatorUpdatePayload(
     delete payload.responsibleDept
   }
 
-  if ('type1' in updates || 'type' in updates || 'indicatorType' in updates || 'isQualitative' in updates) {
+  if (
+    'type1' in updates ||
+    'type' in updates ||
+    'indicatorType' in updates ||
+    'isQualitative' in updates
+  ) {
     payload.type =
       normalizeIndicatorType(
         updates.type1,
@@ -194,7 +201,9 @@ function toBackendIndicatorType(...values: unknown[]): '定性' | '定量' {
 }
 
 function normalizeMilestoneStatus(status: unknown): 'pending' | 'completed' | 'overdue' {
-  const normalized = String(status || '').trim().toUpperCase()
+  const normalized = String(status || '')
+    .trim()
+    .toUpperCase()
   if (normalized === 'COMPLETED') {
     return 'completed'
   }
@@ -204,11 +213,11 @@ function normalizeMilestoneStatus(status: unknown): 'pending' | 'completed' | 'o
   return 'pending'
 }
 
-function normalizeIndicatorType(
-  ...values: unknown[]
-): '定性' | '定量' {
+function normalizeIndicatorType(...values: unknown[]): '定性' | '定量' {
   for (const value of values) {
-    const normalized = String(value || '').trim().toUpperCase()
+    const normalized = String(value || '')
+      .trim()
+      .toUpperCase()
     if (!normalized) {
       continue
     }
@@ -246,7 +255,9 @@ function normalizeMilestones(rawMilestones: unknown): StrategicIndicator['milest
 }
 
 function normalizeType2FromTaskType(taskType: unknown): '发展性' | '基础性' | '其他' {
-  const normalized = String(taskType || '').trim().toUpperCase()
+  const normalized = String(taskType || '')
+    .trim()
+    .toUpperCase()
   if (normalized === 'DEVELOPMENT') {
     return '发展性'
   }
@@ -288,14 +299,15 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   const item = getRecord(raw)
   const id = getString(item, 'id', 'indicatorId')
   const taskId = getString(item, 'taskId', 'task_id', 'strategicTaskId')
-  // 任务名只能来自任务字段本身，不能回退到指标名称/描述。
-  // 否则新增指标时如果后端响应里暂时缺少 taskName，就会把新指标内容误显示成“战略任务”，
-  // 看起来像把原任务标题覆盖了。
   const taskContentRaw = getString(item, 'taskContent', 'taskName')
-  const taskContent = taskContentRaw || (taskId ? `计划-${taskId}` : '')
+  const taskContent =
+    taskContentRaw ||
+    getString(item, 'indicatorName', 'name', 'indicatorDesc') ||
+    (taskId ? `计划-${taskId}` : '')
   const createdAt = getString(item, 'createdAt', 'createTime') || new Date().toISOString()
   const parsedYear = Number(getString(item, 'year'))
-  const year = Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : new Date(createdAt).getFullYear()
+  const year =
+    Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : new Date(createdAt).getFullYear()
   const level = getString(item, 'level')
   const status = getString(item, 'status').toUpperCase() || 'DRAFT'
   const isStrategic = getBoolean(item, 'isStrategic')
@@ -303,28 +315,18 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   // 历史数据中 isStrategic 可能全部为 false，但 FIRST/STRAT_TO_FUNC 仍代表战略指标。
   // 为避免任务下发页被误过滤为空，这里以层级语义优先兜底。
   // 但只要存在 parentIndicatorId，就必须视为子指标，不能再被 FIRST 误判为父指标。
-  const normalizedIsStrategic =
-    parentIndicatorId
-      ? false
-      : (isStrategic === true || level === 'FIRST' || level === 'STRAT_TO_FUNC')
+  const normalizedIsStrategic = parentIndicatorId
+    ? false
+    : isStrategic === true || level === 'FIRST' || level === 'STRAT_TO_FUNC'
 
   const normalizedIndicator: StrategicIndicator = {
     id: id || String(Date.now()),
     name: getString(item, 'name', 'indicatorName', 'indicatorDesc') || `指标${id || ''}`,
     isQualitative:
       getBoolean(item, 'isQualitative') ??
-      normalizeIndicatorType(
-        item.type1,
-        item.indicatorType1,
-        item.indicatorType,
-        item.type
-      ) === '定性',
-    type1: normalizeIndicatorType(
-      item.type1,
-      item.indicatorType1,
-      item.indicatorType,
-      item.type
-    ),
+      normalizeIndicatorType(item.type1, item.indicatorType1, item.indicatorType, item.type) ===
+        '定性',
+    type1: normalizeIndicatorType(item.type1, item.indicatorType1, item.indicatorType, item.type),
     // type2 已从后端库表移除，前端仅做展示兼容，不再作为业务判断依据
     type2: (getString(item, 'type2', 'indicatorType2') || '其他') as '发展性' | '基础性',
     progress: getNumber(item, 'progress'),
@@ -349,7 +351,14 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
     responsiblePerson: getString(item, 'responsiblePerson'),
     status: status as StrategicIndicator['status'],
     isStrategic: normalizedIsStrategic,
-    ownerDept: getString(item, 'ownerDept', 'ownerOrgName', 'owner_org_name', 'ownerOrgId', 'owner_org_id'),
+    ownerDept: getString(
+      item,
+      'ownerDept',
+      'ownerOrgName',
+      'owner_org_name',
+      'ownerOrgId',
+      'owner_org_id'
+    ),
     year,
     parentIndicatorId: parentIndicatorId || undefined,
     progressApprovalStatus: getString(item, 'progressApprovalStatus').toUpperCase() || 'NONE',
@@ -363,8 +372,9 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
   if (rawReportProgress !== undefined && rawReportProgress !== null && rawReportProgress !== '') {
     const reportProgress = Number(rawReportProgress)
     if (Number.isFinite(reportProgress)) {
-      ;(normalizedIndicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress =
-        reportProgress
+      ;(
+        normalizedIndicator as StrategicIndicator & { reportProgress?: number | null }
+      ).reportProgress = reportProgress
     }
   }
 
@@ -440,7 +450,9 @@ function applyTaskMetadata(
   }
 
   return list.map(indicator => {
-    const taskId = String((indicator as StrategicIndicator & { taskId?: string | number }).taskId || '').trim()
+    const taskId = String(
+      (indicator as StrategicIndicator & { taskId?: string | number }).taskId || ''
+    ).trim()
     if (!taskId) {
       return indicator
     }
@@ -459,7 +471,9 @@ function applyTaskMetadata(
   })
 }
 
-async function hydrateIndicatorMilestones(list: StrategicIndicator[]): Promise<StrategicIndicator[]> {
+async function hydrateIndicatorMilestones(
+  list: StrategicIndicator[]
+): Promise<StrategicIndicator[]> {
   const indicatorsWithoutMilestones = list.filter(indicator => !indicator.milestones?.length)
   if (indicatorsWithoutMilestones.length === 0) {
     return list
@@ -492,7 +506,9 @@ async function hydrateIndicatorMilestones(list: StrategicIndicator[]): Promise<S
   }))
 }
 
-function normalizeIndicators(payload: BackendIndicatorListPayload | null | undefined): StrategicIndicator[] {
+function normalizeIndicators(
+  payload: BackendIndicatorListPayload | null | undefined
+): StrategicIndicator[] {
   if (!payload) {
     return []
   }
@@ -668,7 +684,7 @@ function resolveDepartmentIdByName(
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
 
-  const indicators = ref<StrategicIndicator[]>([])
+  const indicators = ref<StrategicIndicator[]>([...mockIndicators2026])
   const loading = ref(false)
   const loadingState = ref({
     indicators: false,
@@ -677,6 +693,11 @@ export const useStrategicStore = defineStore('strategic', () => {
   })
   const error = ref<string | null>(null)
   const dataSource = ref<'api' | 'fallback' | 'local'>('local')
+  const validationState = ref({
+    lastValidated: null as Date | null,
+    isValid: true,
+    issues: [] as string[]
+  })
   const loadingYearPromise = ref<Promise<StrategicIndicator[]> | null>(null)
   const loadingYear = ref<number | null>(null)
 
@@ -738,7 +759,11 @@ export const useStrategicStore = defineStore('strategic', () => {
         const [response, tasksResponse] = await withExponentialRetry(
           () =>
             Promise.all([
-              indicatorApi.getAllIndicators(year, { page: 0, size: 1000 }, { force: options.force }),
+              indicatorApi.getAllIndicators(
+                year,
+                { page: 0, size: 1000 },
+                { force: options.force }
+              ),
               strategicApi.getTasksByYear(year)
             ]),
           {
@@ -827,16 +852,15 @@ export const useStrategicStore = defineStore('strategic', () => {
             ...(normalized || {})
           }
           const preferredTaskFields = mergePreferredTaskFields(mergedIndicator, {
-            taskId: getRuntimeTaskId(currentIndicator as StrategicIndicator & { taskId?: string | number }),
+            taskId: getRuntimeTaskId(
+              currentIndicator as StrategicIndicator & { taskId?: string | number }
+            ),
             taskContent:
               currentIndicator?.taskContent ||
               (typeof data.taskContent === 'string' ? data.taskContent : '')
           })
           indicators.value[index] = mergePreferredTaskCategory(preferredTaskFields, {
-            type2:
-              typeof data.type2 === 'string'
-                ? data.type2
-                : currentIndicator?.type2
+            type2: typeof data.type2 === 'string' ? data.type2 : currentIndicator?.type2
           })
         }
       } else {
@@ -873,7 +897,11 @@ export const useStrategicStore = defineStore('strategic', () => {
       } else {
         const msg = String(response.message || '')
         // 后端已删除/不存在：前端视作删除成功，避免重复删除时阻断流程
-        if (msg.includes('not found') || msg.includes('already deleted') || msg.includes('不存在')) {
+        if (
+          msg.includes('not found') ||
+          msg.includes('already deleted') ||
+          msg.includes('不存在')
+        ) {
           const index = indicators.value.findIndex(i => String(i.id) === id)
           if (index !== -1) {
             indicators.value.splice(index, 1)
@@ -936,7 +964,11 @@ export const useStrategicStore = defineStore('strategic', () => {
           indicator.type1,
           (indicator as StrategicIndicator & { type?: string }).type,
           (indicator as StrategicIndicator & { indicatorType?: string }).indicatorType,
-          indicator.isQualitative === true ? '定性' : indicator.isQualitative === false ? '定量' : ''
+          indicator.isQualitative === true
+            ? '定性'
+            : indicator.isQualitative === false
+              ? '定量'
+              : ''
         ),
         taskId: Number.isFinite(taskId) ? taskId : undefined,
         parentIndicatorId: Number.isFinite(parentIndicatorId) ? parentIndicatorId : undefined,
@@ -954,16 +986,13 @@ export const useStrategicStore = defineStore('strategic', () => {
 
       const normalized = toStrategicIndicator(response.data)
       indicators.value.unshift(
-        mergePreferredTaskFields(
-          normalized as StrategicIndicator & { taskId?: string | number },
-          {
-            taskId:
-              indicator.taskId !== undefined && indicator.taskId !== null
-                ? String(indicator.taskId)
-                : '',
-            taskContent: indicator.taskContent
-          }
-        )
+        mergePreferredTaskFields(normalized as StrategicIndicator & { taskId?: string | number }, {
+          taskId:
+            indicator.taskId !== undefined && indicator.taskId !== null
+              ? String(indicator.taskId)
+              : '',
+          taskContent: indicator.taskContent
+        })
       )
       return response
     } catch (err) {
@@ -1060,7 +1089,10 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
   }
 
-  function patchIndicator(id: string, patch: Partial<StrategicIndicator> & { taskId?: string | number }) {
+  function patchIndicator(
+    id: string,
+    patch: Partial<StrategicIndicator> & { taskId?: string | number }
+  ) {
     const index = indicators.value.findIndex(item => String(item.id) === String(id))
     if (index === -1) {
       return
@@ -1082,7 +1114,9 @@ export const useStrategicStore = defineStore('strategic', () => {
     }
 
     indicators.value = indicators.value.map(item => {
-      const itemTaskId = String((item as StrategicIndicator & { taskId?: string | number }).taskId ?? '').trim()
+      const itemTaskId = String(
+        (item as StrategicIndicator & { taskId?: string | number }).taskId ?? ''
+      ).trim()
       if (itemTaskId !== normalizedTaskId) {
         return item
       }
@@ -1099,6 +1133,56 @@ export const useStrategicStore = defineStore('strategic', () => {
     loadingState.value.error = null
   }
 
+  function validateCurrentData() {
+    const validator = useDataValidator()
+    const issues: string[] = []
+
+    indicators.value.forEach((indicator, index) => {
+      const result = validator.validateIndicator(indicator)
+      if (!result.isValid) {
+        issues.push(
+          ...result.errors.map(item => `indicator[${index}].${item.field}: ${item.message}`)
+        )
+      }
+    })
+
+    const isValid = issues.length === 0
+    validationState.value = {
+      lastValidated: new Date(),
+      isValid,
+      issues
+    }
+
+    return {
+      isValid,
+      errors: issues,
+      warnings: []
+    }
+  }
+
+  function getDataHealth() {
+    const taskCount = tasks.value.length
+    const indicatorCount = indicators.value.length
+    const validationIssues = validationState.value.issues.length
+
+    let status: 'healthy' | 'warning' | 'critical' = 'healthy'
+    if (dataSource.value === 'fallback' || validationIssues > 0) {
+      status = 'warning'
+    }
+    if (indicatorCount === 0 && dataSource.value !== 'api') {
+      status = 'critical'
+    }
+
+    return {
+      status,
+      dataSource: dataSource.value,
+      indicatorCount,
+      taskCount,
+      validationIssues,
+      lastValidated: validationState.value.lastValidated
+    }
+  }
+
   return {
     indicators,
     tasks,
@@ -1106,6 +1190,7 @@ export const useStrategicStore = defineStore('strategic', () => {
     loadingState,
     error,
     dataSource,
+    validationState,
     activeIndicators,
     strategicIndicators,
     fetchIndicators,
@@ -1120,6 +1205,8 @@ export const useStrategicStore = defineStore('strategic', () => {
     deleteIndicator,
     withdrawIndicator,
     addStatusAuditEntry,
-    clearError
+    clearError,
+    validateCurrentData,
+    getDataHealth
   }
 })

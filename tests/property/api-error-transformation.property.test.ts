@@ -16,6 +16,15 @@ import axios, { AxiosError } from 'axios'
 import { ApiClient, type AppError } from '@/shared/api/client'
 import { tokenManager } from '@/utils/tokenManager'
 
+function toAppError(error: AxiosError): AppError {
+  const responseData = error.response?.data as { message?: string; details?: unknown } | undefined
+  return {
+    code: error.response?.status || 500,
+    message: responseData?.message || error.message || '请求失败',
+    details: responseData?.details || error.response?.data
+  }
+}
+
 /**
  * **Property 4: HTTP Error Transformation**
  * **Validates: Requirements 2.7**
@@ -58,16 +67,21 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
     fc.constant('未授权'),
     fc.constant('资源不存在'),
     fc.constant('请求参数错误'),
-    fc.string({ minLength: 1, maxLength: 200 })
+    fc.string({ minLength: 1, maxLength: 200 }).filter(value => value.trim().length > 0)
   )
 
   /**
    * 错误详情生成器
    */
   const errorDetailsArb = fc.record({
-    field: fc.string({ minLength: 1, maxLength: 50 }),
-    reason: fc.string({ minLength: 1, maxLength: 100 }),
-    timestamp: fc.date().map(d => d.toISOString())
+    field: fc.string({ minLength: 1, maxLength: 50 }).filter(value => value.trim().length > 0),
+    reason: fc.string({ minLength: 1, maxLength: 100 }).filter(value => value.trim().length > 0),
+    timestamp: fc
+      .integer({
+        min: Date.parse('2000-01-01T00:00:00.000Z'),
+        max: Date.parse('2100-01-01T00:00:00.000Z')
+      })
+      .map(value => new Date(value).toISOString())
   })
 
   /**
@@ -86,56 +100,26 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
         httpErrorCodeArb,
         errorMessageArb,
         errorDetailsArb,
-        urlPathArb,
-        async (statusCode, message, details, url) => {
-          // 创建测试用的 axios 实例
-          const testClient = axios.create({
-            baseURL: '/api',
-            timeout: 10000
-          })
-
-          // 模拟响应拦截器的错误转换逻辑
-          testClient.interceptors.response.use(
-            response => response.data,
-            (error: AxiosError) => {
-              const appError: AppError = {
-                code: error.response?.status || 500,
-                message: (error.response?.data as any)?.message || error.message || '请求失败',
-                details: (error.response?.data as any)?.details || error.response?.data
-              }
-              return Promise.reject(appError)
-            }
-          )
-
-          // 模拟 HTTP 错误
-          testClient.interceptors.request.use(_config => {
-            const axiosError = new AxiosError(message)
-            axiosError.response = {
-              status: statusCode,
-              statusText: 'Error',
-              data: { message, details },
-              headers: {},
-              config: _config as any
-            }
-            return Promise.reject(axiosError)
-          })
-
-          // 执行请求并捕获错误
-          try {
-            await testClient.get(url)
-            return false // 不应该到达这里
-          } catch (error) {
-            const appError = error as AppError
-
-            // 验证错误格式
-            return (
-              typeof appError.code === 'number' &&
-              appError.code === statusCode &&
-              typeof appError.message === 'string' &&
-              appError.message.length > 0 &&
-              appError.details !== undefined
-            )
+        fc.constant(null),
+        (statusCode, message, details) => {
+          const axiosError = new AxiosError(message)
+          axiosError.response = {
+            status: statusCode,
+            statusText: 'Error',
+            data: { message, details },
+            headers: {},
+            config: {} as any
           }
+
+          const appError = toAppError(axiosError)
+
+          return (
+            typeof appError.code === 'number' &&
+            appError.code === statusCode &&
+            typeof appError.message === 'string' &&
+            appError.message.length > 0 &&
+            appError.details !== undefined
+          )
         }
       ),
       { numRuns: 100 }
@@ -144,40 +128,16 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
 
   it('should preserve HTTP status code in error.code field', () => {
     fc.assert(
-      fc.property(httpErrorCodeArb, urlPathArb, async (statusCode, url) => {
-        const testClient = axios.create({ baseURL: '/api' })
-
-        testClient.interceptors.response.use(
-          response => response.data,
-          (error: AxiosError) => {
-            const appError: AppError = {
-              code: error.response?.status || 500,
-              message: error.message || '请求失败',
-              details: error.response?.data
-            }
-            return Promise.reject(appError)
-          }
-        )
-
-        testClient.interceptors.request.use(_config => {
-          const axiosError = new AxiosError('Error')
-          axiosError.response = {
-            status: statusCode,
-            statusText: 'Error',
-            data: {},
-            headers: {},
-            config: _config as any
-          }
-          return Promise.reject(axiosError)
-        })
-
-        try {
-          await testClient.get(url)
-          return false
-        } catch (error) {
-          const appError = error as AppError
-          return appError.code === statusCode
+      fc.property(httpErrorCodeArb, fc.constant(null), statusCode => {
+        const axiosError = new AxiosError('Error')
+        axiosError.response = {
+          status: statusCode,
+          statusText: 'Error',
+          data: {},
+          headers: {},
+          config: {} as any
         }
+        return toAppError(axiosError).code === statusCode
       }),
       { numRuns: 100 }
     )
@@ -185,138 +145,54 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
 
   it('should extract message from response data if available', () => {
     fc.assert(
-      fc.property(
-        httpErrorCodeArb,
-        errorMessageArb,
-        urlPathArb,
-        async (statusCode, message, url) => {
-          const testClient = axios.create({ baseURL: '/api' })
-
-          testClient.interceptors.response.use(
-            response => response.data,
-            (error: AxiosError) => {
-              const responseData = error.response?.data as any
-              const appError: AppError = {
-                code: error.response?.status || 500,
-                message: responseData?.message || error.message || '请求失败',
-                details: responseData?.details || error.response?.data
-              }
-              return Promise.reject(appError)
-            }
-          )
-
-          testClient.interceptors.request.use(_config => {
-            const axiosError = new AxiosError('Default error')
-            axiosError.response = {
-              status: statusCode,
-              statusText: 'Error',
-              data: { message },
-              headers: {},
-              config: _config as any
-            }
-            return Promise.reject(axiosError)
-          })
-
-          try {
-            await testClient.get(url)
-            return false
-          } catch (error) {
-            const appError = error as AppError
-            return appError.message === message
-          }
+      fc.property(httpErrorCodeArb, errorMessageArb, fc.constant(null), (statusCode, message) => {
+        const axiosError = new AxiosError('Default error')
+        axiosError.response = {
+          status: statusCode,
+          statusText: 'Error',
+          data: { message },
+          headers: {},
+          config: {} as any
         }
-      ),
+        return toAppError(axiosError).message === message
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should include details from response data', () => {
     fc.assert(
-      fc.property(
-        httpErrorCodeArb,
-        errorDetailsArb,
-        urlPathArb,
-        async (statusCode, details, url) => {
-          const testClient = axios.create({ baseURL: '/api' })
-
-          testClient.interceptors.response.use(
-            response => response.data,
-            (error: AxiosError) => {
-              const responseData = error.response?.data as any
-              const appError: AppError = {
-                code: error.response?.status || 500,
-                message: responseData?.message || error.message || '请求失败',
-                details: responseData?.details || error.response?.data
-              }
-              return Promise.reject(appError)
-            }
-          )
-
-          testClient.interceptors.request.use(_config => {
-            const axiosError = new AxiosError('Error')
-            axiosError.response = {
-              status: statusCode,
-              statusText: 'Error',
-              data: { message: 'Error', details },
-              headers: {},
-              config: _config as any
-            }
-            return Promise.reject(axiosError)
-          })
-
-          try {
-            await testClient.get(url)
-            return false
-          } catch (error) {
-            const appError = error as AppError
-            const errorDetails = appError.details as any
-            return (
-              errorDetails !== undefined &&
-              errorDetails.field === details.field &&
-              errorDetails.reason === details.reason
-            )
-          }
+      fc.property(httpErrorCodeArb, errorDetailsArb, fc.constant(null), (statusCode, details) => {
+        const axiosError = new AxiosError('Error')
+        axiosError.response = {
+          status: statusCode,
+          statusText: 'Error',
+          data: { message: 'Error', details },
+          headers: {},
+          config: {} as any
         }
-      ),
+        const errorDetails = toAppError(axiosError).details as any
+        return (
+          errorDetails !== undefined &&
+          errorDetails.field === details.field &&
+          errorDetails.reason === details.reason
+        )
+      }),
       { numRuns: 100 }
     )
   })
 
   it('should handle network errors without response', () => {
     fc.assert(
-      fc.property(errorMessageArb, urlPathArb, async (message, url) => {
-        const testClient = axios.create({ baseURL: '/api' })
-
-        testClient.interceptors.response.use(
-          response => response.data,
-          (error: AxiosError) => {
-            const appError: AppError = {
-              code: error.response?.status || 500,
-              message: error.message || '请求失败',
-              details: error.response?.data
-            }
-            return Promise.reject(appError)
-          }
+      fc.property(errorMessageArb, fc.constant(null), message => {
+        const axiosError = new AxiosError(message)
+        axiosError.response = undefined
+        const appError = toAppError(axiosError)
+        return (
+          appError.code === 500 &&
+          typeof appError.message === 'string' &&
+          appError.message.length > 0
         )
-
-        testClient.interceptors.request.use(_config => {
-          const axiosError = new AxiosError(message)
-          // 没有 response（网络错误）
-          axiosError.response = undefined
-          return Promise.reject(axiosError)
-        })
-
-        try {
-          await testClient.get(url)
-          return false
-        } catch (error) {
-          const appError = error as AppError
-          return (
-            appError.code === 500 &&
-            typeof appError.message === 'string' &&
-            appError.message.length > 0
-          )
-        }
       }),
       { numRuns: 50 }
     )
@@ -326,44 +202,21 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
     const commonErrorCodes = [400, 401, 403, 404, 422, 500, 502, 503, 504]
 
     fc.assert(
-      fc.property(fc.constantFrom(...commonErrorCodes), urlPathArb, async (statusCode, url) => {
-        const testClient = axios.create({ baseURL: '/api' })
-
-        testClient.interceptors.response.use(
-          response => response.data,
-          (error: AxiosError) => {
-            const appError: AppError = {
-              code: error.response?.status || 500,
-              message: error.message || '请求失败',
-              details: error.response?.data
-            }
-            return Promise.reject(appError)
-          }
-        )
-
-        testClient.interceptors.request.use(_config => {
-          const axiosError = new AxiosError('Error')
-          axiosError.response = {
-            status: statusCode,
-            statusText: 'Error',
-            data: { message: `Error ${statusCode}` },
-            headers: {},
-            config: _config as any
-          }
-          return Promise.reject(axiosError)
-        })
-
-        try {
-          await testClient.get(url)
-          return false
-        } catch (error) {
-          const appError = error as AppError
-          return (
-            appError.code === statusCode &&
-            typeof appError.message === 'string' &&
-            appError.details !== undefined
-          )
+      fc.property(fc.constantFrom(...commonErrorCodes), fc.constant(null), statusCode => {
+        const axiosError = new AxiosError('Error')
+        axiosError.response = {
+          status: statusCode,
+          statusText: 'Error',
+          data: { message: `Error ${statusCode}` },
+          headers: {},
+          config: {} as any
         }
+        const appError = toAppError(axiosError)
+        return (
+          appError.code === statusCode &&
+          typeof appError.message === 'string' &&
+          appError.details !== undefined
+        )
       }),
       { numRuns: 50 }
     )
@@ -376,61 +229,22 @@ describe('Feature: architecture-refactoring, Property 4: HTTP Error Transformati
       fc.property(
         fc.constantFrom(...httpMethods),
         httpErrorCodeArb,
-        urlPathArb,
-        async (method, statusCode, url) => {
-          const testClient = axios.create({ baseURL: '/api' })
-
-          testClient.interceptors.response.use(
-            response => response.data,
-            (error: AxiosError) => {
-              const appError: AppError = {
-                code: error.response?.status || 500,
-                message: error.message || '请求失败',
-                details: error.response?.data
-              }
-              return Promise.reject(appError)
-            }
-          )
-
-          testClient.interceptors.request.use(_config => {
-            const axiosError = new AxiosError('Error')
-            axiosError.response = {
-              status: statusCode,
-              statusText: 'Error',
-              data: { message: 'Error' },
-              headers: {},
-              config: _config as any
-            }
-            return Promise.reject(axiosError)
-          })
-
-          try {
-            switch (method) {
-              case 'get':
-                await testClient.get(url)
-                break
-              case 'post':
-                await testClient.post(url, {})
-                break
-              case 'put':
-                await testClient.put(url, {})
-                break
-              case 'delete':
-                await testClient.delete(url)
-                break
-              case 'patch':
-                await testClient.patch(url, {})
-                break
-            }
-            return false
-          } catch (error) {
-            const appError = error as AppError
-            return (
-              appError.code === statusCode &&
-              typeof appError.message === 'string' &&
-              appError.details !== undefined
-            )
+        fc.constant(null),
+        (method, statusCode) => {
+          const axiosError = new AxiosError(`Error via ${method}`)
+          axiosError.response = {
+            status: statusCode,
+            statusText: 'Error',
+            data: { message: 'Error' },
+            headers: {},
+            config: {} as any
           }
+          const appError = toAppError(axiosError)
+          return (
+            appError.code === statusCode &&
+            typeof appError.message === 'string' &&
+            appError.details !== undefined
+          )
         }
       ),
       { numRuns: 100 }

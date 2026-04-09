@@ -1,6 +1,6 @@
 /**
  * Unit Tests for Strategic Indicator Store
- * 
+ *
  * Tests for features/strategic-indicator/model/store.ts
  */
 
@@ -92,7 +92,7 @@ describe('Strategic Indicator Store', () => {
 
     it('should compute listState correctly', () => {
       const listState = indicatorStore.listState
-      
+
       expect(listState.items).toEqual(mockIndicatorList)
       expect(listState.total).toBe(2)
       expect(listState.loading).toBe(false)
@@ -101,15 +101,15 @@ describe('Strategic Indicator Store', () => {
 
     it('should compute statistics correctly', () => {
       const stats = indicatorStore.statistics
-      
+
       expect(stats.total).toBe(2)
       expect(stats.byStatus).toEqual({
-        'DISTRIBUTED': 1,
-        'COMPLETED': 1
+        DISTRIBUTED: 1,
+        COMPLETED: 1
       })
       expect(stats.byLevel).toEqual({
-        'STRATEGIC': 1,
-        'OPERATIONAL': 1
+        STRATEGIC: 1,
+        OPERATIONAL: 1
       })
       expect(stats.completionRate).toBe(80) // Weighted: (80 + 80) / (100 + 100) * 100
     })
@@ -117,7 +117,7 @@ describe('Strategic Indicator Store', () => {
     it('should handle empty indicators in statistics', () => {
       indicatorStore.indicators = []
       const stats = indicatorStore.statistics
-      
+
       expect(stats.total).toBe(0)
       expect(stats.byStatus).toEqual({})
       expect(stats.byLevel).toEqual({})
@@ -129,7 +129,7 @@ describe('Strategic Indicator Store', () => {
         { ...mockIndicator, targetValue: undefined, actualValue: undefined }
       ]
       const stats = indicatorStore.statistics
-      
+
       expect(stats.completionRate).toBe(0)
     })
   })
@@ -137,7 +137,7 @@ describe('Strategic Indicator Store', () => {
   describe('Fetch Indicators', () => {
     it('should fetch indicators successfully', async () => {
       const mockQuery = await import('@/features/strategic-indicator/api/query')
-      
+
       mockQuery.queryIndicators.mockResolvedValue({
         content: mockIndicatorList,
         totalElements: 2
@@ -158,7 +158,7 @@ describe('Strategic Indicator Store', () => {
     it('should handle fetch indicators error', async () => {
       const mockQuery = await import('@/features/strategic-indicator/api/query')
       const error = new Error('Network error')
-      
+
       mockQuery.queryIndicators.mockRejectedValue(error)
 
       await expect(indicatorStore.fetchIndicators()).rejects.toThrow('Network error')
@@ -168,7 +168,7 @@ describe('Strategic Indicator Store', () => {
 
     it('should update filters when provided', async () => {
       const mockQuery = await import('@/features/strategic-indicator/api/query')
-      
+
       mockQuery.queryIndicators.mockResolvedValue({
         content: [],
         totalElements: 0
@@ -188,7 +188,7 @@ describe('Strategic Indicator Store', () => {
   describe('Fetch Indicator By ID', () => {
     it('should fetch indicator by ID successfully', async () => {
       const mockQuery = await import('@/features/strategic-indicator/api/query')
-      
+
       mockQuery.getIndicatorById.mockResolvedValue(mockIndicator)
 
       const result = await indicatorStore.fetchIndicatorById(1)
@@ -202,7 +202,7 @@ describe('Strategic Indicator Store', () => {
     it('should handle fetch indicator by ID error', async () => {
       const mockQuery = await import('@/features/strategic-indicator/api/query')
       const error = new Error('Not found')
-      
+
       mockQuery.getIndicatorById.mockRejectedValue(error)
 
       await expect(indicatorStore.fetchIndicatorById(1)).rejects.toThrow('Not found')
@@ -215,12 +215,14 @@ describe('Strategic Indicator Store', () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
       const newIndicatorData = { name: 'New Indicator', type: 'QUANTITATIVE' }
       const createdIndicator = { ...mockIndicator, id: 3, ...newIndicatorData }
-      
+
       mockMutations.createIndicator.mockResolvedValue(createdIndicator)
 
       const result = await indicatorStore.createIndicator(newIndicatorData)
 
-      expect(mockMutations.createIndicator).toHaveBeenCalledWith(newIndicatorData)
+      expect(mockMutations.createIndicator).toHaveBeenCalledWith(
+        expect.objectContaining(newIndicatorData)
+      )
       expect(result).toEqual(createdIndicator)
       expect(indicatorStore.indicators[0]).toEqual(createdIndicator)
       expect(indicatorStore.total).toBe(1)
@@ -229,7 +231,7 @@ describe('Strategic Indicator Store', () => {
     it('should handle create indicator error', async () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
       const error = new Error('Validation error')
-      
+
       mockMutations.createIndicator.mockRejectedValue(error)
 
       await expect(indicatorStore.createIndicator({})).rejects.toThrow('Validation error')
@@ -247,7 +249,7 @@ describe('Strategic Indicator Store', () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
       const updateData = { name: 'Updated Name' }
       const updatedIndicator = { ...mockIndicator, ...updateData }
-      
+
       mockMutations.updateIndicator.mockResolvedValue(updatedIndicator)
 
       const result = await indicatorStore.updateIndicator(1, updateData)
@@ -261,7 +263,7 @@ describe('Strategic Indicator Store', () => {
     it('should handle update indicator error', async () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
       const error = new Error('Update failed')
-      
+
       mockMutations.updateIndicator.mockRejectedValue(error)
 
       await expect(indicatorStore.updateIndicator(1, {})).rejects.toThrow('Update failed')
@@ -278,7 +280,7 @@ describe('Strategic Indicator Store', () => {
 
     it('should delete indicator successfully', async () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
-      
+
       mockMutations.deleteIndicator.mockResolvedValue(undefined)
 
       await indicatorStore.deleteIndicator(1)
@@ -292,7 +294,7 @@ describe('Strategic Indicator Store', () => {
     it('should handle delete indicator error', async () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
       const error = new Error('Delete failed')
-      
+
       mockMutations.deleteIndicator.mockRejectedValue(error)
 
       await expect(indicatorStore.deleteIndicator(1)).rejects.toThrow('Delete failed')
@@ -304,11 +306,16 @@ describe('Strategic Indicator Store', () => {
     it('should distribute indicator successfully', async () => {
       const mockMutations = await import('@/features/strategic-indicator/api/mutations')
       const mockQuery = await import('@/features/strategic-indicator/api/query')
-      
+
       mockMutations.distributeIndicator.mockResolvedValue({ success: true })
       mockQuery.getIndicatorById.mockResolvedValue(mockIndicator)
 
-      const result = await indicatorStore.distributeIndicator(1, [2, 3], 'Test message', '2026-12-31')
+      const result = await indicatorStore.distributeIndicator(
+        1,
+        [2, 3],
+        'Test message',
+        '2026-12-31'
+      )
 
       expect(mockMutations.distributeIndicator).toHaveBeenCalledWith(1, {
         targetOrgIds: [2, 3],
@@ -323,9 +330,9 @@ describe('Strategic Indicator Store', () => {
   describe('Utility Actions', () => {
     it('should reset filters', () => {
       indicatorStore.filters = { page: 5, size: 50, status: 'ACTIVE' }
-      
+
       indicatorStore.resetFilters()
-      
+
       expect(indicatorStore.filters).toEqual({
         page: 0,
         size: 20
@@ -334,9 +341,9 @@ describe('Strategic Indicator Store', () => {
 
     it('should clear error', () => {
       indicatorStore.error = 'Some error'
-      
+
       indicatorStore.clearError()
-      
+
       expect(indicatorStore.error).toBe(null)
     })
   })

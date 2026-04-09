@@ -61,7 +61,7 @@ export enum ErrorCodePrefix {
   /** 网络错误 */
   NET = 'NET',
   /** 频率限制错误 */
-  RATE = 'RATE',
+  RATE = 'RATE'
 }
 
 /**
@@ -75,7 +75,7 @@ export enum ErrorSeverity {
   /** 错误级别，功能无法正常使用 */
   ERROR = 'error',
   /** 严重错误，系统可能不稳定 */
-  CRITICAL = 'critical',
+  CRITICAL = 'critical'
 }
 
 /**
@@ -126,7 +126,8 @@ export function isApiErrorResponse(error: unknown): error is ApiErrorResponse {
 
   const obj = error as Record<string, unknown>
   return (
-    typeof obj.code === 'number' && typeof obj.message === 'string'
+    (typeof obj.code === 'number' || typeof obj.code === 'string') &&
+    typeof obj.message === 'string'
   )
 }
 
@@ -137,7 +138,7 @@ export function isValidationErrorResponse(error: unknown): error is ValidationEr
   if (!isApiErrorResponse(error)) {
     return false
   }
-  
+
   const obj = error as ValidationErrorResponse
   return (
     obj.details !== undefined &&

@@ -116,7 +116,7 @@ export interface PlanFillVO {
 }
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
-  return response.success === true || response.code === 200
+  return Boolean(response) && (response.success === true || response.code === 200)
 }
 
 type SilentApiResult<T> = {
@@ -835,7 +835,7 @@ async function resolveIndicatorFillSaveContext(indicatorId: number | string): Pr
   const latestCurrentMonthReport = currentMonthReports[0]
   const editableExistingReport = currentMonthReports.find(report => {
     const normalizedStatus = getNormalizedReportStatus(report.status)
-    return normalizedStatus === 'DRAFT'
+    return normalizedStatus === 'DRAFT' || normalizedStatus === 'REJECTED'
   })
 
   if (latestCurrentMonthReport && !editableExistingReport) {
@@ -992,9 +992,7 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
 }
 
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
-  const result = await silentApiGet<PlanReportSimpleResponse>(
-    `/reports/${reportId}?_t=${Date.now()}`
-  )
+  const result = await silentApiGet<PlanReportSimpleResponse>(`/reports/${reportId}`)
   const response = result.data as ApiResponse<PlanReportSimpleResponse> | undefined
   if (result.status >= 500 || !response || !hasApiData(response) || !response.data) {
     throw new Error(
@@ -2211,8 +2209,8 @@ export const indicatorFillApi = {
       )
 
     const latestEditableDraft =
-      currentMonthReports.find(
-        report => getNormalizedReportStatus(report.status) === 'DRAFT'
+      currentMonthReports.find(report =>
+        ['DRAFT', 'REJECTED'].includes(getNormalizedReportStatus(report.status))
       ) || null
 
     if (latestEditableDraft) {

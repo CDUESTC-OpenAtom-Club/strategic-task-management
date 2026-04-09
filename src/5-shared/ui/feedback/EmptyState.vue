@@ -16,16 +16,16 @@
     </div>
 
     <!-- 标题 -->
-    <div v-if="title || $slots.title" class="empty-state__title">
+    <div v-if="_displayTitle || $slots.title" class="empty-state__title">
       <slot name="title">
-        {{ title }}
+        {{ _displayTitle }}
       </slot>
     </div>
 
     <!-- 描述 -->
-    <div v-if="description || $slots.description" class="empty-state__description">
+    <div v-if="_displayDescription || $slots.description" class="empty-state__description">
       <slot name="description">
-        {{ description }}
+        {{ _displayDescription }}
       </slot>
     </div>
 
@@ -145,7 +145,9 @@ const defaultIcon = computed(() => iconMap[props.type] || Document)
 const _displayTitle = computed(() => props.title || textMap[props.type]?.title || '')
 
 /** 显示描述 */
-const _displayDescription = computed(() => props.description || textMap[props.type]?.description || '')
+const _displayDescription = computed(
+  () => props.description || textMap[props.type]?.description || ''
+)
 
 /** 图标大小 */
 const iconSize = computed(() => {
@@ -157,13 +159,9 @@ const iconSize = computed(() => {
 function handleAction() {
   emit('action')
 }
-
-// 暴露给模板
-const { title, description } = toRefs(props)
 </script>
 
 <script lang="ts">
-import { toRefs } from 'vue'
 export default {
   name: 'EmptyState'
 }

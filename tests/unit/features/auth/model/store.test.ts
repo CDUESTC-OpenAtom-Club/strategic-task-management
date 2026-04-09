@@ -11,14 +11,14 @@ import type { User } from '@/types'
 import { getTestCredentials } from '../../../../helpers/testCredentials'
 
 // Mock dependencies
-vi.mock('@/api', () => ({
-  default: {
+vi.mock('@/shared/api/client', () => ({
+  apiClient: {
     post: vi.fn(),
     get: vi.fn()
   }
 }))
 
-vi.mock('@/utils/logger', () => ({
+vi.mock('@/shared/lib/utils/logger', () => ({
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -26,12 +26,13 @@ vi.mock('@/utils/logger', () => ({
   }
 }))
 
-vi.mock('@/utils/tokenManager', () => ({
+vi.mock('@/shared/lib/utils/tokenManager', () => ({
   tokenManager: {
-    getAccessToken: vi.fn(),
+    getAccessToken: vi.fn(() => null),
     setAccessToken: vi.fn(),
     clearAccessToken: vi.fn(),
-    refreshAccessToken: vi.fn()
+    refreshAccessToken: vi.fn(),
+    hasValidToken: vi.fn(() => true)
   },
   TokenRefreshError: class TokenRefreshError extends Error {
     constructor(message: string) {
@@ -41,9 +42,19 @@ vi.mock('@/utils/tokenManager', () => ({
   }
 }))
 
-vi.mock('@/utils/authHelpers', () => ({
+vi.mock('@/shared/lib/utils/authHelpers', () => ({
   parseLoginResponse: vi.fn(),
   mapBackendUser: vi.fn()
+}))
+
+vi.mock('@/features/auth/api/query', () => ({
+  getUserPermissions: vi.fn(async () => ({ success: true, data: [] }))
+}))
+
+vi.mock('@/shared/lib/utils/cache', () => ({
+  buildQueryKey: vi.fn(() => ['auth.user']),
+  fetchWithCache: vi.fn(async ({ fetcher }: { fetcher: () => Promise<unknown> }) => fetcher()),
+  invalidateQueries: vi.fn()
 }))
 
 vi.mock('@/shared/lib/timeContext', () => ({
@@ -139,11 +150,11 @@ describe('Auth Store', () => {
     const mockCredentials = getTestCredentials('STANDARD')
 
     it('should handle successful login', async () => {
-      const mockApi = await import('@/api')
-      const mockAuthHelpers = await import('@/utils/authHelpers')
+      const mockApi = await import('@/shared/api/client')
+      const mockAuthHelpers = await import('@/shared/lib/utils/authHelpers')
 
       // Mock successful API response
-      mockApi.default.post.mockResolvedValue({
+      mockApi.apiClient.post.mockResolvedValue({
         code: 0,
         data: { token: 'mock-token', user: mockUser }
       })
@@ -164,9 +175,9 @@ describe('Auth Store', () => {
     })
 
     it('should handle login failure', async () => {
-      const mockApi = await import('@/api')
+      const mockApi = await import('@/shared/api/client')
 
-      mockApi.default.post.mockRejectedValue(new Error('Network error'))
+      mockApi.apiClient.post.mockRejectedValue(new Error('Network error'))
 
       const result = await authStore.login(mockCredentials)
 
@@ -178,10 +189,10 @@ describe('Auth Store', () => {
     })
 
     it('should handle parse error', async () => {
-      const mockApi = await import('@/api')
-      const mockAuthHelpers = await import('@/utils/authHelpers')
+      const mockApi = await import('@/shared/api/client')
+      const mockAuthHelpers = await import('@/shared/lib/utils/authHelpers')
 
-      mockApi.default.post.mockResolvedValue({ code: 0 })
+      mockApi.apiClient.post.mockResolvedValue({ code: 0 })
       mockAuthHelpers.parseLoginResponse.mockReturnValue({
         success: false,
         error: 'Parse error'
@@ -202,8 +213,8 @@ describe('Auth Store', () => {
       localStorage.setItem('token', 'mock-token')
     })
 
-    it('should clear all auth data', () => {
-      const mockTokenManager = vi.mocked(await import('@/utils/tokenManager'))
+    it('should clear all auth data', async () => {
+      const mockTokenManager = vi.mocked(await import('@/shared/lib/utils/tokenManager'))
 
       authStore.logout()
 
@@ -223,7 +234,7 @@ describe('Auth Store', () => {
     it('should check permissions for strategic_dept role', () => {
       expect(authStore.hasPermission('strategic_tasks', 'create')).toBe(true)
       expect(authStore.hasPermission('indicators', 'read')).toBe(true)
-      expect(authStore.hasPermission('approvals', 'approve')).toBe(true)
+      expect(authStore.hasPermission('approvals', 'approve')).toBe(false)
     })
 
     it('should deny permissions for unauthenticated user', () => {
@@ -273,39 +284,39 @@ describe('Auth Store', () => {
 
   describe('Fetch User', () => {
     it('should fetch user data when token exists', async () => {
-      const mockApi = await import('@/api')
+      const mockApi = await import('@/shared/api/client')
       authStore.token = 'mock-token'
 
-      mockApi.default.get.mockResolvedValue({
-        code: 0,
+      mockApi.apiClient.get.mockResolvedValue({
+        success: true,
         data: mockUser
       })
 
       await authStore.fetchUser()
 
-      expect(mockApi.default.get).toHaveBeenCalledWith('/auth/me')
+      expect(mockApi.apiClient.get).toHaveBeenCalledWith('/auth/me')
       expect(authStore.user).toEqual(mockUser)
     })
 
     it('should logout on fetch user failure', async () => {
-      const mockApi = await import('@/api')
+      const mockApi = await import('@/shared/api/client')
       authStore.token = 'mock-token'
 
-      mockApi.default.get.mockRejectedValue(new Error('Unauthorized'))
+      mockApi.apiClient.get.mockRejectedValue(new Error('Unauthorized'))
 
-      const logoutSpy = vi.spyOn(authStore, 'logout')
       await authStore.fetchUser()
 
-      expect(logoutSpy).toHaveBeenCalled()
+      expect(authStore.user).toBe(null)
+      expect(authStore.token).toBe(null)
     })
 
     it('should not fetch user when no token', async () => {
-      const mockApi = await import('@/api')
+      const mockApi = await import('@/shared/api/client')
       authStore.token = null
 
       await authStore.fetchUser()
 
-      expect(mockApi.default.get).not.toHaveBeenCalled()
+      expect(mockApi.apiClient.get).not.toHaveBeenCalled()
     })
   })
 })

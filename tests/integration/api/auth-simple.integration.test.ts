@@ -11,24 +11,29 @@ import type { User } from '@/entities/user/model/types'
 import { getTestCredentials } from '../../../helpers/testCredentials'
 
 // Mock dependencies
-vi.mock('@/api', () => ({
-  default: {
+vi.mock('@/shared/api/client', () => ({
+  apiClient: {
     post: vi.fn(),
     get: vi.fn()
   }
 }))
 
-vi.mock('@/utils/tokenManager', () => ({
+vi.mock('@/shared/lib/utils/tokenManager', () => ({
   tokenManager: {
     getAccessToken: vi.fn(() => null),
     setAccessToken: vi.fn(),
-    clearAccessToken: vi.fn()
+    clearAccessToken: vi.fn(),
+    hasValidToken: vi.fn(() => true)
   }
 }))
 
-vi.mock('@/utils/authHelpers', () => ({
+vi.mock('@/shared/lib/utils/authHelpers', () => ({
   parseLoginResponse: vi.fn(),
   mapBackendUser: vi.fn()
+}))
+
+vi.mock('@/features/auth/api/query', () => ({
+  getUserPermissions: vi.fn(async () => ({ success: true, data: [] }))
 }))
 
 describe('Auth API Integration', () => {
@@ -52,11 +57,11 @@ describe('Auth API Integration', () => {
 
   describe('Login Flow Integration', () => {
     it('should complete full login flow with API and store integration', async () => {
-      const mockApi = await import('@/api')
-      const mockAuthHelpers = await import('@/utils/authHelpers')
+      const mockApi = await import('@/shared/api/client')
+      const mockAuthHelpers = await import('@/shared/lib/utils/authHelpers')
 
       // Mock successful API response
-      mockApi.default.post.mockResolvedValue({
+      mockApi.apiClient.post.mockResolvedValue({
         code: 0,
         data: { token: 'mock-jwt-token', user: mockUser }
       })

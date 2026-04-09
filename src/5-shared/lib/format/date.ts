@@ -1,17 +1,19 @@
 // @ts-nocheck
 /**
  * Date Formatting Utilities
- * 
+ *
  * Date formatting and parsing functions using Day.js
  */
 
 import dayjs from 'dayjs'
 import 'dayjs/locale/zh-cn'
 import relativeTime from 'dayjs/plugin/relativeTime'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
 
 // Configure dayjs
 dayjs.locale('zh-cn')
 dayjs.extend(relativeTime)
+dayjs.extend(customParseFormat)
 
 /**
  * Format date to string with default format YYYY-MM-DD
@@ -30,7 +32,10 @@ export function formatDateShort(date: Date | string | number): string {
 /**
  * Format datetime to string with default format YYYY-MM-DD HH:mm:ss
  */
-export function formatDateTime(date: Date | string | number, format = 'YYYY-MM-DD HH:mm:ss'): string {
+export function formatDateTime(
+  date: Date | string | number,
+  format = 'YYYY-MM-DD HH:mm:ss'
+): string {
   return dayjs(date).format(format)
 }
 
@@ -45,9 +50,13 @@ export function formatTime(date: Date | string | number, format = 'HH:mm:ss'): s
  * Format date to Chinese format (YYYY年MM月DD日)
  */
 export function formatDateChinese(date: Date | string | null | undefined): string {
-  if (!date) {return '未设置'}
+  if (!date) {
+    return '未设置'
+  }
   const d = dayjs(date)
-  if (!d.isValid()) {return '日期格式错误'}
+  if (!d.isValid()) {
+    return '日期格式错误'
+  }
   return d.format('YYYY年MM月DD日')
 }
 
@@ -59,9 +68,13 @@ export function safeFormatDate(
   format = 'YYYY-MM-DD',
   defaultValue = '未设置'
 ): string {
-  if (!date) {return defaultValue}
+  if (!date) {
+    return defaultValue
+  }
   const d = dayjs(date)
-  if (!d.isValid()) {return defaultValue}
+  if (!d.isValid()) {
+    return defaultValue
+  }
   return d.format(format)
 }
 

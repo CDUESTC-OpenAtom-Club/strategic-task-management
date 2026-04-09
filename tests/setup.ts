@@ -6,8 +6,9 @@
  * Requirements: Testing framework configuration (Vitest + fast-check)
  */
 
-import { beforeAll, afterEach, afterAll, vi } from 'vitest'
+import { beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest'
 import { config } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 
 // Mock localStorage and sessionStorage before all tests
 const localStorageMock = (() => {
@@ -43,8 +44,14 @@ beforeAll(() => {
     // Stub out router-link and router-view
     'router-link': true,
     'router-view': true,
-    // Stub out Element Plus components if needed
-    'el-button': true,
+    // Minimal Element Plus stubs that still render slot content for assertions
+    'el-icon': {
+      template: '<i class="el-icon"><slot /></i>'
+    },
+    'el-button': {
+      emits: ['click'],
+      template: '<button class="el-button" @click="$emit(\'click\')"><slot /></button>'
+    },
     'el-input': true,
     'el-form': true,
     'el-form-item': true,
@@ -63,6 +70,10 @@ beforeAll(() => {
     value: localStorageMock,
     writable: true
   })
+})
+
+beforeEach(() => {
+  setActivePinia(createPinia())
 })
 
 // Clean up after each test

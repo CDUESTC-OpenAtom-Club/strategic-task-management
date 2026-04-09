@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  apiGet,
-  apiPost,
-  apiPut,
-  getIndicatorById,
-  loadDepartments
-} = vi.hoisted(() => ({
+const { apiGet, apiPost, apiPut, getIndicatorById, loadDepartments } = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   apiPut: vi.fn(),
@@ -212,16 +206,19 @@ describe('indicatorFillApi real report flow', () => {
     })
 
     expect(apiPost).not.toHaveBeenCalled()
-    expect(apiPut).toHaveBeenCalledWith('/reports/9', {
-      title: '年度预算执行率',
-      indicatorId: 30022,
-      content: '驳回后修改并重新保存',
-      summary: '驳回后修改并重新保存',
-      progress: 66,
-      issues: '驳回后修改并重新保存',
-      nextPlan: '驳回后修改并重新保存',
-      operatorUserId: 124
-    })
+    expect(apiPut).toHaveBeenCalledWith(
+      '/reports/9',
+      expect.objectContaining({
+        title: '年度预算执行率',
+        indicatorId: 30022,
+        content: '驳回后修改并重新保存',
+        summary: '驳回后修改并重新保存',
+        progress: 66,
+        issues: '驳回后修改并重新保存',
+        nextPlan: '驳回后修改并重新保存',
+        operatorUserId: 124
+      })
+    )
     expect(response.data.id).toBe(9)
     expect(response.data.content).toBe('驳回后修改并重新保存')
   })

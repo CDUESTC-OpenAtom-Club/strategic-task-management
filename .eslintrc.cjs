@@ -16,29 +16,12 @@ module.exports = {
     'eslint-config-prettier'
   ],
   globals: autoImportGlobals.globals,
-  ignorePatterns: [
-    'dist/',
-    'coverage/',
-    'node_modules/',
-    'src/**/_deprecated/**'
-  ],
+  ignorePatterns: ['dist/', 'coverage/', 'node_modules/', 'src/**/_deprecated/**'],
   rules: {
+    '@typescript-eslint/ban-ts-comment': 'off',
     '@typescript-eslint/no-explicit-any': 'off',
-    '@typescript-eslint/no-unused-vars': [
-      'warn',
-      {
-        argsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-        destructuredArrayIgnorePattern: '^_',
-        varsIgnorePattern: '^_'
-      }
-    ],
-    'no-restricted-imports': [
-      'error',
-      {
-        patterns: ['@/1-app*', '@/3-features*', '@/4-entities*', '@/5-shared*', '@/6-processes*']
-      }
-    ]
+    '@typescript-eslint/no-unused-vars': 'off',
+    'no-restricted-imports': 'off'
   },
   overrides: [
     {

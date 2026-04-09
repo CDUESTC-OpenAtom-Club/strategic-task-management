@@ -68,6 +68,10 @@ export const usePlanStore = defineStore('plan', () => {
     return plans.value.find(p => p.id === id)
   }
 
+  const getPlanFillsByPlanId = (planId: number | string) => {
+    return planFills.value.filter(fill => String(fill.planId) === String(planId))
+  }
+
   const pendingPlanFills = computed(() => {
     return planFills.value.filter(pf => pf.status === 'submitted')
   })
@@ -864,6 +868,7 @@ export const usePlanStore = defineStore('plan', () => {
     filteredPlans,
     visiblePlans,
     getPlanById,
+    getPlanFillsByPlanId,
     getPlanByTargetOrgAndYear,
     pendingPlanFills,
     visiblePendingFills,
