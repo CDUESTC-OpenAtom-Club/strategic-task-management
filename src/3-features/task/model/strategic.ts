@@ -254,17 +254,14 @@ function normalizeMilestones(rawMilestones: unknown): StrategicIndicator['milest
   })
 }
 
-function normalizeType2FromTaskType(taskType: unknown): '发展性' | '基础性' | '其他' {
+function normalizeType2FromTaskType(taskType: unknown): '发展性' | '基础性' {
   const normalized = String(taskType || '')
     .trim()
     .toUpperCase()
   if (normalized === 'DEVELOPMENT') {
     return '发展性'
   }
-  if (normalized === 'BASIC') {
-    return '基础性'
-  }
-  return '其他'
+  return '基础性'
 }
 
 function normalizeStatusAudit(rawStatusAudit: unknown): Array<Record<string, unknown>> {
@@ -328,7 +325,7 @@ export function toStrategicIndicator(raw: unknown): StrategicIndicator {
         '定性',
     type1: normalizeIndicatorType(item.type1, item.indicatorType1, item.indicatorType, item.type),
     // type2 已从后端库表移除，前端仅做展示兼容，不再作为业务判断依据
-    type2: (getString(item, 'type2', 'indicatorType2') || '其他') as '发展性' | '基础性',
+    type2: (getString(item, 'type2', 'indicatorType2') || '基础性') as '发展性' | '基础性',
     progress: getNumber(item, 'progress'),
     createTime: createdAt,
     weight: getNumber(item, 'weight', 'weightPercent'),
@@ -465,7 +462,7 @@ function applyTaskMetadata(
     const normalizedType2 = normalizeType2FromTaskType(taskInfo.taskType)
     return {
       ...indicator,
-      type2: normalizedType2 === '其他' ? indicator.type2 : normalizedType2,
+      type2: normalizedType2,
       taskContent: taskInfo.taskName || indicator.taskContent
     }
   })
@@ -586,7 +583,7 @@ function mergePreferredTaskCategory(
   const currentType2 = String(nextIndicator.type2 || '').trim()
   const fallbackType2 = String(fallbackIndicator.type2 || '').trim()
 
-  if ((!currentType2 || currentType2 === '其他') && fallbackType2 && fallbackType2 !== '其他') {
+  if (!currentType2 && fallbackType2) {
     nextIndicator.type2 = fallbackType2 as StrategicIndicator['type2']
   }
 

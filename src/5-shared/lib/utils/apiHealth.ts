@@ -52,6 +52,36 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
   logger.debug('🏥 [Health Check] 检查后端服务健康状态...')
 
   try {
+    const token = tokenManager.getAccessToken()
+    const hasValidToken = Boolean(token && tokenManager.hasValidToken())
+
+    if (!hasValidToken) {
+      for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
+        try {
+          logger.debug(`🔍 [Health Check] 未登录状态，优先探测公开端点: ${endpoint}`)
+          const publicResponse = await probeEndpoint(endpoint, 5000)
+          if (publicResponse.status >= 200 && publicResponse.status < 500) {
+            return {
+              service: 'Backend API',
+              status: 'success',
+              message: '后端服务运行正常',
+              details: publicResponse.data,
+              timestamp: new Date()
+            }
+          }
+        } catch {
+          // try next endpoint
+        }
+      }
+
+      return {
+        service: 'Backend API',
+        status: 'warning',
+        message: '未登录状态下无法完成受保护接口探测，但公开健康端点可用性未明确',
+        timestamp: new Date()
+      }
+    }
+
     const response = await probeEndpoint('/organizations', 10000)
 
     if (response.status >= 200 && response.status < 300) {
@@ -232,6 +262,23 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
  */
 export async function quickBackendCheck(): Promise<boolean> {
   try {
+    const token = tokenManager.getAccessToken()
+    const hasValidToken = Boolean(token && tokenManager.hasValidToken())
+
+    if (!hasValidToken) {
+      for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
+        try {
+          const response = await probeEndpoint(endpoint, 3000)
+          if (response.status >= 200 && response.status < 500) {
+            return true
+          }
+        } catch {
+          // try next endpoint
+        }
+      }
+      return false
+    }
+
     const response = await probeEndpoint('/organizations', 3000)
 
     if (response.status >= 200 && response.status < 300) {

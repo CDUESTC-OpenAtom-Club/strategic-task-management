@@ -371,17 +371,14 @@ const getIndicatorMappedTaskType = (indicator: StrategicIndicator): string => {
   )
 }
 
-const getTaskCategoryLabel = (taskType?: string): '基础性' | '发展性' | '其他' => {
+const getTaskCategoryLabel = (taskType?: string): '基础性' | '发展性' => {
   if (isBasicTaskType(taskType)) {
     return '基础性'
   }
-  if (isDevelopmentTaskType(taskType)) {
-    return '发展性'
-  }
-  return '其他'
+  return '发展性'
 }
 
-const getIndicatorCategoryLabel = (indicator: StrategicIndicator): '基础性' | '发展性' | '其他' => {
+const getIndicatorCategoryLabel = (indicator: StrategicIndicator): '基础性' | '发展性' => {
   return getTaskCategoryLabel(getIndicatorMappedTaskType(indicator))
 }
 

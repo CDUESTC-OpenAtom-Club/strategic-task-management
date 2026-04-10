@@ -15,18 +15,10 @@
 export type TaskType =
   | 'BASIC' // 基础性任务
   | 'DEVELOPMENT' // 发展性任务
-  | 'KEY' // 重点任务
-  | 'SPECIAL' // 专项任务
-  | 'QUANTITATIVE' // 定量任务
-  | 'REGULAR' // 常规任务
 
 export const TaskType = {
   BASIC: 'BASIC' as const,
-  DEVELOPMENT: 'DEVELOPMENT' as const,
-  KEY: 'KEY' as const,
-  SPECIAL: 'SPECIAL' as const,
-  QUANTITATIVE: 'QUANTITATIVE' as const,
-  REGULAR: 'REGULAR' as const
+  DEVELOPMENT: 'DEVELOPMENT' as const
 } as const
 
 /**

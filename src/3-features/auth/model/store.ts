@@ -143,6 +143,10 @@ export const useAuthStore = defineStore('auth', () => {
   ): Promise<Record<string, unknown>> => {
     const orgId = userData.orgId
 
+    if (!token.value || !tokenManager.hasValidToken()) {
+      return userData
+    }
+
     const hasOrgMetadata = Boolean(
       String(userData.orgName ?? userData.department ?? '').trim() &&
       String(userData.orgType ?? userData.role ?? '').trim()
@@ -153,31 +157,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      if (token.value && tokenManager.hasValidToken()) {
-        const response = await api.get('/organizations')
+      const response = await api.get('/organizations')
 
-        const organizations =
-          response &&
-          typeof response === 'object' &&
-          'data' in response &&
-          Array.isArray(response.data)
-            ? (response.data as Array<Record<string, unknown>>)
-            : []
+      const organizations =
+        response &&
+        typeof response === 'object' &&
+        'data' in response &&
+        Array.isArray(response.data)
+          ? (response.data as Array<Record<string, unknown>>)
+          : []
 
-        const matchedOrg = organizations.find(org => {
-          const candidateId = org.id ?? org.orgId
-          return String(candidateId) === String(orgId)
-        })
+      const matchedOrg = organizations.find(org => {
+        const candidateId = org.id ?? org.orgId
+        return String(candidateId) === String(orgId)
+      })
 
-        if (matchedOrg) {
-          return {
-            ...userData,
-            orgType: (matchedOrg.orgType as string | undefined) || userData.orgType,
-            orgName:
-              (matchedOrg.orgName as string | undefined) ||
-              (matchedOrg.name as string | undefined) ||
-              userData.orgName
-          }
+      if (matchedOrg) {
+        return {
+          ...userData,
+          orgType: (matchedOrg.orgType as string | undefined) || userData.orgType,
+          orgName:
+            (matchedOrg.orgName as string | undefined) ||
+            (matchedOrg.name as string | undefined) ||
+            userData.orgName
         }
       }
 
