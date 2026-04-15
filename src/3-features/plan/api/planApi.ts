@@ -43,6 +43,10 @@ export interface SubmitPlanApprovalPayload {
 }
 
 const PLAN_WITHDRAW_TIMEOUT_MS = 90000
+const PLAN_REPORTS_CACHE_TTL_MS = 15 * 1000
+const planReportsByPlanIdCache = new Map<string, PlanReportSimpleResponse[]>()
+const planReportsByPlanIdCacheTime = new Map<string, number>()
+const planReportsByPlanIdInFlight = new Map<string, Promise<PlanReportSimpleResponse[]>>()
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
@@ -975,20 +979,92 @@ async function resolveIndicatorReportContext(
 }
 
 async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
-  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(
-    `/reports/plan/${planId}`,
-    { _t: Date.now() }
-  )
-  if (!hasApiData(response)) {
-    throw new Error(
-      typeof response.message === 'string'
-        ? response.message || '加载计划报告失败'
-        : '加载计划报告失败'
-    )
+  const normalizedPlanId = Number(planId)
+  if (!Number.isFinite(normalizedPlanId) || normalizedPlanId <= 0) {
+    return []
   }
 
-  const reports = Array.isArray(response.data) ? response.data : []
-  return Promise.all(reports.map(report => enrichPlanReportWorkflow(report)))
+  const cacheKey = String(normalizedPlanId)
+  const cachedAt = planReportsByPlanIdCacheTime.get(cacheKey) ?? 0
+  const cachedReports = planReportsByPlanIdCache.get(cacheKey)
+  const now = Date.now()
+
+  if (cachedReports && now - cachedAt < PLAN_REPORTS_CACHE_TTL_MS) {
+    return cachedReports
+  }
+
+  const inFlightRequest = planReportsByPlanIdInFlight.get(cacheKey)
+  if (inFlightRequest) {
+    return inFlightRequest
+  }
+
+  const requestPromise = (async () => {
+    const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(
+      `/reports/plan/${normalizedPlanId}`
+    )
+    if (!hasApiData(response)) {
+      throw new Error(
+        typeof response.message === 'string'
+          ? response.message || '加载计划报告失败'
+          : '加载计划报告失败'
+      )
+    }
+
+    const reports = Array.isArray(response.data) ? response.data : []
+    const enrichedReports = await Promise.all(reports.map(report => enrichPlanReportWorkflow(report)))
+    planReportsByPlanIdCache.set(cacheKey, enrichedReports)
+    planReportsByPlanIdCacheTime.set(cacheKey, Date.now())
+    return enrichedReports
+  })()
+
+  planReportsByPlanIdInFlight.set(cacheKey, requestPromise)
+
+  try {
+    return await requestPromise
+  } finally {
+    planReportsByPlanIdInFlight.delete(cacheKey)
+  }
+}
+
+function resolveCurrentMonthPlanReportSummaries(
+  reports: PlanReportSimpleResponse[],
+  reportOrgId: number,
+  reportMonth: string
+): {
+  currentReport: PlanReportSimpleResponse | null
+  latestReport: PlanReportSimpleResponse | null
+} {
+  const currentMonthReports = reports
+    .filter(
+      report =>
+        Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() -
+        new Date(a.updatedAt || a.createdAt || 0).getTime()
+    )
+
+  return {
+    currentReport:
+      currentMonthReports.find(report =>
+        ['DRAFT', 'REJECTED'].includes(getNormalizedReportStatus(report.status))
+      ) ||
+      currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) ||
+      null,
+    latestReport:
+      currentMonthReports.find(report => {
+        const normalizedStatus = getNormalizedReportStatus(report.status)
+        return (
+          Boolean(report.workflowInstanceId ?? report.auditInstanceId) ||
+          ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(
+            normalizedStatus
+          )
+        )
+      }) ||
+      currentMonthReports[0] ||
+      null
+  }
 }
 
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
@@ -2197,27 +2273,7 @@ export const indicatorFillApi = {
     reportMonth: string = getCurrentReportMonth()
   ): Promise<PlanReportSimpleResponse | null> {
     const reports = await loadPlanReportsByPlanId(Number(planId))
-    const currentMonthReports = reports
-      .filter(
-        report =>
-          Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt || 0).getTime() -
-          new Date(a.updatedAt || a.createdAt || 0).getTime()
-      )
-
-    const latestEditableDraft =
-      currentMonthReports.find(report =>
-        ['DRAFT', 'REJECTED'].includes(getNormalizedReportStatus(report.status))
-      ) || null
-
-    if (latestEditableDraft) {
-      return latestEditableDraft
-    }
-
-    return currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) || null
+    return resolveCurrentMonthPlanReportSummaries(reports, reportOrgId, reportMonth).currentReport
   },
 
   async getLatestCurrentMonthPlanReport(
@@ -2226,29 +2282,19 @@ export const indicatorFillApi = {
     reportMonth: string = getCurrentReportMonth()
   ): Promise<PlanReportSimpleResponse | null> {
     const reports = await loadPlanReportsByPlanId(Number(planId))
-    const currentMonthReports = reports
-      .filter(
-        report =>
-          Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt || 0).getTime() -
-          new Date(a.updatedAt || a.createdAt || 0).getTime()
-      )
+    return resolveCurrentMonthPlanReportSummaries(reports, reportOrgId, reportMonth).latestReport
+  },
 
-    const latestWorkflowBackedReport =
-      currentMonthReports.find(report => {
-        const normalizedStatus = getNormalizedReportStatus(report.status)
-        return (
-          Boolean(report.workflowInstanceId ?? report.auditInstanceId) ||
-          ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(
-            normalizedStatus
-          )
-        )
-      }) || null
-
-    return latestWorkflowBackedReport || currentMonthReports[0] || null
+  async getCurrentMonthPlanReportSummaries(
+    planId: number | string,
+    reportOrgId: number,
+    reportMonth: string = getCurrentReportMonth()
+  ): Promise<{
+    currentReport: PlanReportSimpleResponse | null
+    latestReport: PlanReportSimpleResponse | null
+  }> {
+    const reports = await loadPlanReportsByPlanId(Number(planId))
+    return resolveCurrentMonthPlanReportSummaries(reports, reportOrgId, reportMonth)
   },
 
   async submitCurrentMonthPlanReport(

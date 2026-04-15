@@ -330,6 +330,9 @@ type CurrentCollegePlanReportSummary = Awaited<
 >
 const currentCollegePlanReportSummary = ref<CurrentCollegePlanReportSummary>(null)
 const latestCollegePlanReportSummary = ref<{ id: number } | null>(null)
+const pendingCollegePlanUiState = ref<null | 'submitted' | 'withdrawn' | 'approved' | 'rejected'>(
+  null
+)
 const isBatchDistributing = ref(false)
 const pageBootstrapPromise = ref<Promise<void> | null>(null)
 const refreshDistributionPromise = ref<Promise<void> | null>(null)
@@ -611,13 +614,42 @@ const currentCollegePlanReportUiStatus = computed(() => {
   const reportBusinessStatus = String(currentCollegePlanReportSummary.value?.status || '')
     .trim()
     .toUpperCase()
+  const reportWorkflowStatus = String(currentCollegePlanReportSummary.value?.workflowStatus || '')
+    .trim()
+    .toUpperCase()
+
+  if (
+    pendingCollegePlanUiState.value === 'submitted' &&
+    (!reportWorkflowStatus || ['DRAFT', 'WITHDRAWN', 'CANCELLED'].includes(reportWorkflowStatus))
+  ) {
+    return 'SUBMITTED'
+  }
+
+  if (
+    pendingCollegePlanUiState.value === 'withdrawn' &&
+    (!reportWorkflowStatus || ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportWorkflowStatus))
+  ) {
+    return 'DRAFT'
+  }
+
+  if (
+    pendingCollegePlanUiState.value === 'approved' &&
+    ['DRAFT', 'PENDING', 'IN_REVIEW', 'SUBMITTED', ''].includes(reportWorkflowStatus)
+  ) {
+    return 'APPROVED'
+  }
+
+  if (
+    pendingCollegePlanUiState.value === 'rejected' &&
+    ['DRAFT', 'PENDING', 'IN_REVIEW', 'SUBMITTED', ''].includes(reportWorkflowStatus)
+  ) {
+    return 'REJECTED'
+  }
+
   if (reportBusinessStatus === 'DRAFT') {
     return 'DRAFT'
   }
 
-  const reportWorkflowStatus = String(currentCollegePlanReportSummary.value?.workflowStatus || '')
-    .trim()
-    .toUpperCase()
   if (reportWorkflowStatus) {
     return reportWorkflowStatus
   }
@@ -1041,6 +1073,13 @@ const confirmDepartmentPlanApprovalSubmission = async () => {
     await planStore.submitPlanForApproval(planId, {
       workflowCode: preview.workflowCode || currentDispatchWorkflowCode.value
     })
+    applyLocalCollegePlanPatch({
+      status: 'PENDING' as Plan['status'],
+      workflowStatus: 'IN_REVIEW',
+      canWithdraw: true,
+      currentStepName: preview.steps[0]?.stepName || '审批中'
+    })
+    applyLocalCollegePlanReportSummaryPatch('submitted')
     await refreshDistributionData()
     handleCloseApprovalSetupDialog()
     taskApprovalVisible.value = true
@@ -1209,6 +1248,44 @@ const loadCurrentCollegePlanReportSummary = async () => {
       planId,
       reportOrgId
     )
+
+    const rawReportStatus = String(currentCollegePlanReportSummary.value?.status || '')
+      .trim()
+      .toUpperCase()
+    const rawWorkflowStatus = String(currentCollegePlanReportSummary.value?.workflowStatus || '')
+      .trim()
+      .toUpperCase()
+
+    if (
+      pendingCollegePlanUiState.value === 'submitted' &&
+      (Boolean(currentCollegePlanReportSummary.value?.canWithdraw) ||
+        ['APPROVED', 'WITHDRAWN', 'CANCELLED', 'REJECTED'].includes(
+          rawWorkflowStatus || rawReportStatus
+        ))
+    ) {
+      pendingCollegePlanUiState.value = null
+    }
+
+    if (
+      pendingCollegePlanUiState.value === 'withdrawn' &&
+      (rawReportStatus === 'DRAFT' || rawWorkflowStatus === 'WITHDRAWN')
+    ) {
+      pendingCollegePlanUiState.value = null
+    }
+
+    if (
+      pendingCollegePlanUiState.value === 'approved' &&
+      (rawReportStatus === 'APPROVED' || rawWorkflowStatus === 'APPROVED')
+    ) {
+      pendingCollegePlanUiState.value = null
+    }
+
+    if (
+      pendingCollegePlanUiState.value === 'rejected' &&
+      (rawReportStatus === 'REJECTED' || rawWorkflowStatus === 'REJECTED')
+    ) {
+      pendingCollegePlanUiState.value = null
+    }
   } catch (error) {
     currentCollegePlanReportSummary.value = null
     latestCollegePlanReportSummary.value = null
@@ -1217,6 +1294,46 @@ const loadCurrentCollegePlanReportSummary = async () => {
       reportOrgId,
       error
     })
+  }
+}
+
+function applyLocalCollegePlanPatch(
+  patch: Partial<Plan> & {
+    workflowStatus?: string
+    canWithdraw?: boolean
+    currentTaskId?: number | undefined
+    currentStepName?: string | undefined
+    currentApproverId?: number | undefined
+    currentApproverName?: string | undefined
+  }
+) {
+  if (currentDepartmentPlanDetails.value) {
+    currentDepartmentPlanDetails.value = {
+      ...currentDepartmentPlanDetails.value,
+      ...patch
+    }
+  }
+
+  if (currentSelectedCollegePlanDetails.value) {
+    currentSelectedCollegePlanDetails.value = {
+      ...currentSelectedCollegePlanDetails.value,
+      ...patch
+    }
+  }
+}
+
+function applyLocalCollegePlanReportSummaryPatch(target: 'submitted' | 'withdrawn') {
+  pendingCollegePlanUiState.value = target
+  const nextSummary = {
+    ...(currentCollegePlanReportSummary.value || {}),
+    status: target === 'withdrawn' ? 'DRAFT' : 'SUBMITTED',
+    workflowStatus: target === 'withdrawn' ? 'WITHDRAWN' : 'IN_REVIEW',
+    canWithdraw: target === 'submitted'
+  }
+
+  currentCollegePlanReportSummary.value = nextSummary
+  if (Number.isFinite(Number(nextSummary.id)) && Number(nextSummary.id) > 0) {
+    latestCollegePlanReportSummary.value = { id: Number(nextSummary.id) }
   }
 }
 
@@ -1242,8 +1359,57 @@ const handleOpenApproval = () => {
 }
 
 // 审批后刷新
-const handleApprovalRefresh = async () => {
-  await refreshDistributionData()
+const handleApprovalRefresh = async (
+  payload?: Partial<Plan> & {
+    workflowStatus?: string
+    canWithdraw?: boolean
+    currentTaskId?: number | null
+    currentStepName?: string | null
+    currentApproverId?: number | null
+    currentApproverName?: string | null
+  }
+) => {
+  if (payload) {
+    applyLocalCollegePlanPatch({
+      ...payload,
+      currentTaskId:
+        payload.currentTaskId === null ? undefined : (payload.currentTaskId ?? undefined),
+      currentStepName:
+        payload.currentStepName === null ? undefined : (payload.currentStepName ?? undefined),
+      currentApproverId:
+        payload.currentApproverId === null ? undefined : (payload.currentApproverId ?? undefined),
+      currentApproverName:
+        payload.currentApproverName === null
+          ? undefined
+          : (payload.currentApproverName ?? undefined)
+    })
+
+    if (payload.workflowStatus === 'APPROVED') {
+      pendingCollegePlanUiState.value = 'approved'
+      applyLocalCollegePlanReportSummaryPatch('submitted')
+      if (currentCollegePlanReportSummary.value) {
+        currentCollegePlanReportSummary.value = {
+          ...currentCollegePlanReportSummary.value,
+          workflowStatus: 'APPROVED',
+          status: 'APPROVED',
+          canWithdraw: false
+        }
+      }
+    } else if (payload.workflowStatus === 'REJECTED') {
+      pendingCollegePlanUiState.value = 'rejected'
+      applyLocalCollegePlanReportSummaryPatch('withdrawn')
+      if (currentCollegePlanReportSummary.value) {
+        currentCollegePlanReportSummary.value = {
+          ...currentCollegePlanReportSummary.value,
+          workflowStatus: 'REJECTED',
+          status: 'REJECTED',
+          canWithdraw: false
+        }
+      }
+    }
+  }
+
+  void refreshDistributionData()
 }
 
 // ================== 数据获取 ==================
@@ -2676,6 +2842,16 @@ const handleBatchWithdraw = async (college: string) => {
       }
 
       await planStore.withdrawPlan(planId)
+      applyLocalCollegePlanPatch({
+        status: 'DRAFT' as Plan['status'],
+        workflowStatus: 'WITHDRAWN',
+        canWithdraw: false,
+        currentTaskId: undefined,
+        currentStepName: undefined,
+        currentApproverId: undefined,
+        currentApproverName: undefined
+      })
+      applyLocalCollegePlanReportSummaryPatch('withdrawn')
 
       const result = await indicatorApi.batchWithdrawIndicators(
         ownerOrgId,
@@ -2803,6 +2979,13 @@ const handleBatchDistribute = async (college: string) => {
       await planStore.submitPlanForApproval(planId, {
         workflowCode: currentDispatchWorkflowCode.value
       })
+      applyLocalCollegePlanPatch({
+        status: 'PENDING' as Plan['status'],
+        workflowStatus: 'IN_REVIEW',
+        canWithdraw: true,
+        currentStepName: '审批中'
+      })
+      applyLocalCollegePlanReportSummaryPatch('submitted')
       await refreshDistributionData()
       ElMessage.success('已发起下发审批')
     } catch (error) {
@@ -2915,6 +3098,13 @@ const handleBatchDistribute = async (college: string) => {
     await planStore.submitPlanForApproval(planId, {
       workflowCode: currentDispatchWorkflowCode.value
     })
+    applyLocalCollegePlanPatch({
+      status: 'PENDING' as Plan['status'],
+      workflowStatus: 'IN_REVIEW',
+      canWithdraw: true,
+      currentStepName: '审批中'
+    })
+    applyLocalCollegePlanReportSummaryPatch('submitted')
     await refreshDistributionData()
     ElMessage.success(`已成功下发并发起审批 ${response.data.totalCount} 个指标`)
   } catch (error) {

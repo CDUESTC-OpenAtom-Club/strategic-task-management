@@ -225,9 +225,30 @@ export const usePlanStore = defineStore('plan', () => {
 
       if (hasApiData(response) && response.data) {
         const existingPlan = plans.value.find(p => p.id === planId)
+        const existingStatus = String((existingPlan as (Plan & { status?: unknown }) | undefined)?.status || '')
+          .trim()
+          .toUpperCase()
+        const incomingStatus = String((response.data as Plan & { status?: unknown }).status || '')
+          .trim()
+          .toUpperCase()
+        const shouldPreserveOptimisticApprovalState =
+          existingStatus === 'PENDING' &&
+          (incomingStatus === '' || incomingStatus === 'DRAFT')
+
         const mergedPlan = {
           ...(existingPlan || {}),
           ...response.data,
+          ...(shouldPreserveOptimisticApprovalState
+            ? {
+                status: (existingPlan as Plan & { status?: unknown }).status,
+                workflowStatus:
+                  (existingPlan as (Plan & { workflowStatus?: unknown }) | undefined)
+                    ?.workflowStatus ?? (response.data as Plan & { workflowStatus?: unknown }).workflowStatus,
+                canWithdraw:
+                  (existingPlan as (Plan & { canWithdraw?: boolean }) | undefined)?.canWithdraw ??
+                  (response.data as Plan & { canWithdraw?: boolean }).canWithdraw
+              }
+            : {}),
           targetOrgName:
             response.data.targetOrgName ||
             (existingPlan as (Plan & { targetOrgName?: string }) | undefined)?.targetOrgName,
@@ -446,8 +467,8 @@ export const usePlanStore = defineStore('plan', () => {
           canWithdraw: true
         }
         const mergedPlan = {
-          ...optimisticPatch,
-          ...response.data
+          ...response.data,
+          ...optimisticPatch
         }
 
         // 更新本地 Plan 状态

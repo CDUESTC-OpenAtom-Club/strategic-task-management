@@ -1256,18 +1256,34 @@ function handleClose() {
   emit('close')
 }
 
+function applyOptimisticPlanWorkflowPatch(patch: {
+  status?: string
+  workflowStatus?: string
+  canWithdraw?: boolean
+  currentTaskId?: number | null
+  currentStepName?: string | null
+  currentApproverId?: number | null
+  currentApproverName?: string | null
+}) {
+  if (!props.plan) {
+    return
+  }
+
+  Object.assign(props.plan, patch)
+}
+
 async function refreshPlanApprovalAfterMutation(): Promise<void> {
   const planId = Number(props.plan?.id ?? scopedDepartmentPlan.value?.id ?? NaN)
-
-  if (Number.isFinite(planId) && planId > 0) {
-    await planStore.loadPlanDetails(planId, { force: true, background: true })
-  }
 
   await Promise.all([
     loadPendingPlanApprovals(),
     loadPlanWorkflowDetail(),
     loadPlanWorkflowHistoryCards()
   ])
+
+  if (Number.isFinite(planId) && planId > 0) {
+    await planStore.loadPlanDetails(planId, { force: true, background: true })
+  }
 
   emit('refresh')
 }
@@ -1449,6 +1465,15 @@ async function handleApprovePlanBatch() {
           ElMessage.error(response.message || '审批失败')
           return
         }
+        applyOptimisticPlanWorkflowPatch({
+          status: 'DISTRIBUTED',
+          workflowStatus: 'APPROVED',
+          canWithdraw: false,
+          currentTaskId: null,
+          currentStepName: '审批完成',
+          currentApproverId: null,
+          currentApproverName: null
+        })
         await refreshPlanApprovalAfterMutation()
         ElMessage.success('审批通过')
       } finally {
@@ -1497,6 +1522,15 @@ async function handleApprovePlanBatch() {
         }
       }
 
+      applyOptimisticPlanWorkflowPatch({
+        status: 'DISTRIBUTED',
+        workflowStatus: 'APPROVED',
+        canWithdraw: false,
+        currentTaskId: null,
+        currentStepName: '审批完成',
+        currentApproverId: null,
+        currentApproverName: null
+      })
       await refreshPlanApprovalAfterMutation()
       ElMessage.success(`已一键通过 ${scopedPlanApprovals.value.length} 条审批实例`)
     } finally {
@@ -1548,6 +1582,13 @@ async function handleRejectPlanBatch() {
           ElMessage.error(response.message || '驳回失败')
           return
         }
+        applyOptimisticPlanWorkflowPatch({
+          status: 'DRAFT',
+          workflowStatus: 'REJECTED',
+          canWithdraw: false,
+          currentTaskId: null,
+          currentStepName: '已驳回'
+        })
         await refreshPlanApprovalAfterMutation()
         ElMessage.success('审批已驳回')
       } finally {
@@ -1585,16 +1626,23 @@ async function handleRejectPlanBatch() {
 
     try {
       const userId = authStore.user?.userId || authStore.user?.id || 1
-      for (const instance of scopedPlanApprovals.value) {
-        const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
+        for (const instance of scopedPlanApprovals.value) {
+          const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
         if (!response.success) {
           ElMessage.error(response.message || '拒绝失败')
-          return
+            return
+          }
         }
-      }
 
-      await refreshPlanApprovalAfterMutation()
-      ElMessage.success(`已一键驳回 ${scopedPlanApprovals.value.length} 条审批实例`)
+        applyOptimisticPlanWorkflowPatch({
+          status: 'DRAFT',
+          workflowStatus: 'REJECTED',
+          canWithdraw: false,
+          currentTaskId: null,
+          currentStepName: '已驳回'
+        })
+        await refreshPlanApprovalAfterMutation()
+        ElMessage.success(`已一键驳回 ${scopedPlanApprovals.value.length} 条审批实例`)
     } finally {
       loadingInstance.close()
     }

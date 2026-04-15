@@ -26,7 +26,10 @@ async function probeEndpoint(url: string, timeout: number) {
   const token = tokenManager.getAccessToken()
   return healthApi.get(url, {
     timeout,
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: {
+      'X-Health-Check': 'true',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
     // 健康检查只需要确认服务可达，2xx-4xx都认为服务正常
     validateStatus: status => status >= 200 && status < 500
   })
@@ -199,14 +202,24 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       | { message?: string; code?: string }
       | string
       | undefined
+    const responseText =
+      typeof responseData === 'string'
+        ? responseData
+        : typeof responseData === 'object' && responseData !== null && 'message' in responseData
+          ? String(responseData.message || '')
+          : ''
 
     // Vite dev proxy may convert upstream ECONNREFUSED into an HTTP 500 with
-    // empty/plain-text body. Treat it as backend unreachable instead of a
+    // empty/plain-text body or proxy error text. Treat it as backend unreachable instead of a
     // misleading server-side 500.
     const looksLikeProxyConnectionFailure =
       responseStatus === 500 &&
-      responseContentType.includes('text/plain') &&
-      (responseData === '' || responseData == null)
+      (
+        (responseContentType.includes('text/plain') && (responseData === '' || responseData == null)) ||
+        /Error occurred while trying to proxy|ECONNREFUSED|ERR_CONNECTION_REFUSED|socket hang up|connect ECONNREFUSED/i.test(
+          `${errorMessage}\n${responseText}`
+        )
+      )
 
     // 处理超时错误
     if (errorCode === 'ECONNABORTED' && errorMessage.includes('timeout')) {

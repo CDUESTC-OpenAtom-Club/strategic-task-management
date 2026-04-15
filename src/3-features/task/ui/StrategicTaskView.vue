@@ -878,6 +878,54 @@ function resolveExpectedApproverOrgIdForCurrentPlan(): number | null {
 
 const hydratingPlanDetail = ref(false)
 const departmentViewRequestId = ref(0)
+let currentPlanReportSummaryPromise:
+  | Promise<{
+      currentReport: Awaited<ReturnType<typeof indicatorFillApi.getCurrentMonthPlanReport>>
+      latestReport: Awaited<ReturnType<typeof indicatorFillApi.getLatestCurrentMonthPlanReport>>
+    }>
+  | null = null
+let currentPlanReportSummaryKey = ''
+
+async function syncCurrentPlanReportSummaries(
+  options: { force?: boolean } = {}
+): Promise<void> {
+  const planId = Number(currentPlan.value?.id ?? NaN)
+  const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
+  if (!(Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0)) {
+    currentPlanReportSummary.value = null
+    latestPlanReportSummary.value = null
+    return
+  }
+
+  const cacheKey = `${planId}:${reportOrgId}:${timeContext.currentYear}`
+  if (!options.force && currentPlanReportSummaryPromise && currentPlanReportSummaryKey === cacheKey) {
+    logger.debug('[StrategicTaskView] reuse plan report summaries request', { cacheKey })
+    const summaries = await currentPlanReportSummaryPromise
+    currentPlanReportSummary.value = summaries.currentReport
+    latestPlanReportSummary.value = summaries.latestReport
+    return
+  }
+
+  currentPlanReportSummaryKey = cacheKey
+  logger.debug('[StrategicTaskView] load plan report summaries', {
+    planId,
+    reportOrgId,
+    year: timeContext.currentYear,
+    force: options.force === true
+  })
+  currentPlanReportSummaryPromise = indicatorFillApi.getCurrentMonthPlanReportSummaries(
+    planId,
+    reportOrgId
+  )
+
+  try {
+    const summaries = await currentPlanReportSummaryPromise
+    currentPlanReportSummary.value = summaries.currentReport
+    latestPlanReportSummary.value = summaries.latestReport
+  } finally {
+    currentPlanReportSummaryPromise = null
+  }
+}
 
 const hydrateCurrentPlanWorkflowState = async (options: { force?: boolean } = {}) => {
   const planId = Number(currentPlan.value?.id ?? NaN)
@@ -923,6 +971,13 @@ const refreshCurrentDepartmentView = async (
 ) => {
   const requestId = departmentViewRequestId.value + 1
   departmentViewRequestId.value = requestId
+  logger.debug('[StrategicTaskView] refresh department view', {
+    requestId,
+    department: selectedDepartment.value,
+    planId: currentPlan.value?.id ?? null,
+    year: timeContext.currentYear,
+    force: options.force === true
+  })
 
   if (options.showLoading) {
     pageTransitionLoading.value = true
@@ -932,18 +987,7 @@ const refreshCurrentDepartmentView = async (
     await hydrateCurrentPlanWorkflowState()
     await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: options.force })
     await loadCurrentPlanTaskScope({ force: options.force })
-    const planId = Number(currentPlan.value?.id ?? NaN)
-    const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
-    if (Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0) {
-      currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(planId, reportOrgId)
-      latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
-        planId,
-        reportOrgId
-      )
-    } else {
-      currentPlanReportSummary.value = null
-      latestPlanReportSummary.value = null
-    }
+    await syncCurrentPlanReportSummaries({ force: options.force })
   } finally {
     if (options.showLoading && departmentViewRequestId.value === requestId) {
       pageTransitionLoading.value = false
@@ -1248,15 +1292,28 @@ const pendingApprovalCount = computed(() => {
   )
 })
 
+const planUiPhase = computed<
+  'draft' | 'pending_withdrawable' | 'pending_locked' | 'distributed'
+>(() => {
+  const status = currentPlanStatus.value
+  const workflowStatus = currentApprovalWorkflowStatus.value
+
+  if (status === 'PENDING' || ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) {
+    return canWithdrawPlan.value ? 'pending_withdrawable' : 'pending_locked'
+  }
+
+  if (status === 'DISTRIBUTED' || workflowStatus === 'APPROVED') {
+    return 'distributed'
+  }
+
+  return 'draft'
+})
+
 const approvalEntryButtonText = computed(() => {
-  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentApprovalWorkflowStatus.value)) {
+  if (planUiPhase.value === 'pending_withdrawable' || planUiPhase.value === 'pending_locked') {
     return '审批中'
   }
-  if (
-    approvalWorkflowReportSummary.value?.id ||
-    currentPlanStatus.value === 'DISTRIBUTED' ||
-    currentApprovalWorkflowStatus.value === 'APPROVED'
-  ) {
+  if (approvalWorkflowReportSummary.value?.id || planUiPhase.value === 'distributed') {
     return '查看审批'
   }
   return '审批进度'
@@ -1322,8 +1379,7 @@ const canDistribute = computed(() => {
 // - 草稿状态 → 下发
 // - 待审批/已下发状态 → 撤回
 const distributeButtonText = computed(() => {
-  const status = currentPlanStatus.value
-  if (status === 'DRAFT' || !status) {
+  if (planUiPhase.value === 'draft') {
     return '发起审批'
   }
   return '撤回'
@@ -1331,18 +1387,15 @@ const distributeButtonText = computed(() => {
 
 // 下发/撤回按钮类型
 const distributeButtonType = computed(() => {
-  const status = currentPlanStatus.value
-  if (status === 'DRAFT' || !status) {
+  if (planUiPhase.value === 'draft') {
     return 'success'
   }
-  // 待审批/已下发状态：可撤回用 warning，不可撤回用 info(禁用)
-  return canWithdrawPlan.value ? 'warning' : 'info'
+  return planUiPhase.value === 'pending_withdrawable' ? 'warning' : 'info'
 })
 
 // 下发/撤回按钮图标
 const distributeButtonIcon = computed(() => {
-  const status = currentPlanStatus.value
-  if (status === 'DRAFT' || !status) {
+  if (planUiPhase.value === 'draft') {
     return Promotion
   }
   return RefreshLeft
@@ -1353,24 +1406,21 @@ const distributeButtonDisabledReason = computed(() => {
     return '历史快照为只读状态'
   }
 
-  const status = currentPlanStatus.value
-  const isSubmittingStatus = status === 'DRAFT' || !status
-
-  if (isSubmittingStatus && !canCurrentUserSubmitCurrentPlan.value) {
+  if (planUiPhase.value === 'draft' && !canCurrentUserSubmitCurrentPlan.value) {
     return '只有当前计划归属部门的填报人才可以发起审批'
   }
 
-  if (isSubmittingStatus && departmentTotalWeight.value !== 100) {
+  if (planUiPhase.value === 'draft' && departmentTotalWeight.value !== 100) {
     return `基础性任务指标权重合计必须为100%，当前为${departmentTotalWeight.value}`
   }
 
-  if (status === 'PENDING' && !canWithdrawPlan.value) {
+  if (planUiPhase.value === 'pending_locked') {
     return isCurrentUserReporter.value
       ? '当前审批进度不支持撤回'
       : '当前登录身份不是填报人，不能撤回'
   }
 
-  if (status && status !== 'DRAFT' && status !== 'PENDING') {
+  if (planUiPhase.value === 'distributed') {
     return '当前状态不可操作'
   }
 
@@ -1458,7 +1508,6 @@ const confirmPlanApprovalSubmission = async () => {
     await planStore.submitPlanForApproval(planId, {
       workflowCode: preview.workflowCode || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
     })
-    await planStore.loadPlanDetails(planId, { force: true, background: true })
     await refreshCurrentDepartmentView({ force: true })
     await preloadApprovalWorkflowDetail()
     await loadPendingPlanApprovalCount()
@@ -1606,6 +1655,37 @@ const loadIndicatorWorkflowSnapshot = async (
 }
 
 const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => {
+  const workflowSnapshot = await loadIndicatorWorkflowSnapshot(indicatorId, { force: true })
+  if (workflowSnapshot?.workflowStatus) {
+    const optimisticPlanStatus =
+      ['APPROVED', 'COMPLETED'].includes(String(workflowSnapshot.workflowStatus).toUpperCase())
+        ? 'DISTRIBUTED'
+        : ['REJECTED', 'RETURNED', 'WITHDRAWN', 'CANCELLED'].includes(
+              String(workflowSnapshot.workflowStatus).toUpperCase()
+            )
+          ? 'DRAFT'
+          : 'PENDING'
+
+    if (currentPlan.value) {
+      currentPlan.value = {
+        ...currentPlan.value,
+        status: optimisticPlanStatus,
+        workflowStatus: workflowSnapshot.workflowStatus,
+        currentTaskId: workflowSnapshot.currentTaskId ?? currentPlan.value.currentTaskId,
+        currentStepName: workflowSnapshot.currentStepName ?? currentPlan.value.currentStepName,
+        currentApproverId: workflowSnapshot.currentApproverId ?? currentPlan.value.currentApproverId,
+        currentApproverName:
+          workflowSnapshot.currentApproverName ?? currentPlan.value.currentApproverName,
+        canWithdraw:
+          optimisticPlanStatus === 'PENDING'
+            ? false
+            : optimisticPlanStatus === 'DRAFT'
+              ? true
+              : false
+      }
+    }
+  }
+
   invalidateQueries([
     'indicator.list',
     'task.list',
@@ -1613,7 +1693,6 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
     'dashboard.overview',
     buildQueryKey('task', 'list', { year: timeContext.currentYear })
   ])
-  await loadIndicatorWorkflowSnapshot(indicatorId, { force: true })
   const planId = currentPlan.value?.id
   await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
   if (planId !== undefined && planId !== null && planId !== '') {
@@ -2618,13 +2697,6 @@ const handleGlobalClick = (event: MouseEvent) => {
 onMounted(async () => {
   await Promise.all([
     (async () => {
-      try {
-        await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: true })
-      } catch (error) {
-        logger.error('[StrategicTaskView] 初始加载指标失败:', error)
-      }
-    })(),
-    (async () => {
       if (orgStore.departments.length === 0) {
         try {
           await orgStore.loadDepartments()
@@ -3086,18 +3158,7 @@ const _hasPendingApprovalForDept = computed(() => {
 })
 
 async function refreshApprovalWorkflowSummaries(): Promise<void> {
-  const planId = Number(currentPlan.value?.id ?? NaN)
-  const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
-  if (Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0) {
-    currentPlanReportSummary.value = await indicatorFillApi.getCurrentMonthPlanReport(planId, reportOrgId)
-    latestPlanReportSummary.value = await indicatorFillApi.getLatestCurrentMonthPlanReport(
-      planId,
-      reportOrgId
-    )
-  } else {
-    currentPlanReportSummary.value = null
-    latestPlanReportSummary.value = null
-  }
+  await syncCurrentPlanReportSummaries({ force: true })
 }
 
 async function preloadApprovalWorkflowDetail(): Promise<void> {
@@ -3741,6 +3802,18 @@ const handleWithdrawAll = async () => {
 
       try {
         await planStore.withdrawPlan(planId)
+        if (currentPlan.value) {
+          currentPlan.value = {
+            ...currentPlan.value,
+            status: 'DRAFT',
+            workflowStatus: 'WITHDRAWN',
+            canWithdraw: false,
+            currentTaskId: undefined,
+            currentStepName: undefined,
+            currentApproverId: undefined,
+            currentApproverName: undefined
+          }
+        }
         await planStore.loadPlans({ force: true, background: true })
         loading.close()
         ElMessage.success('已成功撤回当前 Plan')
@@ -7175,6 +7248,37 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   color: var(--text-regular);
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.approval-badge {
+  display: inline-flex;
+}
+
+.approval-badge :deep(.el-badge__content.is-fixed.is-dot) {
+  background-color: #f56c6c;
+  box-shadow: 0 0 0 rgba(245, 108, 108, 0.45);
+  animation: approval-badge-pulse 1.35s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes approval-badge-pulse {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.5);
+  }
+
+  45% {
+    opacity: 1;
+    transform: scale(1.18);
+    box-shadow: 0 0 0 6px rgba(245, 108, 108, 0.08);
+  }
+
+  100% {
+    opacity: 0.95;
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0);
+  }
 }
 
 /* 里程碑列表 */

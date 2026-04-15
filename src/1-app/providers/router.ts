@@ -11,15 +11,21 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/features/auth/model/store'
 import { tokenManager } from '@/shared/lib/utils/tokenManager'
+import { logger } from '@/shared/lib/utils/logger'
 import { startProgress, doneProgress } from './router-progress'
 import './router-progress.css'
 
+const resolveAuthenticatedHome = (authStore: ReturnType<typeof useAuthStore>) => {
+  return authStore.userRole === 'strategic_dept' ? '/strategic-tasks' : '/dashboard'
+}
+
 // 确保从 localStorage 恢复认证状态
-const ensureAuthRestored = () => {
+const ensureAuthRestored = async () => {
   const authStore = useAuthStore()
+  await authStore.initializeAuth()
 
   if (authStore.token && !tokenManager.hasValidToken()) {
-    authStore.logout()
+    authStore.logout({ redirect: false })
     return
   }
 
@@ -31,7 +37,7 @@ const ensureAuthRestored = () => {
         authStore.user = JSON.parse(savedUser)
       } catch (e) {
         // Failed to restore user from localStorage
-        authStore.logout()
+        authStore.logout({ redirect: false })
       }
     }
   }
@@ -196,7 +202,7 @@ const router = createRouter({
 })
 
 // Navigation guards
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 开始进度进度条（如果是页面导航）
   if (_from.name !== undefined) {
     startProgress()
@@ -210,9 +216,15 @@ router.beforeEach((to, _from, next) => {
   }
 
   // 确保认证状态已从 localStorage 恢复
-  ensureAuthRestored()
+  await ensureAuthRestored()
 
   const authStore = useAuthStore()
+  logger.debug('[Router] auth restored', {
+    path: to.path,
+    authenticated: authStore.isAuthenticated,
+    role: authStore.userRole,
+    effectiveRole: authStore.effectiveRole
+  })
 
   // Check if route requires authentication
   if (to.meta['requiresAuth'] && !authStore.isAuthenticated) {
@@ -248,7 +260,7 @@ router.beforeEach((to, _from, next) => {
 
   // Redirect authenticated users away from login page
   if (to.path === '/login' && authStore.isAuthenticated) {
-    next('/dashboard')
+    next(resolveAuthenticatedHome(authStore))
     return
   }
 

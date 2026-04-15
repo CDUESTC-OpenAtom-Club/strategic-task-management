@@ -4023,6 +4023,19 @@ function applyLocalPlanReportSummary(
   latestPlanReportSummary.value = nextSummary?.id ? { id: Number(nextSummary.id) } : null
 }
 
+function applyLocalCurrentPlanDetailsPatch(
+  patch: Partial<NonNullable<typeof currentPlanDetails.value>>
+): void {
+  if (!currentPlanDetails.value) {
+    return
+  }
+
+  currentPlanDetails.value = {
+    ...currentPlanDetails.value,
+    ...patch
+  }
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => {
     window.setTimeout(resolve, ms)
@@ -4280,6 +4293,14 @@ const handleSubmitAll = () => {
           applyLocalPlanReportSummary(updatedReportSummary, 'submitted')
         }
 
+        if (!usePlanReportFlow.value) {
+          applyLocalCurrentPlanDetailsPatch({
+            status: 'PENDING',
+            workflowStatus: 'IN_REVIEW',
+            canWithdraw: true
+          })
+        }
+
         // 修复：无论采用的是哪种 Flow，提交操作的最终目标态都是 submitted
         await settleCurrentPlanReportState('submitted')
 
@@ -4369,6 +4390,18 @@ const handleWithdrawAllProgressApprovals = () => {
 
         if (updatedReportSummary) {
           applyLocalPlanReportSummary(updatedReportSummary, 'withdrawn')
+        }
+
+        if (!usePlanReportFlow.value) {
+          applyLocalCurrentPlanDetailsPatch({
+            status: 'DRAFT',
+            workflowStatus: 'WITHDRAWN',
+            canWithdraw: false,
+            currentTaskId: undefined,
+            currentStepName: undefined,
+            currentApproverId: undefined,
+            currentApproverName: undefined
+          })
         }
 
         await settleCurrentPlanReportState('withdrawn')

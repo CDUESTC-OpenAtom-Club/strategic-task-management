@@ -22,6 +22,8 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(tokenManager.getAccessToken())
   const loading = ref(false)
   const sessionRestoring = ref(false)
+  const authInitialized = ref(false)
+  let initializePromise: Promise<void> | null = null
 
   // 视角切换状态（用于战略发展部查看其他部门视角）
   const viewingAsRole = ref<UserRole | null>(null)
@@ -254,6 +256,7 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = mappedUser
         persistUser(mappedUser)
         invalidateQueries(['auth.user'])
+        authInitialized.value = true
 
         logger.debug('?[Auth] 登录状态已保存')
 
@@ -296,7 +299,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const logout = () => {
+  const logout = (options: { redirect?: boolean } = {}) => {
+    const shouldRedirect = options.redirect !== false
     user.value = null
     token.value = null
     tokenManager.clearAccessToken()
@@ -304,10 +308,11 @@ export const useAuthStore = defineStore('auth', () => {
     clearLegacyAccessTokenStorage()
     localStorage.removeItem('refreshToken')
     invalidateQueries(['auth.user'])
+    authInitialized.value = true
 
     logger.debug('[Auth] 用户已登出，所有凭证已清除')
 
-    if (!window.location.pathname.includes('/login')) {
+    if (shouldRedirect && !window.location.pathname.includes('/login')) {
       window.location.href = '/login'
     }
   }
@@ -343,11 +348,11 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = mappedUser
         persistUser(mappedUser)
       } else {
-        logout()
+          logout({ redirect: false })
       }
     } catch (error) {
       logger.error('Fetch user error:', error)
-      logout()
+      logout({ redirect: false })
     }
   }
 
@@ -390,61 +395,81 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const initializeAuth = async () => {
-    const savedUser = localStorage.getItem('currentUser')
-    const memoryToken = tokenManager.getAccessToken()
-    clearLegacyAccessTokenStorage()
+    if (authInitialized.value) {
+      return
+    }
 
-    if (memoryToken && savedUser) {
-      const parsedUser = restorePersistedUser(savedUser)
-      if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
+    if (initializePromise) {
+      await initializePromise
+      return
+    }
+
+    initializePromise = (async () => {
+      const savedUser = localStorage.getItem('currentUser')
+      const memoryToken = tokenManager.getAccessToken()
+      clearLegacyAccessTokenStorage()
+
+      if (memoryToken && savedUser) {
+        const parsedUser = restorePersistedUser(savedUser)
+        if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
           user.value = parsedUser
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
           void refreshCurrentUserPermissions()
+          authInitialized.value = true
           return
-      }
-
-      if (!tokenManager.hasValidToken()) {
-        logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
-        tokenManager.clearAccessToken()
-      }
-    }
-
-    if (savedUser) {
-      sessionRestoring.value = true
-      logger.debug('[Auth] 尝试通过 Refresh Token 恢复会话...')
-
-      try {
-        const newToken = await tokenManager.refreshAccessToken()
-        const parsedUser = restorePersistedUser(savedUser)
-        if (parsedUser && parsedUser.role) {
-          user.value = parsedUser
-          token.value = newToken
-          persistUser(parsedUser)
-          logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
-          void refreshCurrentUserPermissions()
-        } else {
-          logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
-          logout()
         }
-      } catch (error) {
-        if (error instanceof TokenRefreshError) {
-          logger.warn('[Auth] Refresh Token 无效，需要重新登录', error.message)
-        } else {
-          logger.error('[Auth] 会话恢复失败:', error)
-        }
-        logout()
-      } finally {
-        sessionRestoring.value = false
-      }
-    }
 
-    clearLegacyAccessTokenStorage()
+        if (!tokenManager.hasValidToken()) {
+          logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
+          tokenManager.clearAccessToken()
+          token.value = null
+        }
+      }
+
+      if (savedUser) {
+        sessionRestoring.value = true
+        logger.debug('[Auth] 尝试通过 Refresh Token 恢复会话...')
+
+        try {
+          const newToken = await tokenManager.refreshAccessToken()
+          const parsedUser = restorePersistedUser(savedUser)
+          if (parsedUser && parsedUser.role) {
+            user.value = parsedUser
+            token.value = newToken
+            persistUser(parsedUser)
+            logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
+            void refreshCurrentUserPermissions()
+          } else {
+            logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
+            logout({ redirect: false })
+          }
+        } catch (error) {
+          if (error instanceof TokenRefreshError) {
+            logger.warn('[Auth] Refresh Token 无效，需要重新登录', error.message)
+          } else {
+            logger.error('[Auth] 会话恢复失败:', error)
+          }
+          logout({ redirect: false })
+        } finally {
+          sessionRestoring.value = false
+        }
+      }
+
+      clearLegacyAccessTokenStorage()
+      authInitialized.value = true
+    })()
+
+    try {
+      await initializePromise
+    } finally {
+      initializePromise = null
+    }
   }
 
   // 立即初始?
-  initializeAuth()
+  void initializeAuth()
 
   // 切换视角
   const setViewingAs = (role: UserRole | null, department: string | null) => {
@@ -479,6 +504,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     loading,
     sessionRestoring,
+    authInitialized,
     viewingAsRole,
     viewingAsDepartment,
 
@@ -494,6 +520,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     fetchUser,
+    initializeAuth,
     hasPermission,
     setViewingAs,
     resetViewingAs,

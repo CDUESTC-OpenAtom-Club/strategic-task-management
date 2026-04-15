@@ -98,8 +98,13 @@ if (import.meta.env.DEV) {
 
 /**
  * Auto health check
+ * Delay diagnostics until the initial route/auth state settles.
  */
-autoHealthCheck()
+void router.isReady().then(() => {
+  window.setTimeout(() => {
+    autoHealthCheck()
+  }, 3000)
+})
 
 /**
  * Export app instance for testing purposes

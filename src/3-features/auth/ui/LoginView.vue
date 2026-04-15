@@ -237,7 +237,9 @@ const handleSubmit = async (credentials: { username: string; password: string })
     if (result.success) {
       loginFormRef.value?.resetErrorCount()
       ElMessage.success(`欢迎回来，${authStore.userDepartment}`)
-      router.push('/dashboard')
+      const defaultRoute =
+        authStore.userRole === 'strategic_dept' ? '/strategic-tasks' : '/dashboard'
+      router.push(defaultRoute)
     } else {
       loginFormRef.value?.incrementErrorCount()
       errorMessage.value = result.error || '用户名或密码错误'
