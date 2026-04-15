@@ -37,7 +37,7 @@ describe('apiHealth', () => {
     healthApiGetMock.mockReset()
   })
 
-  it('treats 403 from /organizations as backend reachable', async () => {
+  it('treats 403 from public health endpoint as backend reachable', async () => {
     healthApiGetMock
       .mockResolvedValueOnce({
         status: 403,
@@ -53,22 +53,22 @@ describe('apiHealth', () => {
     await expect(checkBackendHealth()).resolves.toMatchObject({
       service: 'Backend API',
       status: 'success',
-      message: '后端服务运行正常（健康检查端点需要认证）',
-      details: { status: 403 }
+      message: '后端服务运行正常',
+      details: { message: 'Forbidden' }
     })
 
     await expect(quickBackendCheck()).resolves.toBe(true)
     expect(healthApiGetMock).toHaveBeenNthCalledWith(
       1,
-      '/organizations',
+      '/auth/health',
       expect.objectContaining({
-        timeout: 10000,
+        timeout: 5000,
         validateStatus: expect.any(Function)
       })
     )
     expect(healthApiGetMock).toHaveBeenNthCalledWith(
       2,
-      '/organizations',
+      '/auth/health',
       expect.objectContaining({
         timeout: 3000,
         validateStatus: expect.any(Function)

@@ -66,12 +66,13 @@ vi.mock('@/features/approval/api/approval', () => ({
   approvalApi: {}
 }))
 
-import { indicatorFillApi } from '@/features/plan/api/planApi'
-
 const currentReportMonth = new Date().toISOString().slice(0, 7).replace('-', '')
 
 describe('indicatorFillApi real report flow', () => {
+  let indicatorFillApi: typeof import('@/features/plan/api/planApi').indicatorFillApi
+
   beforeEach(() => {
+    vi.resetModules()
     apiGet.mockReset()
     apiPost.mockReset()
     apiPut.mockReset()
@@ -104,6 +105,10 @@ describe('indicatorFillApi real report flow', () => {
         data: []
       })
     })
+  })
+
+  beforeEach(async () => {
+    ;({ indicatorFillApi } = await import('@/features/plan/api/planApi'))
   })
 
   it('blocks saving when the current month report is already in review', async () => {
