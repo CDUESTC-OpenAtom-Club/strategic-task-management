@@ -1,267 +1,237 @@
-/**
- * Messages Feature API
- * 集成预警告警消息
- */
-
 import { apiClient } from '@/shared/api/client'
-import { alertApi, type WarningEvent, type AlertEvent } from '@/shared/api/monitoringApi'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { CACHE_TTL, createShortMemoryPolicy } from '@/shared/lib/utils/cache-config'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
-import { logger } from '@/shared/lib/utils/logger'
 
-/**
- * 消息类型
- */
-export type MessageType = 'NOTIFICATION' | 'WARNING' | 'ALERT' | 'SYSTEM' | 'REMINDER'
+export type MessageCategory = 'ALL' | 'TODO' | 'APPROVAL' | 'REMINDER' | 'SYSTEM' | 'RISK'
+export type MessageBizType =
+  | 'APPROVAL_TODO'
+  | 'APPROVAL_RESULT'
+  | 'REMINDER_NOTICE'
+  | 'SYSTEM_NOTICE'
+  | 'BUSINESS_NOTICE'
+  | 'RISK_WARNING'
+  | 'RISK_ALERT'
 
-/**
- * 消息项
- */
-export interface MessageItem {
-  id: string | number
-  type: MessageType
-  title: string
-  content: string
-  isRead: boolean
-  createdAt: string
-  link?: string
-  // 预警/告警特有字段
-  severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'MAJOR' | 'MINOR'
-  entityId?: number
-  entityType?: string
-  relatedEntityId?: number
-  approvalInstanceId?: number
-  status?: string
+export interface MessageCenterCapabilities {
+  riskEnabled: boolean
+  approvalAggregationEnabled: boolean
+  detailDrawerEnabled: boolean
 }
+
+export interface MessageCenterSummary {
+  totalCount: number
+  todoCount: number
+  approvalCount: number
+  reminderCount: number
+  systemCount: number
+  riskCount: number
+  capabilities: MessageCenterCapabilities
+  lastRefreshTime?: string
+  partialSuccess?: boolean
+  unavailableSources?: string[]
+}
+
+export interface MessageItem {
+  messageId: string
+  sourceType: 'notification' | 'workflow' | 'risk'
+  sourceId: string
+  category: MessageCategory
+  bizType: MessageBizType
+  title: string
+  summary: string
+  content: string
+  priority?: string | null
+  severity?: string | null
+  readState?: 'UNREAD' | 'READ' | null
+  actionState?: 'ACTION_REQUIRED' | 'DONE' | null
+  createdAt: string
+  eventAt?: string | null
+  actionUrl?: string | null
+  entityType?: string | null
+  entityId?: number | null
+  approvalInstanceId?: number | null
+  currentStepName?: string | null
+  currentAssigneeDisplay?: string | null
+  senderDisplay?: string | null
+  canMarkAsRead: boolean
+  canViewDetail: boolean
+  canProcess: boolean
+  metadata?: Record<string, unknown> | null
+}
+
+export interface MessageListPayload {
+  items: MessageItem[]
+  total: number
+  pageNum: number
+  pageSize: number
+  totalPages: number
+  partialSuccess?: boolean
+  unavailableSources?: string[]
+  capabilities: MessageCenterCapabilities
+}
+
+interface ApiEnvelope<T> {
+  success: boolean
+  code: number
+  message: string
+  data: T
+}
+
+const SUMMARY_POLICY = createShortMemoryPolicy(CACHE_TTL.MESSAGE_UNREAD, {
+  staleWhileRevalidate: false,
+  tags: ['messages.summary', 'messages.unread']
+})
 
 const MESSAGE_LIST_POLICY = createShortMemoryPolicy(CACHE_TTL.MESSAGE_LIST, {
   staleWhileRevalidate: false,
-  tags: ['messages.list', 'messages.unread']
+  tags: ['messages.list']
 })
 
 function withMessageContext(params?: Record<string, unknown>): Record<string, unknown> {
   return {
     ...getCachedUserContext(),
     ...(params ?? {}),
-    version: 'v1'
+    version: 'v2'
   }
 }
 
 function invalidateMessageCaches(): void {
-  invalidateQueries(['messages.list', 'messages.unread'])
+  invalidateQueries(['messages.summary', 'messages.unread', 'messages.list'])
 }
 
-function normalizeNotificationList(payload: unknown): MessageItem[] {
-  if (Array.isArray(payload)) {
-    return payload as MessageItem[]
+function emptyCapabilities(): MessageCenterCapabilities {
+  return {
+    riskEnabled: false,
+    approvalAggregationEnabled: true,
+    detailDrawerEnabled: true
+  }
+}
+
+function emptySummary(): MessageCenterSummary {
+  return {
+    totalCount: 0,
+    todoCount: 0,
+    approvalCount: 0,
+    reminderCount: 0,
+    systemCount: 0,
+    riskCount: 0,
+    capabilities: emptyCapabilities(),
+    partialSuccess: false,
+    unavailableSources: []
+  }
+}
+
+function normalizeSummary(
+  payload: ApiEnvelope<MessageCenterSummary> | MessageCenterSummary
+): MessageCenterSummary {
+  const summary =
+    (payload as ApiEnvelope<MessageCenterSummary>)?.data ?? (payload as MessageCenterSummary)
+  if (!summary || typeof summary !== 'object') {
+    return emptySummary()
   }
 
-  if (!payload || typeof payload !== 'object') {
-    return []
+  return {
+    ...emptySummary(),
+    ...summary,
+    capabilities: {
+      ...emptyCapabilities(),
+      ...(summary.capabilities ?? {})
+    },
+    unavailableSources: Array.isArray(summary.unavailableSources) ? summary.unavailableSources : []
   }
+}
 
-  const directContent = (payload as { content?: unknown }).content
-  if (Array.isArray(directContent)) {
-    return directContent as MessageItem[]
-  }
-
-  const nestedData = (payload as { data?: unknown }).data
-  if (Array.isArray(nestedData)) {
-    return nestedData as MessageItem[]
-  }
-
-  if (nestedData && typeof nestedData === 'object') {
-    const nestedContent = (nestedData as { content?: unknown }).content
-    if (Array.isArray(nestedContent)) {
-      return nestedContent as MessageItem[]
+function normalizeListPayload(
+  payload: ApiEnvelope<MessageListPayload> | MessageListPayload
+): MessageListPayload {
+  const normalized =
+    (payload as ApiEnvelope<MessageListPayload>)?.data ?? (payload as MessageListPayload)
+  if (!normalized || typeof normalized !== 'object') {
+    return {
+      items: [],
+      total: 0,
+      pageNum: 1,
+      pageSize: 100,
+      totalPages: 0,
+      capabilities: emptyCapabilities(),
+      partialSuccess: false,
+      unavailableSources: []
     }
   }
 
-  return []
+  return {
+    items: Array.isArray(normalized.items) ? normalized.items : [],
+    total: Number(normalized.total ?? 0),
+    pageNum: Number(normalized.pageNum ?? 1),
+    pageSize: Number(normalized.pageSize ?? 100),
+    totalPages: Number(normalized.totalPages ?? 0),
+    partialSuccess: Boolean(normalized.partialSuccess),
+    unavailableSources: Array.isArray(normalized.unavailableSources)
+      ? normalized.unavailableSources
+      : [],
+    capabilities: {
+      ...emptyCapabilities(),
+      ...(normalized.capabilities ?? {})
+    }
+  }
 }
 
 export const messagesApi = {
-  /**
-   * 获取所有消息（包括通知、预警、告警）
-   */
-  async getAllMessages(): Promise<MessageItem[]> {
+  async getSummary(): Promise<MessageCenterSummary> {
     return fetchWithCache({
-      key: buildQueryKey('messages', 'list', withMessageContext()),
+      key: buildQueryKey('messages', 'summary', withMessageContext()),
+      policy: SUMMARY_POLICY,
+      fetcher: async () => {
+        const response =
+          await apiClient.get<ApiEnvelope<MessageCenterSummary>>('/message-center/summary')
+        return normalizeSummary(response)
+      }
+    })
+  },
+
+  async getAllMessages(category: MessageCategory = 'ALL'): Promise<MessageItem[]> {
+    return fetchWithCache({
+      key: buildQueryKey('messages', 'list', withMessageContext({ category })),
       policy: MESSAGE_LIST_POLICY,
       fetcher: async () => {
-        try {
-          const [notifications, warnings, alerts] = await Promise.allSettled([
-            this.getMessages(),
-            alertApi.getActiveWarnings({ page: 1, size: 20 }),
-            alertApi.getUnclosedAlerts()
-          ])
-
-          const messages: MessageItem[] = []
-
-          if (notifications.status === 'fulfilled') {
-            const notificationList = normalizeNotificationList(notifications.value?.data)
-
-            messages.push(
-              ...notificationList.map((msg: MessageItem) => ({
-                ...msg,
-                isRead:
-                  typeof msg.isRead === 'boolean'
-                    ? msg.isRead
-                    : String(msg.status || '').toUpperCase() === 'READ',
-                type: (msg.type || 'NOTIFICATION') as MessageType
-              }))
-            )
+        const response = await apiClient.get<ApiEnvelope<MessageListPayload>>(
+          '/message-center/messages',
+          {
+            category,
+            page: 1,
+            size: 100,
+            includeRisk: true
           }
-
-          if (warnings.status === 'fulfilled' && warnings.value?.content) {
-            messages.push(
-              ...warnings.value.content.map((w: WarningEvent) => ({
-                id: `warning-${w.id}`,
-                type: 'WARNING' as MessageType,
-                title: w.ruleName || '预警提醒',
-                content: w.message,
-                isRead: w.status === 'ACKNOWLEDGED',
-                createdAt: w.triggeredAt,
-                severity: w.severity,
-                entityId: w.entityId,
-                entityType: w.entityType,
-                status: w.status,
-                link: `/indicators/${w.entityId}`
-              }))
-            )
-          }
-
-          if (alerts.status === 'fulfilled' && alerts.value) {
-            messages.push(
-              ...alerts.value.map((a: AlertEvent) => ({
-                id: `alert-${a.id}`,
-                type: 'ALERT' as MessageType,
-                title: a.ruleName || '告警通知',
-                content: a.message,
-                isRead: a.status !== 'OPEN',
-                createdAt: a.triggeredAt,
-                severity: a.severity,
-                entityId: a.entityId,
-                entityType: a.entityType,
-                status: a.status,
-                link: `/indicators/${a.entityId}`
-              }))
-            )
-          }
-
-          return messages.sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          )
-        } catch (error) {
-          logger.error('获取消息失败:', error)
-          try {
-            const response = await this.getMessages()
-            const notificationList = normalizeNotificationList(response.data)
-            return notificationList.map((msg: MessageItem) => ({
-              ...msg,
-              isRead:
-                typeof msg.isRead === 'boolean'
-                  ? msg.isRead
-                  : String(msg.status || '').toUpperCase() === 'READ',
-              type: (msg.type || 'NOTIFICATION') as MessageType
-            }))
-          } catch {
-            return []
-          }
-        }
+        )
+        return normalizeListPayload(response).items
       }
     })
   },
 
-  /**
-   * 获取通知消息
-   * 使用正确的后端API路径：/api/v1/notifications/my
-   */
-  async getMessages() {
-    return await apiClient.get('/notifications/my', {
-      page: 0,
-      size: 20
-    })
+  async getMessageDetail(messageId: string): Promise<MessageItem> {
+    const response = await apiClient.get<ApiEnvelope<MessageItem>>(
+      `/message-center/messages/${encodeURIComponent(messageId)}`
+    )
+    return (response as ApiEnvelope<MessageItem>).data
   },
 
-  /**
-   * 标记为已读
-   * 使用正确的后端API路径：/api/v1/notifications/{notificationId}/read
-   * 使用POST方法（后端文档定义）
-   */
-  async markAsRead(id: string | number) {
-    const result = await apiClient.post(`/notifications/${id}/read`)
+  async markAsRead(messageId: string) {
+    const result = await apiClient.post<ApiEnvelope<unknown>>(
+      `/message-center/messages/${encodeURIComponent(messageId)}/read`
+    )
     invalidateMessageCaches()
     return result
   },
 
-  /**
-   * 确认预警
-   */
-  async acknowledgeWarning(id: number) {
-    const result = await alertApi.acknowledgeWarning(id)
-    invalidateMessageCaches()
-    return result
-  },
-
-  /**
-   * 处理告警
-   */
-  async processAlert(
-    id: number,
-    data: {
-      assigneeId?: number
-      status: string
-      actionLog: string
-    }
-  ) {
-    const result = await alertApi.processAlert(id, data)
-    invalidateMessageCaches()
-    return result
-  },
-
-  /**
-   * 批量标记为已读
-   * V1 未提供批量已读接口，前端逐条标记
-   */
-  async markMultipleAsRead(ids: (string | number)[]) {
-    const results = await Promise.allSettled(ids.map(id => this.markAsRead(id)))
-    invalidateMessageCaches()
-    return results
-  },
-
-  /**
-   * 标记所有通知为已读
-   * 使用正确的后端API路径：/api/v1/notifications/read-all
-   * 使用POST方法（后端文档定义）
-   */
   async markAllAsRead() {
-    const result = await apiClient.post('/notifications/read-all')
+    const result = await apiClient.post<ApiEnvelope<unknown>>('/message-center/messages/read-all')
     invalidateMessageCaches()
     return result
   },
 
-  /**
-   * 获取未读消息数量
-   */
   async getUnreadCount(): Promise<number> {
-    return fetchWithCache({
-      key: buildQueryKey('messages', 'unreadCount', withMessageContext()),
-      policy: {
-        ...createShortMemoryPolicy(CACHE_TTL.MESSAGE_UNREAD, {
-          staleWhileRevalidate: false,
-          tags: ['messages.unread']
-        })
-      },
-      fetcher: async () => {
-        try {
-          const messages = await this.getAllMessages()
-          return messages.filter(m => !m.isRead).length
-        } catch {
-          return 0
-        }
-      }
-    })
+    const summary = await this.getSummary()
+    return summary.totalCount
   }
 }

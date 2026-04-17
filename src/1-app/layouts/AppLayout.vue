@@ -175,7 +175,12 @@ const handleDropdownCommand = async (command: string) => {
           </div>
 
           <!-- Notification badge -->
-          <el-badge :value="unreadCount" :max="99" class="notification-badge">
+          <el-badge
+            :value="unreadCount"
+            :max="99"
+            :hidden="unreadCount <= 0"
+            class="notification-badge"
+          >
             <el-button :icon="Bell" circle @click="handleNotificationClick" />
           </el-badge>
 

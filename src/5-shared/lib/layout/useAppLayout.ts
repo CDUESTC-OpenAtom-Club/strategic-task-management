@@ -41,11 +41,11 @@ export function useAppLayout() {
         await orgStore.loadDepartments()
 
         // 获取消息数据
-        await messageStore.fetchMessages()
+        await messageStore.refreshMessageCenter()
       } else if (isAuth && orgStore.loaded) {
         // 确保消息已加载
         if (messageStore.messages.length === 0) {
-          await messageStore.fetchMessages()
+          await messageStore.refreshMessageCenter()
         }
       }
     },

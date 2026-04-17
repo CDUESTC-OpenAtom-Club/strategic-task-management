@@ -1370,7 +1370,7 @@ const handleUrge = async (task: {
 
   try {
     await dashboardApi.sendReminder(task.id)
-    await Promise.all([loadReminderStatuses(), messageStore.fetchMessages()])
+    await Promise.all([loadReminderStatuses(), messageStore.refreshMessageCenter()])
     ElMessage.success(`已向 ${task.dept} 发送催办通知`)
   } catch (error: any) {
     const message =

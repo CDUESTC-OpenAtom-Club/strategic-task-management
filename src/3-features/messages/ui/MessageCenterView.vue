@@ -1,19 +1,45 @@
 <template>
   <div class="message-center">
-    <!-- 页面头部 - Requirements: 5.1, 5.2, 5.3, 5.4 -->
     <div class="page-header">
       <div class="header-content">
         <h1 class="page-title">消息中心</h1>
-        <p class="page-desc">查看和管理您的所有通知消息</p>
+        <p class="page-desc">查看和管理与您相关的待处理事项和通知消息</p>
       </div>
       <div class="page-actions">
-        <el-button type="primary" @click="markAllAsRead"> 全部标为已读 </el-button>
-        <el-button @click="clearReadMessages"> 清除已读 </el-button>
+        <el-button :loading="messageStore.loading" @click="refreshData"> 刷新 </el-button>
+        <el-button
+          type="primary"
+          plain
+          :disabled="!messageStore.hasUnreadMarkableMessages"
+          @click="markAllAsRead"
+        >
+          全部标为已读
+        </el-button>
+        <el-button :disabled="!messageStore.hasReadMarkableMessages" @click="clearReadMessages">
+          清除已读
+        </el-button>
       </div>
     </div>
 
-    <!-- 消息内容卡片 - Requirements: 2.1, 2.2 -->
-    <el-card class="message-card card-animate" shadow="never">
+    <el-alert
+      v-if="messageStore.error"
+      type="error"
+      show-icon
+      :closable="false"
+      class="message-error"
+      :title="messageStore.error"
+      description="消息中心未再使用 mock 数据兜底，你可以点击刷新重新加载真实数据。"
+    />
+
+    <div class="summary-grid">
+      <el-card v-for="card in summaryCards" :key="card.key" shadow="never" class="summary-card">
+        <div class="summary-label">{{ card.label }}</div>
+        <div class="summary-value">{{ card.value }}</div>
+        <div class="summary-hint">{{ card.hint }}</div>
+      </el-card>
+    </div>
+
+    <el-card class="message-card" shadow="never">
       <el-tabs v-model="activeTab" class="message-tabs">
         <el-tab-pane name="all">
           <template #label>
@@ -27,60 +53,38 @@
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'all'"
-              :messages="allMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
+          <MessageList
+            v-if="activeTab === 'all'"
+            :messages="allMessages"
+            empty-description="暂无消息"
+            @read="handleMessageRead"
+            @view="handleMessageView"
+          />
         </el-tab-pane>
-        <el-tab-pane name="reminders">
+
+        <el-tab-pane name="todo">
           <template #label>
             <span class="tab-label">
-              催办通知
+              待处理
               <el-badge
-                v-if="unreadCount.reminders > 0"
-                :value="unreadCount.reminders"
+                v-if="unreadCount.todo > 0"
+                :value="unreadCount.todo"
                 :max="99"
                 class="tab-badge"
-                type="primary"
+                type="warning"
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'reminders'"
-              :messages="reminderMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
+          <MessageList
+            v-if="activeTab === 'todo'"
+            :messages="todoMessages"
+            empty-description="当前没有待处理事项"
+            @read="handleMessageRead"
+            @view="handleMessageView"
+          />
         </el-tab-pane>
-        <el-tab-pane name="alerts">
-          <template #label>
-            <span class="tab-label">
-              预警通知
-              <el-badge
-                v-if="unreadCount.alerts > 0"
-                :value="unreadCount.alerts"
-                :max="99"
-                class="tab-badge"
-                type="danger"
-              />
-            </span>
-          </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'alerts'"
-              :messages="alertMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
-        </el-tab-pane>
-        <el-tab-pane name="approvals">
+
+        <el-tab-pane name="approval">
           <template #label>
             <span class="tab-label">
               审批通知
@@ -93,15 +97,37 @@
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'approvals'"
-              :messages="approvalMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
+          <MessageList
+            v-if="activeTab === 'approval'"
+            :messages="approvalMessages"
+            empty-description="当前没有审批相关消息"
+            @read="handleMessageRead"
+            @view="handleMessageView"
+          />
         </el-tab-pane>
+
+        <el-tab-pane name="reminder">
+          <template #label>
+            <span class="tab-label">
+              催办通知
+              <el-badge
+                v-if="unreadCount.reminders > 0"
+                :value="unreadCount.reminders"
+                :max="99"
+                class="tab-badge"
+                type="primary"
+              />
+            </span>
+          </template>
+          <MessageList
+            v-if="activeTab === 'reminder'"
+            :messages="reminderMessages"
+            empty-description="当前没有催办消息"
+            @read="handleMessageRead"
+            @view="handleMessageView"
+          />
+        </el-tab-pane>
+
         <el-tab-pane name="system">
           <template #label>
             <span class="tab-label">
@@ -115,58 +141,178 @@
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'system'"
-              :messages="systemMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
+          <MessageList
+            v-if="activeTab === 'system'"
+            :messages="systemMessages"
+            empty-description="当前没有系统通知"
+            @read="handleMessageRead"
+            @view="handleMessageView"
+          />
+        </el-tab-pane>
+
+        <el-tab-pane v-if="messageStore.capabilities.riskEnabled" name="risk">
+          <template #label>
+            <span class="tab-label">
+              风险提醒
+              <el-badge
+                v-if="unreadCount.alerts > 0"
+                :value="unreadCount.alerts"
+                :max="99"
+                class="tab-badge"
+                type="danger"
+              />
+            </span>
+          </template>
+          <MessageList
+            v-if="activeTab === 'risk'"
+            :messages="alertMessages"
+            empty-description="当前没有风险提醒"
+            @read="handleMessageRead"
+            @view="handleMessageView"
+          />
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <el-drawer v-model="detailVisible" title="消息详情" size="480px" destroy-on-close>
+      <div v-if="detailMessage" class="detail-content">
+        <div class="detail-tags">
+          <el-tag size="small">{{ detailMessage.title }}</el-tag>
+          <el-tag v-if="detailMessage.senderDisplay" type="info" size="small">
+            {{ detailMessage.senderDisplay }}
+          </el-tag>
+          <el-tag v-if="detailMessage.currentStepName" type="warning" size="small">
+            {{ detailMessage.currentStepName }}
+          </el-tag>
+        </div>
+        <div class="detail-time">{{ formatDateTime(detailMessage.createdAt) }}</div>
+        <div class="detail-body">{{ detailMessage.detailContent || detailMessage.content }}</div>
+
+        <div class="detail-actions">
+          <el-button
+            v-if="detailMessage.actionUrl"
+            type="primary"
+            @click="navigateByMessage(detailMessage)"
+          >
+            查看关联内容
+          </el-button>
+          <el-button
+            v-if="detailMessage.canMarkAsRead && !detailMessage.isRead"
+            @click="handleMessageRead(detailMessage.id)"
+          >
+            标为已读
+          </el-button>
+        </div>
+      </div>
+      <el-skeleton v-else-if="messageStore.detailLoading" :rows="6" animated />
+      <el-empty v-else description="暂无可展示的详情内容" />
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MessageList from '@/shared/ui/message/MessageList.vue'
-import { useApprovalStore } from '@/features/approval/model/store'
+import { useMessageStore } from '@/features/messages/model/message'
 import {
   requiresApprovalCenterFallback,
   resolveApprovalRoute
 } from '@/features/approval/lib/approvalNotifications'
 import { useApprovalCenter } from '@/features/approval'
-import { useMessageStore } from '@/features/messages/model/message'
 import type { Message } from '@/shared/types'
+import { formatDateTime } from '@/shared/lib/utils'
 
 const router = useRouter()
-
-// 使用消息 Store
 const messageStore = useMessageStore()
-const approvalStore = useApprovalStore()
 const { openApprovalCenter } = useApprovalCenter()
 
 const activeTab = ref('all')
+const detailVisible = ref(false)
+const detailMessage = ref<Message | null>(null)
 
-// 从 store 获取消息数据
 const allMessages = computed(() => messageStore.visibleMessages)
+const todoMessages = computed(() => messageStore.todoMessages)
 const reminderMessages = computed(() => messageStore.reminderMessages)
 const alertMessages = computed(() => messageStore.alertMessages)
 const approvalMessages = computed(() => messageStore.approvalMessages)
 const systemMessages = computed(() => messageStore.systemMessages)
-
-// 未读消息计数
 const unreadCount = computed(() => messageStore.unreadCount)
 
-const handleMessageRead = (messageId: string) => {
-  messageStore.markAsRead(messageId)
+const summaryCards = computed(() => {
+  const cards = [
+    {
+      key: 'todo',
+      label: '待处理',
+      value: messageStore.summary.todoCount,
+      hint: '当前仍需你处理的审批事项'
+    },
+    {
+      key: 'approval',
+      label: '审批通知',
+      value: messageStore.summary.approvalCount,
+      hint: '待处理和审批结果统一归口'
+    },
+    {
+      key: 'reminder',
+      label: '催办通知',
+      value: messageStore.summary.reminderCount,
+      hint: '仅统计未读催办消息'
+    },
+    {
+      key: 'system',
+      label: '系统通知',
+      value: messageStore.summary.systemCount,
+      hint: '仅统计未读系统与业务通知'
+    }
+  ]
+
+  if (messageStore.capabilities.riskEnabled) {
+    cards.push({
+      key: 'risk',
+      label: '风险提醒',
+      value: messageStore.summary.riskCount,
+      hint: '风险能力开启后才展示'
+    })
+  }
+
+  return cards
+})
+
+async function refreshData() {
+  try {
+    await messageStore.refreshMessageCenter()
+  } catch {
+    ElMessage.error(messageStore.error || '刷新失败，请稍后重试')
+  }
 }
 
-const handleMessageView = (message: Message) => {
+async function handleMessageRead(messageId: string) {
+  try {
+    await messageStore.markAsRead(messageId)
+    ElMessage.success('已标记为已读')
+  } catch {
+    ElMessage.error('标记已读失败，请稍后重试')
+  }
+}
+
+async function handleMessageView(message: Message) {
+  if (message.canProcess || message.bizType === 'APPROVAL_TODO') {
+    navigateByMessage(message)
+    return
+  }
+
+  detailVisible.value = true
+  detailMessage.value = message
+  try {
+    detailMessage.value = await messageStore.fetchMessageDetail(message.id)
+  } catch {
+    ElMessage.warning('详情加载失败，已展示列表中的摘要内容')
+  }
+}
+
+function navigateByMessage(message: Message) {
   const approvalPayload = {
     approvalInstanceId: message.approvalInstanceId,
     entityType: message.entityType,
@@ -180,78 +326,68 @@ const handleMessageView = (message: Message) => {
   }
 
   const approvalRoute = resolveApprovalRoute(approvalPayload)
-
   if (approvalRoute) {
     void router.push(approvalRoute)
     return
   }
 
-  if (message.type === 'approval') {
-    openApprovalCenter()
+  if (message.actionUrl) {
+    void router.push(message.actionUrl)
     return
   }
 
-  if (message.actionUrl) {
-    void router.push(message.actionUrl)
+  if (message.type === 'approval') {
+    openApprovalCenter()
   }
 }
 
-const markAllAsRead = () => {
-  messageStore.markAllAsRead()
-  ElMessage.success('已将所有消息标为已读')
+async function markAllAsRead() {
+  if (!messageStore.hasUnreadMarkableMessages) {
+    ElMessage.warning('暂无可标记为已读的消息')
+    return
+  }
+
+  try {
+    await messageStore.markAllAsRead()
+    ElMessage.success('已将普通通知全部标为已读')
+  } catch {
+    ElMessage.error('全部标记已读失败，请稍后重试')
+  }
 }
 
-const clearReadMessages = () => {
-  const unread = messageStore.unreadCount.all
-  const total = messageStore.visibleMessages.length
-
-  if (unread === total) {
-    ElMessage.warning('没有已读消息可清理')
+function clearReadMessages() {
+  if (!messageStore.hasReadMarkableMessages) {
+    ElMessage.warning('暂无已读消息可清理')
     return
   }
 
   messageStore.clearReadMessages()
-  ElMessage.success('已清除所有已读消息')
+  ElMessage.success('已清除当前视图中的已读消息')
 }
 
 onMounted(() => {
-  void Promise.all([messageStore.fetchMessages(), approvalStore.loadPendingApprovals()]).then(
-    () => {
-      messageStore.syncPendingApprovals(approvalStore.pendingApprovals)
-    }
-  )
+  void refreshData()
 })
 </script>
 
 <style scoped>
-/* ========================================
-   MessageCenterView 统一样式
-   使用 colors.css 中定义的 CSS 变量
-   Requirements: 2.1, 5.1, 9.1
-   ======================================== */
-
-/* 页面主容器 - 使用统一的页面容器样式 */
 .message-center {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xl);
+  gap: 20px;
 }
 
-/* ========================================
-   页面头部样式 - 统一页面头部规范
-   Requirements: 5.1, 5.2, 5.3, 5.4
-   ======================================== */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: var(--spacing-md);
+  gap: 16px;
 }
 
 .header-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .page-title {
@@ -270,130 +406,94 @@ onMounted(() => {
 .page-actions {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 12px;
 }
 
-/* ========================================
-   消息卡片样式 - 统一卡片规范
-   Requirements: 2.1, 2.2, 2.4
-   ======================================== */
-.message-card {
-  background: var(--bg-white);
-  border-radius: var(--radius-lg);
+.message-error {
+  margin-bottom: -4px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
   border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-card);
-  transition: box-shadow var(--transition-normal);
-  min-height: 500px;
 }
 
-.message-card:hover {
-  box-shadow: var(--shadow-hover);
+.summary-label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
-/* ========================================
-   Tab 样式定制 - 统一 Tab 规范
-   Requirements: 5.1, 9.1
-   ======================================== */
+.summary-value {
+  margin: 8px 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.summary-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.message-card {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
 .message-tabs :deep(.el-tabs__header) {
-  margin-bottom: var(--spacing-xl);
-  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 20px;
 }
 
-.message-tabs :deep(.el-tabs__nav-wrap::after) {
-  display: none;
-}
-
-.message-tabs :deep(.el-tabs__item) {
-  font-size: 15px;
-  padding: 0 var(--spacing-xl);
-  height: 48px;
-  line-height: 48px;
-  color: var(--text-regular);
-  transition: all var(--transition-fast);
-}
-
-.message-tabs :deep(.el-tabs__item:hover) {
-  color: var(--color-primary);
-}
-
-.message-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.message-tabs :deep(.el-tabs__active-bar) {
-  height: 3px;
-  border-radius: 2px;
-  background-color: var(--color-primary);
-  transition: transform var(--transition-normal);
-}
-
-/* Tab 标签样式 - Requirements: 9.1, 9.3 */
 .tab-label {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .tab-badge {
-  margin-left: var(--spacing-xs);
+  margin-left: 2px;
 }
 
-.tab-badge :deep(.el-badge__content) {
-  font-size: 10px;
-  height: 16px;
-  line-height: 16px;
-  padding: 0 5px;
-  border-radius: var(--radius-sm);
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* ========================================
-   Tab 切换过渡动画 - 统一过渡动画规范
-   Requirements: 6.1
-   ======================================== */
-.tab-fade-enter-active,
-.tab-fade-leave-active {
-  transition: all var(--transition-normal);
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.tab-fade-enter-from {
-  opacity: 0;
-  transform: translateX(20px);
+.detail-time {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
-.tab-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
+.detail-body {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--text-main);
 }
 
-/* ========================================
-   卡片入场动画 - 统一动画规范
-   Requirements: 6.1
-   ======================================== */
-.card-animate {
-  animation: fadeInUp 0.4s ease-out;
+.detail-actions {
+  display: flex;
+  gap: 12px;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .page-actions {
+    flex-wrap: wrap;
   }
-}
-
-/* ========================================
-   按钮过渡效果 - 统一过渡动画规范
-   Requirements: 6.1
-   ======================================== */
-:deep(.el-button) {
-  transition: all var(--transition-fast);
-}
-
-:deep(.el-button:active) {
-  transform: scale(0.96);
 }
 </style>

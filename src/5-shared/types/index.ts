@@ -184,12 +184,26 @@ export interface ApprovalHistory {
 // ProgressReport 已移至 entities.ts,请使用: import { ProgressReport } from '@/shared/types'
 
 // Message Types
+export type MessageType = 'alert' | 'approval' | 'reminder' | 'system'
+export type AlertLevel = 'severe' | 'moderate' | 'normal'
+export type MessageCategory = 'ALL' | 'TODO' | 'APPROVAL' | 'REMINDER' | 'SYSTEM' | 'RISK'
+export type MessageBizType =
+  | 'APPROVAL_TODO'
+  | 'APPROVAL_RESULT'
+  | 'REMINDER_NOTICE'
+  | 'SYSTEM_NOTICE'
+  | 'BUSINESS_NOTICE'
+  | 'RISK_WARNING'
+  | 'RISK_ALERT'
+
 export interface Message {
   id: string
-  type: string
+  messageId?: string
+  type: MessageType
   title: string
   content: string
-  severity?: string
+  detailContent?: string
+  severity?: AlertLevel
   recipientRoles?: string[] // 接收者角色
   recipientDept?: string | string[] // 接收者部门
   recipientId?: string // 特定接收者ID
@@ -201,6 +215,17 @@ export interface Message {
   entityId?: string
   approvalInstanceId?: number
   status?: string
+  category?: MessageCategory
+  bizType?: MessageBizType
+  readState?: 'UNREAD' | 'READ'
+  actionState?: 'ACTION_REQUIRED' | 'DONE'
+  canMarkAsRead?: boolean
+  canViewDetail?: boolean
+  canProcess?: boolean
+  senderDisplay?: string
+  currentStepName?: string
+  currentAssigneeDisplay?: string
+  metadata?: Record<string, unknown>
   syntheticSource?: 'notification' | 'pending_approval'
 }
 

@@ -20,10 +20,9 @@ const orgStore = reactive({
 
 const messageStore = reactive({
   messages: [] as Array<{ id: string }>,
-  fetchMessages: vi.fn(async () => {
+  refreshMessageCenter: vi.fn(async () => {
     messageStore.messages = [{ id: 'remote-1' }]
-  }),
-  syncPendingApprovals: vi.fn()
+  })
 })
 
 const approvalStore = reactive({
@@ -34,10 +33,7 @@ const approvalStore = reactive({
         instanceId: 1,
         entityType: 'PLAN',
         entityId: 10,
-        status: 'PENDING',
-        currentStepName: '部门审核',
-        applicant: { name: '教务处' },
-        initiatedAt: '2026-04-17T08:00:00Z'
+        status: 'PENDING'
       }
     ]
   })
@@ -88,10 +84,9 @@ function resetStoreState() {
   orgStore.getStrategicDeptName = vi.fn(() => '战略发展部')
 
   messageStore.messages = []
-  messageStore.fetchMessages = vi.fn(async () => {
+  messageStore.refreshMessageCenter = vi.fn(async () => {
     messageStore.messages = [{ id: 'remote-1' }]
   })
-  messageStore.syncPendingApprovals = vi.fn()
 
   approvalStore.pendingApprovals = []
   approvalStore.loadPendingApprovals = vi.fn(async () => {
@@ -100,16 +95,13 @@ function resetStoreState() {
         instanceId: 1,
         entityType: 'PLAN',
         entityId: 10,
-        status: 'PENDING',
-        currentStepName: '部门审核',
-        applicant: { name: '教务处' },
-        initiatedAt: '2026-04-17T08:00:00Z'
+        status: 'PENDING'
       }
     ]
   })
 }
 
-describe('useAppLayout approval-message sync', () => {
+describe('useAppLayout message center refresh', () => {
   beforeEach(() => {
     resetStoreState()
   })
@@ -118,60 +110,30 @@ describe('useAppLayout approval-message sync', () => {
     vi.clearAllMocks()
   })
 
-  it('syncs pending approvals into the message store after the global load finishes', async () => {
+  it('loads departments and refreshes unified message center on first mount', async () => {
     const wrapper = mount(Harness)
 
     await flushUi()
 
     expect(orgStore.loadDepartments).toHaveBeenCalledTimes(1)
-    expect(messageStore.fetchMessages).toHaveBeenCalledTimes(1)
+    expect(messageStore.refreshMessageCenter).toHaveBeenCalledTimes(1)
     expect(approvalStore.loadPendingApprovals).toHaveBeenCalledTimes(1)
-    expect(messageStore.syncPendingApprovals).toHaveBeenLastCalledWith(
-      approvalStore.pendingApprovals
-    )
 
     wrapper.unmount()
   })
 
-  it('re-syncs synthetic approval messages when pending approvals change later', async () => {
+  it('refreshes unified message center again when approval state refresh event is dispatched', async () => {
     const wrapper = mount(Harness)
 
     await flushUi()
-    vi.mocked(messageStore.syncPendingApprovals).mockClear()
-
-    approvalStore.pendingApprovals = [
-      {
-        instanceId: 2,
-        entityType: 'INDICATOR',
-        entityId: 20,
-        status: 'PENDING',
-        currentStepName: '指标审批',
-        applicant: { name: '科研处' },
-        initiatedAt: '2026-04-17T09:00:00Z'
-      }
-    ]
-
-    await flushUi()
-
-    expect(messageStore.syncPendingApprovals).toHaveBeenCalledWith(approvalStore.pendingApprovals)
-
-    wrapper.unmount()
-  })
-
-  it('refreshes pending approvals when the approval refresh event is dispatched', async () => {
-    const wrapper = mount(Harness)
-
-    await flushUi()
+    vi.mocked(messageStore.refreshMessageCenter).mockClear()
     vi.mocked(approvalStore.loadPendingApprovals).mockClear()
-    vi.mocked(messageStore.syncPendingApprovals).mockClear()
-    vi.mocked(messageStore.fetchMessages).mockClear()
 
     window.dispatchEvent(new CustomEvent(APPROVAL_STATE_REFRESH_EVENT))
     await flushUi()
 
+    expect(messageStore.refreshMessageCenter).toHaveBeenCalledTimes(1)
     expect(approvalStore.loadPendingApprovals).toHaveBeenCalledTimes(1)
-    expect(messageStore.syncPendingApprovals).toHaveBeenCalledWith(approvalStore.pendingApprovals)
-    expect(messageStore.fetchMessages).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

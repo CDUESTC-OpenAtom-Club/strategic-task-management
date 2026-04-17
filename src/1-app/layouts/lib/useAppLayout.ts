@@ -16,18 +16,12 @@ export function useAppLayout() {
   const isStrategicDept = computed(() => authStore.userRole === 'strategic_dept')
   const strategicDeptName = computed(() => orgStore.getStrategicDeptName())
 
-  const syncPendingApprovalMessages = () => {
-    messageStore.syncPendingApprovals(approvalStore.pendingApprovals)
-  }
-
   const refreshNotificationState = async () => {
-    await Promise.all([messageStore.fetchMessages(), approvalStore.loadPendingApprovals()])
-    syncPendingApprovalMessages()
+    await Promise.all([messageStore.refreshMessageCenter(), approvalStore.loadPendingApprovals()])
   }
 
   const refreshPendingApprovalState = async () => {
-    await approvalStore.loadPendingApprovals()
-    syncPendingApprovalMessages()
+    await Promise.all([messageStore.refreshMessageCenter(), approvalStore.loadPendingApprovals()])
   }
 
   const handleApprovalStateRefresh = () => {
@@ -69,15 +63,6 @@ export function useAppLayout() {
       }
     },
     { immediate: true }
-  )
-
-  // Keep synthetic approval messages aligned with the globally refreshed approval store.
-  watch(
-    () => approvalStore.pendingApprovals,
-    pendingApprovals => {
-      messageStore.syncPendingApprovals(pendingApprovals)
-    },
-    { deep: true }
   )
 
   const handleLogout = () => {

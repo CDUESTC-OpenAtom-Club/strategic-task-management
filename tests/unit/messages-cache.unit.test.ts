@@ -9,22 +9,11 @@ const apiClientMock = vi.hoisted(() => ({
   post: vi.fn()
 }))
 
-const alertApiMock = vi.hoisted(() => ({
-  getActiveWarnings: vi.fn(),
-  getUnclosedAlerts: vi.fn(),
-  acknowledgeWarning: vi.fn(),
-  processAlert: vi.fn()
-}))
-
 vi.mock('@/shared/api/client', () => ({
   apiClient: apiClientMock
 }))
 
-vi.mock('@/shared/api/monitoringApi', () => ({
-  alertApi: alertApiMock
-}))
-
-describe('messages cache integration', () => {
+describe('message center cache integration', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     cacheManager.clear()
@@ -32,9 +21,6 @@ describe('messages cache integration', () => {
     sessionStorage.clear()
     localStorage.clear()
     vi.clearAllMocks()
-
-    alertApiMock.getActiveWarnings.mockResolvedValue({ content: [], total: 0 })
-    alertApiMock.getUnclosedAlerts.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -44,318 +30,213 @@ describe('messages cache integration', () => {
     localStorage.clear()
   })
 
-  it('caches unread count in memory scope', async () => {
+  it('caches unified unread count via summary endpoint', async () => {
     apiClientMock.get.mockResolvedValue({
       data: {
-        data: [
-          {
-            id: 'n-1',
-            type: 'NOTIFICATION',
-            title: '消息1',
-            content: '内容1',
-            isRead: false,
-            createdAt: '2026-03-24T08:00:00Z'
-          }
-        ]
+        totalCount: 3,
+        todoCount: 1,
+        approvalCount: 2,
+        reminderCount: 1,
+        systemCount: 1,
+        riskCount: 0,
+        capabilities: {
+          riskEnabled: false,
+          approvalAggregationEnabled: true,
+          detailDrawerEnabled: true
+        }
       }
     })
 
     const first = await messagesApi.getUnreadCount()
     const second = await messagesApi.getUnreadCount()
 
-    expect(first).toBe(1)
-    expect(second).toBe(1)
+    expect(first).toBe(3)
+    expect(second).toBe(3)
     expect(apiClientMock.get).toHaveBeenCalledTimes(1)
-    expect(
-      cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))?.scope
-    ).toBe('memory')
+    expect(cacheManager.get(buildQueryKey('messages', 'summary', { version: 'v2' }))?.scope).toBe(
+      'memory'
+    )
   })
 
-  it('invalidates unread cache after marking a message as read', async () => {
+  it('invalidates summary cache after marking a message as read', async () => {
     apiClientMock.get.mockResolvedValue({
       data: {
-        data: [
-          {
-            id: 'n-1',
-            type: 'NOTIFICATION',
-            title: '消息1',
-            content: '内容1',
-            isRead: false,
-            createdAt: '2026-03-24T08:00:00Z'
-          }
-        ]
+        totalCount: 1,
+        todoCount: 0,
+        approvalCount: 0,
+        reminderCount: 0,
+        systemCount: 1,
+        riskCount: 0,
+        capabilities: {
+          riskEnabled: false,
+          approvalAggregationEnabled: true,
+          detailDrawerEnabled: true
+        }
       }
     })
     apiClientMock.post.mockResolvedValue({ success: true })
 
     await messagesApi.getUnreadCount()
-    expect(
-      cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))
-    ).toBeDefined()
+    expect(cacheManager.get(buildQueryKey('messages', 'summary', { version: 'v2' }))).toBeDefined()
 
-    await messagesApi.markAsRead('n-1')
+    await messagesApi.markAsRead('notification:1')
 
     expect(
-      cacheManager.get(buildQueryKey('messages', 'unreadCount', { version: 'v1' }))
+      cacheManager.get(buildQueryKey('messages', 'summary', { version: 'v2' }))
     ).toBeUndefined()
   })
 
-  it('message store fetches remote messages before falling back to mock data', async () => {
-    apiClientMock.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            id: 'n-2',
-            type: 'NOTIFICATION',
-            title: '远程消息',
-            content: '需要处理',
-            isRead: false,
-            createdAt: '2026-03-24T09:00:00Z'
+  it('message store uses unified list data and does not fall back to mock messages', async () => {
+    apiClientMock.get
+      .mockResolvedValueOnce({
+        data: {
+          totalCount: 2,
+          todoCount: 1,
+          approvalCount: 1,
+          reminderCount: 0,
+          systemCount: 1,
+          riskCount: 0,
+          capabilities: {
+            riskEnabled: false,
+            approvalAggregationEnabled: true,
+            detailDrawerEnabled: true
           }
-        ]
-      }
-    })
-
-    const store = useMessageStore()
-    await store.fetchMessages()
-
-    expect(store.messages).toHaveLength(1)
-    expect(store.messages[0]?.title).toBe('远程消息')
-  })
-
-  it('maps reminder notifications into reminder message type', async () => {
-    apiClientMock.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            id: 'n-3',
-            type: 'REMINDER',
-            title: '催办提醒',
-            content: '请尽快处理',
-            isRead: false,
-            createdAt: '2026-03-24T09:30:00Z'
+        }
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              messageId: 'workflow:12:501',
+              sourceType: 'workflow',
+              sourceId: '501',
+              category: 'TODO',
+              bizType: 'APPROVAL_TODO',
+              title: '有新的计划待审批',
+              summary: '计算机学院提交了“2026年度计划”，请及时处理。',
+              content: '计算机学院提交了“2026年度计划”，请及时处理。',
+              actionState: 'ACTION_REQUIRED',
+              createdAt: '2026-04-17T08:00:00',
+              actionUrl: '/strategic-tasks?tab=approval&approvalInstanceId=12',
+              entityType: 'PLAN',
+              entityId: 101,
+              approvalInstanceId: 12,
+              currentStepName: '部门负责人审批',
+              canMarkAsRead: false,
+              canViewDetail: true,
+              canProcess: true
+            },
+            {
+              messageId: 'notification:9',
+              sourceType: 'notification',
+              sourceId: '9',
+              category: 'SYSTEM',
+              bizType: 'SYSTEM_NOTICE',
+              title: '系统维护提醒',
+              summary: '本周日晚间系统维护。',
+              content: '本周日晚间系统维护。',
+              readState: 'UNREAD',
+              createdAt: '2026-04-17T07:00:00',
+              canMarkAsRead: true,
+              canViewDetail: true,
+              canProcess: false
+            }
+          ],
+          total: 2,
+          pageNum: 1,
+          pageSize: 100,
+          totalPages: 1,
+          capabilities: {
+            riskEnabled: false,
+            approvalAggregationEnabled: true,
+            detailDrawerEnabled: true
           }
-        ]
-      }
-    })
+        }
+      })
 
     const store = useMessageStore()
-    await store.fetchMessages()
+    await store.refreshMessageCenter()
 
-    expect(store.messages[0]?.type).toBe('reminder')
-    expect(store.unreadCount.reminders).toBe(1)
+    expect(store.messages).toHaveLength(2)
+    expect(store.todoMessages).toHaveLength(1)
+    expect(store.approvalMessages).toHaveLength(1)
+    expect(store.systemMessages).toHaveLength(1)
+    expect(store.messages[0]?.id).toBe('workflow:12:501')
+    expect(store.messages[0]?.canMarkAsRead).toBe(false)
+    expect(store.summary.totalCount).toBe(2)
   })
 
-  it('reads paged notification payloads returned directly under data.content', async () => {
-    apiClientMock.get.mockResolvedValue({
-      data: {
-        content: [
-          {
-            id: 4,
-            type: 'REMINDER',
-            title: '滞后任务催办提醒',
-            content: '任务“测试”当前进度滞后，请尽快处理并更新进展。',
-            isRead: false,
-            createdAt: '2026-04-05T02:03:05.203605',
-            relatedEntityId: 2049
+  it('mark all as read only affects readable notifications and keeps todo counts intact', async () => {
+    apiClientMock.get
+      .mockResolvedValueOnce({
+        data: {
+          totalCount: 2,
+          todoCount: 1,
+          approvalCount: 1,
+          reminderCount: 0,
+          systemCount: 1,
+          riskCount: 0,
+          capabilities: {
+            riskEnabled: false,
+            approvalAggregationEnabled: true,
+            detailDrawerEnabled: true
           }
-        ],
-        totalElements: 1
-      }
-    })
-
-    const store = useMessageStore()
-    await store.fetchMessages()
-
-    expect(store.messages).toHaveLength(1)
-    expect(store.messages[0]?.type).toBe('reminder')
-    expect(store.reminderMessages).toHaveLength(1)
-    expect(store.messages[0]?.title).toBe('滞后任务催办提醒')
-  })
-
-  it('retains approval routing metadata on remote approval messages', async () => {
-    apiClientMock.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            id: 'n-4',
-            type: 'NOTIFICATION',
-            title: '有新的计划待审批',
-            content: '请及时处理。',
-            isRead: false,
-            createdAt: '2026-03-24T10:00:00Z',
-            entityId: 88,
-            entityType: 'PLAN',
-            approvalInstanceId: 91,
-            link: '/strategic-tasks?tab=approval&approvalInstanceId=91',
-            status: 'APPROVAL_PENDING'
+        }
+      })
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              messageId: 'workflow:12:501',
+              sourceType: 'workflow',
+              sourceId: '501',
+              category: 'TODO',
+              bizType: 'APPROVAL_TODO',
+              title: '有新的计划待审批',
+              summary: '待处理审批事项',
+              content: '待处理审批事项',
+              actionState: 'ACTION_REQUIRED',
+              createdAt: '2026-04-17T08:00:00',
+              canMarkAsRead: false,
+              canViewDetail: true,
+              canProcess: true
+            },
+            {
+              messageId: 'notification:9',
+              sourceType: 'notification',
+              sourceId: '9',
+              category: 'SYSTEM',
+              bizType: 'SYSTEM_NOTICE',
+              title: '系统维护提醒',
+              summary: '本周日晚间系统维护。',
+              content: '本周日晚间系统维护。',
+              readState: 'UNREAD',
+              createdAt: '2026-04-17T07:00:00',
+              canMarkAsRead: true,
+              canViewDetail: true,
+              canProcess: false
+            }
+          ],
+          total: 2,
+          pageNum: 1,
+          pageSize: 100,
+          totalPages: 1,
+          capabilities: {
+            riskEnabled: false,
+            approvalAggregationEnabled: true,
+            detailDrawerEnabled: true
           }
-        ]
-      }
-    })
+        }
+      })
+    apiClientMock.post.mockResolvedValue({ success: true })
 
     const store = useMessageStore()
-    await store.fetchMessages()
-
-    expect(store.messages[0]?.type).toBe('approval')
-    expect(store.messages[0]?.entityType).toBe('PLAN')
-    expect(store.messages[0]?.entityId).toBe('88')
-    expect(store.messages[0]?.approvalInstanceId).toBe(91)
-    expect(store.messages[0]?.actionUrl).toBe('/strategic-tasks?tab=approval&approvalInstanceId=91')
-  })
-
-  it('syncs pending approvals into synthetic approval messages', async () => {
-    apiClientMock.get.mockResolvedValue({ data: { data: [] } })
-
-    const store = useMessageStore()
-    await store.fetchMessages()
-    store.syncPendingApprovals([
-      {
-        instanceId: 12,
-        entityType: 'PLAN',
-        entityId: 101,
-        status: 'PENDING',
-        currentStepName: '计划审批',
-        applicant: { name: '教务处' },
-        initiatedAt: '2026-03-24T11:00:00Z'
-      }
-    ])
-
-    expect(store.approvalMessages).toHaveLength(2)
-    const syntheticMessage = store.approvalMessages.find(
-      message => message.syntheticSource === 'pending_approval'
-    )
-    expect(syntheticMessage?.title).toBe('有新的计划待审批')
-    expect(syntheticMessage?.actionUrl).toBe('/strategic-tasks')
-    expect(syntheticMessage?.entityId).toBe('101')
-    expect(store.unreadCount.approvals).toBeGreaterThanOrEqual(1)
-  })
-
-  it('keeps synthetic pending approvals unread and visible when local read actions run', async () => {
-    apiClientMock.get.mockResolvedValue({ data: { data: [] } })
-
-    const store = useMessageStore()
-    await store.fetchMessages()
-    store.syncPendingApprovals([
-      {
-        instanceId: 18,
-        entityType: 'PLAN',
-        entityId: 108,
-        status: 'PENDING',
-        currentStepName: '计划审批',
-        applicant: { name: '科研处' },
-        initiatedAt: '2026-03-24T11:20:00Z'
-      }
-    ])
-
-    const syntheticMessage = store.approvalMessages.find(
-      message => message.syntheticSource === 'pending_approval'
-    )
-
-    expect(syntheticMessage?.isRead).toBe(false)
-
-    await store.markAsRead(String(syntheticMessage?.id))
-    expect(
-      store.approvalMessages.find(message => message.id === syntheticMessage?.id)?.isRead
-    ).toBe(false)
-
+    await store.refreshMessageCenter()
     await store.markAllAsRead()
-    expect(
-      store.approvalMessages.find(message => message.id === syntheticMessage?.id)?.isRead
-    ).toBe(false)
 
-    store.clearReadMessages()
-    expect(store.approvalMessages.some(message => message.id === syntheticMessage?.id)).toBe(true)
-    expect(store.unreadCount.approvals).toBeGreaterThanOrEqual(1)
-  })
-
-  it('keeps matched remote approval notifications actionable while the approval is still pending', async () => {
-    apiClientMock.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            id: 'n-5a',
-            type: 'NOTIFICATION',
-            title: '有新的计划待审批',
-            content: '请及时处理。',
-            isRead: true,
-            createdAt: '2026-03-24T10:30:00Z',
-            entityId: 101,
-            entityType: 'PLAN',
-            link: '/strategic-tasks?tab=approval&approvalInstanceId=12',
-            status: 'APPROVAL_PENDING'
-          }
-        ]
-      }
-    })
-
-    const store = useMessageStore()
-    await store.fetchMessages()
-    expect(store.approvalMessages[0]?.isRead).toBe(true)
-
-    store.syncPendingApprovals([
-      {
-        instanceId: 12,
-        entityType: 'PLAN',
-        entityId: 101,
-        status: 'PENDING',
-        currentStepName: '计划审批',
-        applicant: { name: '教务处' },
-        initiatedAt: '2026-03-24T11:00:00Z'
-      }
-    ])
-
-    expect(store.approvalMessages).toHaveLength(1)
-    expect(store.approvalMessages[0]?.syntheticSource).toBe('notification')
-    expect(store.approvalMessages[0]?.isRead).toBe(false)
-
-    await store.markAllAsRead()
-    expect(store.approvalMessages[0]?.isRead).toBe(false)
-
-    store.clearReadMessages()
-    expect(store.approvalMessages).toHaveLength(1)
-  })
-
-  it('dedupes pending approvals against matching remote approval notifications', async () => {
-    apiClientMock.get.mockResolvedValue({
-      data: {
-        data: [
-          {
-            id: 'n-5',
-            type: 'NOTIFICATION',
-            title: '有新的计划待审批',
-            content: '请及时处理。',
-            isRead: false,
-            createdAt: '2026-03-24T10:30:00Z',
-            entityId: 101,
-            entityType: 'PLAN',
-            link: '/strategic-tasks?tab=approval&approvalInstanceId=12',
-            status: 'APPROVAL_PENDING'
-          }
-        ]
-      }
-    })
-
-    const store = useMessageStore()
-    await store.fetchMessages()
-    store.syncPendingApprovals([
-      {
-        instanceId: 12,
-        entityType: 'PLAN',
-        entityId: 101,
-        status: 'PENDING',
-        currentStepName: '计划审批',
-        applicant: { name: '教务处' },
-        initiatedAt: '2026-03-24T11:00:00Z'
-      }
-    ])
-
-    expect(store.approvalMessages).toHaveLength(1)
-    expect(store.approvalMessages[0]?.syntheticSource).toBe('notification')
-    expect(store.approvalMessages[0]?.approvalInstanceId).toBe(12)
-    expect(store.approvalMessages[0]?.entityId).toBe('101')
-    expect(store.approvalMessages[0]?.actionUrl).toBe(
-      '/strategic-tasks?tab=approval&approvalInstanceId=12'
-    )
+    expect(store.todoMessages[0]?.isRead).toBe(false)
+    expect(store.systemMessages[0]?.isRead).toBe(true)
+    expect(store.summary.todoCount).toBe(1)
+    expect(store.summary.totalCount).toBe(1)
   })
 })
