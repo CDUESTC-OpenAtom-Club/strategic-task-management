@@ -99,16 +99,20 @@ export function usePermission(): UsePermissionReturn {
     return hasPermission(permission) && canAccessOrg(resourceOrgId)
   }
 
-  const canViewPlan = (plan: Plan): boolean => {
+  const canAccessPlanOrg = (plan: Plan, permission: PermissionCode): boolean => {
+    if (!hasPermission(permission)) {
+      return false
+    }
+
     if (isStrategicDept.value) {
       return true
     }
 
-    if (isFunctionalDept.value && plan.org_id === userOrgId.value) {
-      return true
-    }
+    return plan.org_id === userOrgId.value
+  }
 
-    return false
+  const canViewPlan = (plan: Plan): boolean => {
+    return canAccessPlanOrg(plan, PermissionCode.PLAN_VIEW)
   }
 
   const canEditPlan = (plan: Plan): boolean => {
@@ -144,11 +148,7 @@ export function usePermission(): UsePermissionReturn {
       return false
     }
 
-    if (isStrategicDept.value) {
-      return true
-    }
-
-    return plan.org_id === userOrgId.value
+    return canAccessPlanOrg(plan, PermissionCode.PLAN_SUBMIT)
   }
 
   const getAccessiblePlans = (plans: Plan[]): Plan[] => {

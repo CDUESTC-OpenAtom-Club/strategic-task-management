@@ -1,0 +1,37 @@
+import { describe, expect, it } from 'vitest'
+import { isKnownUserRole, mapBackendUser } from '@/shared/lib/utils/authHelpers'
+
+describe('responseParser', () => {
+  it('recognizes explicit frontend roles without remapping them', () => {
+    const user = mapBackendUser({
+      userId: 7,
+      username: 'jiaowu_report',
+      realName: '教务处填报员',
+      role: 'functional_dept',
+      orgName: '教务处'
+    })
+
+    expect(user?.role).toBe('functional_dept')
+  })
+
+  it('returns null when the response does not contain a valid frontend role', () => {
+    const user = mapBackendUser({
+      userId: 9,
+      username: 'mystery_user',
+      realName: '未知角色用户',
+      role: 'ROLE_SUPER_REVIEWER',
+      orgType: '',
+      orgName: '测试组织'
+    })
+
+    expect(user).toBeNull()
+  })
+
+  it('accepts only the three supported frontend roles', () => {
+    expect(isKnownUserRole('strategic_dept')).toBe(true)
+    expect(isKnownUserRole('functional_dept')).toBe(true)
+    expect(isKnownUserRole('secondary_college')).toBe(true)
+    expect(isKnownUserRole('ROLE_APPROVER')).toBe(false)
+    expect(isKnownUserRole('')).toBe(false)
+  })
+})

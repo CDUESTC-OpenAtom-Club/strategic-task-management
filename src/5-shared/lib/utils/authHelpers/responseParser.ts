@@ -13,6 +13,8 @@
 import type { User, UserRole } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 
+const KNOWN_USER_ROLES: UserRole[] = ['strategic_dept', 'functional_dept', 'secondary_college']
+
 /** 登录响应数据接口 */
 export interface LoginResponseData {
   token: string
@@ -25,6 +27,10 @@ export interface ParseResult {
   success: boolean
   data?: LoginResponseData
   error?: string
+}
+
+export function isKnownUserRole(value: unknown): value is UserRole {
+  return typeof value === 'string' && KNOWN_USER_ROLES.includes(value as UserRole)
 }
 
 /**
@@ -78,14 +84,31 @@ export function mapOrgTypeToRole(orgType: string, orgName?: string): UserRole | 
   return mapping[normalizedType] || null
 }
 
+function resolveUserRole(userData: Record<string, unknown>): UserRole | null {
+  const explicitRoleCandidates = [userData.role, userData.userRole, userData.frontendRole]
+
+  for (const candidate of explicitRoleCandidates) {
+    if (isKnownUserRole(candidate)) {
+      return candidate
+    }
+  }
+
+  return mapOrgTypeToRole(
+    String(userData.orgType || userData.role || '').trim(),
+    String(userData.orgName || userData.department || '').trim()
+  )
+}
+
 /**
  * 映射后端用户数据到前端 User 类型
  */
-export function mapBackendUser(userData: Record<string, unknown>): User {
-  const mappedRole = mapOrgTypeToRole(
-    userData.orgType || userData.role,
-    userData.orgName || userData.department
-  )
+export function mapBackendUser(userData: Record<string, unknown>): User | null {
+  const resolvedRole = resolveUserRole(userData)
+  if (!resolvedRole) {
+    logger.error('❌ [Auth] 无法从响应中解析有效前端角色:', userData)
+    return null
+  }
+
   const roles = Array.isArray(userData.roles)
     ? userData.roles.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
     : []
@@ -94,7 +117,7 @@ export function mapBackendUser(userData: Record<string, unknown>): User {
     id: userData.userId?.toString() || userData.id?.toString() || '',
     username: userData.username || '',
     name: userData.realName || userData.name || userData.username || '',
-    role: mappedRole || 'secondary_college', // 默认角色
+    role: resolvedRole,
     department: userData.orgName || userData.department || '',
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -44,7 +44,8 @@ vi.mock('@/shared/lib/utils/tokenManager', () => ({
 
 vi.mock('@/shared/lib/utils/authHelpers', () => ({
   parseLoginResponse: vi.fn(),
-  mapBackendUser: vi.fn()
+  mapBackendUser: vi.fn(),
+  isKnownUserRole: vi.fn(() => true)
 }))
 
 vi.mock('@/features/auth/api/query', () => ({
@@ -203,6 +204,30 @@ describe('Auth Store', () => {
       expect(result.success).toBe(false)
       expect(result.error).toBe('Parse error')
     })
+
+    it('should clear auth state when backend role cannot be mapped', async () => {
+      const mockApi = await import('@/shared/api/client')
+      const mockAuthHelpers = await import('@/shared/lib/utils/authHelpers')
+      const mockTokenManager = await import('@/shared/lib/utils/tokenManager')
+
+      mockApi.apiClient.post.mockResolvedValue({
+        code: 0,
+        data: { token: 'broken-role-token', user: mockUser }
+      })
+      mockAuthHelpers.parseLoginResponse.mockReturnValue({
+        success: true,
+        data: { token: 'broken-role-token', user: mockUser }
+      })
+      mockAuthHelpers.mapBackendUser.mockReturnValue(null)
+
+      const result = await authStore.login(mockCredentials)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('未识别的用户角色')
+      expect(authStore.user).toBe(null)
+      expect(authStore.token).toBe(null)
+      expect(mockTokenManager.tokenManager.clearAccessToken).toHaveBeenCalled()
+    })
   })
 
   describe('Logout Action', () => {
@@ -285,12 +310,14 @@ describe('Auth Store', () => {
   describe('Fetch User', () => {
     it('should fetch user data when token exists', async () => {
       const mockApi = await import('@/shared/api/client')
+      const mockAuthHelpers = await import('@/shared/lib/utils/authHelpers')
       authStore.token = 'mock-token'
 
       mockApi.apiClient.get.mockResolvedValue({
         success: true,
         data: mockUser
       })
+      mockAuthHelpers.mapBackendUser.mockReturnValue(mockUser)
 
       await authStore.fetchUser()
 

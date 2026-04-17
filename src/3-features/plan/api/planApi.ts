@@ -244,6 +244,9 @@ function convertBackendPlanToPlan(
   // workflowStatus is retained separately for approval detail rendering,
   // but it must not override DRAFT after a withdraw.
   const effectiveStatus = raw.status
+  const normalizedCompletionPercentage = Number(raw.completionPercentage)
+  const normalizedCompletedIndicators = Number(raw.completedIndicators)
+  const normalizedTotalIndicators = Number(raw.indicatorCount ?? raw.totalIndicators)
 
   return {
     id: raw.id ?? raw.planId,
@@ -259,8 +262,15 @@ function convertBackendPlanToPlan(
     ...('createdByOrgName' in raw ? { createdByOrgName: raw.createdByOrgName } : {}),
     ...('createdByName' in raw ? { createdByName: raw.createdByName } : {}),
     description: raw.description,
-    totalIndicators: raw.indicatorCount,
-    completedIndicators: raw.completionPercentage,
+    ...(Number.isFinite(normalizedTotalIndicators)
+      ? { totalIndicators: normalizedTotalIndicators }
+      : {}),
+    ...(Number.isFinite(normalizedCompletedIndicators)
+      ? { completedIndicators: normalizedCompletedIndicators }
+      : {}),
+    ...(Number.isFinite(normalizedCompletionPercentage)
+      ? { completionPercentage: normalizedCompletionPercentage }
+      : {}),
     // Preserve backend fields used by existing views during the migration period.
     ...('targetOrgId' in raw || 'orgId' in raw
       ? { targetOrgId: raw.targetOrgId ?? raw.orgId }
@@ -1011,7 +1021,9 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
     }
 
     const reports = Array.isArray(response.data) ? response.data : []
-    const enrichedReports = await Promise.all(reports.map(report => enrichPlanReportWorkflow(report)))
+    const enrichedReports = await Promise.all(
+      reports.map(report => enrichPlanReportWorkflow(report))
+    )
     planReportsByPlanIdCache.set(cacheKey, enrichedReports)
     planReportsByPlanIdCacheTime.set(cacheKey, Date.now())
     return enrichedReports

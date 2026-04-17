@@ -25,7 +25,8 @@ vi.mock('@/features/strategic-indicator/api/query', () => ({
 
 vi.mock('@/shared/lib/utils/authHelpers', () => ({
   parseLoginResponse: vi.fn(),
-  mapBackendUser: vi.fn()
+  mapBackendUser: vi.fn(),
+  isKnownUserRole: vi.fn(() => true)
 }))
 
 vi.mock('@/shared/lib/utils/tokenManager', () => ({

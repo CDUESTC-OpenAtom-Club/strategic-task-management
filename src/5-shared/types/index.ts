@@ -515,6 +515,7 @@ export interface Plan {
   // 前端辅助字段
   totalIndicators?: number // 总指标数
   completedIndicators?: number // 已完成指标数
+  completionPercentage?: number // 后端已计算好的完成百分比
   latestFillDate?: string // 最近填报日期
   workflowInstanceId?: number
   workflowStatus?: string

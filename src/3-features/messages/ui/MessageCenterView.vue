@@ -7,6 +7,7 @@
         <p class="page-desc">查看和管理您的所有通知消息</p>
       </div>
       <div class="page-actions">
+        <el-button type="primary" plain @click="goToWorkflowTasks"> 进入待办中心 </el-button>
         <el-button type="primary" @click="markAllAsRead"> 全部标为已读 </el-button>
         <el-button @click="clearReadMessages"> 清除已读 </el-button>
       </div>
@@ -131,11 +132,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MessageList from '@/shared/ui/message/MessageList.vue'
 import { useApprovalCenter } from '@/features/approval'
 import { useMessageStore } from '@/features/messages/model/message'
 import type { Message } from '@/shared/types'
+
+const router = useRouter()
 
 // 使用消息 Store
 const messageStore = useMessageStore()
@@ -179,6 +183,10 @@ const clearReadMessages = () => {
 
   messageStore.clearReadMessages()
   ElMessage.success('已清除所有已读消息')
+}
+
+const goToWorkflowTasks = () => {
+  router.push('/workflow-tasks')
 }
 
 onMounted(() => {

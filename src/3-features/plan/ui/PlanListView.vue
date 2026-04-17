@@ -39,6 +39,7 @@ import {
 import type { Plan, PlanStatus, Task as _Task } from '@/shared/types'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
+import { usePermission } from '@/5-shared/lib/permissions'
 
 /**
  * Plan 列表页
@@ -54,6 +55,7 @@ import { useAuthStore } from '@/features/auth/model/store'
 const router = useRouter()
 const planStore = usePlanStore()
 const authStore = useAuthStore()
+const permissionUtil = usePermission()
 
 // ============ 状态 ============
 const searchKeyword = ref('')
@@ -73,10 +75,11 @@ const filteredPlans = computed(() => {
   // 关键词搜索
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
-    result = result.filter(p =>
-      p.name.toLowerCase().includes(keyword) ||
-      p.cycle.toLowerCase().includes(keyword) ||
-      (p.description && p.description.toLowerCase().includes(keyword))
+    result = result.filter(
+      p =>
+        p.name.toLowerCase().includes(keyword) ||
+        p.cycle.toLowerCase().includes(keyword) ||
+        (p.description && p.description.toLowerCase().includes(keyword))
     )
   }
 
@@ -99,7 +102,10 @@ const statusOptions: Array<{ value: PlanStatus | 'all'; label: string; type?: st
 
 // 获取状态配置
 const getStatusConfig = (status: PlanStatus) => {
-  const configs: Record<PlanStatus, { label: string; type: string; icon: typeof Document | typeof Clock | typeof Check }> = {
+  const configs: Record<
+    PlanStatus,
+    { label: string; type: string; icon: typeof Document | typeof Clock | typeof Check }
+  > = {
     draft: { label: '草稿', type: 'info', icon: Document },
     pending: { label: '待审核', type: 'warning', icon: Clock },
     published: { label: '已发布', type: 'success', icon: Check },
@@ -110,24 +116,33 @@ const getStatusConfig = (status: PlanStatus) => {
 
 // 计算 Plan 的完成进度
 const getPlanProgress = (plan: Plan) => {
-  if (!plan.totalIndicators || plan.totalIndicators === 0) {return 0}
-  return Math.round((plan.completedIndicators || 0) / plan.totalIndicators * 100)
+  if (typeof plan.completionPercentage === 'number' && Number.isFinite(plan.completionPercentage)) {
+    return Math.max(0, Math.min(100, Math.round(plan.completionPercentage)))
+  }
+  if (!plan.totalIndicators || plan.totalIndicators === 0) {
+    return 0
+  }
+  return Math.round(((plan.completedIndicators || 0) / plan.totalIndicators) * 100)
 }
 
 // 检查是否可以提交
 const canSubmitPlan = (plan: Plan) => {
-  return plan.status === 'draft' || plan.status === 'pending'
+  return permissionUtil.canSubmitPlan(plan)
 }
 
 // 检查是否可以编辑
 const canEditPlan = (plan: Plan) => {
-  if (authStore.user?.role !== 'strategic_dept') {return false}
+  if (authStore.user?.role !== 'strategic_dept') {
+    return false
+  }
   return plan.status === 'draft'
 }
 
 // 检查是否可以删除
 const canDeletePlan = (plan: Plan) => {
-  if (authStore.user?.role !== 'strategic_dept') {return false}
+  if (authStore.user?.role !== 'strategic_dept') {
+    return false
+  }
   return plan.status === 'draft'
 }
 
@@ -158,15 +173,11 @@ const handleEdit = (plan: Plan) => {
 // 删除 Plan
 const handleDelete = async (plan: Plan) => {
   try {
-    await ElMessageBox.confirm(
-      `确定要删除计划「${plan.name}」吗？此操作不可撤销。`,
-      '删除确认',
-      {
-        confirmButtonText: '确定删除',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
+    await ElMessageBox.confirm(`确定要删除计划「${plan.name}」吗？此操作不可撤销。`, '删除确认', {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
 
     await planStore.deletePlan(plan.id)
   } catch {
@@ -183,7 +194,9 @@ const openSubmitDialog = (plan: Plan) => {
 
 // 提交 Plan
 const handleSubmit = async () => {
-  if (!submittingPlanId.value) {return}
+  if (!submittingPlanId.value) {
+    return
+  }
 
   try {
     await planStore.submitPlan({
@@ -279,11 +292,7 @@ onMounted(() => {
         </ElSelect>
       </div>
       <div class="filter-right">
-        <ElButton
-          v-if="searchKeyword || filterStatus !== 'all'"
-          link
-          @click="resetFilter"
-        >
+        <ElButton v-if="searchKeyword || filterStatus !== 'all'" link @click="resetFilter">
           重置筛选
         </ElButton>
       </div>
@@ -299,19 +308,25 @@ onMounted(() => {
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value warning">{{ filteredPlans.filter(p => p.status === 'pending').length }}</div>
+          <div class="stat-value warning">
+            {{ filteredPlans.filter(p => p.status === 'pending').length }}
+          </div>
           <div class="stat-label">待审核</div>
         </div>
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value success">{{ filteredPlans.filter(p => p.status === 'published').length }}</div>
+          <div class="stat-value success">
+            {{ filteredPlans.filter(p => p.status === 'published').length }}
+          </div>
           <div class="stat-label">已发布</div>
         </div>
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value info">{{ filteredPlans.filter(p => p.status === 'draft').length }}</div>
+          <div class="stat-value info">
+            {{ filteredPlans.filter(p => p.status === 'draft').length }}
+          </div>
           <div class="stat-label">草稿</div>
         </div>
       </ElCard>
@@ -319,12 +334,7 @@ onMounted(() => {
 
     <!-- 表格视图 -->
     <ElCard class="table-card" shadow="never">
-      <ElTable
-        v-loading="planStore.loading"
-        :data="filteredPlans"
-        stripe
-        class="plan-table"
-      >
+      <ElTable v-loading="planStore.loading" :data="filteredPlans" stripe class="plan-table">
         <ElTableColumn prop="name" label="计划名称" min-width="200">
           <template #default="{ row }">
             <div class="plan-name-cell">
@@ -341,7 +351,9 @@ onMounted(() => {
         <ElTableColumn label="状态" width="100" align="center">
           <template #default="{ row }">
             <ElTag :type="getStatusConfig(row.status).type as any" effect="light">
-              <el-icon class="tag-icon"><component :is="getStatusConfig(row.status).icon" /></el-icon>
+              <el-icon class="tag-icon"
+                ><component :is="getStatusConfig(row.status).icon"
+              /></el-icon>
               {{ getStatusConfig(row.status).label }}
             </ElTag>
           </template>
@@ -356,11 +368,7 @@ onMounted(() => {
         <ElTableColumn label="完成进度" width="150">
           <template #default="{ row }">
             <div class="progress-cell">
-              <ElProgress
-                :percentage="getPlanProgress(row)"
-                :stroke-width="8"
-                :show-text="false"
-              />
+              <ElProgress :percentage="getPlanProgress(row)" :stroke-width="8" :show-text="false" />
               <span class="progress-text">{{ getPlanProgress(row) }}%</span>
             </div>
           </template>
@@ -378,14 +386,7 @@ onMounted(() => {
         <ElTableColumn label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
-              <ElButton
-                type="primary"
-                link
-                :icon="View"
-                @click="handleView(row)"
-              >
-                查看
-              </ElButton>
+              <ElButton type="primary" link :icon="View" @click="handleView(row)"> 查看 </ElButton>
 
               <ElButton
                 v-if="canEditPlan(row)"
@@ -430,9 +431,16 @@ onMounted(() => {
       <div v-if="!planStore.loading && filteredPlans.length === 0" class="empty-state">
         <el-empty :image-size="120">
           <template #description>
-            <p class="empty-text">{{ searchKeyword || filterStatus !== 'all' ? '没有找到匹配的计划' : '暂无计划数据' }}</p>
+            <p class="empty-text">
+              {{ searchKeyword || filterStatus !== 'all' ? '没有找到匹配的计划' : '暂无计划数据' }}
+            </p>
           </template>
-          <ElButton v-if="!searchKeyword && filterStatus === 'all'" type="primary" :icon="Plus" @click="handleCreate">
+          <ElButton
+            v-if="!searchKeyword && filterStatus === 'all'"
+            type="primary"
+            :icon="Plus"
+            @click="handleCreate"
+          >
             创建第一个计划
           </ElButton>
         </el-empty>
@@ -450,7 +458,9 @@ onMounted(() => {
         <p class="submit-hint">您即将提交以下计划进行审核：</p>
         <div class="submit-plan-info">
           <div class="info-label">计划名称</div>
-          <div class="info-value">{{ filteredPlans.find(p => p.id === submittingPlanId)?.name }}</div>
+          <div class="info-value">
+            {{ filteredPlans.find(p => p.id === submittingPlanId)?.name }}
+          </div>
         </div>
         <ElInput
           v-model="submitComment"
@@ -463,11 +473,7 @@ onMounted(() => {
       </div>
       <template #footer>
         <ElButton @click="cancelSubmit">取消</ElButton>
-        <ElButton
-          type="primary"
-          :loading="planStore.submitting"
-          @click="handleSubmit"
-        >
+        <ElButton type="primary" :loading="planStore.submitting" @click="handleSubmit">
           确认提交
         </ElButton>
       </template>

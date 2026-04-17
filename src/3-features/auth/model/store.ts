@@ -11,7 +11,7 @@ import { apiClient as api } from '@/shared/api/client'
 import type { User, UserRole } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/shared/lib/utils/tokenManager'
-import { parseLoginResponse, mapBackendUser } from '@/shared/lib/utils/authHelpers'
+import { parseLoginResponse, mapBackendUser, isKnownUserRole } from '@/shared/lib/utils/authHelpers'
 import { getUserPermissions } from '@/features/auth/api/query'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
@@ -52,11 +52,9 @@ export const useAuthStore = defineStore('auth', () => {
       return []
     }
 
-    return [...new Set(
-      value
-        .map(item => (typeof item === 'string' ? item.trim() : ''))
-        .filter(Boolean)
-    )]
+    return [
+      ...new Set(value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean))
+    ]
   }
 
   const fetchPermissionCodes = async (fallbackPermissions?: unknown): Promise<string[]> => {
@@ -84,8 +82,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   const restorePersistedUser = (savedUser: string): User | null => {
     try {
-      const parsedUser = JSON.parse(savedUser) as User & { permissions?: unknown }
+      const parsedUser = JSON.parse(savedUser) as User & {
+        permissions?: unknown
+        role?: unknown
+      }
       if (!parsedUser) {
+        return null
+      }
+
+      if (!isKnownUserRole(parsedUser.role)) {
+        logger.warn('[Auth] 本地缓存用户缺少有效角色，忽略缓存用户:', parsedUser.role)
         return null
       }
 
@@ -209,8 +215,8 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       const status = Number(
         (error as { code?: number; response?: { status?: number } }).code ??
-        (error as { response?: { status?: number } }).response?.status ??
-        NaN
+          (error as { response?: { status?: number } }).response?.status ??
+          NaN
       )
 
       if (status === 401 || status === 403) {
@@ -251,6 +257,18 @@ export const useAuthStore = defineStore('auth', () => {
         const enrichedUserData = await enrichUserWithOrganization(userData)
         const userWithPermissions = await attachPermissionCodes(enrichedUserData)
         const mappedUser = mapBackendUser(userWithPermissions)
+        if (!mappedUser) {
+          logger.warn('[Auth] 登录响应未能解析出有效前端角色，终止登录流程')
+          tokenManager.clearAccessToken()
+          clearLegacyAccessTokenStorage()
+          token.value = null
+          localStorage.removeItem('refreshToken')
+          persistUser(null)
+          return {
+            success: false,
+            error: '登录失败：未识别的用户角色，请联系管理员确认账号权限'
+          }
+        }
         logger.debug('?[Auth] 映射后的用户:', mappedUser)
 
         user.value = mappedUser
@@ -345,10 +363,15 @@ export const useAuthStore = defineStore('auth', () => {
         const enrichedUserData = await enrichUserWithOrganization(authResponse.data)
         const userWithPermissions = await attachPermissionCodes(enrichedUserData)
         const mappedUser = mapBackendUser(userWithPermissions)
+        if (!mappedUser) {
+          logger.warn('[Auth] 当前会话用户缺少有效角色，清除登录状态')
+          logout({ redirect: false })
+          return
+        }
         user.value = mappedUser
         persistUser(mappedUser)
       } else {
-          logout({ redirect: false })
+        logout({ redirect: false })
       }
     } catch (error) {
       logger.error('Fetch user error:', error)
@@ -411,12 +434,19 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (memoryToken && savedUser) {
         const parsedUser = restorePersistedUser(savedUser)
-        if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
+        if (parsedUser && tokenManager.hasValidToken()) {
           user.value = parsedUser
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
           void refreshCurrentUserPermissions()
+          authInitialized.value = true
+          return
+        }
+
+        if (!parsedUser) {
+          logger.warn('[Auth] 本地缓存用户角色无效，清除登录状态')
+          logout({ redirect: false })
           authInitialized.value = true
           return
         }
@@ -435,7 +465,7 @@ export const useAuthStore = defineStore('auth', () => {
         try {
           const newToken = await tokenManager.refreshAccessToken()
           const parsedUser = restorePersistedUser(savedUser)
-          if (parsedUser && parsedUser.role) {
+          if (parsedUser) {
             user.value = parsedUser
             token.value = newToken
             persistUser(parsedUser)
