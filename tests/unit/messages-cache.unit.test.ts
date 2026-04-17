@@ -172,4 +172,190 @@ describe('messages cache integration', () => {
     expect(store.reminderMessages).toHaveLength(1)
     expect(store.messages[0]?.title).toBe('滞后任务催办提醒')
   })
+
+  it('retains approval routing metadata on remote approval messages', async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 'n-4',
+            type: 'NOTIFICATION',
+            title: '有新的计划待审批',
+            content: '请及时处理。',
+            isRead: false,
+            createdAt: '2026-03-24T10:00:00Z',
+            entityId: 88,
+            entityType: 'PLAN',
+            approvalInstanceId: 91,
+            link: '/strategic-tasks?tab=approval&approvalInstanceId=91',
+            status: 'APPROVAL_PENDING'
+          }
+        ]
+      }
+    })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+
+    expect(store.messages[0]?.type).toBe('approval')
+    expect(store.messages[0]?.entityType).toBe('PLAN')
+    expect(store.messages[0]?.entityId).toBe('88')
+    expect(store.messages[0]?.approvalInstanceId).toBe(91)
+    expect(store.messages[0]?.actionUrl).toBe('/strategic-tasks?tab=approval&approvalInstanceId=91')
+  })
+
+  it('syncs pending approvals into synthetic approval messages', async () => {
+    apiClientMock.get.mockResolvedValue({ data: { data: [] } })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+    store.syncPendingApprovals([
+      {
+        instanceId: 12,
+        entityType: 'PLAN',
+        entityId: 101,
+        status: 'PENDING',
+        currentStepName: '计划审批',
+        applicant: { name: '教务处' },
+        initiatedAt: '2026-03-24T11:00:00Z'
+      }
+    ])
+
+    expect(store.approvalMessages).toHaveLength(2)
+    const syntheticMessage = store.approvalMessages.find(
+      message => message.syntheticSource === 'pending_approval'
+    )
+    expect(syntheticMessage?.title).toBe('有新的计划待审批')
+    expect(syntheticMessage?.actionUrl).toBe('/strategic-tasks')
+    expect(syntheticMessage?.entityId).toBe('101')
+    expect(store.unreadCount.approvals).toBeGreaterThanOrEqual(1)
+  })
+
+  it('keeps synthetic pending approvals unread and visible when local read actions run', async () => {
+    apiClientMock.get.mockResolvedValue({ data: { data: [] } })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+    store.syncPendingApprovals([
+      {
+        instanceId: 18,
+        entityType: 'PLAN',
+        entityId: 108,
+        status: 'PENDING',
+        currentStepName: '计划审批',
+        applicant: { name: '科研处' },
+        initiatedAt: '2026-03-24T11:20:00Z'
+      }
+    ])
+
+    const syntheticMessage = store.approvalMessages.find(
+      message => message.syntheticSource === 'pending_approval'
+    )
+
+    expect(syntheticMessage?.isRead).toBe(false)
+
+    await store.markAsRead(String(syntheticMessage?.id))
+    expect(
+      store.approvalMessages.find(message => message.id === syntheticMessage?.id)?.isRead
+    ).toBe(false)
+
+    await store.markAllAsRead()
+    expect(
+      store.approvalMessages.find(message => message.id === syntheticMessage?.id)?.isRead
+    ).toBe(false)
+
+    store.clearReadMessages()
+    expect(store.approvalMessages.some(message => message.id === syntheticMessage?.id)).toBe(true)
+    expect(store.unreadCount.approvals).toBeGreaterThanOrEqual(1)
+  })
+
+  it('keeps matched remote approval notifications actionable while the approval is still pending', async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 'n-5a',
+            type: 'NOTIFICATION',
+            title: '有新的计划待审批',
+            content: '请及时处理。',
+            isRead: true,
+            createdAt: '2026-03-24T10:30:00Z',
+            entityId: 101,
+            entityType: 'PLAN',
+            link: '/strategic-tasks?tab=approval&approvalInstanceId=12',
+            status: 'APPROVAL_PENDING'
+          }
+        ]
+      }
+    })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+    expect(store.approvalMessages[0]?.isRead).toBe(true)
+
+    store.syncPendingApprovals([
+      {
+        instanceId: 12,
+        entityType: 'PLAN',
+        entityId: 101,
+        status: 'PENDING',
+        currentStepName: '计划审批',
+        applicant: { name: '教务处' },
+        initiatedAt: '2026-03-24T11:00:00Z'
+      }
+    ])
+
+    expect(store.approvalMessages).toHaveLength(1)
+    expect(store.approvalMessages[0]?.syntheticSource).toBe('notification')
+    expect(store.approvalMessages[0]?.isRead).toBe(false)
+
+    await store.markAllAsRead()
+    expect(store.approvalMessages[0]?.isRead).toBe(false)
+
+    store.clearReadMessages()
+    expect(store.approvalMessages).toHaveLength(1)
+  })
+
+  it('dedupes pending approvals against matching remote approval notifications', async () => {
+    apiClientMock.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 'n-5',
+            type: 'NOTIFICATION',
+            title: '有新的计划待审批',
+            content: '请及时处理。',
+            isRead: false,
+            createdAt: '2026-03-24T10:30:00Z',
+            entityId: 101,
+            entityType: 'PLAN',
+            link: '/strategic-tasks?tab=approval&approvalInstanceId=12',
+            status: 'APPROVAL_PENDING'
+          }
+        ]
+      }
+    })
+
+    const store = useMessageStore()
+    await store.fetchMessages()
+    store.syncPendingApprovals([
+      {
+        instanceId: 12,
+        entityType: 'PLAN',
+        entityId: 101,
+        status: 'PENDING',
+        currentStepName: '计划审批',
+        applicant: { name: '教务处' },
+        initiatedAt: '2026-03-24T11:00:00Z'
+      }
+    ])
+
+    expect(store.approvalMessages).toHaveLength(1)
+    expect(store.approvalMessages[0]?.syntheticSource).toBe('notification')
+    expect(store.approvalMessages[0]?.approvalInstanceId).toBe(12)
+    expect(store.approvalMessages[0]?.entityId).toBe('101')
+    expect(store.approvalMessages[0]?.actionUrl).toBe(
+      '/strategic-tasks?tab=approval&approvalInstanceId=12'
+    )
+  })
 })

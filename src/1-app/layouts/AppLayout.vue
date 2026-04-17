@@ -18,7 +18,10 @@ import YearSelector from '@/shared/ui/form/YearSelector.vue'
 import CacheDebugPanel from '@/shared/ui/dev/CacheDebugPanel.vue'
 import { useNavigation } from '@/shared/lib/layout'
 import { useAppLayout, useDepartmentSwitcher, useNotificationCenter } from './lib'
-import { initApprovalNotifications } from '@/features/approval/lib/approvalNotifications'
+import {
+  initApprovalNotifications,
+  destroyApprovalNotifications
+} from '@/features/approval/lib/approvalNotifications'
 import { disconnectWebSocket } from '@/shared/api/websocket'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 
@@ -57,6 +60,7 @@ onMounted(() => {
  * Clean up WebSocket connection on unmount
  */
 onUnmounted(() => {
+  destroyApprovalNotifications()
   disconnectWebSocket()
 })
 
@@ -252,7 +256,7 @@ const handleDropdownCommand = async (command: string) => {
       :show-plan-approvals="true"
       :show-approval-section="true"
       approval-type="submission"
-      @update:model-value="(value) => !value && closeApprovalCenter()"
+      @update:model-value="value => !value && closeApprovalCenter()"
       @close="closeApprovalCenter"
     />
   </div>
@@ -431,6 +435,7 @@ const handleDropdownCommand = async (command: string) => {
 
 .notification-badge :deep(.el-badge__content) {
   background: #dc2626;
+  pointer-events: none;
 }
 
 .user-avatar {

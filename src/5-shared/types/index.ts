@@ -197,6 +197,11 @@ export interface Message {
   createdAt: Date
   relatedId?: string
   actionUrl?: string // 操作链接
+  entityType?: string
+  entityId?: string
+  approvalInstanceId?: number
+  status?: string
+  syntheticSource?: 'notification' | 'pending_approval'
 }
 
 export interface NotificationSettings {

@@ -44,6 +44,7 @@ export interface SubmitPlanApprovalPayload {
 
 const PLAN_WITHDRAW_TIMEOUT_MS = 90000
 const PLAN_REPORTS_CACHE_TTL_MS = 15 * 1000
+const PLAN_REPORTS_CACHE_MAX_ENTRIES = 100
 const planReportsByPlanIdCache = new Map<string, PlanReportSimpleResponse[]>()
 const planReportsByPlanIdCacheTime = new Map<string, number>()
 const planReportsByPlanIdInFlight = new Map<string, Promise<PlanReportSimpleResponse[]>>()
@@ -994,6 +995,8 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
     return []
   }
 
+  cleanupExpiredPlanReportCacheEntries()
+
   const cacheKey = String(normalizedPlanId)
   const cachedAt = planReportsByPlanIdCacheTime.get(cacheKey) ?? 0
   const cachedReports = planReportsByPlanIdCache.get(cacheKey)
@@ -1026,6 +1029,7 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
     )
     planReportsByPlanIdCache.set(cacheKey, enrichedReports)
     planReportsByPlanIdCacheTime.set(cacheKey, Date.now())
+    evictOldestPlanReportCacheEntryIfNeeded()
     return enrichedReports
   })()
 
@@ -1036,6 +1040,42 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
   } finally {
     planReportsByPlanIdInFlight.delete(cacheKey)
   }
+}
+
+function cleanupExpiredPlanReportCacheEntries(now = Date.now()): void {
+  for (const [key, cachedAt] of planReportsByPlanIdCacheTime.entries()) {
+    if (now - cachedAt < PLAN_REPORTS_CACHE_TTL_MS) {
+      continue
+    }
+
+    planReportsByPlanIdCache.delete(key)
+    planReportsByPlanIdCacheTime.delete(key)
+  }
+}
+
+function evictOldestPlanReportCacheEntryIfNeeded(): void {
+  if (planReportsByPlanIdCache.size <= PLAN_REPORTS_CACHE_MAX_ENTRIES) {
+    return
+  }
+
+  let oldestKey: string | null = null
+  let oldestTimestamp = Number.POSITIVE_INFINITY
+
+  for (const [key, timestamp] of planReportsByPlanIdCacheTime.entries()) {
+    if (timestamp >= oldestTimestamp) {
+      continue
+    }
+
+    oldestKey = key
+    oldestTimestamp = timestamp
+  }
+
+  if (!oldestKey) {
+    return
+  }
+
+  planReportsByPlanIdCache.delete(oldestKey)
+  planReportsByPlanIdCacheTime.delete(oldestKey)
 }
 
 function resolveCurrentMonthPlanReportSummaries(

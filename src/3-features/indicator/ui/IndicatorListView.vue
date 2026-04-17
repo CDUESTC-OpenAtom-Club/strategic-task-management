@@ -29,6 +29,7 @@ import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useApprovalStore } from '@/features/approval/model/store'
+import { useApprovalRouteAutopen } from '@/features/approval/lib'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 import {
   getProgressStatus,
@@ -1941,12 +1942,27 @@ const approvalEntryButtonText = computed(() => {
   return '审批进度'
 })
 
+const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
+  supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
+  onAutoOpen: () => handleOpenApproval(),
+  onClearFailure: error => {
+    logger.warn('[IndicatorListView] 清理审批自动打开参数失败:', error)
+  }
+})
+
 const primaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
+  if (routeApprovalEntityType.value) {
+    return routeApprovalEntityType.value
+  }
   return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
 })
 
 const primaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
-  return approvalWorkflowReportSummary.value?.id || currentPlanDetails.value?.id
+  return (
+    routeApprovalEntityId.value ??
+    approvalWorkflowReportSummary.value?.id ??
+    currentPlanDetails.value?.id
+  )
 })
 
 const secondaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
@@ -1965,15 +1981,13 @@ const secondaryApprovalWorkflowEntityId = computed<number | string | undefined>(
   return latestPlanReportSummary.value?.id
 })
 
-const handleOpenApproval = () => {
-  void (async () => {
-    const planId = Number(getCurrentPlanId() ?? NaN)
-    if (Number.isFinite(planId) && planId > 0) {
-      await loadCurrentPlanReportSummary(planId)
-      await loadCurrentPlanWorkflowDetail(planId)
-    }
-    approvalDrawerVisible.value = true
-  })()
+const handleOpenApproval = async () => {
+  const planId = Number(getCurrentPlanId() ?? NaN)
+  if (Number.isFinite(planId) && planId > 0) {
+    await loadCurrentPlanReportSummary(planId)
+    await loadCurrentPlanWorkflowDetail(planId)
+  }
+  approvalDrawerVisible.value = true
 }
 
 interface TaskListItem {

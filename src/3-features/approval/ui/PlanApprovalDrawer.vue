@@ -8,6 +8,7 @@ import { Check, Close, Document, User, Timer, Right } from '@element-plus/icons-
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { useAuthStore } from '@/features/auth/model/store'
+import { notifyApprovalStateRefresh } from '@/features/approval/lib'
 import { usePermission } from '@/5-shared/lib/permissions'
 import { PermissionCode } from '@/shared/types'
 import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
@@ -123,6 +124,7 @@ const handleApprove = async (instance: PendingPlanApproval) => {
       if (response.success) {
         ElMessage.success('审批通过成功')
         await loadPendingApprovals()
+        notifyApprovalStateRefresh({ source: 'plan-approval-drawer' })
         emit('refresh')
       } else {
         ElMessage.error(response.message || '审批失败')
@@ -173,6 +175,7 @@ const handleReject = async (instance: PendingPlanApproval) => {
       if (response.success) {
         ElMessage.success('已拒绝该计划')
         await loadPendingApprovals()
+        notifyApprovalStateRefresh({ source: 'plan-approval-drawer' })
         emit('refresh')
       } else {
         ElMessage.error(response.message || '拒绝失败')
@@ -284,7 +287,9 @@ watch(
           <div class="info-row">
             <el-icon><Timer /></el-icon>
             <span class="label">提交时间：</span>
-            <span class="value">{{ instance.createdAt ? formatTime(instance.createdAt) : '--' }}</span>
+            <span class="value">{{
+              instance.createdAt ? formatTime(instance.createdAt) : '--'
+            }}</span>
           </div>
           <div class="info-row">
             <el-icon><Right /></el-icon>

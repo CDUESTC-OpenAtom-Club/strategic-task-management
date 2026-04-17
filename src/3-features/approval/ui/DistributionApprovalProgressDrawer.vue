@@ -19,6 +19,7 @@ import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { getUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
+import { notifyApprovalStateRefresh } from '@/features/approval/lib'
 import { usePlanStore } from '@/features/plan/model/store'
 import { usePermission } from '@/shared/lib/permissions'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
@@ -1338,6 +1339,8 @@ async function refreshPlanApprovalAfterMutation(): Promise<void> {
   if (Number.isFinite(planId) && planId > 0) {
     await planStore.loadPlanDetails(planId, { force: true, background: true })
   }
+
+  notifyApprovalStateRefresh({ source: 'distribution-approval-progress-drawer' })
 }
 
 async function loadPendingPlanApprovals() {
@@ -1555,38 +1558,38 @@ async function handleApprovePlanBatch() {
 
     try {
       const userId = authStore.user?.userId || authStore.user?.id || 1
-        for (const instance of scopedPlanApprovals.value) {
-          const response = await approvalApi.approvePlan(
-            instance.instanceId,
+      for (const instance of scopedPlanApprovals.value) {
+        const response = await approvalApi.approvePlan(
+          instance.instanceId,
           userId,
           value || '审批通过'
         )
         if (!response.success) {
           ElMessage.error(response.message || '审批失败')
-            return
-          }
+          return
         }
+      }
 
-        applyOptimisticPlanWorkflowPatch({
-          status: 'DISTRIBUTED',
-          workflowStatus: 'APPROVED',
-          canWithdraw: false,
-          currentTaskId: null,
-          currentStepName: '审批完成',
-          currentApproverId: null,
-          currentApproverName: null
-        })
-        emit('refresh', {
-          status: 'DISTRIBUTED',
-          workflowStatus: 'APPROVED',
-          canWithdraw: false,
-          currentTaskId: null,
-          currentStepName: '审批完成',
-          currentApproverId: null,
-          currentApproverName: null
-        })
-        await refreshPlanApprovalAfterMutation()
-        ElMessage.success(`已一键通过 ${scopedPlanApprovals.value.length} 条审批实例`)
+      applyOptimisticPlanWorkflowPatch({
+        status: 'DISTRIBUTED',
+        workflowStatus: 'APPROVED',
+        canWithdraw: false,
+        currentTaskId: null,
+        currentStepName: '审批完成',
+        currentApproverId: null,
+        currentApproverName: null
+      })
+      emit('refresh', {
+        status: 'DISTRIBUTED',
+        workflowStatus: 'APPROVED',
+        canWithdraw: false,
+        currentTaskId: null,
+        currentStepName: '审批完成',
+        currentApproverId: null,
+        currentApproverName: null
+      })
+      await refreshPlanApprovalAfterMutation()
+      ElMessage.success(`已一键通过 ${scopedPlanApprovals.value.length} 条审批实例`)
     } finally {
       loadingInstance.close()
     }
@@ -1687,30 +1690,30 @@ async function handleRejectPlanBatch() {
 
     try {
       const userId = authStore.user?.userId || authStore.user?.id || 1
-        for (const instance of scopedPlanApprovals.value) {
-          const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
+      for (const instance of scopedPlanApprovals.value) {
+        const response = await approvalApi.rejectPlan(instance.instanceId, userId, value)
         if (!response.success) {
           ElMessage.error(response.message || '拒绝失败')
-            return
-          }
+          return
         }
+      }
 
-        applyOptimisticPlanWorkflowPatch({
-          status: 'DRAFT',
-          workflowStatus: 'REJECTED',
-          canWithdraw: false,
-          currentTaskId: null,
-          currentStepName: '已驳回'
-        })
-        emit('refresh', {
-          status: 'DRAFT',
-          workflowStatus: 'REJECTED',
-          canWithdraw: false,
-          currentTaskId: null,
-          currentStepName: '已驳回'
-        })
-        await refreshPlanApprovalAfterMutation()
-        ElMessage.success(`已一键驳回 ${scopedPlanApprovals.value.length} 条审批实例`)
+      applyOptimisticPlanWorkflowPatch({
+        status: 'DRAFT',
+        workflowStatus: 'REJECTED',
+        canWithdraw: false,
+        currentTaskId: null,
+        currentStepName: '已驳回'
+      })
+      emit('refresh', {
+        status: 'DRAFT',
+        workflowStatus: 'REJECTED',
+        canWithdraw: false,
+        currentTaskId: null,
+        currentStepName: '已驳回'
+      })
+      await refreshPlanApprovalAfterMutation()
+      ElMessage.success(`已一键驳回 ${scopedPlanApprovals.value.length} 条审批实例`)
     } finally {
       loadingInstance.close()
     }

@@ -49,6 +49,7 @@ import {
 } from '@/shared/lib/utils/indicatorStatus'
 import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib'
 import { ApprovalProgressDrawer } from '@/features/approval'
+import { useApprovalRouteAutopen } from '@/features/approval/lib'
 import { useApprovalStore } from '@/features/approval/model/store'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
 import { indicatorApi } from '@/features/indicator/api'
@@ -311,9 +312,7 @@ const getIndicatorTaskId = (indicator: StrategicIndicator): string => {
     parentIndicatorId?: string | number
   }
 
-  const directTaskId = normalizeTaskId(
-    raw.taskId ?? raw.task_id ?? raw.strategicTaskId
-  )
+  const directTaskId = normalizeTaskId(raw.taskId ?? raw.task_id ?? raw.strategicTaskId)
   if (directTaskId) {
     return directTaskId
   }
@@ -780,7 +779,9 @@ const currentPlanReportSummary = ref<{
 const latestPlanReportSummary = ref<{ id: number } | null>(null)
 
 const approvalWorkflowReportSummary = computed(() => {
-  const currentWorkflowInstanceId = Number(currentPlanReportSummary.value?.workflowInstanceId ?? NaN)
+  const currentWorkflowInstanceId = Number(
+    currentPlanReportSummary.value?.workflowInstanceId ?? NaN
+  )
   const currentStatus = String(
     currentPlanReportSummary.value?.workflowStatus || currentPlanReportSummary.value?.status || ''
   )
@@ -789,7 +790,8 @@ const approvalWorkflowReportSummary = computed(() => {
 
   if (
     currentPlanReportSummary.value?.id &&
-    (Number.isFinite(currentWorkflowInstanceId) && currentWorkflowInstanceId > 0) &&
+    Number.isFinite(currentWorkflowInstanceId) &&
+    currentWorkflowInstanceId > 0 &&
     currentStatus !== 'DRAFT'
   ) {
     return currentPlanReportSummary.value
@@ -854,7 +856,9 @@ function resolveExpectedApproverOrgIdForCurrentPlan(): number | null {
       } & Record<string, unknown>)
     | null
 
-  const stepName = String(approvalWorkflowReportSummary.value?.currentStepName || plan?.currentStepName || '').trim()
+  const stepName = String(
+    approvalWorkflowReportSummary.value?.currentStepName || plan?.currentStepName || ''
+  ).trim()
   if (!stepName) {
     return null
   }
@@ -878,17 +882,13 @@ function resolveExpectedApproverOrgIdForCurrentPlan(): number | null {
 
 const hydratingPlanDetail = ref(false)
 const departmentViewRequestId = ref(0)
-let currentPlanReportSummaryPromise:
-  | Promise<{
-      currentReport: Awaited<ReturnType<typeof indicatorFillApi.getCurrentMonthPlanReport>>
-      latestReport: Awaited<ReturnType<typeof indicatorFillApi.getLatestCurrentMonthPlanReport>>
-    }>
-  | null = null
+let currentPlanReportSummaryPromise: Promise<{
+  currentReport: Awaited<ReturnType<typeof indicatorFillApi.getCurrentMonthPlanReport>>
+  latestReport: Awaited<ReturnType<typeof indicatorFillApi.getLatestCurrentMonthPlanReport>>
+}> | null = null
 let currentPlanReportSummaryKey = ''
 
-async function syncCurrentPlanReportSummaries(
-  options: { force?: boolean } = {}
-): Promise<void> {
+async function syncCurrentPlanReportSummaries(options: { force?: boolean } = {}): Promise<void> {
   const planId = Number(currentPlan.value?.id ?? NaN)
   const reportOrgId = Number(currentDepartmentOrgId.value ?? NaN)
   if (!(Number.isFinite(planId) && planId > 0 && Number.isFinite(reportOrgId) && reportOrgId > 0)) {
@@ -898,7 +898,11 @@ async function syncCurrentPlanReportSummaries(
   }
 
   const cacheKey = `${planId}:${reportOrgId}:${timeContext.currentYear}`
-  if (!options.force && currentPlanReportSummaryPromise && currentPlanReportSummaryKey === cacheKey) {
+  if (
+    !options.force &&
+    currentPlanReportSummaryPromise &&
+    currentPlanReportSummaryKey === cacheKey
+  ) {
     logger.debug('[StrategicTaskView] reuse plan report summaries request', { cacheKey })
     const summaries = await currentPlanReportSummaryPromise
     currentPlanReportSummary.value = summaries.currentReport
@@ -1282,32 +1286,30 @@ const pendingApprovalCount = computed(() => {
     (expectedApproverOrgId as number) <= 0 ||
     currentUserOrgId.value === expectedApproverOrgId
 
-  return (
-    ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentApprovalWorkflowStatus.value) &&
+  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentApprovalWorkflowStatus.value) &&
     permissionUtil.hasPermission(PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE) &&
     hasExpectedRole &&
     hasExpectedOrg
-      ? 1
-      : 0
-  )
+    ? 1
+    : 0
 })
 
-const planUiPhase = computed<
-  'draft' | 'pending_withdrawable' | 'pending_locked' | 'distributed'
->(() => {
-  const status = currentPlanStatus.value
-  const workflowStatus = currentApprovalWorkflowStatus.value
+const planUiPhase = computed<'draft' | 'pending_withdrawable' | 'pending_locked' | 'distributed'>(
+  () => {
+    const status = currentPlanStatus.value
+    const workflowStatus = currentApprovalWorkflowStatus.value
 
-  if (status === 'PENDING' || ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) {
-    return canWithdrawPlan.value ? 'pending_withdrawable' : 'pending_locked'
+    if (status === 'PENDING' || ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) {
+      return canWithdrawPlan.value ? 'pending_withdrawable' : 'pending_locked'
+    }
+
+    if (status === 'DISTRIBUTED' || workflowStatus === 'APPROVED') {
+      return 'distributed'
+    }
+
+    return 'draft'
   }
-
-  if (status === 'DISTRIBUTED' || workflowStatus === 'APPROVED') {
-    return 'distributed'
-  }
-
-  return 'draft'
-})
+)
 
 const approvalEntryButtonText = computed(() => {
   if (planUiPhase.value === 'pending_withdrawable' || planUiPhase.value === 'pending_locked') {
@@ -1319,12 +1321,25 @@ const approvalEntryButtonText = computed(() => {
   return '审批进度'
 })
 
+const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
+  supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
+  onAutoOpen: () => handleOpenApproval(),
+  onClearFailure: error => {
+    logger.warn('[StrategicTaskView] 清理审批自动打开参数失败:', error)
+  }
+})
+
 const primaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
+  if (routeApprovalEntityType.value) {
+    return routeApprovalEntityType.value
+  }
   return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
 })
 
 const primaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
-  return approvalWorkflowReportSummary.value?.id || currentPlan.value?.id
+  return (
+    routeApprovalEntityId.value ?? approvalWorkflowReportSummary.value?.id ?? currentPlan.value?.id
+  )
 })
 
 const secondaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
@@ -1657,14 +1672,15 @@ const loadIndicatorWorkflowSnapshot = async (
 const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => {
   const workflowSnapshot = await loadIndicatorWorkflowSnapshot(indicatorId, { force: true })
   if (workflowSnapshot?.workflowStatus) {
-    const optimisticPlanStatus =
-      ['APPROVED', 'COMPLETED'].includes(String(workflowSnapshot.workflowStatus).toUpperCase())
-        ? 'DISTRIBUTED'
-        : ['REJECTED', 'RETURNED', 'WITHDRAWN', 'CANCELLED'].includes(
-              String(workflowSnapshot.workflowStatus).toUpperCase()
-            )
-          ? 'DRAFT'
-          : 'PENDING'
+    const optimisticPlanStatus = ['APPROVED', 'COMPLETED'].includes(
+      String(workflowSnapshot.workflowStatus).toUpperCase()
+    )
+      ? 'DISTRIBUTED'
+      : ['REJECTED', 'RETURNED', 'WITHDRAWN', 'CANCELLED'].includes(
+            String(workflowSnapshot.workflowStatus).toUpperCase()
+          )
+        ? 'DRAFT'
+        : 'PENDING'
 
     if (currentPlan.value) {
       currentPlan.value = {
@@ -1673,7 +1689,8 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
         workflowStatus: workflowSnapshot.workflowStatus,
         currentTaskId: workflowSnapshot.currentTaskId ?? currentPlan.value.currentTaskId,
         currentStepName: workflowSnapshot.currentStepName ?? currentPlan.value.currentStepName,
-        currentApproverId: workflowSnapshot.currentApproverId ?? currentPlan.value.currentApproverId,
+        currentApproverId:
+          workflowSnapshot.currentApproverId ?? currentPlan.value.currentApproverId,
         currentApproverName:
           workflowSnapshot.currentApproverName ?? currentPlan.value.currentApproverName,
         canWithdraw:
@@ -3218,12 +3235,10 @@ async function preloadApprovalWorkflowDetail(): Promise<void> {
 }
 
 // 打开任务审批抽屉
-const handleOpenApproval = () => {
-  void (async () => {
-    await refreshApprovalWorkflowSummaries()
-    await preloadApprovalWorkflowDetail()
-    taskApprovalVisible.value = true
-  })()
+const handleOpenApproval = async () => {
+  await refreshApprovalWorkflowSummaries()
+  await preloadApprovalWorkflowDetail()
+  taskApprovalVisible.value = true
 }
 
 // 审批后刷新

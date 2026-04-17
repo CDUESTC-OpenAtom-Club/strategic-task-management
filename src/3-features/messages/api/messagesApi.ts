@@ -30,6 +30,8 @@ export interface MessageItem {
   severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'MAJOR' | 'MINOR'
   entityId?: number
   entityType?: string
+  relatedEntityId?: number
+  approvalInstanceId?: number
   status?: string
 }
 

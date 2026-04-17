@@ -14,14 +14,7 @@ import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { UserRole } from '@/shared/types'
 import type { Component } from 'vue'
-import {
-  Bell,
-  DataAnalysis,
-  Document as _Document,
-  Edit,
-  List,
-  Promotion
-} from '@element-plus/icons-vue'
+import { DataAnalysis, Document as _Document, Edit, List, Promotion } from '@element-plus/icons-vue'
 
 /** 标签页配置接口 */
 export interface TabConfig {
@@ -35,18 +28,15 @@ export interface TabConfig {
 const ROLE_BASED_TABS: Record<UserRole, TabConfig[]> = {
   strategic_dept: [
     { id: 'dashboard', label: '数据看板', icon: DataAnalysis, path: '/dashboard' },
-    { id: 'workflowTasks', label: '待办中心', icon: Bell, path: '/workflow-tasks' },
     { id: 'strategic', label: '战略任务管理', icon: List, path: '/strategic-tasks' }
   ],
   functional_dept: [
     { id: 'dashboard', label: '数据看板', icon: DataAnalysis, path: '/dashboard' },
-    { id: 'workflowTasks', label: '待办中心', icon: Bell, path: '/workflow-tasks' },
     { id: 'indicators', label: '指标填报', icon: Edit, path: '/indicators' },
     { id: 'distribution', label: '指标下发与审批', icon: Promotion, path: '/distribution' }
   ],
   secondary_college: [
     { id: 'dashboard', label: '数据看板', icon: DataAnalysis, path: '/dashboard' },
-    { id: 'workflowTasks', label: '待办中心', icon: Bell, path: '/workflow-tasks' },
     { id: 'indicators', label: '指标填报', icon: Edit, path: '/indicators' }
   ]
 }

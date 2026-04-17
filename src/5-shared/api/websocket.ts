@@ -38,6 +38,7 @@ const ws = ref<WebSocket | null>(null)
 const connectionState = ref<ConnectionState>('disconnected')
 const notifications = ref<NotificationMessage[]>([])
 const unreadCount = ref(0)
+const MAX_NOTIFICATION_HISTORY = 100
 
 // Reconnection settings
 const RECONNECT_INTERVAL = 5000
@@ -96,9 +97,12 @@ function handleMessage(event: MessageEvent): void {
 
     // Add to notifications list
     notifications.value.unshift(message)
+    if (notifications.value.length > MAX_NOTIFICATION_HISTORY) {
+      notifications.value.length = MAX_NOTIFICATION_HISTORY
+    }
 
     // Increment unread count
-    unreadCount.value++
+    unreadCount.value = Math.min(unreadCount.value + 1, notifications.value.length)
 
     // Show browser notification if supported
     showBrowserNotification(message)
@@ -197,7 +201,10 @@ function handleError(error: Event): void {
   if (consecutiveFailureCount >= MAX_CONSECUTIVE_FAILURES) {
     shouldReconnect = false
     handshakeRejected = true
-    logConnectionError('WebSocket 握手连续失败，已暂停自动重连，请检查后端通知通道权限或可用性', error)
+    logConnectionError(
+      'WebSocket 握手连续失败，已暂停自动重连，请检查后端通知通道权限或可用性',
+      error
+    )
     return
   }
 
@@ -278,9 +285,7 @@ export function disconnectWebSocket(): void {
 export function markAsRead(index: number): void {
   if (index >= 0 && index < notifications.value.length) {
     notifications.value.splice(index, 1)
-    if (unreadCount.value > 0) {
-      unreadCount.value--
-    }
+    unreadCount.value = Math.min(unreadCount.value, notifications.value.length)
   }
 }
 

@@ -22,6 +22,7 @@ import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
+import { useApprovalRouteAutopen } from '@/features/approval/lib'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
 import { DistributionApprovalProgressDrawer } from '@/features/approval'
 import { indicatorApi } from '@/features/indicator/api'
@@ -763,11 +764,25 @@ const currentApprovalWorkflowCode = computed<string | string[]>(() => {
   return currentDispatchWorkflowCode.value
 })
 
+const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
+  supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
+  onAutoOpen: () => handleOpenApproval(),
+  onClearFailure: error => {
+    logger.warn('[IndicatorDistributeView] 清理审批自动打开参数失败:', error)
+  }
+})
+
 const currentApprovalEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
+  if (routeApprovalEntityType.value) {
+    return routeApprovalEntityType.value
+  }
   return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
 })
 
 const currentApprovalEntityId = computed<number | string | undefined>(() => {
+  if (routeApprovalEntityId.value) {
+    return routeApprovalEntityId.value
+  }
   if (approvalWorkflowReportSummary.value?.id) {
     return approvalWorkflowReportSummary.value.id
   }
@@ -1354,7 +1369,7 @@ const formatDetailDate = (time: string | Date | undefined): string => {
 }
 
 // 打开任务审批抽屉
-const handleOpenApproval = () => {
+const handleOpenApproval = async () => {
   taskApprovalVisible.value = true
 }
 

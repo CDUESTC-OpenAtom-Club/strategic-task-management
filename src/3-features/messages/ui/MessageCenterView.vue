@@ -7,7 +7,6 @@
         <p class="page-desc">查看和管理您的所有通知消息</p>
       </div>
       <div class="page-actions">
-        <el-button type="primary" plain @click="goToWorkflowTasks"> 进入待办中心 </el-button>
         <el-button type="primary" @click="markAllAsRead"> 全部标为已读 </el-button>
         <el-button @click="clearReadMessages"> 清除已读 </el-button>
       </div>
@@ -135,6 +134,11 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MessageList from '@/shared/ui/message/MessageList.vue'
+import { useApprovalStore } from '@/features/approval/model/store'
+import {
+  requiresApprovalCenterFallback,
+  resolveApprovalRoute
+} from '@/features/approval/lib/approvalNotifications'
 import { useApprovalCenter } from '@/features/approval'
 import { useMessageStore } from '@/features/messages/model/message'
 import type { Message } from '@/shared/types'
@@ -143,6 +147,7 @@ const router = useRouter()
 
 // 使用消息 Store
 const messageStore = useMessageStore()
+const approvalStore = useApprovalStore()
 const { openApprovalCenter } = useApprovalCenter()
 
 const activeTab = ref('all')
@@ -162,8 +167,32 @@ const handleMessageRead = (messageId: string) => {
 }
 
 const handleMessageView = (message: Message) => {
+  const approvalPayload = {
+    approvalInstanceId: message.approvalInstanceId,
+    entityType: message.entityType,
+    entityId: message.entityId,
+    actionUrl: message.actionUrl
+  }
+
+  if (message.type === 'approval' && requiresApprovalCenterFallback(approvalPayload)) {
+    openApprovalCenter()
+    return
+  }
+
+  const approvalRoute = resolveApprovalRoute(approvalPayload)
+
+  if (approvalRoute) {
+    void router.push(approvalRoute)
+    return
+  }
+
   if (message.type === 'approval') {
     openApprovalCenter()
+    return
+  }
+
+  if (message.actionUrl) {
+    void router.push(message.actionUrl)
   }
 }
 
@@ -185,12 +214,12 @@ const clearReadMessages = () => {
   ElMessage.success('已清除所有已读消息')
 }
 
-const goToWorkflowTasks = () => {
-  router.push('/workflow-tasks')
-}
-
 onMounted(() => {
-  void messageStore.fetchMessages()
+  void Promise.all([messageStore.fetchMessages(), approvalStore.loadPendingApprovals()]).then(
+    () => {
+      messageStore.syncPendingApprovals(approvalStore.pendingApprovals)
+    }
+  )
 })
 </script>
 
