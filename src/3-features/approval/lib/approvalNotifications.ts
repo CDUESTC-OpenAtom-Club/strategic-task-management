@@ -6,10 +6,13 @@
  */
 
 import { computed } from 'vue'
+import { getActivePinia } from 'pinia'
 import { ElNotification } from 'element-plus'
 import { useWebSocketNotifications, NotificationType } from '@/shared/api/websocket'
 import type { NotificationMessage } from '@/shared/api/websocket'
+import { useAuthStore } from '@/features/auth/model/store'
 import { ENABLE_WEBSOCKET_NOTIFICATIONS } from '@/shared/config/api'
+import type { UserRole } from '@/shared/types'
 
 export const APPROVAL_STATE_REFRESH_EVENT = 'approval-state-refresh'
 
@@ -22,6 +25,8 @@ export interface ApprovalRoutePayload {
   entityType?: string | null
   entityId?: number | string | null
   actionUrl?: string | null
+  viewerRole?: UserRole | null
+  departmentName?: string | null
 }
 
 let approvalNotificationListener: EventListener | null = null
@@ -47,6 +52,80 @@ function normalizeApprovalRoute(path?: string | null): string | null {
   return normalized
 }
 
+function normalizeViewerRole(role?: UserRole | string | null): UserRole | null {
+  const normalized = String(role || '').trim()
+  if (
+    normalized === 'strategic_dept' ||
+    normalized === 'functional_dept' ||
+    normalized === 'secondary_college'
+  ) {
+    return normalized as UserRole
+  }
+
+  return null
+}
+
+function resolveCurrentViewerRole(): UserRole | null {
+  try {
+    if (getActivePinia()) {
+      const authStore = useAuthStore()
+      return normalizeViewerRole(authStore.effectiveRole || authStore.userRole)
+    }
+  } catch {
+    // ignore store lookup failures and fall back to persisted user data
+  }
+
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const savedUser = localStorage.getItem('currentUser')
+    if (!savedUser) {
+      return null
+    }
+
+    const parsedUser = JSON.parse(savedUser) as { role?: string | null }
+    return normalizeViewerRole(parsedUser.role)
+  } catch {
+    return null
+  }
+}
+
+function replaceRoutePath(path: string, nextPathname: string): string {
+  const [, search = ''] = path.split('?')
+  return search ? `${nextPathname}?${search}` : nextPathname
+}
+
+function resolveApprovalWorkbenchRoute(payload: ApprovalRoutePayload): string | null {
+  const entityType = String(payload.entityType || '')
+    .trim()
+    .toUpperCase()
+  const viewerRole = normalizeViewerRole(payload.viewerRole) || resolveCurrentViewerRole()
+
+  switch (entityType) {
+    case 'PLAN':
+    case 'PLAN_REPORT':
+      if (viewerRole === 'functional_dept') {
+        return '/distribution'
+      }
+
+      if (viewerRole === 'secondary_college') {
+        return '/indicators'
+      }
+
+      return '/strategic-tasks'
+    case 'TASK':
+      return '/strategic-tasks'
+    case 'INDICATOR':
+      return '/indicators'
+    case 'INDICATOR_DISTRIBUTION':
+      return '/distribution'
+    default:
+      return null
+  }
+}
+
 function appendApprovalContext(path: string, payload: ApprovalRoutePayload): string {
   const [pathname, search = ''] = path.split('?')
   const params = new URLSearchParams(search)
@@ -56,6 +135,7 @@ function appendApprovalContext(path: string, payload: ApprovalRoutePayload): str
   const entityType = normalizeApprovalQueryValue(payload.entityType)?.toUpperCase()
   const entityId = normalizeApprovalQueryValue(payload.entityId)
   const approvalInstanceId = normalizeApprovalQueryValue(payload.approvalInstanceId)
+  const departmentName = normalizeApprovalQueryValue(payload.departmentName)
 
   if (entityType) {
     params.set('approvalEntityType', entityType)
@@ -69,32 +149,36 @@ function appendApprovalContext(path: string, payload: ApprovalRoutePayload): str
     params.set('approvalInstanceId', approvalInstanceId)
   }
 
+  if (departmentName) {
+    params.set('approvalDepartment', departmentName)
+  }
+
   const query = params.toString()
   return query ? `${pathname}?${query}` : pathname
 }
 
 export function resolveApprovalRoute(payload: ApprovalRoutePayload): string | null {
   const explicitRoute = normalizeApprovalRoute(payload.actionUrl)
-  if (explicitRoute) {
-    return appendApprovalContext(explicitRoute, payload)
-  }
-
+  const preferredWorkbenchRoute = resolveApprovalWorkbenchRoute(payload)
   const entityType = String(payload.entityType || '')
     .trim()
     .toUpperCase()
 
-  switch (entityType) {
-    case 'PLAN':
-    case 'PLAN_REPORT':
-    case 'TASK':
-      return appendApprovalContext('/strategic-tasks', payload)
-    case 'INDICATOR':
-      return appendApprovalContext('/indicators', payload)
-    case 'INDICATOR_DISTRIBUTION':
-      return appendApprovalContext('/distribution', payload)
-    default:
-      return explicitRoute ? appendApprovalContext(explicitRoute, payload) : null
+  if (entityType === 'PLAN' || entityType === 'PLAN_REPORT') {
+    const baseRoute = preferredWorkbenchRoute
+      ? explicitRoute
+        ? replaceRoutePath(explicitRoute, preferredWorkbenchRoute)
+        : preferredWorkbenchRoute
+      : explicitRoute
+
+    return baseRoute ? appendApprovalContext(baseRoute, payload) : null
   }
+
+  if (explicitRoute) {
+    return appendApprovalContext(explicitRoute, payload)
+  }
+
+  return preferredWorkbenchRoute ? appendApprovalContext(preferredWorkbenchRoute, payload) : null
 }
 
 export function notifyApprovalStateRefresh(detail: ApprovalStateRefreshDetail = {}): void {

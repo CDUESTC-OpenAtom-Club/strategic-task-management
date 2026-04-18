@@ -132,7 +132,7 @@ export const getStatusColor = (status: string): string => {
 
 export const getStatusLabel = (status: string): string => {
   const statusLabels: Record<string, string> = {
-    pending: '待审批',
+    pending: '审批中',
     approved: '已通过',
     rejected: '已驳回',
     draft: '草稿',

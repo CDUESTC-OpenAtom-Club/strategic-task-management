@@ -2,15 +2,17 @@
   <BaseApprovalDrawer
     v-model="visible"
     title="任务审批"
-    :subtitle="`待审批 ${pendingApprovals.length} 项`"
+    :subtitle="`审批中 ${pendingApprovals.length} 项`"
     :loading="loading"
     :show-empty="pendingApprovals.length === 0"
-    empty-description="暂无待审批任务"
+    empty-description="暂无审批中任务"
   >
     <div class="approval-list">
       <div v-for="instance in pendingApprovals" :key="instance.taskId" class="approval-card">
         <div class="approval-header">
-          <div class="approval-title">{{ instance.title || `${instance.entityType} #${instance.entityId}` }}</div>
+          <div class="approval-title">
+            {{ instance.title || `${instance.entityType} #${instance.entityId}` }}
+          </div>
           <el-tag type="warning" size="small">{{ instance.status }}</el-tag>
         </div>
 
@@ -48,7 +50,7 @@
 
     <template #footer>
       <div class="drawer-footer">
-        <span class="footer-summary">待审批 {{ pendingApprovals.length }} 项</span>
+        <span class="footer-summary">审批中 {{ pendingApprovals.length }} 项</span>
         <el-button @click="handleClose">关闭</el-button>
       </div>
     </template>
@@ -130,7 +132,9 @@ const formatTime = (raw?: string | null) => {
 }
 
 const resolveRequiredPermissionCode = (entityType?: string | null): string | null => {
-  const normalizedEntityType = String(entityType || '').trim().toUpperCase()
+  const normalizedEntityType = String(entityType || '')
+    .trim()
+    .toUpperCase()
   if (normalizedEntityType === 'PLAN') {
     return 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
   }
@@ -171,7 +175,8 @@ const loadPendingApprovals = async () => {
       pendingApprovals.value = pageResult.items.map((task, index) => {
         const detail = details[index]
         const requiredPermissionCode = resolveRequiredPermissionCode(detail?.businessEntityType)
-        const hasPermission = !requiredPermissionCode ||
+        const hasPermission =
+          !requiredPermissionCode ||
           currentUserPermissionCodes.value.includes(requiredPermissionCode)
         const currentApproverId = Number(detail?.currentApproverId ?? task.assigneeId ?? 0)
         const canHandle = Boolean(
@@ -208,7 +213,7 @@ const loadPendingApprovals = async () => {
     })
   } catch (error) {
     logger.error('[TaskApprovalDrawer] Failed to load pending approvals', error)
-    ElMessage.error('加载待审批任务失败')
+    ElMessage.error('加载审批中任务失败')
   } finally {
     loading.value = false
   }

@@ -13,6 +13,8 @@ import { computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useOrgStore } from '@/features/organization/model/store'
 import { useMessageStore } from '@/features/messages/model/message'
+import { invalidateQueries } from '@/shared/lib/utils/cache'
+import { USE_MOCK } from '@/shared/config/api'
 
 export function useAppLayout() {
   // Stores
@@ -29,7 +31,11 @@ export function useAppLayout() {
   // 初始化部门数?- 在用户登录后加载
   onMounted(async () => {
     if (authStore.isAuthenticated) {
-      await orgStore.loadDepartments()
+      if (!USE_MOCK) {
+        invalidateQueries(['dashboard.overview', 'org.list', 'indicator.list', 'task.list'])
+      }
+
+      await orgStore.loadDepartments(0, 2, { force: !USE_MOCK })
     }
   })
 
@@ -38,7 +44,11 @@ export function useAppLayout() {
     () => authStore.isAuthenticated,
     async isAuth => {
       if (isAuth && !orgStore.loaded) {
-        await orgStore.loadDepartments()
+        if (!USE_MOCK) {
+          invalidateQueries(['dashboard.overview', 'org.list', 'indicator.list', 'task.list'])
+        }
+
+        await orgStore.loadDepartments(0, 2, { force: !USE_MOCK })
 
         // 获取消息数据
         await messageStore.refreshMessageCenter()

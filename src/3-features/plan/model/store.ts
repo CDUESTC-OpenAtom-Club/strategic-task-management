@@ -55,10 +55,20 @@ export const usePlanStore = defineStore('plan', () => {
 
   const visiblePlans = computed(() => {
     const authStore = useAuthStore()
-    const userOrgId = authStore.user?.orgId || authStore.user?.department
+    const rawUserOrgId = authStore.user?.orgId
+    const userOrgId =
+      typeof rawUserOrgId === 'number'
+        ? rawUserOrgId
+        : typeof rawUserOrgId === 'string'
+          ? Number(rawUserOrgId)
+          : NaN
 
     if (authStore.user?.role === 'strategic_dept') {
       return filteredPlans.value
+    }
+
+    if (!Number.isFinite(userOrgId)) {
+      return []
     }
 
     return filteredPlans.value.filter(p => p.org_id === userOrgId)
@@ -225,15 +235,16 @@ export const usePlanStore = defineStore('plan', () => {
 
       if (hasApiData(response) && response.data) {
         const existingPlan = plans.value.find(p => p.id === planId)
-        const existingStatus = String((existingPlan as (Plan & { status?: unknown }) | undefined)?.status || '')
+        const existingStatus = String(
+          (existingPlan as (Plan & { status?: unknown }) | undefined)?.status || ''
+        )
           .trim()
           .toUpperCase()
         const incomingStatus = String((response.data as Plan & { status?: unknown }).status || '')
           .trim()
           .toUpperCase()
         const shouldPreserveOptimisticApprovalState =
-          existingStatus === 'PENDING' &&
-          (incomingStatus === '' || incomingStatus === 'DRAFT')
+          existingStatus === 'PENDING' && (incomingStatus === '' || incomingStatus === 'DRAFT')
 
         const mergedPlan = {
           ...(existingPlan || {}),
@@ -243,7 +254,8 @@ export const usePlanStore = defineStore('plan', () => {
                 status: (existingPlan as Plan & { status?: unknown }).status,
                 workflowStatus:
                   (existingPlan as (Plan & { workflowStatus?: unknown }) | undefined)
-                    ?.workflowStatus ?? (response.data as Plan & { workflowStatus?: unknown }).workflowStatus,
+                    ?.workflowStatus ??
+                  (response.data as Plan & { workflowStatus?: unknown }).workflowStatus,
                 canWithdraw:
                   (existingPlan as (Plan & { canWithdraw?: boolean }) | undefined)?.canWithdraw ??
                   (response.data as Plan & { canWithdraw?: boolean }).canWithdraw

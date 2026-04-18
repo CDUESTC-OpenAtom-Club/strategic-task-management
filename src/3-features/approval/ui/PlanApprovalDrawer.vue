@@ -238,11 +238,11 @@ watch(
   <BaseApprovalDrawer
     v-model="drawerVisible"
     title="计划审批"
-    :subtitle="`待审批 ${pendingApprovals.length} 个计划`"
+    :subtitle="`审批中 ${pendingApprovals.length} 个计划`"
     size="600px"
     :loading="loading"
     :show-empty="pendingApprovals.length === 0"
-    empty-description="暂无待审批的计划"
+    empty-description="暂无审批中的计划"
     custom-class="plan-approval-drawer"
     content-padding="20px"
     min-content-height="400px"
@@ -253,7 +253,7 @@ watch(
           <el-icon><Check /></el-icon>
           <span>计划审批</span>
         </div>
-        <div class="header-subtitle">待审批 {{ pendingApprovals.length }} 个计划</div>
+        <div class="header-subtitle">审批中 {{ pendingApprovals.length }} 个计划</div>
       </div>
     </template>
 
@@ -275,7 +275,7 @@ watch(
               <div class="plan-year">{{ instance.year || '2025' }}年度</div>
             </div>
           </div>
-          <el-tag type="warning" size="small">待审批</el-tag>
+          <el-tag type="warning" size="small">审批中</el-tag>
         </div>
 
         <div class="submit-info">
@@ -311,7 +311,7 @@ watch(
 
     <template #footer>
       <div class="drawer-footer">
-        <span class="footer-info">待审批 {{ pendingApprovals.length }} 个计划</span>
+        <span class="footer-info">审批中 {{ pendingApprovals.length }} 个计划</span>
         <el-button @click="handleClose">关闭</el-button>
       </div>
     </template>

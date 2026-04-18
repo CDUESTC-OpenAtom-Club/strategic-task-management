@@ -8,10 +8,25 @@ describe('responseParser', () => {
       username: 'jiaowu_report',
       realName: '教务处填报员',
       role: 'functional_dept',
-      orgName: '教务处'
+      orgName: '教务处',
+      orgType: 'functional'
     })
 
     expect(user?.role).toBe('functional_dept')
+    expect(user?.orgType).toBe('functional')
+  })
+
+  it('preserves admin org type for downstream permission checks', () => {
+    const user = mapBackendUser({
+      userId: 8,
+      username: 'zlb_admin',
+      realName: '战略部管理员',
+      orgType: 'admin',
+      orgName: '战略发展部'
+    })
+
+    expect(user?.role).toBe('strategic_dept')
+    expect(user?.orgType).toBe('admin')
   })
 
   it('returns null when the response does not contain a valid frontend role', () => {

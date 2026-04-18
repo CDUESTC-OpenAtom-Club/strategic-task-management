@@ -12,6 +12,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/features/auth/model/store'
 import { tokenManager } from '@/shared/lib/utils/tokenManager'
 import { logger } from '@/shared/lib/utils/logger'
+import { hasAdminConsoleAccess } from '@/shared/lib/permissions/adminConsoleAccess'
 import { startProgress, doneProgress } from './router-progress'
 import { resolveProtectedRouteRedirect } from './lib/routeAccess'
 import './router-progress.css'
@@ -226,16 +227,22 @@ router.beforeEach(async (to, _from, next) => {
   await ensureAuthRestored()
 
   const authStore = useAuthStore()
+  const currentOrgId = Number(authStore.user?.orgId ?? NaN)
+  const canAccessAdminConsole = hasAdminConsoleAccess(authStore.user)
   logger.debug('[Router] auth restored', {
     path: to.path,
     authenticated: authStore.isAuthenticated,
     role: authStore.userRole,
-    effectiveRole: authStore.effectiveRole
+    effectiveRole: authStore.effectiveRole,
+    orgId: currentOrgId,
+    orgType: authStore.user?.orgType,
+    canAccessAdminConsole
   })
 
   const protectedRouteRedirect = resolveProtectedRouteRedirect({
     requiresAuth: Boolean(to.meta['requiresAuth']),
     isAuthenticated: authStore.isAuthenticated,
+    hasAdminConsoleAccess: canAccessAdminConsole,
     userRole: authStore.userRole,
     effectiveRole: authStore.effectiveRole,
     allowedRoles: Array.isArray(to.meta['roles']) ? (to.meta['roles'] as string[]) : undefined,

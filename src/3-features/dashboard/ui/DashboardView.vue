@@ -381,15 +381,10 @@ const stackedBarData = computed(() => {
     return []
   }
 
-  const summary = dashboardStore.departmentSummary
-  if (!summary || summary.length === 0) {
+  const functionalDepts = orgStore.functionalDepartments.map(item => item.name).filter(Boolean)
+  if (functionalDepts.length === 0) {
     return []
   }
-
-  // 获取职能部门列表（战略发展部视角）
-  const functionalDepts = summary
-    .filter(item => !isSecondaryCollege(item.dept))
-    .map(item => item.dept)
 
   return functionalDepts.map(dept => {
     const stats = getDeptStatsAtMonth(dept, selectedMonth.value, timeContext.currentYear)
@@ -952,7 +947,7 @@ const remindingMap = ref<Record<number, boolean>>({})
  * @requirement 10.5 - 降级模式下应显示明确的提示标识
  */
 const isFallbackMode = computed(() => {
-  return strategicStore.dataSource === 'fallback'
+  return false
 })
 
 // 当前视角角色（优先使用父组件传递的，否则使用有效角色）
@@ -1559,8 +1554,8 @@ const initBenchmarkChart = async () => {
     return
   }
 
-  // 设置容器高度（固定高度用于堆叠柱状图）
-  benchmarkChartRef.value.style.height = `350px`
+  // 控制首屏占用，避免刷新后第一张图过高把后续模块全部挤到下方。
+  benchmarkChartRef.value.style.height = `280px`
 
   benchmarkChartInstance = await createChartInstance(
     benchmarkChartRef.value,
@@ -1802,6 +1797,18 @@ watch(
   () => dashboardStore.departmentSummary.length,
   newLength => {
     if (newLength > 0) {
+      nextTick(() => {
+        initBenchmarkChart()
+      })
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => orgStore.functionalDepartments.length,
+  newLength => {
+    if (currentRole.value === 'strategic_dept' && newLength > 0) {
       nextTick(() => {
         initBenchmarkChart()
       })
@@ -2278,8 +2285,12 @@ watch(showCollegeMonthIndicatorCard, () => {
 // 生命周期
 onMounted(async () => {
   try {
-    if (strategicStore.indicators.length === 0) {
-      await strategicStore.loadIndicatorsByYear(timeContext.currentYear)
+    if (!orgStore.loaded || orgStore.departments.length === 0) {
+      await orgStore.loadDepartments()
+    }
+
+    if (strategicStore.dataSource !== 'api' || strategicStore.indicators.length === 0) {
+      await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: true })
     }
   } catch (err) {
     logger.error('[Dashboard] Initial load failed:', err)
@@ -3548,7 +3559,7 @@ onUnmounted(() => {
 .dashboard-view {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xl);
+  gap: var(--spacing-lg);
 }
 
 /* ========== 降级模式提示样式 - Requirements 1.4, 10.5 ========== */
@@ -3722,7 +3733,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: var(--spacing-md) var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
   background: var(--bg-white);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-light);
@@ -4132,7 +4143,7 @@ onUnmounted(() => {
 
 .benchmark-chart {
   width: 100%;
-  height: 350px;
+  height: 280px;
 }
 
 .radar-chart {

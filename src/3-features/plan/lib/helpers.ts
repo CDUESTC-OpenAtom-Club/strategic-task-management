@@ -43,9 +43,9 @@ export function canApprovePlan(plan: Plan | null): boolean {
 export function getPlanStatusText(status: PlanStatus): string {
   const statusMap: Record<PlanStatus, string> = {
     DRAFT: '草稿',
-    PENDING_APPROVAL: '待审批',
+    PENDING_APPROVAL: '审批中',
     APPROVED: '已下发',
-    PENDING: '待审批',
+    PENDING: '审批中',
     DISTRIBUTED: '已下发'
   }
   return statusMap[status] || status

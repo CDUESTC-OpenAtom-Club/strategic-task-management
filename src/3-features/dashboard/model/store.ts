@@ -27,6 +27,11 @@ import { logger } from '@/shared/lib/utils/logger'
 import { alertApi, type AlertStats, type AlertEvent } from '@/shared/api/monitoringApi'
 import { dashboardApi } from '@/features/dashboard/api/dashboardApi'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
+import { USE_MOCK } from '@/shared/config/api'
+
+function isPersistedIndicatorId(value: unknown): boolean {
+  return /^\d+$/.test(String(value ?? '').trim())
+}
 
 export const useDashboardStore = defineStore('dashboard', () => {
   // State
@@ -85,6 +90,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const strategicStore = useStrategicStore()
     const timeContext = useTimeContextStore()
     let result = [...strategicStore.indicators]
+
+    if (!USE_MOCK) {
+      result = result.filter(indicator => isPersistedIndicatorId(indicator.id))
+    }
 
     // 按当前年份过滤
     // 没有 year 字段的指标默认为当前真实年份（2025）
@@ -150,7 +159,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     } else {
       // 根据角色获取应该显示的所有部门
       if (role === 'strategic_dept') {
-        // 战略发展部只看职能部门（不包含学院）
+        // 只信任后端返回的真实职能部门，不再混入前端静态部门清单。
         orgStore.functionalDepartments.forEach(d => targetDepartments.add(d.name))
       } else if (role === 'functional_dept') {
         // 职能部门只看它实际下发任务的目标部门（二级学院）
@@ -282,6 +291,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const role = authStore.effectiveRole
     const dept = authStore.effectiveDepartment
     let indicators = [...strategicStore.indicators]
+
+    if (!USE_MOCK) {
+      indicators = indicators.filter(indicator => isPersistedIndicatorId(indicator.id))
+    }
 
     // 按当前年份过滤
     // 没有 year 字段的指标默认为当前真实年份（2025）

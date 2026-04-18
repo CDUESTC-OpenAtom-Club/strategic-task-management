@@ -26,7 +26,7 @@ export const PlanLevel = {
  */
 export type PlanStatus =
   | 'DRAFT' // Draft plan (草稿 - 可编辑)
-  | 'PENDING' // Pending approval (待审批)
+  | 'PENDING' // Pending approval (审批中)
   | 'DISTRIBUTED' // Distributed to departments (已下发)
 
 export const PlanStatus = {

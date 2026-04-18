@@ -3,6 +3,7 @@ import type { UserRole } from '@/shared/types'
 interface RouteAccessInput {
   allowedRoles?: string[]
   effectiveRole?: UserRole | null
+  hasAdminConsoleAccess?: boolean
   isAuthenticated: boolean
   path: string
   requiresAuth: boolean
@@ -12,6 +13,7 @@ interface RouteAccessInput {
 export function resolveProtectedRouteRedirect({
   allowedRoles,
   effectiveRole,
+  hasAdminConsoleAccess,
   isAuthenticated,
   path,
   requiresAuth,
@@ -29,7 +31,15 @@ export function resolveProtectedRouteRedirect({
     return '/login'
   }
 
-  if (!allowedRoles?.length || userRole === 'strategic_dept') {
+  if (!allowedRoles?.length) {
+    return null
+  }
+
+  if (path.startsWith('/admin')) {
+    return hasAdminConsoleAccess ? null : '/403'
+  }
+
+  if (userRole === 'strategic_dept') {
     return null
   }
 

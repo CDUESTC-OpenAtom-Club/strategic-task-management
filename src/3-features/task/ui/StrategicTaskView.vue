@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Plus,
   View,
@@ -49,6 +50,7 @@ import {
 } from '@/shared/lib/utils/indicatorStatus'
 import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib'
 import { ApprovalProgressDrawer } from '@/features/approval'
+import { canCurrentUserHandleWorkflowApproval } from '@/features/approval/lib'
 import { useApprovalRouteAutopen } from '@/features/approval/lib'
 import { useApprovalStore } from '@/features/approval/model/store'
 import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
@@ -74,6 +76,8 @@ const timeContext = useTimeContextStore()
 const orgStore = useOrgStore()
 const planStore = usePlanStore()
 const approvalStore = useApprovalStore()
+const route = useRoute()
+const router = useRouter()
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
 const currentUserPermissionCodes = computed(() => {
   const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
@@ -152,6 +156,11 @@ const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartment
 
 // 选中的部门 - 默认选中第一个
 const selectedDepartment = ref('')
+
+const getRouteQueryText = (value: unknown): string => {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return String(candidate ?? '').trim()
+}
 
 // 初始化选中部门 - 默认选中第一个职能部门
 watch(
@@ -541,6 +550,39 @@ const normalizeDepartmentName = (value?: string | null): string => {
   )
 }
 
+async function syncSelectedDepartmentFromRoute(): Promise<void> {
+  const queryDepartment = normalizeDepartmentName(getRouteQueryText(route.query.approvalDepartment))
+  if (!queryDepartment) {
+    return
+  }
+
+  if (!orgStore.loaded || orgStore.departments.length === 0) {
+    await orgStore.loadDepartments()
+  }
+
+  const matchedDepartment = functionalDepartments.value.find(
+    dept => normalizeDepartmentName(dept) === queryDepartment
+  )
+
+  if (matchedDepartment && selectedDepartment.value !== matchedDepartment) {
+    selectedDepartment.value = matchedDepartment
+  }
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.approvalDepartment
+  await router.replace({ query: nextQuery })
+}
+
+watch(
+  () => [route.query.approvalDepartment, functionalDepartments.value.length],
+  () => {
+    if (getRouteQueryText(route.query.approvalDepartment)) {
+      void syncSelectedDepartmentFromRoute()
+    }
+  },
+  { immediate: true }
+)
+
 const milestoneMap = ref<Record<string, Array<Record<string, unknown>>>>({})
 const loadedMilestoneIds = ref(new Set<string>())
 const loadingMilestoneIds = ref(new Set<string>())
@@ -800,6 +842,59 @@ const approvalWorkflowReportSummary = computed(() => {
   return latestPlanReportSummary.value
 })
 
+function hasWorkflowBinding(
+  summary:
+    | {
+        id?: number | null
+        workflowInstanceId?: number | null
+        currentTaskId?: number | null
+        workflowStatus?: string | null
+        status?: string | null
+        currentStepName?: string | null
+      }
+    | null
+    | undefined
+): boolean {
+  if (!summary?.id) {
+    return false
+  }
+
+  const workflowInstanceId = Number(summary.workflowInstanceId ?? NaN)
+  if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+    return true
+  }
+
+  const currentTaskId = Number(summary.currentTaskId ?? NaN)
+  if (Number.isFinite(currentTaskId) && currentTaskId > 0) {
+    return true
+  }
+
+  const workflowStatus = String(summary.workflowStatus || summary.status || '')
+    .trim()
+    .toUpperCase()
+  if (workflowStatus && workflowStatus !== 'DRAFT') {
+    return true
+  }
+
+  return Boolean(String(summary.currentStepName || '').trim())
+}
+
+const hasApprovalWorkflowReportBinding = computed(() =>
+  hasWorkflowBinding(
+    approvalWorkflowReportSummary.value as
+      | {
+          id?: number | null
+          workflowInstanceId?: number | null
+          currentTaskId?: number | null
+          workflowStatus?: string | null
+          status?: string | null
+          currentStepName?: string | null
+        }
+      | null
+      | undefined
+  )
+)
+
 // 获取当前选中部门对应的 Plan 状态
 const currentPlanStatus = computed(() => {
   return normalizePlanStatus(currentPlan.value?.status)
@@ -882,6 +977,7 @@ function resolveExpectedApproverOrgIdForCurrentPlan(): number | null {
 
 const hydratingPlanDetail = ref(false)
 const departmentViewRequestId = ref(0)
+const departmentViewLoadingRequestId = ref(0)
 let currentPlanReportSummaryPromise: Promise<{
   currentReport: Awaited<ReturnType<typeof indicatorFillApi.getCurrentMonthPlanReport>>
   latestReport: Awaited<ReturnType<typeof indicatorFillApi.getLatestCurrentMonthPlanReport>>
@@ -985,6 +1081,7 @@ const refreshCurrentDepartmentView = async (
 
   if (options.showLoading) {
     pageTransitionLoading.value = true
+    departmentViewLoadingRequestId.value = requestId
   }
 
   try {
@@ -993,8 +1090,9 @@ const refreshCurrentDepartmentView = async (
     await loadCurrentPlanTaskScope({ force: options.force })
     await syncCurrentPlanReportSummaries({ force: options.force })
   } finally {
-    if (options.showLoading && departmentViewRequestId.value === requestId) {
+    if (options.showLoading && departmentViewLoadingRequestId.value === requestId) {
       pageTransitionLoading.value = false
+      departmentViewLoadingRequestId.value = 0
     }
   }
 }
@@ -1002,7 +1100,9 @@ const refreshCurrentDepartmentView = async (
 const PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE = 'PLAN_DISPATCH_STRATEGY'
 const PLAN_APPROVAL_HISTORY_WORKFLOW_CODES = [
   'PLAN_DISPATCH_STRATEGY',
-  'PLAN_APPROVAL_FUNCDEPT'
+  'PLAN_DISPATCH_FUNCDEPT',
+  'PLAN_APPROVAL_FUNCDEPT',
+  'PLAN_APPROVAL_COLLEGE'
 ] as const
 
 const approvalSetupDialogVisible = ref(false)
@@ -1276,20 +1376,26 @@ const canDeleteIndicator = (indicator: StrategicIndicator): boolean => {
 // @requirement: Plan-centric status - 使用 Plan 状态判断待审批数量
 // Plan 处于 PENDING 状态时，表示有待审批的内容
 const pendingApprovalCount = computed(() => {
-  const expectedApproverRoleCodes = resolveExpectedApproverRoleCodesForCurrentPlan()
-  const hasExpectedRole =
-    expectedApproverRoleCodes.length === 0 ||
-    expectedApproverRoleCodes.some(roleCode => currentUserRoleCodes.value.includes(roleCode))
-  const expectedApproverOrgId = resolveExpectedApproverOrgIdForCurrentPlan()
-  const hasExpectedOrg =
-    !Number.isFinite(expectedApproverOrgId) ||
-    (expectedApproverOrgId as number) <= 0 ||
-    currentUserOrgId.value === expectedApproverOrgId
+  const explicitApproverId = Number(
+    approvalWorkflowReportSummary.value?.currentApproverId ??
+      currentPlan.value?.currentApproverId ??
+      0
+  )
 
-  return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(currentApprovalWorkflowStatus.value) &&
-    permissionUtil.hasPermission(PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE) &&
-    hasExpectedRole &&
-    hasExpectedOrg
+  return canCurrentUserHandleWorkflowApproval({
+    currentUserId: currentUserId.value,
+    currentUserOrgId: currentUserOrgId.value,
+    currentUserRoleCodes: currentUserRoleCodes.value,
+    hasApprovalPermission: permissionUtil.hasPermission(
+      PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE
+    ),
+    isPendingApproval: ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(
+      currentApprovalWorkflowStatus.value
+    ),
+    explicitApproverId,
+    expectedApproverRoleCodes: resolveExpectedApproverRoleCodesForCurrentPlan(),
+    expectedApproverOrgId: resolveExpectedApproverOrgIdForCurrentPlan()
+  })
     ? 1
     : 0
 })
@@ -1313,7 +1419,7 @@ const planUiPhase = computed<'draft' | 'pending_withdrawable' | 'pending_locked'
 
 const approvalEntryButtonText = computed(() => {
   if (planUiPhase.value === 'pending_withdrawable' || planUiPhase.value === 'pending_locked') {
-    return '审批中'
+    return '审批'
   }
   if (approvalWorkflowReportSummary.value?.id || planUiPhase.value === 'distributed') {
     return '查看审批'
@@ -1323,7 +1429,13 @@ const approvalEntryButtonText = computed(() => {
 
 const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
   supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
-  onAutoOpen: () => handleOpenApproval(),
+  onAutoOpen: async () => {
+    await syncSelectedDepartmentFromRoute()
+    await nextTick()
+    await refreshCurrentDepartmentView({ showLoading: true, force: true })
+    await preloadApprovalWorkflowDetail()
+    taskApprovalVisible.value = true
+  },
   onClearFailure: error => {
     logger.warn('[StrategicTaskView] 清理审批自动打开参数失败:', error)
   }
@@ -1333,18 +1445,22 @@ const primaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() =>
   if (routeApprovalEntityType.value) {
     return routeApprovalEntityType.value
   }
-  return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
+  return hasApprovalWorkflowReportBinding.value ? 'PLAN_REPORT' : 'PLAN'
 })
 
 const primaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
   return (
-    routeApprovalEntityId.value ?? approvalWorkflowReportSummary.value?.id ?? currentPlan.value?.id
+    routeApprovalEntityId.value ??
+    (hasApprovalWorkflowReportBinding.value
+      ? approvalWorkflowReportSummary.value?.id
+      : undefined) ??
+    currentPlan.value?.id
   )
 })
 
 const secondaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
   // 战略任务页既要支持当前上报审批，也要保留原来的下发审批历史。
-  if (approvalWorkflowReportSummary.value?.id) {
+  if (hasApprovalWorkflowReportBinding.value) {
     return 'PLAN'
   }
 
@@ -1352,7 +1468,7 @@ const secondaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT' | un
 })
 
 const secondaryApprovalWorkflowEntityId = computed<number | string | undefined>(() => {
-  if (approvalWorkflowReportSummary.value?.id) {
+  if (hasApprovalWorkflowReportBinding.value) {
     return currentPlan.value?.id
   }
 
@@ -2003,7 +2119,7 @@ const getTaskStatus = (_row: StrategicIndicator) => {
     return { label: '已下发', type: 'success', canWithdraw: false }
   }
   if (planStatus === 'PENDING') {
-    return { label: '待审批', type: 'warning', canWithdraw: false }
+    return { label: '审批中', type: 'warning', canWithdraw: false }
   }
   // 默认返回待下发
   return { label: '待下发', type: 'info', canWithdraw: true }
@@ -3181,7 +3297,9 @@ async function refreshApprovalWorkflowSummaries(): Promise<void> {
 async function preloadApprovalWorkflowDetail(): Promise<void> {
   preloadedPlanWorkflowDetail.value = null
 
-  const reportId = Number(approvalWorkflowReportSummary.value?.id ?? NaN)
+  const reportId = Number(
+    hasApprovalWorkflowReportBinding.value ? (approvalWorkflowReportSummary.value?.id ?? NaN) : NaN
+  )
   if (Number.isFinite(reportId) && reportId > 0) {
     try {
       const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
@@ -4469,15 +4587,20 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
               <el-table-column prop="progress" label="进度" width="120" align="center">
                 <template #default="{ row }">
                   <div class="progress-cell" @dblclick="handleIndicatorDblClick(row, 'progress')">
-                    <el-input
+                    <div
                       v-if="editingIndicatorId === row.id && editingIndicatorField === 'progress'"
-                      v-model="editingIndicatorValue"
-                      v-focus
-                      size="small"
-                      style="width: 50px"
-                      @blur="saveIndicatorEdit(row, 'progress')"
-                      @keyup.enter="saveIndicatorEdit(row, 'progress')"
-                    />
+                      class="progress-edit-field"
+                    >
+                      <el-input
+                        v-model="editingIndicatorValue"
+                        v-focus
+                        size="small"
+                        style="width: 54px"
+                        @blur="saveIndicatorEdit(row, 'progress')"
+                        @keyup.enter="saveIndicatorEdit(row, 'progress')"
+                      />
+                      <span class="progress-suffix">%</span>
+                    </div>
                     <span
                       v-else-if="isSavingIndicatorCell(row, 'progress')"
                       class="cell-saving-text"
@@ -4485,7 +4608,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                       保存中...
                     </span>
                     <!-- 始终显示已审批通过的进度（progress），不显示待审批进度 -->
-                    <span v-else class="progress-number">{{ row.progress || 0 }}</span>
+                    <span v-else class="progress-number">{{ row.progress || 0 }}%</span>
                   </div>
                 </template>
               </el-table-column>
@@ -4697,7 +4820,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                         <div class="workflow-progress-item">
                           <span class="workflow-progress-label">当前节点</span>
                           <span class="workflow-progress-value">{{
-                            currentIndicatorWorkflow.currentStepName || '审批中'
+                            currentIndicatorWorkflow.currentStepName || '审批'
                           }}</span>
                         </div>
                         <div class="workflow-progress-item">
@@ -4832,6 +4955,8 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
                     </el-select>
                   </el-form-item>
                 </el-col>
+              </el-row>
+              <el-row :gutter="16">
                 <el-col :span="4">
                   <el-form-item class="required-form-item">
                     <template #label><span class="required-asterisk">*</span>指标类型</template>
@@ -5201,19 +5326,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           description="暂未加载到审批流程定义"
           :image-size="88"
         />
-
-        <div v-else class="approval-step-list">
-          <div
-            v-for="step in approvalWorkflowPreview?.steps || []"
-            :key="step.stepDefId"
-            class="approval-step-item"
-          >
-            <div class="approval-step-header">
-              <div class="approval-step-name">{{ step.stepOrder }}. {{ step.stepName }}</div>
-              <el-tag type="info" size="small"> 系统自动分配 </el-tag>
-            </div>
-          </div>
-        </div>
       </div>
 
       <template #footer>
@@ -6553,10 +6665,21 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   width: 100%;
 }
 
+.progress-edit-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .progress-number {
   font-weight: 500;
   color: var(--text-main);
   font-size: 14px;
+}
+
+.progress-suffix {
+  font-size: 14px;
+  color: var(--text-main);
 }
 
 .progress-bar-inline {
@@ -7478,6 +7601,45 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   background: var(--border-light, #cbd5e1);
 }
 
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap) {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(37, 99, 235, 0.95) rgba(191, 219, 254, 0.72);
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar) {
+  width: 12px;
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar-track) {
+  background: rgba(191, 219, 254, 0.58);
+  border-radius: 999px;
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar-thumb) {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.96), rgba(37, 99, 235, 0.96));
+  border-radius: 999px;
+  border: 2px solid rgba(219, 234, 254, 0.9);
+}
+
+:global(
+  .sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar-thumb:hover
+) {
+  background: linear-gradient(180deg, rgba(29, 78, 216, 0.98), rgba(30, 64, 175, 0.98));
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-scrollbar__bar.is-vertical) {
+  width: 12px;
+  right: 2px;
+  opacity: 1 !important;
+}
+
+:global(
+  .sism-select-popper--visible-scrollbar .el-scrollbar__bar.is-vertical .el-scrollbar__thumb
+) {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.96), rgba(37, 99, 235, 0.96));
+  border-radius: 999px;
+}
+
 /* 里程碑单元格可编辑提示 */
 .milestone-cell.editable {
   cursor: pointer;
@@ -7490,7 +7652,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 }
 
 .approval-setup-dialog {
-  min-height: 220px;
+  min-height: 120px;
 }
 
 .approval-setup-summary {
@@ -7511,39 +7673,6 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 .summary-value {
   color: var(--el-text-color-primary);
   font-weight: 500;
-}
-
-.approval-step-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.approval-step-item {
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 10px;
-  padding: 14px;
-  background: #fff;
-}
-
-.approval-step-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.approval-step-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.approval-step-readonly {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.6;
 }
 
 .approval-user-option {

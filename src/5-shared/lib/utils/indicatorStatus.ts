@@ -15,7 +15,10 @@ export const LIFECYCLE_STATUS_TEXT_MAP: Record<IndicatorLifecycleStatus, string>
 /**
  * 生命周期状态类型映射（Element Plus Tag 类型）
  */
-export const LIFECYCLE_STATUS_TYPE_MAP: Record<IndicatorLifecycleStatus, 'info' | 'warning' | 'success'> = {
+export const LIFECYCLE_STATUS_TYPE_MAP: Record<
+  IndicatorLifecycleStatus,
+  'info' | 'warning' | 'success'
+> = {
   DRAFT: 'info',
   PENDING_REVIEW: 'warning',
   DISTRIBUTED: 'success'
@@ -40,14 +43,14 @@ export type ProgressApprovalStatus = 'NONE' | 'PENDING' | 'APPROVED' | 'REJECTED
  */
 export const APPROVAL_STATUS_TEXT_MAP: Record<ProgressApprovalStatus, string> = {
   NONE: '无',
-  PENDING: '待审批',
+  PENDING: '审批中',
   APPROVED: '已批准',
   REJECTED: '已驳回'
 }
 
 /**
  * 获取指标生命周期状态（仅返回生命周期状态，不考虑审批状态）
- * 
+ *
  * 兼容性说明：
  * - PENDING（遗留状态）映射为 PENDING_REVIEW
  * - ACTIVE（遗留状态）映射为 DISTRIBUTED
@@ -55,9 +58,15 @@ export const APPROVAL_STATUS_TEXT_MAP: Record<ProgressApprovalStatus, string> = 
  */
 export function getIndicatorStatus(indicator: { status?: string }): IndicatorLifecycleStatus {
   const status = indicator.status?.toUpperCase()
-  if (status === 'PENDING_REVIEW' || status === 'PENDING') {return 'PENDING_REVIEW'}
-  if (status === 'DISTRIBUTED' || status === 'ACTIVE') {return 'DISTRIBUTED'}
-  if (status === 'ARCHIVED') {return 'DRAFT'}
+  if (status === 'PENDING_REVIEW' || status === 'PENDING') {
+    return 'PENDING_REVIEW'
+  }
+  if (status === 'DISTRIBUTED' || status === 'ACTIVE') {
+    return 'DISTRIBUTED'
+  }
+  if (status === 'ARCHIVED') {
+    return 'DRAFT'
+  }
   return 'DRAFT'
 }
 
@@ -65,7 +74,9 @@ export function getIndicatorStatus(indicator: { status?: string }): IndicatorLif
  * 获取生命周期状态显示文本
  */
 export function getStatusText(status?: IndicatorLifecycleStatus): string {
-  if (!status) {return '未知'}
+  if (!status) {
+    return '未知'
+  }
   return LIFECYCLE_STATUS_TEXT_MAP[status] || status
 }
 
@@ -73,7 +84,9 @@ export function getStatusText(status?: IndicatorLifecycleStatus): string {
  * 获取生命周期状态类型（用于 el-tag）
  */
 export function getStatusType(status?: IndicatorLifecycleStatus): 'info' | 'warning' | 'success' {
-  if (!status) {return 'info'}
+  if (!status) {
+    return 'info'
+  }
   return LIFECYCLE_STATUS_TYPE_MAP[status] || 'info'
 }
 
@@ -81,7 +94,9 @@ export function getStatusType(status?: IndicatorLifecycleStatus): 'info' | 'warn
  * 获取生命周期状态图标
  */
 export function getStatusIcon(status?: IndicatorLifecycleStatus): string {
-  if (!status) {return ''}
+  if (!status) {
+    return ''
+  }
   return LIFECYCLE_STATUS_ICON_MAP[status] || ''
 }
 
@@ -89,7 +104,9 @@ export function getStatusIcon(status?: IndicatorLifecycleStatus): string {
  * 获取完整的生命周期状态显示文本（包含图标）
  */
 export function getFullStatusText(status?: IndicatorLifecycleStatus): string {
-  if (!status) {return '未知'}
+  if (!status) {
+    return '未知'
+  }
   return `${getStatusIcon(status)} ${getStatusText(status)}`
 }
 

@@ -284,6 +284,8 @@ export interface User {
   orgId?: number | string
   /** 前端兼容组织名称 */
   orgName?: string
+  /** 后端原始组织类型（如 admin / functional / academic） */
+  orgType?: string | null
   /** 邮箱 (后端: email) */
   email: string | null
   /** 电话 (后端: phone) */

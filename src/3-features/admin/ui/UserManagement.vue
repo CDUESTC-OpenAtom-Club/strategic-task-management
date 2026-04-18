@@ -30,7 +30,8 @@ import {
   Unlock,
   User,
   Key,
-  WarningFilled
+  WarningFilled,
+  QuestionFilled
 } from '@element-plus/icons-vue'
 import type { UserManagementItem, UserForm, Organization } from '@/shared/types'
 import { apiClient as api } from '@/shared/api/client'
@@ -126,6 +127,39 @@ const userForm = ref<UserForm>({
 const organizationTree = ref<Organization[]>([])
 const organizationLoading = ref(false)
 
+const getOrganizationNameById = (orgId: string | number | null | undefined) => {
+  const normalizedOrgId = String(orgId ?? '')
+  if (!normalizedOrgId) {
+    return ''
+  }
+
+  return organizationTree.value.find(org => String(org.id) === normalizedOrgId)?.name ?? ''
+}
+
+const getOrganizationTypeById = (orgId: string | number | null | undefined) => {
+  const normalizedOrgId = String(orgId ?? '')
+  if (!normalizedOrgId) {
+    return ''
+  }
+
+  return organizationTree.value.find(org => String(org.id) === normalizedOrgId)?.type ?? ''
+}
+
+const resolveOrganizationName = (user: Record<string, unknown>) => {
+  const directName = [user.orgName, user.department, user.organizationName].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0
+  )
+
+  return directName ?? getOrganizationNameById(user.orgId as string | number | null | undefined)
+}
+
+const hydrateUserOrganizationNames = () => {
+  users.value = users.value.map(user => ({
+    ...user,
+    orgName: user.orgName || getOrganizationNameById(user.orgId)
+  }))
+}
+
 // 密码相关
 const passwordForm = ref<{
   userId: string | number
@@ -169,6 +203,24 @@ const filteredUsers = computed(() => {
 
   return result
 })
+
+const strategicUserCount = computed(
+  () =>
+    filteredUsers.value.filter(user => getOrganizationTypeById(user.orgId) === 'strategic_dept')
+      .length
+)
+
+const functionalUserCount = computed(
+  () =>
+    filteredUsers.value.filter(user => getOrganizationTypeById(user.orgId) === 'functional_dept')
+      .length
+)
+
+const secondaryCollegeUserCount = computed(
+  () =>
+    filteredUsers.value.filter(user => getOrganizationTypeById(user.orgId) === 'secondary_college')
+      .length
+)
 
 interface RoleListItem {
   id: number
@@ -335,7 +387,7 @@ const loadUsers = async () => {
       email: String(user.email ?? ''),
       phone: String(user.phone ?? ''),
       orgId: String(user.orgId ?? ''),
-      orgName: String(user.orgName ?? user.department ?? ''),
+      orgName: resolveOrganizationName(user),
       roles: Array.isArray(user.roles)
         ? user.roles.map((r: string | { roleCode?: string; role?: string }) =>
             typeof r === 'string' ? r : (r.roleCode ?? r.role ?? '')
@@ -364,6 +416,7 @@ const loadOrganizations = async () => {
       type: dept.type,
       children: []
     }))
+    hydrateUserOrganizationNames()
   } catch (error) {
     ElMessage.error('加载组织结构失败')
   } finally {
@@ -746,26 +799,20 @@ onMounted(() => {
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value success">
-            {{ filteredUsers.filter(u => u.status === 'active').length }}
-          </div>
-          <div class="stat-label">启用用户</div>
+          <div class="stat-value warning">{{ strategicUserCount }}</div>
+          <div class="stat-label">战略部门用户</div>
         </div>
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value warning">
-            {{ filteredUsers.filter(u => u.roles.includes('strategic_dept')).length }}
-          </div>
-          <div class="stat-label">战略部门</div>
+          <div class="stat-value success">{{ functionalUserCount }}</div>
+          <div class="stat-label">职能部门用户</div>
         </div>
       </ElCard>
       <ElCard class="stat-card" shadow="hover">
         <div class="stat-content">
-          <div class="stat-value info">
-            {{ filteredUsers.filter(u => u.roles.includes('secondary_college')).length }}
-          </div>
-          <div class="stat-label">二级学院</div>
+          <div class="stat-value info">{{ secondaryCollegeUserCount }}</div>
+          <div class="stat-label">二级学院用户</div>
         </div>
       </ElCard>
     </div>
@@ -797,7 +844,8 @@ onMounted(() => {
 
         <ElTableColumn prop="orgName" label="所属组织" min-width="180">
           <template #default="{ row }">
-            <span class="org-name">{{ row.orgName }}</span>
+            <span v-if="row.orgName" class="org-name">{{ row.orgName }}</span>
+            <span v-else class="no-data">-</span>
           </template>
         </ElTableColumn>
 
@@ -903,8 +951,12 @@ onMounted(() => {
             <template #prefix>
               <el-icon><User /></el-icon>
             </template>
+            <template #suffix>
+              <el-tooltip content="编辑保存完一次之后不可更改" placement="top">
+                <el-icon class="help-icon"><QuestionFilled /></el-icon>
+              </el-tooltip>
+            </template>
           </ElInput>
-          <div v-if="dialogMode === 'edit'" class="form-hint">用户名创建后不可修改</div>
         </ElFormItem>
 
         <!-- 密码（仅创建时显示） -->
@@ -1260,6 +1312,16 @@ onMounted(() => {
 
 .roles-select {
   width: 100%;
+}
+
+.help-icon {
+  cursor: help;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+}
+
+.help-icon:hover {
+  color: var(--el-color-primary);
 }
 
 .role-option {

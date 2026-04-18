@@ -43,6 +43,20 @@
             <span v-if="message.senderDisplay">来源：{{ message.senderDisplay }}</span>
           </div>
 
+          <div
+            v-if="message.bizType === 'APPROVAL_TODO' && getApprovalDepartmentDisplay(message)"
+            class="message-extra approval-department"
+          >
+            <span>审批中部门：{{ getApprovalDepartmentDisplay(message) }}</span>
+          </div>
+
+          <div
+            v-if="message.bizType === 'APPROVAL_TODO' && getApprovalRouteDisplay(message)"
+            class="message-extra approval-route"
+          >
+            <span>审批流向：{{ getApprovalRouteDisplay(message) }}</span>
+          </div>
+
           <div class="message-actions">
             <el-button
               v-if="message.canMarkAsRead && !message.isRead"
@@ -172,6 +186,28 @@ const getRelativeTime = (date: Date): string => {
     return `${Math.floor(days / 7)}周前`
   }
   return formatDateTime(date)
+}
+
+const getMetadataText = (message: Message, key: string): string => {
+  const value = message.metadata?.[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const getApprovalDepartmentDisplay = (message: Message): string => {
+  const sourceOrgName = getMetadataText(message, 'sourceOrgName')
+  const targetOrgName = getMetadataText(message, 'targetOrgName')
+  return targetOrgName || sourceOrgName || message.senderDisplay || ''
+}
+
+const getApprovalRouteDisplay = (message: Message): string => {
+  const sourceOrgName = getMetadataText(message, 'sourceOrgName')
+  const targetOrgName = getMetadataText(message, 'targetOrgName')
+
+  if (sourceOrgName && targetOrgName) {
+    return `${sourceOrgName} -> ${targetOrgName}`
+  }
+
+  return sourceOrgName || targetOrgName || ''
 }
 
 const handleMessageClick = (message: Message) => {

@@ -67,23 +67,27 @@ const rules = {
     { required: true, message: '请输入计划名称', trigger: 'blur' },
     { min: 2, max: 100, message: '计划名称长度应在 2-100 个字符之间', trigger: 'blur' }
   ],
-  cycle: [
-    { required: true, message: '请输入周期', trigger: 'blur' }
-  ]
+  cycle: [{ required: true, message: '请输入周期', trigger: 'blur' }]
 }
 
 const taskRules = {
-  name: [
-    { required: true, message: '请输入任务名称', trigger: 'blur' }
-  ]
+  name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }]
 }
 
 // 计算属性
-const pageTitle = computed(() => isEdit.value ? '编辑计划' : '新建计划')
+const pageTitle = computed(() => (isEdit.value ? '编辑计划' : '新建计划'))
 
 // 获取用户部门
 const userOrgId = computed(() => {
-  return authStore.user?.orgId || authStore.user?.department
+  const value = authStore.user?.orgId
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 })
 
 // 操作方法
@@ -92,7 +96,9 @@ const handleBack = () => {
 }
 
 const handleSave = async () => {
-  if (!formRef.value) {return}
+  if (!formRef.value) {
+    return
+  }
 
   try {
     await formRef.value.validate()
@@ -104,6 +110,9 @@ const handleSave = async () => {
 
   try {
     // 设置组织 ID
+    if (userOrgId.value == null) {
+      throw new Error('当前用户缺少有效组织 ID')
+    }
     formData.value.org_id = userOrgId.value
 
     if (isEdit.value && planId.value) {
@@ -187,7 +196,9 @@ const handleCancelTask = () => {
 
 // 加载 Plan 数据（编辑模式）
 const loadPlan = async () => {
-  if (!planId.value) {return}
+  if (!planId.value) {
+    return
+  }
 
   loading.value = true
   try {
@@ -254,11 +265,7 @@ onMounted(() => {
           </el-form-item>
 
           <el-form-item label="周期" prop="cycle">
-            <el-input
-              v-model="formData.cycle"
-              placeholder="例如：2025、2025-Q1"
-              maxlength="20"
-            />
+            <el-input v-model="formData.cycle" placeholder="例如：2025、2025-Q1" maxlength="20" />
           </el-form-item>
 
           <el-form-item label="描述">
@@ -279,26 +286,18 @@ onMounted(() => {
         <template #header>
           <div class="card-header">
             <h3 class="card-title">任务列表</h3>
-            <el-button :icon="Plus" type="primary" @click="openAddTask">
-              添加任务
-            </el-button>
+            <el-button :icon="Plus" type="primary" @click="openAddTask"> 添加任务 </el-button>
           </div>
         </template>
 
         <div v-if="!formData.tasks || formData.tasks.length === 0" class="empty-tasks">
           <el-empty description="暂无任务，点击上方按钮添加">
-            <el-button :icon="Plus" type="primary" @click="openAddTask">
-              添加第一个任务
-            </el-button>
+            <el-button :icon="Plus" type="primary" @click="openAddTask"> 添加第一个任务 </el-button>
           </el-empty>
         </div>
 
         <div v-else class="task-list">
-          <div
-            v-for="(task, index) in formData.tasks"
-            :key="task.id"
-            class="task-item"
-          >
+          <div v-for="(task, index) in formData.tasks" :key="task.id" class="task-item">
             <div class="task-info">
               <div class="task-name">{{ task.name }}</div>
               <el-tag size="small" type="info">
@@ -306,12 +305,8 @@ onMounted(() => {
               </el-tag>
             </div>
             <div class="task-actions">
-              <el-button link type="primary" @click="openEditTask(index)">
-                编辑
-              </el-button>
-              <el-button link type="danger" @click="handleDeleteTask(index)">
-                删除
-              </el-button>
+              <el-button link type="primary" @click="openEditTask(index)"> 编辑 </el-button>
+              <el-button link type="danger" @click="handleDeleteTask(index)"> 删除 </el-button>
             </div>
           </div>
         </div>
@@ -321,22 +316,13 @@ onMounted(() => {
           <div class="task-form-header">
             <h4>{{ editingTaskIndex !== null ? '编辑任务' : '添加任务' }}</h4>
           </div>
-          <el-form
-            ref="taskFormRef"
-            :model="taskForm"
-            :rules="taskRules"
-            label-width="80px"
-          >
+          <el-form ref="taskFormRef" :model="taskForm" :rules="taskRules" label-width="80px">
             <el-form-item label="任务名称" prop="name">
-              <el-input
-                v-model="taskForm.name"
-                placeholder="请输入任务名称"
-                maxlength="100"
-              />
+              <el-input v-model="taskForm.name" placeholder="请输入任务名称" maxlength="100" />
             </el-form-item>
 
             <el-form-item label="任务类型">
-              <el-select v-model="taskForm.type" style="width: 200px;">
+              <el-select v-model="taskForm.type" style="width: 200px">
                 <el-option label="定性指标" value="qualitative" />
                 <el-option label="定量指标" value="quantitative" />
               </el-select>

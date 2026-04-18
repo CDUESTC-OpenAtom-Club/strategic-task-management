@@ -1929,7 +1929,7 @@ const approvalBadgeCount = computed(() => (canCurrentUserHandlePlanApprovalOnPag
 
 const approvalEntryButtonText = computed(() => {
   if (usePlanReportFlow.value) {
-    return isCurrentPlanReportInApproval.value ? '待审批' : '审批记录'
+    return isCurrentPlanReportInApproval.value ? '审批中' : '审批记录'
   }
 
   const status = normalizedCurrentPlanStatus.value
@@ -4522,7 +4522,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
               type="warning"
               size="small"
               class="overall-status-tag"
-              >待审批</el-tag
+              >审批中</el-tag
             >
             <el-tag v-else type="info" size="small" class="overall-status-tag">草稿</el-tag>
             <span class="indicator-count">共 {{ indicators.length }} 条记录</span>
@@ -4870,6 +4870,7 @@ const canWithdrawDistribution = (_row: StrategicIndicator): boolean => {
             v-model="newRow.taskContent"
             placeholder="请选择所属战略任务"
             style="width: 100%"
+            popper-class="sism-select-popper--visible-scrollbar"
           >
             <el-option
               v-for="task in taskOptions"

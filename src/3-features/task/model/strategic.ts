@@ -17,8 +17,8 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { withExponentialRetry } from '@/shared/lib/api/wrappers'
 import type { Department } from '@/features/organization/api'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
-import { mockIndicators2026 } from '@/shared/api/fixtures/mockIndicators'
 import { useDataValidator } from '@/shared/lib/validation/dataValidator'
+import { USE_MOCK } from '@/shared/config/api'
 
 type BackendIndicatorListPayload =
   | StrategicIndicator[]
@@ -515,7 +515,12 @@ function normalizeIndicators(
   }
 
   const rawItems = Array.isArray(payload.items) ? payload.items : []
-  return rawItems.map(item => toStrategicIndicator(item))
+  const normalized = rawItems.map(item => toStrategicIndicator(item))
+  if (USE_MOCK) {
+    return normalized
+  }
+
+  return normalized.filter(indicator => /^\d+$/.test(String(indicator.id || '').trim()))
 }
 
 function getErrorMessage(error: unknown): string {
@@ -681,7 +686,7 @@ function resolveDepartmentIdByName(
 export const useStrategicStore = defineStore('strategic', () => {
   // ============ State ============
 
-  const indicators = ref<StrategicIndicator[]>([...mockIndicators2026])
+  const indicators = ref<StrategicIndicator[]>([])
   const loading = ref(false)
   const loadingState = ref({
     indicators: false,
@@ -689,7 +694,7 @@ export const useStrategicStore = defineStore('strategic', () => {
     error: null as string | null
   })
   const error = ref<string | null>(null)
-  const dataSource = ref<'api' | 'fallback' | 'local'>('local')
+  const dataSource = ref<'api' | 'local'>('local')
   const validationState = ref({
     lastValidated: null as Date | null,
     isValid: true,
@@ -797,7 +802,8 @@ export const useStrategicStore = defineStore('strategic', () => {
       } catch (err) {
         error.value = err instanceof Error ? err.message : 'Unknown error'
         loadingState.value.error = error.value
-        dataSource.value = 'fallback'
+        indicators.value = []
+        dataSource.value = 'local'
         logger.error('[Strategic Store] Failed to load indicators:', err)
         throw err
       } finally {
@@ -1163,7 +1169,7 @@ export const useStrategicStore = defineStore('strategic', () => {
     const validationIssues = validationState.value.issues.length
 
     let status: 'healthy' | 'warning' | 'critical' = 'healthy'
-    if (dataSource.value === 'fallback' || validationIssues > 0) {
+    if (validationIssues > 0) {
       status = 'warning'
     }
     if (indicatorCount === 0 && dataSource.value !== 'api') {

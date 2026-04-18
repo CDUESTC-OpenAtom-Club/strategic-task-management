@@ -59,7 +59,9 @@ describe('Advanced Status Management', () => {
 
     it('should use custom fallback', () => {
       const indicator = createTestIndicator(IndicatorStatus.DRAFT, 'INVALID_STATUS' as any)
-      expect(getSafeApprovalStatus(indicator, ProgressApprovalStatus.DRAFT)).toBe(ProgressApprovalStatus.DRAFT)
+      expect(getSafeApprovalStatus(indicator, ProgressApprovalStatus.DRAFT)).toBe(
+        ProgressApprovalStatus.DRAFT
+      )
     })
   })
 
@@ -120,7 +122,7 @@ describe('Advanced Status Management', () => {
       expect(getWorkflowStatusText(WorkflowStatus.DRAFT)).toBe('草稿')
       expect(getWorkflowStatusText(WorkflowStatus.PENDING_DISTRIBUTION)).toBe('待确认接收')
       expect(getWorkflowStatusText(WorkflowStatus.DISTRIBUTED)).toBe('已下发')
-      expect(getWorkflowStatusText(WorkflowStatus.PENDING_APPROVAL)).toBe('待审批')
+      expect(getWorkflowStatusText(WorkflowStatus.PENDING_APPROVAL)).toBe('审批中')
       expect(getWorkflowStatusText(WorkflowStatus.REJECTED)).toBe('已驳回')
       expect(getWorkflowStatusText(WorkflowStatus.COMPLETED)).toBe('已完成')
     })
@@ -135,7 +137,11 @@ describe('Advanced Status Management', () => {
 
   describe('Composite Status Info', () => {
     it('should return complete status information', () => {
-      const indicator = createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.APPROVED, WorkflowStatus.COMPLETED)
+      const indicator = createTestIndicator(
+        IndicatorStatus.DISTRIBUTED,
+        ProgressApprovalStatus.APPROVED,
+        WorkflowStatus.COMPLETED
+      )
       const info = getCompositeStatusInfo(indicator)
 
       expect(info.lifecycle.text).toBe('已下发')
@@ -148,12 +154,18 @@ describe('Advanced Status Management', () => {
     })
 
     it('should hide approval badge for NONE status', () => {
-      const indicator = createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.NONE)
+      const indicator = createTestIndicator(
+        IndicatorStatus.DISTRIBUTED,
+        ProgressApprovalStatus.NONE
+      )
       expect(getCompositeStatusInfo(indicator).approval.show).toBe(false)
     })
 
     it('should hide approval badge for DRAFT status', () => {
-      const indicator = createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.DRAFT)
+      const indicator = createTestIndicator(
+        IndicatorStatus.DISTRIBUTED,
+        ProgressApprovalStatus.DRAFT
+      )
       expect(getCompositeStatusInfo(indicator).approval.show).toBe(false)
     })
   })
@@ -176,29 +188,48 @@ describe('Advanced Status Management', () => {
 
     it('should check pending state', () => {
       expect(isPendingState(createTestIndicator(IndicatorStatus.PENDING_REVIEW))).toBe(true)
-      expect(isPendingState(createTestIndicator(IndicatorStatus.DRAFT, ProgressApprovalStatus.PENDING))).toBe(true)
+      expect(
+        isPendingState(createTestIndicator(IndicatorStatus.DRAFT, ProgressApprovalStatus.PENDING))
+      ).toBe(true)
       expect(isPendingState(createTestIndicator(IndicatorStatus.DISTRIBUTED))).toBe(false)
     })
 
     it('should check show approval badge', () => {
-      expect(showApprovalBadge(createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.PENDING))).toBe(true)
-      expect(showApprovalBadge(createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.NONE))).toBe(false)
-      expect(showApprovalBadge(createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.DRAFT))).toBe(false)
+      expect(
+        showApprovalBadge(
+          createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.PENDING)
+        )
+      ).toBe(true)
+      expect(
+        showApprovalBadge(
+          createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.NONE)
+        )
+      ).toBe(false)
+      expect(
+        showApprovalBadge(
+          createTestIndicator(IndicatorStatus.DISTRIBUTED, ProgressApprovalStatus.DRAFT)
+        )
+      ).toBe(false)
     })
   })
 
   describe('Transitions', () => {
     it('should get allowed transitions for draft', () => {
-      expect(getAllowedTransitions(createTestIndicator(IndicatorStatus.DRAFT))).toEqual([IndicatorStatus.PENDING_REVIEW])
+      expect(getAllowedTransitions(createTestIndicator(IndicatorStatus.DRAFT))).toEqual([
+        IndicatorStatus.PENDING_REVIEW
+      ])
     })
 
     it('should get allowed transitions for pending review', () => {
-      expect(getAllowedTransitions(createTestIndicator(IndicatorStatus.PENDING_REVIEW)))
-        .toEqual(expect.arrayContaining([IndicatorStatus.DISTRIBUTED, IndicatorStatus.DRAFT]))
+      expect(getAllowedTransitions(createTestIndicator(IndicatorStatus.PENDING_REVIEW))).toEqual(
+        expect.arrayContaining([IndicatorStatus.DISTRIBUTED, IndicatorStatus.DRAFT])
+      )
     })
 
     it('should get allowed transitions for distributed', () => {
-      expect(getAllowedTransitions(createTestIndicator(IndicatorStatus.DISTRIBUTED))).toEqual([IndicatorStatus.ARCHIVED])
+      expect(getAllowedTransitions(createTestIndicator(IndicatorStatus.DISTRIBUTED))).toEqual([
+        IndicatorStatus.ARCHIVED
+      ])
     })
 
     it('should get allowed transitions for archived', () => {
@@ -206,15 +237,39 @@ describe('Advanced Status Management', () => {
     })
 
     it('should validate valid transitions', () => {
-      expect(isValidTransition(createTestIndicator(IndicatorStatus.DRAFT), IndicatorStatus.PENDING_REVIEW)).toBe(true)
-      expect(isValidTransition(createTestIndicator(IndicatorStatus.PENDING_REVIEW), IndicatorStatus.DISTRIBUTED)).toBe(true)
-      expect(isValidTransition(createTestIndicator(IndicatorStatus.PENDING_REVIEW), IndicatorStatus.DRAFT)).toBe(true)
-      expect(isValidTransition(createTestIndicator(IndicatorStatus.DISTRIBUTED), IndicatorStatus.ARCHIVED)).toBe(true)
+      expect(
+        isValidTransition(
+          createTestIndicator(IndicatorStatus.DRAFT),
+          IndicatorStatus.PENDING_REVIEW
+        )
+      ).toBe(true)
+      expect(
+        isValidTransition(
+          createTestIndicator(IndicatorStatus.PENDING_REVIEW),
+          IndicatorStatus.DISTRIBUTED
+        )
+      ).toBe(true)
+      expect(
+        isValidTransition(
+          createTestIndicator(IndicatorStatus.PENDING_REVIEW),
+          IndicatorStatus.DRAFT
+        )
+      ).toBe(true)
+      expect(
+        isValidTransition(
+          createTestIndicator(IndicatorStatus.DISTRIBUTED),
+          IndicatorStatus.ARCHIVED
+        )
+      ).toBe(true)
     })
 
     it('should invalidate invalid transitions', () => {
-      expect(isValidTransition(createTestIndicator(IndicatorStatus.DRAFT), IndicatorStatus.ARCHIVED)).toBe(false)
-      expect(isValidTransition(createTestIndicator(IndicatorStatus.DISTRIBUTED), IndicatorStatus.DRAFT)).toBe(false)
+      expect(
+        isValidTransition(createTestIndicator(IndicatorStatus.DRAFT), IndicatorStatus.ARCHIVED)
+      ).toBe(false)
+      expect(
+        isValidTransition(createTestIndicator(IndicatorStatus.DISTRIBUTED), IndicatorStatus.DRAFT)
+      ).toBe(false)
     })
   })
 })

@@ -37,24 +37,15 @@ export function isKnownUserRole(value: unknown): value is UserRole {
  * 映射后端 OrgType 到前端 UserRole
  *
  * 与 mapOrgTypeToFrontend 保持一致的映射规则
- * - STRATEGY_DEPT, SCHOOL, admin（战略发展部）→ strategic_dept
+ * - admin / ADMIN → strategic_dept
  * - FUNCTIONAL_DEPT, FUNCTION_DEPT, functional, FUNCTIONAL → functional_dept
  * - COLLEGE, SECONDARY_COLLEGE, DIVISION, OTHER, academic, ACADEMIC → secondary_college
- * - admin/ADMIN → 按组织名称二次判定（在调用处处理）
  */
 export function mapOrgTypeToRole(orgType: string, orgName?: string): UserRole | null {
   const normalizedType = String(orgType || '').trim()
-  const normalizedName = String(orgName || '').trim()
 
-  // 兼容后端当前数据: 所有组织都标记为 admin，需要按名称区分
   if (normalizedType === 'admin' || normalizedType === 'ADMIN') {
-    if (normalizedName === '战略发展部') {
-      return 'strategic_dept'
-    }
-    if (normalizedName.includes('学院')) {
-      return 'secondary_college'
-    }
-    return 'functional_dept'
+    return 'strategic_dept'
   }
 
   const mapping: Record<string, UserRole> = {
@@ -119,6 +110,8 @@ export function mapBackendUser(userData: Record<string, unknown>): User | null {
     name: userData.realName || userData.name || userData.username || '',
     role: resolvedRole,
     department: userData.orgName || userData.department || '',
+    orgName: userData.orgName || userData.department || '',
+    orgType: typeof userData.orgType === 'string' ? userData.orgType : null,
     createdAt: new Date(),
     updatedAt: new Date(),
     userId: Number(userData.userId || userData.id || 0),

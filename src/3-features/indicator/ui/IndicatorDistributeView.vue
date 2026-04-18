@@ -178,6 +178,16 @@ const getOrgIdByDeptName = (deptName: string): number | undefined => {
   return Number.isFinite(id) && id > 0 ? id : undefined
 }
 
+const getDeptNameByOrgId = (orgId?: number | string | null): string | null => {
+  const numericOrgId = Number(orgId ?? NaN)
+  if (!Number.isFinite(numericOrgId) || numericOrgId <= 0) {
+    return null
+  }
+
+  const match = orgStore.departments.find(dept => Number(dept.id ?? NaN) === numericOrgId)
+  return match?.name ? normalizeDepartmentName(match.name) : null
+}
+
 const matchesDepartment = (value: string | string[] | undefined, deptName: string): boolean => {
   const normalizedDeptName = normalizeDepartmentName(deptName)
   if (!normalizedDeptName || !value) {
@@ -728,8 +738,35 @@ const canEditChild = computed(() => {
   )
 })
 
+const routeApprovalPlan = computed<Plan | null>(() => {
+  const routePlanId = Number(routeApprovalEntityId.value ?? NaN)
+  if (!Number.isFinite(routePlanId) || routePlanId <= 0) {
+    return null
+  }
+
+  const candidatePlans = [
+    currentDepartmentPlanDetails.value,
+    currentDepartmentPlan.value,
+    currentSelectedCollegePlanDetails.value,
+    currentSelectedCollegePlan.value,
+    planStore.getPlanById(routePlanId) || null
+  ]
+
+  return (
+    candidatePlans.find(plan => Number(plan?.id ?? NaN) === routePlanId) ||
+    planStore.getPlanById(routePlanId) ||
+    null
+  )
+})
+
 const approvalDrawerPlan = computed<Plan | null>(() => {
-  return currentActiveCollegePlan.value
+  return (
+    routeApprovalPlan.value ||
+    currentActiveCollegePlan.value ||
+    currentDepartmentPlanDetails.value ||
+    currentDepartmentPlan.value ||
+    null
+  )
 })
 
 const approvalWorkflowReportSummary = computed(() => {
@@ -766,7 +803,7 @@ const currentApprovalWorkflowCode = computed<string | string[]>(() => {
 
 const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
   supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
-  onAutoOpen: () => handleOpenApproval(),
+  onAutoOpen: () => Promise.resolve().then(() => handleOpenApproval()),
   onClearFailure: error => {
     logger.warn('[IndicatorDistributeView] 清理审批自动打开参数失败:', error)
   }
@@ -933,7 +970,7 @@ const distributionApprovalButtonType = computed(() => {
 
 const distributionApprovalButtonText = computed(() => {
   if (currentCollegePlanActionState.value.startsWith('pending')) {
-    return '待审批'
+    return '审批中'
   }
   return '查看审批进度'
 })
@@ -1368,8 +1405,50 @@ const formatDetailDate = (time: string | Date | undefined): string => {
   return `${year}-${month}-${day}`
 }
 
+const syncSelectedCollegeFromApprovalRoute = async () => {
+  const routePlanId = Number(routeApprovalEntityId.value ?? NaN)
+  if (!Number.isFinite(routePlanId) || routePlanId <= 0) {
+    return
+  }
+
+  await waitForPageBootstrap()
+
+  let routePlan = planStore.getPlanById(routePlanId) || null
+  if (!routePlan) {
+    routePlan = await planStore.loadPlanDetails(routePlanId, { force: true, background: true })
+  }
+
+  if (!routePlan) {
+    return
+  }
+
+  const planAny = routePlan as Plan & {
+    targetOrgId?: number | string
+    targetOrgName?: string
+    orgId?: number | string
+    orgName?: string
+  }
+
+  const nextCollege =
+    normalizeDepartmentName(planAny.targetOrgName || planAny.orgName || '') ||
+    getDeptNameByOrgId(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId)
+
+  if (
+    !nextCollege ||
+    (selectedCollege.value && isSameDepartment(selectedCollege.value, nextCollege))
+  ) {
+    return
+  }
+
+  selectedCollege.value = nextCollege
+  await nextTick()
+  await loadCurrentSelectedCollegePlanDetails(true)
+  await loadCurrentCollegePlanReportSummary()
+}
+
 // 打开任务审批抽屉
 const handleOpenApproval = async () => {
+  await syncSelectedCollegeFromApprovalRoute()
   taskApprovalVisible.value = true
 }
 
@@ -3187,7 +3266,7 @@ const collegeOverallStatus = computed(() => {
   }
 
   if (currentCollegePlanActionState.value.startsWith('pending')) {
-    return { label: '待审批', type: 'warning' }
+    return { label: '审批中', type: 'warning' }
   }
 
   if (total === 0) {
@@ -3196,7 +3275,7 @@ const collegeOverallStatus = computed(() => {
 
   // plan 状态缺失时，再退回到内容态兜底。
   if (status.pending > 0) {
-    return { label: '待审批', type: 'warning' }
+    return { label: '审批中', type: 'warning' }
   }
   if (status.draft > 0) {
     return { label: '草稿', type: 'info' }
@@ -3408,7 +3487,7 @@ const _getStatusText = (status: string) => {
     case 'active':
       return '已下发' // Legacy ACTIVE status
     case 'pending':
-      return '待审批'
+      return '审批中'
     case 'approved':
       return '已通过'
     default:
@@ -4686,7 +4765,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                 getChildStatus(currentDetailIndicator) === 'draft'
                   ? '草稿'
                   : getChildStatus(currentDetailIndicator) === 'pending'
-                    ? '待审批'
+                    ? '审批中'
                     : getChildStatus(currentDetailIndicator) === 'approved'
                       ? '已通过'
                       : '已下发'
@@ -5888,6 +5967,45 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
 
 .milestone-edit-list::-webkit-scrollbar-thumb:hover {
   background: var(--border-light, #cbd5e1);
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap) {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(37, 99, 235, 0.95) rgba(191, 219, 254, 0.72);
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar) {
+  width: 12px;
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar-track) {
+  background: rgba(191, 219, 254, 0.58);
+  border-radius: 999px;
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar-thumb) {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.96), rgba(37, 99, 235, 0.96));
+  border-radius: 999px;
+  border: 2px solid rgba(219, 234, 254, 0.9);
+}
+
+:global(
+  .sism-select-popper--visible-scrollbar .el-select-dropdown__wrap::-webkit-scrollbar-thumb:hover
+) {
+  background: linear-gradient(180deg, rgba(29, 78, 216, 0.98), rgba(30, 64, 175, 0.98));
+}
+
+:global(.sism-select-popper--visible-scrollbar .el-scrollbar__bar.is-vertical) {
+  width: 12px;
+  right: 2px;
+  opacity: 1 !important;
+}
+
+:global(
+  .sism-select-popper--visible-scrollbar .el-scrollbar__bar.is-vertical .el-scrollbar__thumb
+) {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.96), rgba(37, 99, 235, 0.96));
+  border-radius: 999px;
 }
 
 /* ========================================

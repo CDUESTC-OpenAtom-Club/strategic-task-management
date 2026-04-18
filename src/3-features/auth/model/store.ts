@@ -195,6 +195,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (savedUser) {
         const parsedUser = JSON.parse(savedUser) as {
           department?: string
+          orgType?: string | null
           role?: string
           orgId?: string | number
         }
@@ -207,7 +208,7 @@ export const useAuthStore = defineStore('auth', () => {
             ...userData,
             orgName: parsedUser.department || userData.orgName,
             department: parsedUser.department || userData.department,
-            orgType: parsedUser.role || userData.orgType,
+            orgType: parsedUser.orgType || userData.orgType,
             role: parsedUser.role || userData.role
           }
         }
@@ -439,6 +440,10 @@ export const useAuthStore = defineStore('auth', () => {
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
+          if (!String(parsedUser.orgType ?? '').trim()) {
+            logger.debug('[Auth] 本地缓存缺少 orgType，主动刷新当前用户')
+            await fetchUser()
+          }
           void refreshCurrentUserPermissions()
           authInitialized.value = true
           return
@@ -470,6 +475,10 @@ export const useAuthStore = defineStore('auth', () => {
             token.value = newToken
             persistUser(parsedUser)
             logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
+            if (!String(parsedUser.orgType ?? '').trim()) {
+              logger.debug('[Auth] 恢复会话后缺少 orgType，主动刷新当前用户')
+              await fetchUser()
+            }
             void refreshCurrentUserPermissions()
           } else {
             logger.warn('[Auth] 用户信息缺少 role，清除登录状态')

@@ -4,6 +4,7 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { useMessageStore } from '@/features/messages/model/message'
 import { useApprovalStore } from '@/features/approval/model/store'
 import { APPROVAL_STATE_REFRESH_EVENT } from '@/features/approval/lib'
+import { hasAdminConsoleAccess } from '@/shared/lib/permissions/adminConsoleAccess'
 
 export function useAppLayout() {
   const authStore = useAuthStore()
@@ -15,6 +16,7 @@ export function useAppLayout() {
   const currentUser = computed(() => authStore.user)
   const isStrategicDept = computed(() => authStore.userRole === 'strategic_dept')
   const strategicDeptName = computed(() => orgStore.getStrategicDeptName())
+  const canAccessAdminConsole = computed(() => hasAdminConsoleAccess(authStore.user))
 
   const refreshNotificationState = async () => {
     await Promise.all([messageStore.refreshMessageCenter(), approvalStore.loadPendingApprovals()])
@@ -74,6 +76,7 @@ export function useAppLayout() {
     currentUser,
     isStrategicDept,
     strategicDeptName,
+    canAccessAdminConsole,
     handleLogout
   }
 }

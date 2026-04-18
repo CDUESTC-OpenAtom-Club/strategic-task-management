@@ -47,7 +47,7 @@ export const TaskStatus = {
 export type ApprovalStatus =
   | 'NONE' // 无需审批
   | 'DRAFT' // 草稿
-  | 'PENDING' // 待审批
+  | 'PENDING' // 审批中
   | 'APPROVED' // 已批准
   | 'REJECTED' // 已拒绝
 

@@ -86,7 +86,7 @@ export function getApprovalStatusText(status: string): string {
   const config: Record<string, string> = {
     [ProgressApprovalStatus.NONE]: '无待审批',
     [ProgressApprovalStatus.DRAFT]: '草稿',
-    [ProgressApprovalStatus.PENDING]: '待审批',
+    [ProgressApprovalStatus.PENDING]: '审批中',
     [ProgressApprovalStatus.APPROVED]: '已通过',
     [ProgressApprovalStatus.REJECTED]: '已驳回'
   }
@@ -117,7 +117,7 @@ export function getWorkflowStatusText(status: string): string {
     [WorkflowStatus.DRAFT]: '草稿',
     [WorkflowStatus.PENDING_DISTRIBUTION]: '待确认接收',
     [WorkflowStatus.DISTRIBUTED]: '已下发',
-    [WorkflowStatus.PENDING_APPROVAL]: '待审批',
+    [WorkflowStatus.PENDING_APPROVAL]: '审批中',
     [WorkflowStatus.REJECTED]: '已驳回',
     [WorkflowStatus.COMPLETED]: '已完成'
   }
@@ -200,8 +200,10 @@ export function isEditableState(indicator: Indicator): boolean {
  * Check if indicator is awaiting review or approval
  */
 export function isPendingState(indicator: Indicator): boolean {
-  return indicator.status === IndicatorStatus.PENDING_REVIEW ||
-         isApprovalStatus(indicator, ProgressApprovalStatus.PENDING)
+  return (
+    indicator.status === IndicatorStatus.PENDING_REVIEW ||
+    isApprovalStatus(indicator, ProgressApprovalStatus.PENDING)
+  )
 }
 
 /**

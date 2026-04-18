@@ -55,4 +55,22 @@ describe('usePermission plan semantics', () => {
     expect(permission.canViewPlan(foreignPlan)).toBe(false)
     expect(permission.canSubmitPlan(foreignPlan)).toBe(false)
   })
+
+  it('does not fall back to department name when orgId is missing', () => {
+    mockedAuthState.store.user = {
+      role: 'functional_dept',
+      department: '教务处'
+    }
+
+    const permission = usePermission()
+    const ownPlan = {
+      org_id: 44,
+      status: 'draft'
+    } as Plan
+
+    expect(permission.userOrgId.value).toBeUndefined()
+    expect(permission.canAccessOrg(44)).toBe(false)
+    expect(permission.canViewPlan(ownPlan)).toBe(false)
+    expect(permission.canSubmitPlan(ownPlan)).toBe(false)
+  })
 })

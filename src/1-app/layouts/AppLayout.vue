@@ -31,7 +31,8 @@ const router = useRouter()
 const isDev = import.meta.env.DEV
 
 // 使用 Layout Composables
-const { currentUser, isStrategicDept, strategicDeptName, handleLogout } = useAppLayout()
+const { currentUser, isStrategicDept, strategicDeptName, canAccessAdminConsole, handleLogout } =
+  useAppLayout()
 
 const { viewingDept, viewingRole, viewingDeptName, deptOptions } = useDepartmentSwitcher()
 const planStore = usePlanStore()
@@ -40,12 +41,26 @@ const timeContext = useTimeContextStore()
 const { tabs, activeTab, handleTabClick } = useNavigation(viewingRole)
 
 const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
-const { approvalCenterVisible, closeApprovalCenter } = useApprovalCenter()
+const { approvalCenterVisible, approvalCenterContext, closeApprovalCenter } = useApprovalCenter()
+
+const approvalCenterPlanId = computed(() => {
+  if (approvalCenterContext.value?.workflowEntityType !== 'PLAN') {
+    return null
+  }
+
+  const entityId = Number(approvalCenterContext.value.workflowEntityId ?? NaN)
+  return Number.isFinite(entityId) && entityId > 0 ? entityId : null
+})
 
 const approvalCenterPlan = computed(() => {
+  if (approvalCenterPlanId.value) {
+    return planStore.getPlanById(approvalCenterPlanId.value) || null
+  }
+
   if (!viewingDept.value) {
     return null
   }
+
   return planStore.getPlanByTargetOrgAndYear(viewingDept.value, timeContext.currentYear) || null
 })
 
@@ -80,6 +95,11 @@ watch(viewingDept, (newDept, oldDept) => {
 
 watch(approvalCenterVisible, isVisible => {
   if (!isVisible) {
+    return
+  }
+
+  if (approvalCenterPlanId.value) {
+    void planStore.loadPlanDetails(approvalCenterPlanId.value, { force: true, background: true })
     return
   }
 
@@ -181,7 +201,14 @@ const handleDropdownCommand = async (command: string) => {
             :hidden="unreadCount <= 0"
             class="notification-badge"
           >
-            <el-button :icon="Bell" circle @click="handleNotificationClick" />
+            <el-button
+              :icon="Bell"
+              circle
+              :aria-label="
+                unreadCount > 0 ? `消息中心，当前有 ${unreadCount} 条未处理消息` : '消息中心'
+              "
+              @click="handleNotificationClick"
+            />
           </el-badge>
 
           <!-- User dropdown menu -->
@@ -192,7 +219,7 @@ const handleDropdownCommand = async (command: string) => {
             <template #dropdown>
               <el-dropdown-menu>
                 <!-- Admin exclusive menu -->
-                <el-dropdown-item v-if="isStrategicDept" command="console">
+                <el-dropdown-item v-if="canAccessAdminConsole" command="console">
                   <el-icon><Monitor /></el-icon>
                   控制台
                 </el-dropdown-item>
@@ -203,7 +230,7 @@ const handleDropdownCommand = async (command: string) => {
                   修改密码
                 </el-dropdown-item>
 
-                <el-dropdown-item command="logout" :divided="isStrategicDept">
+                <el-dropdown-item command="logout" :divided="canAccessAdminConsole">
                   <el-icon><SwitchButton /></el-icon>
                   退出登录
                 </el-dropdown-item>
@@ -256,10 +283,14 @@ const handleDropdownCommand = async (command: string) => {
     <ApprovalProgressDrawer
       :model-value="approvalCenterVisible"
       :plan="approvalCenterPlan"
-      :department-name="viewingDept"
-      :plan-name="approvalCenterPlan?.name || viewingDeptName"
+      :department-name="approvalCenterContext?.departmentName || viewingDept"
+      :plan-name="approvalCenterContext?.planName || approvalCenterPlan?.name || viewingDeptName"
       :show-plan-approvals="true"
       :show-approval-section="true"
+      :workflow-entity-type="approvalCenterContext?.workflowEntityType || 'PLAN'"
+      :workflow-entity-id="approvalCenterContext?.workflowEntityId"
+      :secondary-workflow-entity-type="approvalCenterContext?.secondaryWorkflowEntityType"
+      :secondary-workflow-entity-id="approvalCenterContext?.secondaryWorkflowEntityId"
       approval-type="submission"
       @update:model-value="value => !value && closeApprovalCenter()"
       @close="closeApprovalCenter"

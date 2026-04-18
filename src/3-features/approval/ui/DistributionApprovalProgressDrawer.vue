@@ -803,7 +803,7 @@ const resolveTaskStatusTag = (
     ) {
       return { label: '等待中', type: 'info' }
     }
-    return { label: '待审批', type: 'warning' }
+    return { label: '审批中', type: 'warning' }
   }
 
   return { label: normalizedStatus || '未知', type: 'info' }
@@ -1843,7 +1843,7 @@ const detailDialogStatusTag = computed(() => {
   if (hasPlanWorkflowData.value) {
     return planWorkflowStatusTag.value
   }
-  return { label: '待审批', type: 'warning' as const }
+  return { label: '审批中', type: 'warning' as const }
 })
 
 const hasDisplayableApprovalContent = computed(() => {
@@ -2022,10 +2022,10 @@ watch(
             type="warning"
             size="small"
           >
-            当前计划待审批: {{ scopedPendingPlanCount }}
+            当前计划审批中: {{ scopedPendingPlanCount }}
           </el-tag>
           <el-tag v-if="!hasPlanWorkflowData && pendingCount > 0" type="warning" size="small">
-            待审批: {{ pendingCount }}
+            审批中: {{ pendingCount }}
           </el-tag>
           <el-tag v-if="!hasPlanWorkflowData && approvedCount > 0" type="success" size="small">
             已通过: {{ approvedCount }}
@@ -2051,12 +2051,12 @@ watch(
         <el-tab-pane
           v-if="showPlanApprovals"
           name="pending-plans"
-          :label="hasPlanWorkflowData ? '计划审批' : `待审批 (${scopedPendingPlanCount})`"
+          :label="hasPlanWorkflowData ? '计划审批' : `审批中 (${scopedPendingPlanCount})`"
         >
           <div v-loading="planApprovalsLoading" class="plan-approval-pane">
             <el-empty
               v-if="!planApprovalsLoading && !showPlanPendingCard"
-              description="暂无待审批的计划"
+              description="暂无审批中的计划"
               :image-size="120"
             />
             <div v-else class="approval-list">
@@ -2074,7 +2074,7 @@ watch(
                         {{
                           hasPlanWorkflowData
                             ? '当前审批状态已接入'
-                            : `待审批实例 ${currentPlanApprovalSummary.count} 条`
+                            : `审批中实例 ${currentPlanApprovalSummary.count} 条`
                         }}
                       </div>
                     </div>
@@ -2083,7 +2083,7 @@ watch(
                     :type="hasPlanWorkflowData ? planWorkflowStatusTag.type : 'warning'"
                     size="small"
                   >
-                    {{ hasPlanWorkflowData ? planWorkflowStatusTag.label : '待审批' }}
+                    {{ hasPlanWorkflowData ? planWorkflowStatusTag.label : '审批中' }}
                   </el-tag>
                 </div>
                 <div class="submit-info">
@@ -2310,7 +2310,7 @@ watch(
               selectedHistoryInstanceId
                 ? '当前查看审批实例'
                 : isPlanPendingApproval
-                  ? '待审批实例'
+                  ? '审批中实例'
                   : '历史审批实例'
             }}
             {{ selectedHistoryInstanceId ? '' : currentPlanApprovalItems.length }}

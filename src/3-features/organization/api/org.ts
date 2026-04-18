@@ -33,13 +33,12 @@ const ORG_CACHE_POLICY = createPersistentReferencePolicy({
  * 将后端 OrgType 映射到前端类型
  *
  * 映射规则：
- * - STRATEGY_DEPT, SCHOOL → strategic_dept (战略发展部)
+ * - admin / ADMIN, STRATEGY_DEPT, SCHOOL → strategic_dept
  * - FUNCTIONAL_DEPT, FUNCTION_DEPT → functional_dept (职能部门)
  * - COLLEGE, SECONDARY_COLLEGE, DIVISION, OTHER → secondary_college (二级学院)
- * - admin/ADMIN → 按组织名称二次判定（兼容当前数据库全部 admin 的场景）
  *
  * @param orgType - 后端 OrgType 枚举值
- * @param orgName - 组织名称（用于 admin 兜底判定）
+ * @param orgName - 组织名称
  * @returns 前端 Department.type 值
  * @see Property 5 - OrgVO to Department Conversion Correctness
  */
@@ -48,17 +47,9 @@ export function mapOrgTypeToFrontend(
   orgName?: string
 ): 'strategic_dept' | 'functional_dept' | 'secondary_college' {
   const normalizedType = String(orgType || '').trim()
-  const normalizedName = String(orgName || '').trim()
 
-  // 兼容后端当前数据: 所有组织都标记为 admin，需要按名称区分
   if (normalizedType === 'admin' || normalizedType === 'ADMIN') {
-    if (normalizedName === '战略发展部') {
-      return 'strategic_dept'
-    }
-    if (normalizedName.includes('学院')) {
-      return 'secondary_college'
-    }
-    return 'functional_dept'
+    return 'strategic_dept'
   }
 
   const mapping: Record<string, 'strategic_dept' | 'functional_dept' | 'secondary_college'> = {
@@ -111,9 +102,11 @@ export const orgApi = {
       try {
         return await apiClient.get<{ data: OrgVO[]; success: boolean; message?: string }>(endpoint)
       } catch (error) {
-        const status = Number((error as { code?: number; response?: { status?: number } }).code ??
-          (error as { response?: { status?: number } }).response?.status ??
-          NaN)
+        const status = Number(
+          (error as { code?: number; response?: { status?: number } }).code ??
+            (error as { response?: { status?: number } }).response?.status ??
+            NaN
+        )
         const shouldFallback = endpoint === '/organizations' && (status === 403 || status === 404)
 
         if (shouldFallback) {

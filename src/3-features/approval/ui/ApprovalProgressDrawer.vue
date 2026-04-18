@@ -28,6 +28,7 @@ import {
   getWorkflowInstanceDetailByBusiness,
   getWorkflowInstanceHistoryByBusiness
 } from '@/features/workflow/api/queries'
+import { canCurrentUserHandleWorkflowApproval } from '@/features/approval/lib'
 import type {
   WorkflowHistoryCardResponse,
   WorkflowInstanceDetailResponse,
@@ -145,6 +146,71 @@ function matchesExpectedWorkflowCode(workflowCode: unknown): boolean {
   return expectedWorkflowCodes.value.includes(normalizeWorkflowCode(workflowCode))
 }
 
+function normalizeWorkflowEntityType(value: unknown): 'PLAN' | 'PLAN_REPORT' | '' {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+  if (normalized === 'PLAN_REPORT') {
+    return 'PLAN_REPORT'
+  }
+  if (normalized === 'PLAN') {
+    return 'PLAN'
+  }
+  return ''
+}
+
+function parsePositiveEntityId(value: unknown): number | null {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return null
+  }
+  return numericValue
+}
+
+function isRetainableWorkflowDetail(
+  detail: WorkflowInstanceDetailResponse | null | undefined
+): boolean {
+  if (!detail || !matchesExpectedWorkflowCode(detail.flowCode)) {
+    return false
+  }
+
+  const detailEntityType = normalizeWorkflowEntityType(
+    detail.businessEntityType ?? (detail as { entityType?: unknown }).entityType
+  )
+  const expectedEntityType = normalizeWorkflowEntityType(props.workflowEntityType)
+  if (detailEntityType && expectedEntityType && detailEntityType !== expectedEntityType) {
+    return false
+  }
+
+  const expectedEntityId = parsePositiveEntityId(props.workflowEntityId ?? props.plan?.id)
+  const detailEntityId = parsePositiveEntityId(
+    detail.businessEntityId ?? (detail as { entityId?: unknown }).entityId ?? detail.planId
+  )
+  if (expectedEntityId && detailEntityId && expectedEntityId !== detailEntityId) {
+    return false
+  }
+
+  return Boolean(
+    parsePositiveEntityId(detail.instanceId) ||
+    detail.status ||
+    detail.currentStepName ||
+    (Array.isArray(detail.tasks) && detail.tasks.length > 0) ||
+    (Array.isArray(detail.history) && detail.history.length > 0)
+  )
+}
+
+function getRetainedWorkflowDetail(): WorkflowInstanceDetailResponse | null {
+  if (isRetainableWorkflowDetail(props.initialPlanWorkflowDetail)) {
+    return props.initialPlanWorkflowDetail
+  }
+
+  if (isRetainableWorkflowDetail(planWorkflowDetail.value)) {
+    return planWorkflowDetail.value
+  }
+
+  return null
+}
+
 function parsePositiveUserId(value: unknown): number | null {
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue) || numericValue <= 0) {
@@ -245,6 +311,16 @@ const selectedHistoryInstanceId = ref<string | null>(null)
 const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)
 const selectedHistoryInstanceDetailLoading = ref(false)
 const historyInstanceDetailCache = ref<Record<string, WorkflowInstanceDetailResponse>>({})
+
+function resolvePreferredActiveTab(): 'pending-plans' | 'workflow' | 'history' {
+  if (props.showPlanApprovals) {
+    return isPlanPendingApproval.value || scopedPendingPlanCount.value > 0
+      ? 'pending-plans'
+      : 'history'
+  }
+
+  return hasWorkflowTabContent.value ? 'workflow' : 'history'
+}
 
 interface PlanApprovalDetailItem {
   instanceId: number
@@ -600,27 +676,17 @@ const canCurrentUserHandlePlanApproval = computed(() => {
     return false
   }
 
-  const expectedApproverRoleCodes = resolveExpectedApproverRoleCodes()
-  if (expectedApproverRoleCodes.length > 0) {
-    const hasExpectedRole = expectedApproverRoleCodes.some(roleCode =>
-      currentUserRoleCodes.value.includes(roleCode)
-    )
-    if (!hasExpectedRole) {
-      return false
-    }
-  }
-
-  const expectedApproverOrgId = resolveExpectedApproverOrgId()
-  if (
-    Number.isFinite(currentUserOrgId.value) &&
-    currentUserOrgId.value > 0 &&
-    Number.isFinite(expectedApproverOrgId) &&
-    (expectedApproverOrgId as number) > 0
-  ) {
-    return currentUserOrgId.value === expectedApproverOrgId
-  }
-
-  return false
+  return canCurrentUserHandleWorkflowApproval({
+    currentUserId: currentUserId.value,
+    currentUserOrgId: currentUserOrgId.value,
+    currentUserRoleCodes: currentUserRoleCodes.value,
+    hasApprovalPermission: hasPlanApprovalPermission.value,
+    isPendingApproval: isPlanPendingApproval.value,
+    explicitApproverId:
+      currentPendingPlanTask.value.assigneeId ?? activePlanWorkflow.value?.currentApproverId,
+    expectedApproverRoleCodes: resolveExpectedApproverRoleCodes(),
+    expectedApproverOrgId: resolveExpectedApproverOrgId()
+  })
 })
 
 const currentPlanTaskId = computed(() => {
@@ -894,7 +960,7 @@ function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
   if (normalizedStatus === 'COMPLETED') {
     return '已通过'
   }
-  return '待审批'
+  return '审批中'
 }
 
 const latestPlanTaskDisplayLabel = computed(() => {
@@ -1313,6 +1379,9 @@ async function loadPendingPlanApprovals() {
     const response = await approvalApi.getPendingApprovals(userId)
     if (response.success && Array.isArray(response.data)) {
       pendingPlanApprovals.value = response.data
+      if (props.modelValue && props.showPlanApprovals && scopedPendingPlanCount.value > 0) {
+        activeTab.value = 'pending-plans'
+      }
       return
     }
 
@@ -1330,14 +1399,16 @@ async function loadPendingPlanApprovals() {
 }
 
 async function loadPlanWorkflowDetail() {
-  if (!props.showPlanApprovals || !props.plan) {
+  if (!props.showPlanApprovals) {
     planWorkflowDetail.value = null
     return
   }
 
+  const retainedDetail = getRetainedWorkflowDetail()
+
   try {
     const businessEntityType = props.workflowEntityType || 'PLAN'
-    const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
+    const businessEntityId = Number(props.workflowEntityId ?? props.plan?.id ?? 0)
     if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
       const response = await getWorkflowInstanceDetailByBusiness(
         businessEntityType,
@@ -1349,6 +1420,13 @@ async function loadPlanWorkflowDetail() {
         matchesExpectedWorkflowCode(response.data.flowCode)
       ) {
         planWorkflowDetail.value = response.data
+        if (
+          props.modelValue &&
+          props.showPlanApprovals &&
+          normalizeWorkflowStatus(response.data.status) === 'PENDING'
+        ) {
+          activeTab.value = 'pending-plans'
+        }
         return
       }
     }
@@ -1356,7 +1434,7 @@ async function loadPlanWorkflowDetail() {
     logger.warn('[ApprovalProgressDrawer] 按业务实体加载计划工作流详情失败，回退旧实例ID:', error)
   }
 
-  const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+  const workflowInstanceId = Number(props.plan?.workflowInstanceId ?? 0)
   if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
     try {
       const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
@@ -1366,6 +1444,13 @@ async function loadPlanWorkflowDetail() {
         matchesExpectedWorkflowCode(response.data.flowCode)
       ) {
         planWorkflowDetail.value = response.data
+        if (
+          props.modelValue &&
+          props.showPlanApprovals &&
+          normalizeWorkflowStatus(response.data.status) === 'PENDING'
+        ) {
+          activeTab.value = 'pending-plans'
+        }
         return
       }
     } catch (error) {
@@ -1376,12 +1461,12 @@ async function loadPlanWorkflowDetail() {
     }
   }
 
-  try {
-    planWorkflowDetail.value = null
-  } catch (error) {
-    planWorkflowDetail.value = null
-    logger.warn('[ApprovalProgressDrawer] 加载计划工作流详情失败:', error)
+  if (retainedDetail) {
+    planWorkflowDetail.value = retainedDetail
+    return
   }
+
+  planWorkflowDetail.value = null
 }
 
 async function loadPlanWorkflowHistoryCards() {
@@ -1776,7 +1861,7 @@ const detailDialogStatusTag = computed(() => {
   if (hasPlanWorkflowData.value) {
     return planWorkflowStatusTag.value
   }
-  return { label: '待审批', type: 'warning' as const }
+  return { label: '审批中', type: 'warning' as const }
 })
 
 const hasDisplayableApprovalContent = computed(() => {
@@ -1833,7 +1918,7 @@ const showArchivedPlanWorkflowEmptyState = computed(() => {
 watch(
   () => props.initialPlanWorkflowDetail,
   detail => {
-    if (!props.modelValue) {
+    if (!props.modelValue || !isRetainableWorkflowDetail(detail)) {
       return
     }
 
@@ -1845,6 +1930,7 @@ watch(
   () => props.modelValue,
   val => {
     if (val) {
+      planWorkflowDetail.value = props.initialPlanWorkflowDetail ?? null
       // 打开时重置到工作流标签页
       activeTab.value = props.showPlanApprovals
         ? isPlanPendingApproval.value
@@ -1891,7 +1977,10 @@ watch(
       return
     }
 
-    planWorkflowDetail.value = null
+    const retainedDetail = getRetainedWorkflowDetail()
+    if (retainedDetail) {
+      planWorkflowDetail.value = retainedDetail
+    }
     void loadPlanWorkflowDetail()
     void loadPlanWorkflowHistoryCards()
   },
@@ -1918,6 +2007,29 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => [
+    props.modelValue,
+    props.showPlanApprovals,
+    scopedPendingPlanCount.value,
+    isPlanPendingApproval.value,
+    hasWorkflowTabContent.value
+  ],
+  ([isVisible]) => {
+    if (!isVisible) {
+      return
+    }
+
+    const preferredTab = resolvePreferredActiveTab()
+    if (
+      activeTab.value !== preferredTab &&
+      (activeTab.value === 'history' || activeTab.value === 'workflow')
+    ) {
+      activeTab.value = preferredTab
+    }
+  }
+)
 </script>
 
 <template>
@@ -1934,10 +2046,10 @@ watch(
         <h3 class="drawer-title">{{ showPlanApprovals ? '审批中心' : '审批进度' }}</h3>
         <div class="stats-tags">
           <ElTag v-if="showPlanApprovals && scopedPendingPlanCount > 0" type="warning" size="small">
-            当前计划待审批: {{ scopedPendingPlanCount }}
+            当前计划审批中: {{ scopedPendingPlanCount }}
           </ElTag>
           <ElTag v-if="!hasPlanWorkflowData && pendingCount > 0" type="warning" size="small">
-            待审批: {{ pendingCount }}
+            审批中: {{ pendingCount }}
           </ElTag>
           <ElTag v-if="!hasPlanWorkflowData && approvedCount > 0" type="success" size="small">
             已通过: {{ approvedCount }}
@@ -1963,12 +2075,12 @@ watch(
         <ElTabPane
           v-if="showPlanApprovals"
           name="pending-plans"
-          :label="hasPlanWorkflowData ? '计划审批' : `待审批 (${scopedPendingPlanCount})`"
+          :label="hasPlanWorkflowData ? '计划审批' : `审批中 (${scopedPendingPlanCount})`"
         >
           <div v-loading="planApprovalsLoading" class="plan-approval-pane">
             <ElEmpty
               v-if="!planApprovalsLoading && !showPlanPendingCard"
-              description="暂无待审批的计划"
+              description="暂无审批中的计划"
               :image-size="120"
             />
             <div v-else class="approval-list">

@@ -181,6 +181,25 @@
           <el-tag v-if="detailMessage.senderDisplay" type="info" size="small">
             {{ detailMessage.senderDisplay }}
           </el-tag>
+          <el-tag
+            v-if="
+              detailMessage.bizType === 'APPROVAL_TODO' && resolveApprovalDepartment(detailMessage)
+            "
+            type="success"
+            size="small"
+          >
+            审批中部门：{{ resolveApprovalDepartment(detailMessage) }}
+          </el-tag>
+          <el-tag
+            v-if="
+              detailMessage.bizType === 'APPROVAL_TODO' &&
+              resolveApprovalRouteDisplay(detailMessage)
+            "
+            type="primary"
+            size="small"
+          >
+            {{ resolveApprovalRouteDisplay(detailMessage) }}
+          </el-tag>
           <el-tag v-if="detailMessage.currentStepName" type="warning" size="small">
             {{ detailMessage.currentStepName }}
           </el-tag>
@@ -190,11 +209,11 @@
 
         <div class="detail-actions">
           <el-button
-            v-if="detailMessage.actionUrl"
+            v-if="canHandleMessageAction(detailMessage)"
             type="primary"
-            @click="navigateByMessage(detailMessage)"
+            @click="handleDetailPrimaryAction"
           >
-            查看关联内容
+            {{ getMessagePrimaryActionLabel(detailMessage) }}
           </el-button>
           <el-button
             v-if="detailMessage.canMarkAsRead && !detailMessage.isRead"
@@ -221,10 +240,12 @@ import {
   resolveApprovalRoute
 } from '@/features/approval/lib/approvalNotifications'
 import { useApprovalCenter } from '@/features/approval'
+import { useAuthStore } from '@/features/auth/model/store'
 import type { Message } from '@/shared/types'
 import { formatDateTime } from '@/shared/lib/utils'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const messageStore = useMessageStore()
 const { openApprovalCenter } = useApprovalCenter()
 
@@ -297,8 +318,124 @@ async function handleMessageRead(messageId: string) {
   }
 }
 
+function buildApprovalCenterContext(message: Message) {
+  const workflowEntityType =
+    message.entityType === 'PLAN_REPORT' || message.entityType === 'PLAN'
+      ? message.entityType
+      : undefined
+  const workflowEntityId =
+    message.entityId !== undefined && message.entityId !== null && String(message.entityId).trim()
+      ? message.entityId
+      : undefined
+
+  return {
+    workflowEntityType,
+    workflowEntityId,
+    approvalInstanceId: message.approvalInstanceId,
+    departmentName: resolveApprovalDepartment(message),
+    planName: message.title
+  }
+}
+
+function getMessageMetadataValue(message: Message, key: string): string {
+  const value = message.metadata?.[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function resolveApprovalDepartment(message: Message): string {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
+  return targetOrgName || sourceOrgName || message.senderDisplay || ''
+}
+
+function resolveApprovalRouteDisplay(message: Message): string {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
+
+  if (sourceOrgName && targetOrgName) {
+    return `${sourceOrgName} -> ${targetOrgName}`
+  }
+
+  return sourceOrgName || targetOrgName || ''
+}
+
+function buildApprovalPayload(message: Message) {
+  return {
+    approvalInstanceId: message.approvalInstanceId,
+    entityType: message.entityType,
+    entityId: message.entityId,
+    actionUrl: message.actionUrl,
+    viewerRole: authStore.effectiveRole || authStore.userRole,
+    departmentName: resolveApprovalDepartment(message)
+  }
+}
+
+function resolveMessageAction(
+  message?: Message | null
+): { mode: 'approval-center' } | { mode: 'route'; target: string } | { mode: 'none' } {
+  if (!message) {
+    return { mode: 'none' }
+  }
+
+  const approvalPayload = buildApprovalPayload(message)
+  const isProcessAction = Boolean(message.canProcess) || message.bizType === 'APPROVAL_TODO'
+
+  if (message.type === 'approval') {
+    const approvalRoute = resolveApprovalRoute(approvalPayload)
+
+    if (approvalRoute && isProcessAction) {
+      return { mode: 'route', target: approvalRoute }
+    }
+
+    if (requiresApprovalCenterFallback(approvalPayload)) {
+      return { mode: 'approval-center' }
+    }
+
+    if (approvalRoute) {
+      return { mode: 'route', target: approvalRoute }
+    }
+  }
+
+  if (message.actionUrl) {
+    return { mode: 'route', target: message.actionUrl }
+  }
+
+  return { mode: 'none' }
+}
+
+function canHandleMessageAction(message?: Message | null): boolean {
+  return resolveMessageAction(message).mode !== 'none'
+}
+
+function getMessagePrimaryActionLabel(message?: Message | null): string {
+  if (!message) {
+    return '查看关联内容'
+  }
+
+  const action = resolveMessageAction(message)
+  if (action.mode === 'approval-center') {
+    return message.canProcess || message.bizType === 'APPROVAL_TODO'
+      ? '打开审批处理'
+      : '打开关联审批'
+  }
+
+  if (action.mode === 'route') {
+    return message.canProcess || message.bizType === 'APPROVAL_TODO' ? '立即处理' : '查看关联内容'
+  }
+
+  return '查看详情'
+}
+
 async function handleMessageView(message: Message) {
   if (message.canProcess || message.bizType === 'APPROVAL_TODO') {
+    navigateByMessage(message)
+    return
+  }
+
+  if (
+    (!messageStore.capabilities.detailDrawerEnabled || message.canViewDetail === false) &&
+    canHandleMessageAction(message)
+  ) {
     navigateByMessage(message)
     return
   }
@@ -312,32 +449,26 @@ async function handleMessageView(message: Message) {
   }
 }
 
+function handleDetailPrimaryAction() {
+  if (!detailMessage.value) {
+    return
+  }
+
+  navigateByMessage(detailMessage.value)
+  detailVisible.value = false
+}
+
 function navigateByMessage(message: Message) {
-  const approvalPayload = {
-    approvalInstanceId: message.approvalInstanceId,
-    entityType: message.entityType,
-    entityId: message.entityId,
-    actionUrl: message.actionUrl
-  }
+  const action = resolveMessageAction(message)
 
-  if (message.type === 'approval' && requiresApprovalCenterFallback(approvalPayload)) {
-    openApprovalCenter()
+  if (action.mode === 'approval-center') {
+    openApprovalCenter(buildApprovalCenterContext(message))
     return
   }
 
-  const approvalRoute = resolveApprovalRoute(approvalPayload)
-  if (approvalRoute) {
-    void router.push(approvalRoute)
+  if (action.mode === 'route') {
+    void router.push(action.target)
     return
-  }
-
-  if (message.actionUrl) {
-    void router.push(message.actionUrl)
-    return
-  }
-
-  if (message.type === 'approval') {
-    openApprovalCenter()
   }
 }
 

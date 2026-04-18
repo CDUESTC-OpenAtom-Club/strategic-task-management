@@ -6,8 +6,15 @@
  */
 import { ref, computed } from 'vue'
 import {
-  Check, Close, View, Document, Clock as _Clock,
-  User, OfficeBuilding, TrendCharts, Warning as _Warning
+  Check,
+  Close,
+  View,
+  Document,
+  Clock as _Clock,
+  User,
+  OfficeBuilding,
+  TrendCharts,
+  Warning as _Warning
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { StrategicIndicator, StatusAuditEntry as _StatusAuditEntry } from '@/shared/types'
@@ -33,24 +40,36 @@ const approvalAction = ref<'approve' | 'reject'>('approve')
 // 计算进度状态
 const _progressStatus = computed(() => {
   const progress = props.indicator.progress || 0
-  if (progress >= 80) {return 'success'}
-  if (progress >= 50) {return 'warning'}
+  if (progress >= 80) {
+    return 'success'
+  }
+  if (progress >= 50) {
+    return 'warning'
+  }
   return 'exception'
 })
 
 // 计算进度颜色
 const progressColor = computed(() => {
-  if (props.indicator.canWithdraw) {return '#C0C4CC'} // 未下发：灰色
+  if (props.indicator.canWithdraw) {
+    return '#C0C4CC'
+  } // 未下发：灰色
   const progress = props.indicator.progress || 0
-  if (progress >= 80) {return '#67C23A'} // 绿色
-  if (progress >= 50) {return '#E6A23C'} // 黄色
+  if (progress >= 80) {
+    return '#67C23A'
+  } // 绿色
+  if (progress >= 50) {
+    return '#E6A23C'
+  } // 黄色
   return '#F56C6C' // 红色
 })
 
 // 判断是否有待审批
 const hasPendingApproval = computed(() => {
   const audit = props.indicator.statusAudit || []
-  if (audit.length === 0) {return false}
+  if (audit.length === 0) {
+    return false
+  }
   const lastEntry = audit[audit.length - 1]
   return lastEntry.action === 'submit'
 })
@@ -72,7 +91,7 @@ const statusTag = computed(() => {
     return { text: '待下发', type: 'info' }
   }
   if (hasPendingApproval.value) {
-    return { text: '待审批', type: 'warning' }
+    return { text: '审批中', type: 'warning' }
   }
   const progress = props.indicator.progress || 0
   if (progress >= 100) {
@@ -96,15 +115,11 @@ const submitApproval = () => {
   }
 
   const actionText = approvalAction.value === 'approve' ? '通过' : '驳回'
-  ElMessageBox.confirm(
-    `确认${actionText}该指标的进度提交？`,
-    `${actionText}确认`,
-    {
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-      type: approvalAction.value === 'approve' ? 'success' : 'warning'
-    }
-  ).then(() => {
+  ElMessageBox.confirm(`确认${actionText}该指标的进度提交？`, `${actionText}确认`, {
+    confirmButtonText: '确认',
+    cancelButtonText: '取消',
+    type: approvalAction.value === 'approve' ? 'success' : 'warning'
+  }).then(() => {
     if (approvalAction.value === 'approve') {
       emit('approve', props.indicator, approvalComment.value)
     } else {
@@ -147,21 +162,12 @@ const handleViewAuditLog = () => {
         >
           {{ indicator.type1 }}
         </el-tag>
-        <el-tag
-          :type="indicator.type2 === '发展性' ? '' : 'success'"
-          size="small"
-          effect="plain"
-        >
+        <el-tag :type="indicator.type2 === '发展性' ? '' : 'success'" size="small" effect="plain">
           {{ indicator.type2 }}
         </el-tag>
       </div>
       <div class="header-right">
-        <el-button
-          link
-          type="primary"
-          size="small"
-          @click="handleViewAuditLog"
-        >
+        <el-button link type="primary" size="small" @click="handleViewAuditLog">
           <el-icon><Document /></el-icon>
           审计日志
         </el-button>
@@ -210,7 +216,10 @@ const handleViewAuditLog = () => {
         <el-alert type="warning" :closable="false" show-icon>
           <template #title>
             <div class="pending-title">
-              <span>{{ latestSubmission.operatorName }} 于 {{ new Date(latestSubmission.timestamp).toLocaleString() }} 提交了进度更新</span>
+              <span
+                >{{ latestSubmission.operatorName }} 于
+                {{ new Date(latestSubmission.timestamp).toLocaleString() }} 提交了进度更新</span
+              >
             </div>
           </template>
           <div v-if="latestSubmission.comment" class="pending-detail">
@@ -228,7 +237,9 @@ const handleViewAuditLog = () => {
           v-model="approvalComment"
           type="textarea"
           :rows="2"
-          :placeholder="approvalAction === 'reject' ? '请填写驳回原因（必填）' : '填写审批意见（可选）'"
+          :placeholder="
+            approvalAction === 'reject' ? '请填写驳回原因（必填）' : '填写审批意见（可选）'
+          "
         />
         <div class="form-actions">
           <el-button size="small" @click="cancelApproval">取消</el-button>
@@ -250,21 +261,14 @@ const handleViewAuditLog = () => {
         查看详情
       </el-button>
 
-      <div v-if="canApprove && hasPendingApproval && !isReadOnly && !showApprovalForm" class="footer-actions">
-        <el-button
-          type="success"
-          size="small"
-          :icon="Check"
-          @click="openApprovalForm('approve')"
-        >
+      <div
+        v-if="canApprove && hasPendingApproval && !isReadOnly && !showApprovalForm"
+        class="footer-actions"
+      >
+        <el-button type="success" size="small" :icon="Check" @click="openApprovalForm('approve')">
           通过
         </el-button>
-        <el-button
-          type="danger"
-          size="small"
-          :icon="Close"
-          @click="openApprovalForm('reject')"
-        >
+        <el-button type="danger" size="small" :icon="Close" @click="openApprovalForm('reject')">
           驳回
         </el-button>
       </div>

@@ -26,4 +26,18 @@ describe('approval route fallbacks', () => {
       '/strategic-tasks?openApproval=1&approvalEntityType=TASK&approvalEntityId=401&approvalInstanceId=16'
     )
   })
+
+  it('rewrites functional department plan approvals to the distribution workbench', () => {
+    expect(
+      resolveApprovalRoute({
+        entityType: 'PLAN',
+        approvalInstanceId: 3,
+        entityId: 4044,
+        actionUrl: '/strategic-tasks?tab=approval&approvalInstanceId=3',
+        viewerRole: 'functional_dept'
+      })
+    ).toBe(
+      '/distribution?tab=approval&approvalInstanceId=3&openApproval=1&approvalEntityType=PLAN&approvalEntityId=4044'
+    )
+  })
 })

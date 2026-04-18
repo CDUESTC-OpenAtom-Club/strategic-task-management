@@ -8,9 +8,11 @@
   >
     <el-form-item prop="username">
       <div class="input-wrapper">
-        <label class="input-label">用户名</label>
+        <label class="input-label" for="login-username">用户名</label>
         <el-input
+          id="login-username"
           v-model="formData.username"
+          aria-label="用户名"
           placeholder="请输入用户名"
           size="large"
           :disabled="loading"
@@ -25,10 +27,12 @@
 
     <el-form-item prop="password">
       <div class="input-wrapper">
-        <label class="input-label">密码</label>
+        <label class="input-label" for="login-password">密码</label>
         <el-input
+          id="login-password"
           v-model="formData.password"
           type="password"
+          aria-label="密码"
           placeholder="请输入密码"
           size="large"
           show-password
