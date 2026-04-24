@@ -25,9 +25,14 @@
       >
         <!-- Avatar -->
         <div class="avatar-section">
-          <el-avatar :size="80" :src="user?.avatar">
-            <el-icon :size="40"><User /></el-icon>
-          </el-avatar>
+          <AppAvatar
+            :size="80"
+            :src="
+              (user as { avatar?: string; avatarUrl?: string } | null)?.avatar ||
+              (user as { avatar?: string; avatarUrl?: string } | null)?.avatarUrl
+            "
+            :name="user?.realName || user?.name || user?.username || '用户'"
+          />
           <div class="avatar-info">
             <div class="user-name">{{ user?.realName || user?.name }}</div>
             <div class="user-role">{{ roleLabel }}</div>
@@ -152,12 +157,13 @@
 // @ts-nocheck
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { User, Message, Phone } from '@element-plus/icons-vue'
+import { Message, Phone } from '@element-plus/icons-vue'
 import type { User as UserType } from '@/entities/user/model/types'
 import type { UserProfileFormState, PasswordChangeFormState } from '../model/types'
 import { ROLE_CONFIG, VALIDATION_RULES } from '../model/constants'
 import { userApi } from '../api'
 import { logger } from '@/shared/lib/utils/logger'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 
 // Props
 interface Props {

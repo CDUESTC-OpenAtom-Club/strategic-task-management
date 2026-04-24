@@ -432,8 +432,17 @@ export interface WorkflowNode {
   status: 'completed' | 'current' | 'pending' | 'waiting' | 'rejected' | 'withdrawn'
   operator?: string
   operatorName?: string
+  operatorAvatar?: string
   operateTime?: Date
   comment?: string
+  approverCandidates?: Array<{
+    userId?: number
+    username?: string
+    realName?: string
+    displayName: string
+    avatar?: string
+    approved?: boolean
+  }>
 }
 
 // 审批历史项
@@ -442,6 +451,7 @@ export interface ApprovalHistoryItem {
   action: 'submit' | 'approve' | 'reject' | 'withdraw'
   operator: string
   operatorName: string
+  operatorAvatar?: string
   operateTime: Date
   stepName?: string
   comment?: string

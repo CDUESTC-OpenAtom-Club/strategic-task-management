@@ -24,12 +24,15 @@ import { usePlanStore } from '@/features/plan/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
 import {
+  getWorkflowDefinitionPreviewByCode,
   getWorkflowInstanceDetail,
   getWorkflowInstanceDetailByBusiness,
   getWorkflowInstanceHistoryByBusiness
 } from '@/features/workflow/api/queries'
 import { canCurrentUserHandleWorkflowApproval } from '@/features/approval/lib'
 import type {
+  ApproverCandidateResponse,
+  WorkflowDefinitionPreviewResponse,
   WorkflowHistoryCardResponse,
   WorkflowInstanceDetailResponse,
   WorkflowTaskResponse
@@ -122,6 +125,7 @@ const currentUserRoleCodes = computed(() => {
   return roles.map(role => (typeof role === 'string' ? role.trim() : '')).filter(Boolean)
 })
 const submitterNameCache = ref<Record<string, string>>({})
+const workflowUserAvatarCache = ref<Record<string, string>>({})
 
 function normalizeDisplayName(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -219,6 +223,45 @@ function parsePositiveUserId(value: unknown): number | null {
   return numericValue
 }
 
+function cacheWorkflowUserAvatar(userIdValue: unknown, avatarValue: unknown): boolean {
+  const userId = parsePositiveUserId(userIdValue)
+  const avatar = typeof avatarValue === 'string' ? avatarValue.trim() : ''
+  if (!userId || !avatar) {
+    return false
+  }
+
+  const cacheKey = String(userId)
+  if (workflowUserAvatarCache.value[cacheKey] === avatar) {
+    return true
+  }
+
+  workflowUserAvatarCache.value = {
+    ...workflowUserAvatarCache.value,
+    [cacheKey]: avatar
+  }
+  return true
+}
+
+async function ensureWorkflowUserAvatarLoaded(userIdValue: unknown): Promise<void> {
+  const userId = parsePositiveUserId(userIdValue)
+  if (!userId) {
+    return
+  }
+
+  const cacheKey = String(userId)
+  if (workflowUserAvatarCache.value[cacheKey]) {
+    return
+  }
+
+  try {
+    const user = await getUserById(userId)
+    cacheWorkflowUserAvatar(userId, (user as { avatar?: unknown; avatarUrl?: unknown }).avatar)
+    cacheWorkflowUserAvatar(userId, (user as { avatarUrl?: unknown }).avatarUrl)
+  } catch (error) {
+    logger.warn('[ApprovalProgressDrawer] 用户头像解析失败:', { userId, error })
+  }
+}
+
 function getFallbackSubmitterValue(): string {
   const createdBy = normalizeDisplayName(props.plan?.createdBy)
   if (createdBy && !parsePositiveUserId(createdBy)) {
@@ -306,6 +349,7 @@ const planDetailDialogVisible = ref(false)
 const planWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(
   props.initialPlanWorkflowDetail
 )
+const workflowDefinitionPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
 const planWorkflowHistoryCards = ref<WorkflowHistoryCardResponse[]>([])
 const selectedHistoryInstanceId = ref<string | null>(null)
 const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)
@@ -812,6 +856,9 @@ const planWorkflowHistory = computed<ApprovalHistoryItem[]>(() => {
       action: normalizeWorkflowAction(item.action),
       operator: String(item.operatorId ?? index),
       operatorName: String(item.operatorName || '系统'),
+      operatorAvatar: item.operatorId
+        ? workflowUserAvatarCache.value[String(item.operatorId)] || undefined
+        : undefined,
       operateTime: new Date(item.operateTime || Date.now()),
       stepName: typeof item.stepName === 'string' ? item.stepName : undefined,
       comment: item.comment
@@ -832,6 +879,86 @@ const planWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {
     return String(left.taskId || '').localeCompare(String(right.taskId || ''))
   })
 })
+
+function normalizeStepMatchKey(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/[（(].*?[）)]/g, '')
+    .toUpperCase()
+}
+
+function resolveCandidateDisplayName(candidate: ApproverCandidateResponse): string {
+  return (
+    normalizeDisplayName(candidate.realName) ||
+    normalizeDisplayName(candidate.username) ||
+    `用户${candidate.userId}`
+  )
+}
+
+function buildWorkflowNodeCandidates(
+  candidates: ApproverCandidateResponse[] | undefined,
+  operatorName?: string
+): WorkflowNode['approverCandidates'] {
+  const resolvedOperatorName = normalizeDisplayName(operatorName)
+  const candidateList = Array.isArray(candidates)
+    ? candidates
+        .map(candidate => {
+          const displayName = resolveCandidateDisplayName(candidate)
+          return {
+            userId: candidate.userId,
+            username: candidate.username,
+            realName: candidate.realName,
+            displayName,
+            avatar: candidate.userId
+              ? workflowUserAvatarCache.value[String(candidate.userId)] || undefined
+              : undefined,
+            approved: resolvedOperatorName ? displayName === resolvedOperatorName : false
+          }
+        })
+        .filter(candidate => candidate.displayName)
+    : []
+
+  if (
+    resolvedOperatorName &&
+    candidateList.length > 0 &&
+    !candidateList.some(candidate => candidate.displayName === resolvedOperatorName)
+  ) {
+    candidateList.unshift({
+      displayName: resolvedOperatorName,
+      approved: true
+    })
+  }
+
+  return candidateList.length > 0 ? candidateList : undefined
+}
+
+function resolveTaskCandidateApprovers(
+  task: WorkflowTaskResponse
+): WorkflowNode['approverCandidates'] {
+  const preview = workflowDefinitionPreview.value
+  if (!preview || !Array.isArray(preview.steps) || preview.steps.length === 0) {
+    return undefined
+  }
+
+  const taskStepNo = Number(task.stepNo ?? NaN)
+  const rawStepName =
+    normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName)
+  const rawStepKey = normalizeStepMatchKey(rawStepName)
+
+  const matchedStep =
+    preview.steps.find(step => Number(step.stepOrder ?? NaN) === taskStepNo) ||
+    preview.steps.find(step => normalizeStepMatchKey(step.stepName) === rawStepKey)
+
+  if (!matchedStep) {
+    return undefined
+  }
+
+  return buildWorkflowNodeCandidates(
+    matchedStep.candidateApprovers,
+    resolveWorkflowTaskOperatorName(task)
+  )
+}
 
 function mapWorkflowTaskStatusToNodeStatus(task: WorkflowTaskResponse): WorkflowNode['status'] {
   const normalizedStatus = String(task.status || '')
@@ -1191,6 +1318,10 @@ const workflowNodes = computed<WorkflowNode[]>(() => {
       name: resolveWorkflowTaskDisplayName(task),
       status: mapWorkflowTaskStatusToNodeStatus(task),
       operatorName: resolveWorkflowTaskDisplayOperatorName(task),
+      operatorAvatar: task.assigneeId
+        ? workflowUserAvatarCache.value[String(task.assigneeId)] || undefined
+        : undefined,
+      approverCandidates: resolveTaskCandidateApprovers(task),
       operateTime: task.approvedAt
         ? new Date(task.approvedAt)
         : task.createdTime
@@ -1283,6 +1414,9 @@ const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
     action: audit.action as ApprovalHistoryItem['action'],
     operator: String(audit.operator ?? index),
     operatorName: String(audit.operatorName ?? '系统'),
+    operatorAvatar: parsePositiveUserId(audit.operator)
+      ? workflowUserAvatarCache.value[String(parsePositiveUserId(audit.operator))] || undefined
+      : undefined,
     operateTime: new Date((audit.operateTime as string | number | Date | undefined) ?? Date.now()),
     stepName: typeof audit.stepName === 'string' ? audit.stepName : undefined,
     comment: audit.comment as string | undefined,
@@ -1467,6 +1601,48 @@ async function loadPlanWorkflowDetail() {
   }
 
   planWorkflowDetail.value = null
+}
+
+async function loadWorkflowDefinitionPreview() {
+  const flowCode = normalizeDisplayName(
+    planWorkflowDetail.value?.flowCode ||
+      (activePlanWorkflow.value as { flowCode?: unknown } | null)?.flowCode ||
+      (Array.isArray(props.workflowCode) ? props.workflowCode[0] : props.workflowCode)
+  )
+
+  if (!flowCode) {
+    workflowDefinitionPreview.value = null
+    return
+  }
+
+  try {
+    const response = await getWorkflowDefinitionPreviewByCode(flowCode)
+    workflowDefinitionPreview.value = response.success && response.data ? response.data : null
+  } catch (error) {
+    workflowDefinitionPreview.value = null
+    logger.warn('[ApprovalProgressDrawer] 加载流程定义预览失败:', { flowCode, error })
+  }
+}
+
+async function ensureWorkflowRelatedAvatarsLoaded(): Promise<void> {
+  const userIds = new Set<number>()
+
+  planWorkflowTasks.value.forEach(task => {
+    const assigneeId = parsePositiveUserId(task.assigneeId)
+    if (assigneeId) {
+      userIds.add(assigneeId)
+    }
+  })
+  ;(workflowDefinitionPreview.value?.steps || []).forEach(step => {
+    ;(step.candidateApprovers || []).forEach(candidate => {
+      const candidateUserId = parsePositiveUserId(candidate.userId)
+      if (candidateUserId) {
+        userIds.add(candidateUserId)
+      }
+    })
+  })
+
+  await Promise.all([...userIds].map(userId => ensureWorkflowUserAvatarLoaded(userId)))
 }
 
 async function loadPlanWorkflowHistoryCards() {
@@ -1946,6 +2122,8 @@ watch(
       }
       void loadPendingPlanApprovals()
       void loadPlanWorkflowDetail()
+      void loadWorkflowDefinitionPreview()
+      void ensureWorkflowRelatedAvatarsLoaded()
       void loadPlanWorkflowHistoryCards()
     } else {
       selectedHistoryInstanceId.value = null
@@ -1982,7 +2160,36 @@ watch(
       planWorkflowDetail.value = retainedDetail
     }
     void loadPlanWorkflowDetail()
+    void loadWorkflowDefinitionPreview()
+    void ensureWorkflowRelatedAvatarsLoaded()
     void loadPlanWorkflowHistoryCards()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [planWorkflowDetail.value?.flowCode, props.workflowCode],
+  () => {
+    if (!props.modelValue) {
+      return
+    }
+    void loadWorkflowDefinitionPreview()
+  },
+  { immediate: true }
+)
+
+watch(
+  () => [
+    planWorkflowTasks.value.map(task => task.assigneeId).join('|'),
+    (workflowDefinitionPreview.value?.steps || [])
+      .flatMap(step => (step.candidateApprovers || []).map(candidate => candidate.userId))
+      .join('|')
+  ],
+  () => {
+    if (!props.modelValue) {
+      return
+    }
+    void ensureWorkflowRelatedAvatarsLoaded()
   },
   { immediate: true }
 )
@@ -2418,6 +2625,9 @@ watch(
                       action: normalizeWorkflowAction(historyItem.action),
                       operator: String(historyItem.operatorId ?? index),
                       operatorName: String(historyItem.operatorName || '系统'),
+                      operatorAvatar: historyItem.operatorId
+                        ? workflowUserAvatarCache[String(historyItem.operatorId)] || undefined
+                        : undefined,
                       operateTime: new Date(historyItem.operateTime || Date.now()),
                       stepName:
                         typeof historyItem.taskName === 'string' ? historyItem.taskName : undefined,

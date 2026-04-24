@@ -12,9 +12,15 @@
     <el-card class="user-card card-animate" shadow="never">
       <div class="user-avatar-section">
         <div class="avatar-wrapper">
-          <el-avatar :size="80" class="user-avatar">
-            {{ currentUser?.name?.charAt(0) || 'U' }}
-          </el-avatar>
+          <AppAvatar
+            :size="80"
+            class="user-avatar"
+            :src="
+              (currentUser as { avatar?: string; avatarUrl?: string } | null)?.avatar ||
+              (currentUser as { avatar?: string; avatarUrl?: string } | null)?.avatarUrl
+            "
+            :name="currentUser?.name || currentUser?.realName || currentUser?.username || '用户'"
+          />
           <el-button class="avatar-edit-btn" circle size="small" type="primary">
             <el-icon><Edit /></el-icon>
           </el-button>
@@ -55,6 +61,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import BasicInfo from '@/features/profile/ui/BasicInfo.vue'
 import ChangePassword from '@/features/profile/ui/ChangePassword.vue'
 import NotificationSettings from '@/features/profile/ui/NotificationSettings.vue'

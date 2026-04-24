@@ -3,9 +3,12 @@
     <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="basic-info-form">
       <div class="avatar-section">
         <div class="avatar-upload">
-          <el-avatar :size="100" :src="form.avatar" class="user-avatar">
-            {{ form.username?.charAt(0)?.toUpperCase() || 'U' }}
-          </el-avatar>
+          <AppAvatar
+            :size="100"
+            :src="form.avatar"
+            :name="form.name || form.username || '用户'"
+            class="user-avatar"
+          />
           <el-upload
             class="avatar-uploader"
             :show-file-list="false"
@@ -56,6 +59,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import { validateEmail, validatePhone, getRoleLabel } from '@/shared/lib/utils'
 import { profileApi } from '@/features/profile/api'
 import type { User as _User, UserRole } from '@/shared/types'
@@ -181,7 +185,8 @@ const handleReset = () => {
 const loadUserInfo = () => {
   if (authStore.user) {
     Object.assign(form, authStore.user)
-    form.avatar = (authStore.user as { avatar?: string; avatarUrl?: string }).avatar ||
+    form.avatar =
+      (authStore.user as { avatar?: string; avatarUrl?: string }).avatar ||
       (authStore.user as { avatar?: string; avatarUrl?: string }).avatarUrl ||
       ''
   }

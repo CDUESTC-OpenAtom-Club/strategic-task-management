@@ -16,6 +16,7 @@ import { ApprovalProgressDrawer, useApprovalCenter } from '@/features/approval'
 import { usePlanStore } from '@/features/plan/model/store'
 import YearSelector from '@/shared/ui/form/YearSelector.vue'
 import CacheDebugPanel from '@/shared/ui/dev/CacheDebugPanel.vue'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import { useNavigation } from '@/shared/lib/layout'
 import { useAppLayout, useDepartmentSwitcher, useNotificationCenter } from './lib'
 import {
@@ -213,9 +214,15 @@ const handleDropdownCommand = async (command: string) => {
 
           <!-- User dropdown menu -->
           <el-dropdown @command="handleDropdownCommand">
-            <el-avatar class="user-avatar" :size="32">
-              {{ currentUser?.name?.charAt(0)?.toUpperCase() || 'U' }}
-            </el-avatar>
+            <AppAvatar
+              class="user-avatar"
+              :size="32"
+              :src="
+                (currentUser as { avatar?: string; avatarUrl?: string } | null)?.avatar ||
+                (currentUser as { avatar?: string; avatarUrl?: string } | null)?.avatarUrl
+              "
+              :name="currentUser?.name || currentUser?.realName || currentUser?.username || '用户'"
+            />
             <template #dropdown>
               <el-dropdown-menu>
                 <!-- Admin exclusive menu -->

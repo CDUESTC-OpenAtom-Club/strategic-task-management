@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { ref, computed } from 'vue'
-import { ElCard, ElSelect, ElOption, ElAvatar, ElIcon, ElEmpty, ElMessage } from 'element-plus'
+import { ElCard, ElSelect, ElOption, ElIcon, ElEmpty, ElMessage } from 'element-plus'
 import { Check, Close, Loading, Clock, Edit } from '@element-plus/icons-vue'
 import type { WorkflowNode } from '@/shared/types'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 
 /**
  * 自定义审批流程组件
@@ -130,6 +131,29 @@ const cancelEdit = (nodeId: string) => {
   delete customApprovers.value[nodeId]
   editingNode.value = null
 }
+
+const getCandidateAvatarText = (displayName?: string) => {
+  if (!displayName) {
+    return '无'
+  }
+  return displayName.slice(0, 1)
+}
+
+const shouldShowCandidateList = (node: WorkflowNode) => {
+  return Array.isArray(node.approverCandidates) && node.approverCandidates.length > 0
+}
+
+const getOrSignLabel = (node: WorkflowNode) => {
+  return shouldShowCandidateList(node) ? '或签' : ''
+}
+
+const getCandidateSummary = (node: WorkflowNode) => {
+  const total = node.approverCandidates?.length || 0
+  if (total <= 0) {
+    return ''
+  }
+  return `${total}人审批中，1人同意即可通过，预计3小时完成`
+}
 </script>
 
 <template>
@@ -168,6 +192,9 @@ const cancelEdit = (nodeId: string) => {
                 <div class="node-title-row">
                   <span class="node-step">步骤 {{ index + 1 }}</span>
                   <span class="node-name">{{ node.name }}</span>
+                  <span v-if="getOrSignLabel(node)" class="node-sign-mode">
+                    {{ getOrSignLabel(node) }}
+                  </span>
                 </div>
 
                 <!-- 当前节点标识 -->
@@ -229,16 +256,19 @@ const cancelEdit = (nodeId: string) => {
 
               <!-- 审批人信息 -->
               <div
-                v-if="node.operatorName || node.operateTime || canEditNode(node)"
+                v-if="
+                  (!shouldShowCandidateList(node) && (node.operatorName || node.operateTime)) ||
+                  canEditNode(node)
+                "
                 class="node-approver"
               >
                 <div v-if="node.operatorName || node.operateTime" class="approver-info">
-                  <el-avatar
+                  <AppAvatar
+                    :src="node.operatorAvatar"
                     :size="32"
                     :class="['approver-avatar', { 'is-placeholder': !node.operatorName }]"
-                  >
-                    {{ node.operatorName ? node.operatorName[0] : '无' }}
-                  </el-avatar>
+                    :name="node.operatorName || '无'"
+                  />
                   <div class="approver-details">
                     <span v-if="node.operatorName" class="approver-name">
                       {{ node.operatorName }}
@@ -266,6 +296,34 @@ const cancelEdit = (nodeId: string) => {
                 </ElButton>
               </div>
 
+              <div v-if="shouldShowCandidateList(node)" class="candidate-panel">
+                <div class="candidate-panel-label">可审批成员</div>
+                <div class="candidate-panel-summary">
+                  {{ getCandidateSummary(node) }}
+                </div>
+                <div class="candidate-list">
+                  <div
+                    v-for="candidate in node.approverCandidates"
+                    :key="`${node.id}-${candidate.userId || candidate.displayName}`"
+                    :class="['candidate-item', { 'is-approved': candidate.approved }]"
+                  >
+                    <div class="candidate-avatar-wrap">
+                      <AppAvatar
+                        :src="candidate.avatar"
+                        :size="42"
+                        class="candidate-avatar"
+                        :name="candidate.displayName"
+                      />
+                      <span v-if="candidate.approved" class="candidate-approved-badge">
+                        <el-icon><Check /></el-icon>
+                      </span>
+                    </div>
+                    <div class="candidate-name">{{ candidate.displayName }}</div>
+                    <div v-if="candidate.approved" class="candidate-state">已审批通过</div>
+                  </div>
+                </div>
+              </div>
+
               <!-- 审批意见 -->
               <div v-if="node.comment" class="node-comment">
                 <div class="comment-label">审批意见：</div>
@@ -287,9 +345,7 @@ const cancelEdit = (nodeId: string) => {
                     :value="user.id"
                   >
                     <div class="user-option">
-                      <ElAvatar :size="24" class="user-option-avatar">
-                        {{ user.name[0] }}
-                      </ElAvatar>
+                      <AppAvatar :size="24" class="user-option-avatar" :name="user.name" />
                       <div class="user-option-info">
                         <span class="user-option-name">{{ user.name }}</span>
                         <span class="user-option-org">{{ user.org }}</span>
@@ -468,6 +524,18 @@ const cancelEdit = (nodeId: string) => {
   color: var(--el-text-color-primary);
 }
 
+.node-sign-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .node-status-tag {
   flex-shrink: 0;
   margin-top: 2px;
@@ -540,6 +608,85 @@ const cancelEdit = (nodeId: string) => {
 .approve-time {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.candidate-panel {
+  padding: 14px 16px;
+  background: var(--el-fill-color-lighter);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+.candidate-panel-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.candidate-panel-summary {
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+
+.candidate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.candidate-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 60px;
+}
+
+.candidate-avatar-wrap {
+  position: relative;
+}
+
+.candidate-avatar {
+  background: linear-gradient(135deg, #5ba7ff, #3b82f6);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.2);
+}
+
+.candidate-approved-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--el-color-success);
+  color: #fff;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+
+.candidate-name {
+  max-width: 74px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--el-text-color-primary);
+  text-align: center;
+  word-break: break-word;
+}
+
+.candidate-state {
+  font-size: 12px;
+  color: var(--el-color-success);
+}
+
+.candidate-item.is-approved .candidate-avatar {
+  background: linear-gradient(135deg, #34c759, #22c55e);
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.22);
 }
 
 /* 审批意见 */

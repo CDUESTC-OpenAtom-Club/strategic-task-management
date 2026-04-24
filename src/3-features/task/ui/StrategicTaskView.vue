@@ -28,6 +28,7 @@ import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { useOrgStore } from '@/features/organization/model/store'
 import { usePermission } from '@/5-shared/lib/permissions'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
@@ -1114,6 +1115,18 @@ const hasApprovalPreview = computed(() => {
   return (approvalWorkflowPreview.value?.steps?.length || 0) > 0
 })
 
+const normalizePreviewCandidateDisplayName = (
+  candidate: WorkflowDefinitionPreviewResponse['steps'][number]['candidateApprovers'][number]
+) => {
+  return candidate.realName || candidate.username || `用户${candidate.userId}`
+}
+
+const hasApprovalStepCandidates = (
+  candidates?: WorkflowDefinitionPreviewResponse['steps'][number]['candidateApprovers']
+) => {
+  return Array.isArray(candidates) && candidates.length > 0
+}
+
 const getCurrentCycleId = async (): Promise<number> => {
   const cycleResponse = await strategicApi.getCycleByYear(timeContext.currentYear)
   const cycleId =
@@ -1419,12 +1432,9 @@ const planUiPhase = computed<'draft' | 'pending_withdrawable' | 'pending_locked'
 
 const approvalEntryButtonText = computed(() => {
   if (planUiPhase.value === 'pending_withdrawable' || planUiPhase.value === 'pending_locked') {
-    return '审批'
+    return '处理审批'
   }
-  if (approvalWorkflowReportSummary.value?.id || planUiPhase.value === 'distributed') {
-    return '查看审批'
-  }
-  return '审批进度'
+  return '查看审批'
 })
 
 const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
@@ -5321,6 +5331,42 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           </div>
         </div>
 
+        <div v-if="hasApprovalPreview" class="approval-step-list">
+          <div
+            v-for="step in approvalWorkflowPreview?.steps || []"
+            :key="step.stepDefId"
+            class="approval-step-card"
+          >
+            <div class="approval-step-header">
+              <div class="approval-step-order">步骤 {{ step.stepOrder }}</div>
+              <div class="approval-step-name">{{ step.stepName }}</div>
+            </div>
+            <div class="approval-step-users">
+              <span class="approval-step-users-label">可审批用户：</span>
+              <div
+                v-if="hasApprovalStepCandidates(step.candidateApprovers)"
+                class="approval-step-user-list"
+              >
+                <div
+                  v-for="candidate in step.candidateApprovers"
+                  :key="candidate.userId"
+                  class="approval-step-user-item"
+                >
+                  <AppAvatar
+                    :size="32"
+                    :name="normalizePreviewCandidateDisplayName(candidate)"
+                    class="approval-step-user-avatar"
+                  />
+                  <span class="approval-step-user-name">
+                    {{ normalizePreviewCandidateDisplayName(candidate) }}
+                  </span>
+                </div>
+              </div>
+              <span v-else class="approval-step-users-value">系统自动分配</span>
+            </div>
+          </div>
+        </div>
+
         <el-empty
           v-if="!approvalPreviewLoading && !hasApprovalPreview"
           description="暂未加载到审批流程定义"
@@ -7673,6 +7719,81 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 .summary-value {
   color: var(--el-text-color-primary);
   font-weight: 500;
+}
+
+.approval-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approval-step-card {
+  padding: 16px 18px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
+
+.approval-step-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.approval-step-order {
+  flex-shrink: 0;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.approval-step-name {
+  color: var(--el-text-color-primary);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.approval-step-users {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.7;
+}
+
+.approval-step-user-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.approval-step-user-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--el-fill-color-light);
+}
+
+.approval-step-user-avatar {
+  flex-shrink: 0;
+}
+
+.approval-step-user-name {
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+}
+
+.approval-step-users-label {
+  flex-shrink: 0;
+  color: var(--el-text-color-secondary);
+}
+
+.approval-step-users-value {
+  color: var(--el-text-color-primary);
+  word-break: break-word;
 }
 
 .approval-user-option {
