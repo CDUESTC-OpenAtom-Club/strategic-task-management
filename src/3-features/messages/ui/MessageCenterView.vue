@@ -53,13 +53,17 @@
               />
             </span>
           </template>
-          <MessageList
-            v-if="activeTab === 'all'"
-            :messages="allMessages"
-            empty-description="暂无消息"
-            @read="handleMessageRead"
-            @view="handleMessageView"
-          />
+          <div v-if="activeTab === 'all'" class="message-panel">
+            <div class="message-subfilters">
+              <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
+            </div>
+            <MessageList
+              :messages="filteredMessages"
+              :empty-description="getEmptyDescription()"
+              @read="handleMessageRead"
+              @view="handleMessageView"
+            />
+          </div>
         </el-tab-pane>
 
         <el-tab-pane name="todo">
@@ -75,101 +79,43 @@
               />
             </span>
           </template>
-          <MessageList
-            v-if="activeTab === 'todo'"
-            :messages="todoMessages"
-            empty-description="当前没有待处理事项"
-            @read="handleMessageRead"
-            @view="handleMessageView"
-          />
+          <div v-if="activeTab === 'todo'" class="message-panel">
+            <div class="message-subfilters">
+              <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
+            </div>
+            <MessageList
+              :messages="filteredMessages"
+              :empty-description="getEmptyDescription()"
+              @read="handleMessageRead"
+              @view="handleMessageView"
+            />
+          </div>
         </el-tab-pane>
 
-        <el-tab-pane name="approval">
+        <el-tab-pane name="processed">
           <template #label>
             <span class="tab-label">
-              审批通知
+              已处理
               <el-badge
-                v-if="unreadCount.approvals > 0"
-                :value="unreadCount.approvals"
+                v-if="processedCount > 0"
+                :value="processedCount"
                 :max="99"
                 class="tab-badge"
-                type="warning"
+                type="success"
               />
             </span>
           </template>
-          <MessageList
-            v-if="activeTab === 'approval'"
-            :messages="approvalMessages"
-            empty-description="当前没有审批相关消息"
-            @read="handleMessageRead"
-            @view="handleMessageView"
-          />
-        </el-tab-pane>
-
-        <el-tab-pane name="reminder">
-          <template #label>
-            <span class="tab-label">
-              催办通知
-              <el-badge
-                v-if="unreadCount.reminders > 0"
-                :value="unreadCount.reminders"
-                :max="99"
-                class="tab-badge"
-                type="primary"
-              />
-            </span>
-          </template>
-          <MessageList
-            v-if="activeTab === 'reminder'"
-            :messages="reminderMessages"
-            empty-description="当前没有催办消息"
-            @read="handleMessageRead"
-            @view="handleMessageView"
-          />
-        </el-tab-pane>
-
-        <el-tab-pane name="system">
-          <template #label>
-            <span class="tab-label">
-              系统通知
-              <el-badge
-                v-if="unreadCount.system > 0"
-                :value="unreadCount.system"
-                :max="99"
-                class="tab-badge"
-                type="info"
-              />
-            </span>
-          </template>
-          <MessageList
-            v-if="activeTab === 'system'"
-            :messages="systemMessages"
-            empty-description="当前没有系统通知"
-            @read="handleMessageRead"
-            @view="handleMessageView"
-          />
-        </el-tab-pane>
-
-        <el-tab-pane v-if="messageStore.capabilities.riskEnabled" name="risk">
-          <template #label>
-            <span class="tab-label">
-              风险提醒
-              <el-badge
-                v-if="unreadCount.alerts > 0"
-                :value="unreadCount.alerts"
-                :max="99"
-                class="tab-badge"
-                type="danger"
-              />
-            </span>
-          </template>
-          <MessageList
-            v-if="activeTab === 'risk'"
-            :messages="alertMessages"
-            empty-description="当前没有风险提醒"
-            @read="handleMessageRead"
-            @view="handleMessageView"
-          />
+          <div v-if="activeTab === 'processed'" class="message-panel">
+            <div class="message-subfilters">
+              <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
+            </div>
+            <MessageList
+              :messages="filteredMessages"
+              :empty-description="getEmptyDescription()"
+              @read="handleMessageRead"
+              @view="handleMessageView"
+            />
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -250,16 +196,53 @@ const messageStore = useMessageStore()
 const { openApprovalCenter } = useApprovalCenter()
 
 const activeTab = ref('all')
+const activeTypeFilter = ref<'all' | 'approval' | 'reminder' | 'system'>('all')
 const detailVisible = ref(false)
 const detailMessage = ref<Message | null>(null)
 
 const allMessages = computed(() => messageStore.visibleMessages)
 const todoMessages = computed(() => messageStore.todoMessages)
 const reminderMessages = computed(() => messageStore.reminderMessages)
-const alertMessages = computed(() => messageStore.alertMessages)
 const approvalMessages = computed(() => messageStore.approvalMessages)
 const systemMessages = computed(() => messageStore.systemMessages)
 const unreadCount = computed(() => messageStore.unreadCount)
+const processedMessages = computed(() =>
+  allMessages.value.filter(
+    message => !messageStore.todoMessages.some(item => item.id === message.id)
+  )
+)
+const processedCount = computed(() => processedMessages.value.length)
+
+const typeFilterOptions = [
+  { label: '全部类型', value: 'all' },
+  { label: '审批通知', value: 'approval' },
+  { label: '催办通知', value: 'reminder' },
+  { label: '系统通知', value: 'system' }
+] as const
+
+const currentPrimaryMessages = computed(() => {
+  if (activeTab.value === 'todo') {
+    return todoMessages.value
+  }
+  if (activeTab.value === 'processed') {
+    return processedMessages.value
+  }
+  return allMessages.value
+})
+
+const filteredMessages = computed(() => {
+  const base = currentPrimaryMessages.value
+  switch (activeTypeFilter.value) {
+    case 'approval':
+      return base.filter(message => message.type === 'approval')
+    case 'reminder':
+      return base.filter(message => message.type === 'reminder')
+    case 'system':
+      return base.filter(message => message.type === 'system')
+    default:
+      return base
+  }
+})
 
 const summaryCards = computed(() => {
   const cards = [
@@ -289,17 +272,23 @@ const summaryCards = computed(() => {
     }
   ]
 
-  if (messageStore.capabilities.riskEnabled) {
-    cards.push({
-      key: 'risk',
-      label: '风险提醒',
-      value: messageStore.summary.riskCount,
-      hint: '风险能力开启后才展示'
-    })
-  }
-
   return cards
 })
+
+function getEmptyDescription(): string {
+  const scopeLabel =
+    activeTab.value === 'todo' ? '待处理' : activeTab.value === 'processed' ? '已处理' : '消息'
+  const typeLabel =
+    activeTypeFilter.value === 'approval'
+      ? '审批通知'
+      : activeTypeFilter.value === 'reminder'
+        ? '催办通知'
+        : activeTypeFilter.value === 'system'
+          ? '系统通知'
+          : ''
+
+  return typeLabel ? `当前没有${scopeLabel}中的${typeLabel}` : `当前没有${scopeLabel}`
+}
 
 async function refreshData() {
   try {
@@ -590,6 +579,23 @@ onMounted(() => {
   margin-left: 2px;
 }
 
+.message-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.message-subfilters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.message-subfilters :deep(.el-segmented) {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
 .detail-content {
   display: flex;
   flex-direction: column;
@@ -624,6 +630,7 @@ onMounted(() => {
   }
 
   .page-actions {
+    width: 100%;
     flex-wrap: wrap;
   }
 }

@@ -816,6 +816,7 @@ const currentPlanReportSummary = ref<{
   currentTaskId?: number | null
   workflowStatus?: string | null
   currentStepName?: string | null
+  currentApproverName?: string | null
   canWithdraw?: boolean
   status?: string | null
 } | null>(null)
@@ -907,10 +908,125 @@ const currentApprovalWorkflowStatus = computed(() => {
       approvalWorkflowReportSummary.value?.status ||
       currentPlan.value?.workflowStatus ||
       currentPlan.value?.status ||
+      preloadedPlanWorkflowDetail.value?.status ||
       ''
   )
     .trim()
     .toUpperCase()
+})
+
+const currentApprovalStepName = computed(() => {
+  return String(
+    approvalWorkflowReportSummary.value?.currentStepName ||
+      (currentPlan.value as { currentStepName?: string } | null)?.currentStepName ||
+      preloadedPlanWorkflowDetail.value?.currentStepName ||
+      ''
+  ).trim()
+})
+
+const currentApprovalApproverName = computed(() => {
+  return String(
+    (approvalWorkflowReportSummary.value as { currentApproverName?: string | null } | null)
+      ?.currentApproverName ||
+      ((currentPlan.value as { currentApproverName?: string } | null)?.currentApproverName ?? '') ||
+      preloadedPlanWorkflowDetail.value?.currentApproverName ||
+      ''
+  ).trim()
+})
+
+const currentApprovalFlowName = computed(() => {
+  return String(
+    preloadedPlanWorkflowDetail.value?.flowName ||
+      preloadedPlanWorkflowDetail.value?.definitionName ||
+      approvalWorkflowPreview.value?.workflowName ||
+      ''
+  ).trim()
+})
+
+const currentApprovalStepPreview = computed(() => {
+  const stepName = normalizeWorkflowStepName(currentApprovalStepName.value)
+  if (!stepName || !approvalWorkflowPreview.value?.steps?.length) {
+    return null
+  }
+
+  return (
+    approvalWorkflowPreview.value.steps.find(
+      step => normalizeWorkflowStepName(step.stepName) === stepName
+    ) || null
+  )
+})
+
+const currentApprovalCandidateNames = computed(() => {
+  const candidates = currentApprovalStepPreview.value?.candidateApprovers
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return []
+  }
+
+  return candidates
+    .map(candidate => normalizePreviewCandidateDisplayName(candidate))
+    .filter(Boolean)
+})
+
+const approvalFlowStatusMeta = computed(() => {
+  const workflowStatus = currentApprovalWorkflowStatus.value
+  const stepName = currentApprovalStepName.value
+  const approverName = currentApprovalApproverName.value
+  const candidateNames = currentApprovalCandidateNames.value
+
+  if (
+    workflowStatus === 'APPROVED' ||
+    workflowStatus === 'COMPLETED' ||
+    workflowStatus === 'FINISHED' ||
+    currentPlanStatus.value === 'DISTRIBUTED'
+  ) {
+    return {
+      label: '已完成审批',
+      tagType: 'success' as const,
+      description: '当前计划审批流程已完成。'
+    }
+  }
+
+  if (
+    workflowStatus === 'REJECTED' ||
+    workflowStatus === 'RETURNED' ||
+    workflowStatus === 'WITHDRAWN' ||
+    workflowStatus === 'CANCELLED'
+  ) {
+    return {
+      label: '已退回',
+      tagType: 'danger' as const,
+      description: stepName ? `当前流程已在“${stepName}”环节退回。` : '当前计划审批流程已退回。'
+    }
+  }
+
+  if (stepName || approverName || workflowStatus === 'PENDING' || workflowStatus === 'IN_REVIEW') {
+    const label = stepName ? `待${stepName}审批` : '审批中'
+
+    return {
+      label,
+      tagType: 'warning' as const,
+      description:
+        candidateNames.length > 0
+          ? `当前节点有 ${candidateNames.length} 位可审批人。`
+          : stepName
+            ? `当前节点：${stepName}`
+            : '当前计划正在审批中。'
+    }
+  }
+
+  if (hasApprovalWorkflowReportBinding.value) {
+    return {
+      label: '查看流程',
+      tagType: 'info' as const,
+      description: '当前计划已有审批记录，可进入审批中心查看。'
+    }
+  }
+
+  return {
+    label: '未发起流程',
+    tagType: 'info' as const,
+    description: '当前计划还未发起审批流程。'
+  }
 })
 
 function resolveExpectedApproverRoleCodesForCurrentPlan(): string[] {
@@ -1090,6 +1206,9 @@ const refreshCurrentDepartmentView = async (
     await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: options.force })
     await loadCurrentPlanTaskScope({ force: options.force })
     await syncCurrentPlanReportSummaries({ force: options.force })
+    if (hasApprovalWorkflowReportBinding.value) {
+      await preloadApprovalWorkflowDetail()
+    }
   } finally {
     if (options.showLoading && departmentViewLoadingRequestId.value === requestId) {
       pageTransitionLoading.value = false
@@ -1125,6 +1244,12 @@ const hasApprovalStepCandidates = (
   candidates?: WorkflowDefinitionPreviewResponse['steps'][number]['candidateApprovers']
 ) => {
   return Array.isArray(candidates) && candidates.length > 0
+}
+
+const normalizeWorkflowStepName = (value?: string | null) => {
+  return String(value || '')
+    .replace(/\s+/g, '')
+    .trim()
 }
 
 const getCurrentCycleId = async (): Promise<number> => {
@@ -1847,6 +1972,7 @@ const refreshIndicatorWorkflowContext = async (indicatorId: number | string) => 
 
 const refreshTaskPageAfterIndicatorMutation = async () => {
   const planId = currentPlan.value?.id
+  resetApprovalWorkflowStateCache()
   const invalidateTargets: Array<string | ReturnType<typeof buildQueryKey>> = [
     'indicator.list',
     'task.list',
@@ -2066,9 +2192,52 @@ watch(
   { immediate: true }
 )
 
+const taskSpanMetaMap = computed(() => {
+  const map = new Map<number, { rowspan: number; colspan: number }>()
+  const dataList = indicators.value
+
+  let startIndex = 0
+  while (startIndex < dataList.length) {
+    const currentTask = dataList[startIndex].taskContent || '未关联任务'
+    let endIndex = startIndex + 1
+
+    while (
+      endIndex < dataList.length &&
+      (dataList[endIndex].taskContent || '未关联任务') === currentTask
+    ) {
+      endIndex++
+    }
+
+    map.set(startIndex, { rowspan: endIndex - startIndex, colspan: 1 })
+    for (let index = startIndex + 1; index < endIndex; index++) {
+      map.set(index, { rowspan: 0, colspan: 0 })
+    }
+
+    startIndex = endIndex
+  }
+
+  return map
+})
+
+const taskGroupRowsMap = computed(() => {
+  const map = new Map<string, StrategicIndicator[]>()
+
+  indicators.value.forEach(indicator => {
+    const taskContent = indicator.taskContent || '未命名任务'
+    const groupRows = map.get(taskContent)
+    if (groupRows) {
+      groupRows.push(indicator)
+      return
+    }
+    map.set(taskContent, [indicator])
+  })
+
+  return map
+})
+
 // 计算单元格合并信息
 const getSpanMethod = ({
-  row,
+  row: _row,
   column: _column,
   rowIndex,
   columnIndex
@@ -2078,33 +2247,10 @@ const getSpanMethod = ({
   rowIndex: number
   columnIndex: number
 }) => {
-  const dataList = indicators.value
-
   // 战略任务列（第0列）需要合并
   // 列顺序: 0战略任务, 1核心指标, 2说明, 3权重, 4里程碑, 5进度, 6状态, 7操作
   if (columnIndex === 0) {
-    const currentTask = row.taskContent || '未关联任务'
-
-    let startIndex = rowIndex
-    while (
-      startIndex > 0 &&
-      (dataList[startIndex - 1].taskContent || '未关联任务') === currentTask
-    ) {
-      startIndex--
-    }
-
-    if (startIndex === rowIndex) {
-      let count = 1
-      while (
-        rowIndex + count < dataList.length &&
-        (dataList[rowIndex + count].taskContent || '未关联任务') === currentTask
-      ) {
-        count++
-      }
-      return { rowspan: count, colspan: 1 }
-    } else {
-      return { rowspan: 0, colspan: 0 }
-    }
+    return taskSpanMetaMap.value.get(rowIndex) ?? { rowspan: 1, colspan: 1 }
   }
   return { rowspan: 1, colspan: 1 }
 }
@@ -2112,8 +2258,7 @@ const getSpanMethod = ({
 // 获取当前行所属的任务组
 const getTaskGroup = (row: StrategicIndicator) => {
   const taskContent = row.taskContent || '未命名任务'
-  const rows = indicators.value.filter(i => (i.taskContent || '未命名任务') === taskContent)
-  return { taskContent, rows }
+  return { taskContent, rows: taskGroupRowsMap.value.get(taskContent) ?? [] }
 }
 
 // 获取任务级别状态（基于 Plan 的状态）
@@ -2876,6 +3021,7 @@ watch(
     if (isBootstrappingPage.value) {
       return
     }
+    resetApprovalWorkflowStateCache()
     await loadBackendTaskTypeMap({ force: true })
     await refreshCurrentDepartmentView({ showLoading: true, force: true })
   }
@@ -2885,6 +3031,7 @@ watch([selectedDepartment, () => planStore.plans.length], async () => {
   if (isBootstrappingPage.value) {
     return
   }
+  resetApprovalWorkflowStateCache()
   await refreshCurrentDepartmentView({ showLoading: true, force: true })
   void loadMilestonesForCurrentScope()
 })
@@ -2900,6 +3047,7 @@ watch(
       return
     }
 
+    preloadedPlanWorkflowDetail.value = null
     await hydrateCurrentPlanWorkflowState()
   }
 )
@@ -3280,6 +3428,7 @@ const currentDetail = ref<StrategicIndicator | null>(null)
 // 任务审批抽屉状态
 const taskApprovalVisible = ref(false)
 const preloadedPlanWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
+const approvalStatusPopoverLoading = ref(false)
 
 // 专门用于审批抽屉的指标列表（显示当前选中部门的所有指标，一个部门的所有指标状态应该统一）
 const approvalIndicators = computed(() => {
@@ -3299,6 +3448,14 @@ const _hasPendingApprovalForDept = computed(() => {
   }
   return approvalIndicators.value.some(i => i.progressApprovalStatus === 'PENDING')
 })
+
+function resetApprovalWorkflowStateCache(): void {
+  preloadedPlanWorkflowDetail.value = null
+  currentPlanReportSummary.value = null
+  latestPlanReportSummary.value = null
+  currentPlanReportSummaryPromise = null
+  currentPlanReportSummaryKey = ''
+}
 
 async function refreshApprovalWorkflowSummaries(): Promise<void> {
   await syncCurrentPlanReportSummaries({ force: true })
@@ -3367,6 +3524,36 @@ const handleOpenApproval = async () => {
   await refreshApprovalWorkflowSummaries()
   await preloadApprovalWorkflowDetail()
   taskApprovalVisible.value = true
+}
+
+const handleApprovalStatusPopoverShow = async () => {
+  if (!hasApprovalWorkflowReportBinding.value && !currentPlan.value?.id) {
+    return
+  }
+
+  approvalStatusPopoverLoading.value = true
+
+  try {
+    if (!preloadedPlanWorkflowDetail.value) {
+      await refreshApprovalWorkflowSummaries()
+      await preloadApprovalWorkflowDetail()
+    }
+
+    if (!approvalWorkflowPreview.value) {
+      try {
+        const response = await getWorkflowDefinitionPreviewByCode(
+          PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
+        )
+        if (response.success && response.data) {
+          approvalWorkflowPreview.value = response.data
+        }
+      } catch (error) {
+        logger.warn('[StrategicTaskView] 加载流程状态候选审批人失败:', error)
+      }
+    }
+  } finally {
+    approvalStatusPopoverLoading.value = false
+  }
 }
 
 // 审批后刷新
@@ -4295,6 +4482,11 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
       <!-- Excel标题头 -->
       <div class="excel-header">
         <h2 class="excel-title">战略任务指标总表</h2>
+        <div class="excel-header-status">
+          <el-tag :type="overallStatus.type" size="small">
+            计划状态: {{ isInitialDataLoading ? '加载中...' : overallStatus.label }}
+          </el-tag>
+        </div>
       </div>
 
       <!-- Excel工具栏 -->
@@ -4320,17 +4512,29 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
             <el-icon><component :is="distributeButtonIcon" /></el-icon>
             {{ distributeButtonText }}
           </el-button>
-          <!-- 审批进度按钮（带徽章） -->
-          <el-badge v-if="pendingApprovalCount > 0" is-dot class="approval-badge">
-            <el-button size="small" type="warning" @click="handleOpenApproval">
+          <div class="approval-entry-wrapper">
+            <!-- 审批进度按钮（带徽章） -->
+            <el-badge v-if="pendingApprovalCount > 0" is-dot class="approval-badge">
+              <el-button
+                size="small"
+                type="warning"
+                class="approval-entry-action"
+                @click="handleOpenApproval"
+              >
+                <el-icon><Check /></el-icon>
+                {{ approvalEntryButtonText }}
+              </el-button>
+            </el-badge>
+            <el-button
+              v-else
+              size="small"
+              class="approval-entry-action"
+              @click="handleOpenApproval"
+            >
               <el-icon><Check /></el-icon>
               {{ approvalEntryButtonText }}
             </el-button>
-          </el-badge>
-          <el-button v-else size="small" @click="handleOpenApproval">
-            <el-icon><Check /></el-icon>
-            {{ approvalEntryButtonText }}
-          </el-button>
+          </div>
           <el-button size="small">
             <el-icon><Download /></el-icon>
             导出
@@ -4356,9 +4560,61 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
           </el-button-group>
         </div>
         <div class="toolbar-right">
-          <el-tag :type="overallStatus.type" size="small" style="margin-right: 12px">
-            状态: {{ isInitialDataLoading ? '加载中...' : overallStatus.label }}
-          </el-tag>
+          <el-popover
+            placement="top-end"
+            trigger="hover"
+            :width="320"
+            popper-class="approval-status-popper"
+            @show="handleApprovalStatusPopoverShow"
+          >
+            <template #reference>
+              <el-tag
+                :type="approvalFlowStatusMeta.tagType"
+                effect="light"
+                class="approval-status-tag"
+                @click.stop="handleOpenApproval"
+              >
+                审批状态: {{ approvalFlowStatusMeta.label }}
+              </el-tag>
+            </template>
+
+            <div class="approval-status-card" @click.stop="handleOpenApproval">
+              <div class="approval-status-card__header">
+                <span class="approval-status-card__title">流程状态</span>
+              </div>
+              <div class="approval-status-card__body">
+                <div class="approval-status-card__row">
+                  <span class="approval-status-card__label">说明</span>
+                  <span class="approval-status-card__value">
+                    {{ approvalFlowStatusMeta.description }}
+                  </span>
+                </div>
+                <div
+                  v-if="approvalStatusPopoverLoading || currentApprovalFlowName"
+                  class="approval-status-card__row"
+                >
+                  <span class="approval-status-card__label">审批流</span>
+                  <span class="approval-status-card__value">
+                    {{ approvalStatusPopoverLoading ? '加载中...' : currentApprovalFlowName }}
+                  </span>
+                </div>
+                <div v-if="currentApprovalStepName" class="approval-status-card__row">
+                  <span class="approval-status-card__label">当前节点</span>
+                  <span class="approval-status-card__value">{{ currentApprovalStepName }}</span>
+                </div>
+                <div
+                  v-if="currentApprovalCandidateNames.length > 0"
+                  class="approval-status-card__row"
+                >
+                  <span class="approval-status-card__label">可审批人</span>
+                  <span class="approval-status-card__value">
+                    {{ currentApprovalCandidateNames.join('、') }}
+                  </span>
+                </div>
+              </div>
+              <div class="approval-status-card__footer">点击可进入审批中心</div>
+            </div>
+          </el-popover>
           <el-tag
             :type="departmentTotalWeight === 100 ? 'success' : 'danger'"
             size="small"
@@ -6075,6 +6331,7 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 
 /* Excel标题头 - 统一页面头部规范 */
 .excel-header {
+  position: relative;
   background: linear-gradient(135deg, var(--bg-blue-light) 0%, rgba(64, 158, 255, 0.2) 100%);
   padding: var(--spacing-lg) var(--spacing-xl);
   border-bottom: 2px solid var(--color-primary);
@@ -6088,25 +6345,41 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
   margin: 0;
 }
 
+.excel-header-status {
+  position: absolute;
+  top: 50%;
+  right: var(--spacing-xl);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+}
+
 /* Excel工具栏 */
 .excel-toolbar {
   background: var(--bg-light);
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--border-color);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 16px;
 }
 
 .excel-toolbar .toolbar-left {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .excel-toolbar .toolbar-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .update-time {
@@ -7436,9 +7709,148 @@ const getProgressStatus = (progress: number): 'success' | 'warning' | 'exception
 
 .approval-badge {
   display: inline-flex;
+  position: relative;
+  z-index: 5;
+}
+
+.approval-entry-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: flex-start;
+  margin-right: 8px;
+  overflow: visible;
+}
+
+.approval-entry-action {
+  position: relative;
+  z-index: 2;
+}
+
+.approval-status-chip {
+  position: absolute;
+  top: -12px;
+  right: -42px;
+  z-index: 1;
+  max-width: 156px;
+  padding: 2px 9px;
+  border: 1px solid rgba(64, 158, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(10px);
+  color: var(--el-text-color-regular);
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  opacity: 0.62;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.approval-status-tag {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.approval-entry-wrapper:hover .approval-status-chip,
+.approval-status-chip:hover {
+  opacity: 1;
+  z-index: 4;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.approval-status-chip--warning {
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(255, 251, 235, 0.78);
+}
+
+.approval-status-chip--success {
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.24);
+  background: rgba(240, 253, 244, 0.78);
+}
+
+.approval-status-chip--danger {
+  color: #b91c1c;
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(254, 242, 242, 0.78);
+}
+
+.approval-status-chip--info {
+  color: #475569;
+  border-color: rgba(148, 163, 184, 0.28);
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.approval-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.approval-status-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.approval-status-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.approval-status-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.approval-status-card__row {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.approval-status-card__label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.approval-status-card__value {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--el-text-color-primary);
+  word-break: break-word;
+}
+
+.approval-status-card__footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  font-size: 12px;
+  color: var(--el-color-primary);
 }
 
 .approval-badge :deep(.el-badge__content.is-fixed.is-dot) {
+  z-index: 6;
+  top: 2px;
+  right: 6px;
   background-color: #f56c6c;
   box-shadow: 0 0 0 rgba(245, 108, 108, 0.45);
   animation: approval-badge-pulse 1.35s ease-in-out infinite;

@@ -32,10 +32,14 @@ import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDispla
 import type { Plan } from '@/shared/types'
 import { canUseAsFunctionalParentIndicator } from '@/features/indicator/lib/scope'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
-import { normalizePlanStatus } from '@/features/task/lib/planStatus'
+import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib/planStatus'
 import { strategicApi } from '@/features/task/api/strategicApi'
 import { getWorkflowDefinitionPreviewByCode } from '@/features/workflow/api'
-import type { WorkflowDefinitionPreviewResponse } from '@/features/workflow/api/types'
+import type {
+  WorkflowDefinitionPreviewResponse,
+  WorkflowInstanceDetailResponse
+} from '@/features/workflow/api/types'
+import { getWorkflowInstanceDetailByBusiness } from '@/features/workflow/api/queries'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 
 // 接收父组件传递的视角角色和部门
@@ -359,6 +363,8 @@ const lastEditTime = ref(new Date().toLocaleString())
 
 // 任务审批抽屉状态
 const taskApprovalVisible = ref(false)
+const currentCollegeWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
+const approvalStatusPopoverLoading = ref(false)
 
 // 专门用于审批抽屉的指标列表（当前选中学院的所有子指标，只显示当前部门下发的）
 const approvalIndicators = computed(() => {
@@ -801,6 +807,18 @@ const currentApprovalWorkflowCode = computed<string | string[]>(() => {
   return currentDispatchWorkflowCode.value
 })
 
+const normalizeWorkflowStepName = (value?: string | null) => {
+  return String(value || '')
+    .replace(/\s+/g, '')
+    .trim()
+}
+
+const normalizePreviewCandidateDisplayName = (
+  candidate: WorkflowDefinitionPreviewResponse['steps'][number]['candidateApprovers'][number]
+) => {
+  return candidate.realName || candidate.username || `用户${candidate.userId}`
+}
+
 const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
   supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
   onAutoOpen: () => Promise.resolve().then(() => handleOpenApproval()),
@@ -845,6 +863,133 @@ const secondaryApprovalEntityId = computed<number | string | undefined>(() => {
 
 const currentApprovalType = computed<'distribution' | 'submission'>(() => {
   return approvalWorkflowReportSummary.value?.id ? 'submission' : 'distribution'
+})
+
+const currentApprovalWorkflowStatus = computed(() => {
+  return String(
+    currentCollegeWorkflowDetail.value?.status ||
+      currentCollegePlanReportSummary.value?.workflowStatus ||
+      currentCollegePlanReportSummary.value?.status ||
+      currentActiveCollegePlan.value?.workflowStatus ||
+      selectedCollegePlanUiStatus.value ||
+      ''
+  )
+    .trim()
+    .toUpperCase()
+})
+
+const currentApprovalStepName = computed(() => {
+  return String(
+    currentCollegeWorkflowDetail.value?.currentStepName ||
+      currentCollegePlanReportSummary.value?.currentStepName ||
+      currentActiveCollegePlan.value?.currentStepName ||
+      ''
+  ).trim()
+})
+
+const currentApprovalApproverName = computed(() => {
+  return String(
+    currentCollegeWorkflowDetail.value?.currentApproverName ||
+      currentCollegePlanReportSummary.value?.currentApproverName ||
+      currentActiveCollegePlan.value?.currentApproverName ||
+      ''
+  ).trim()
+})
+
+const currentApprovalFlowName = computed(() => {
+  return String(
+    currentCollegeWorkflowDetail.value?.flowName ||
+      currentCollegeWorkflowDetail.value?.definitionName ||
+      approvalWorkflowPreview.value?.workflowName ||
+      ''
+  ).trim()
+})
+
+const currentApprovalStepPreview = computed(() => {
+  const stepName = normalizeWorkflowStepName(currentApprovalStepName.value)
+  if (!stepName || !approvalWorkflowPreview.value?.steps?.length) {
+    return null
+  }
+
+  return (
+    approvalWorkflowPreview.value.steps.find(
+      step => normalizeWorkflowStepName(step.stepName) === stepName
+    ) || null
+  )
+})
+
+const currentApprovalCandidateNames = computed(() => {
+  const candidates = currentApprovalStepPreview.value?.candidateApprovers
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return []
+  }
+
+  return candidates
+    .map(candidate => normalizePreviewCandidateDisplayName(candidate))
+    .filter(Boolean)
+})
+
+const approvalFlowStatusMeta = computed(() => {
+  const workflowStatus = currentApprovalWorkflowStatus.value
+  const stepName = currentApprovalStepName.value
+  const approverName = currentApprovalApproverName.value
+  const candidateNames = currentApprovalCandidateNames.value
+
+  if (
+    workflowStatus === 'APPROVED' ||
+    workflowStatus === 'COMPLETED' ||
+    workflowStatus === 'FINISHED' ||
+    workflowStatus === 'DISTRIBUTED'
+  ) {
+    return {
+      label: '已完成审批',
+      tagType: 'success' as const,
+      description: '当前计划审批流程已完成。'
+    }
+  }
+
+  if (
+    workflowStatus === 'REJECTED' ||
+    workflowStatus === 'RETURNED' ||
+    workflowStatus === 'WITHDRAWN' ||
+    workflowStatus === 'CANCELLED'
+  ) {
+    return {
+      label: '已退回',
+      tagType: 'danger' as const,
+      description: stepName ? `当前流程已在“${stepName}”环节退回。` : '当前计划审批流程已退回。'
+    }
+  }
+
+  if (stepName || approverName || ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(workflowStatus)) {
+    return {
+      label: stepName ? `待${stepName}审批` : '审批中',
+      tagType: 'warning' as const,
+      description:
+        candidateNames.length > 0
+          ? `当前节点有 ${candidateNames.length} 位可审批人。`
+          : stepName
+            ? `当前节点：${stepName}`
+            : '当前计划正在审批中。'
+    }
+  }
+
+  if (
+    approvalWorkflowReportSummary.value?.id ||
+    currentActiveCollegePlan.value?.workflowInstanceId
+  ) {
+    return {
+      label: '查看流程',
+      tagType: 'info' as const,
+      description: '当前计划已有审批记录，可进入审批中心查看。'
+    }
+  }
+
+  return {
+    label: '未发起流程',
+    tagType: 'info' as const,
+    description: '当前计划还未发起审批流程。'
+  }
 })
 
 const currentUserPermissionCodes = computed(() => {
@@ -1449,7 +1594,57 @@ const syncSelectedCollegeFromApprovalRoute = async () => {
 // 打开任务审批抽屉
 const handleOpenApproval = async () => {
   await syncSelectedCollegeFromApprovalRoute()
+  await preloadCurrentCollegeWorkflowDetail()
   taskApprovalVisible.value = true
+}
+
+async function preloadCurrentCollegeWorkflowDetail(): Promise<void> {
+  currentCollegeWorkflowDetail.value = null
+
+  const entityType = currentApprovalEntityType.value
+  const entityId = Number(currentApprovalEntityId.value ?? NaN)
+  if (!entityType || !Number.isFinite(entityId) || entityId <= 0) {
+    return
+  }
+
+  try {
+    const response = await getWorkflowInstanceDetailByBusiness(entityType, entityId)
+    if (response.success && response.data) {
+      currentCollegeWorkflowDetail.value = response.data
+    }
+  } catch (error) {
+    logger.warn('[IndicatorDistributeView] 预加载审批工作流详情失败:', {
+      entityType,
+      entityId,
+      error
+    })
+  }
+}
+
+const handleApprovalStatusPopoverShow = async () => {
+  if (!selectedCollege.value) {
+    return
+  }
+
+  approvalStatusPopoverLoading.value = true
+  try {
+    if (!currentCollegeWorkflowDetail.value) {
+      await preloadCurrentCollegeWorkflowDetail()
+    }
+
+    if (!approvalWorkflowPreview.value) {
+      try {
+        const response = await getWorkflowDefinitionPreviewByCode(currentDispatchWorkflowCode.value)
+        if (response.success && response.data) {
+          approvalWorkflowPreview.value = response.data
+        }
+      } catch (error) {
+        logger.warn('[IndicatorDistributeView] 加载流程状态候选审批人失败:', error)
+      }
+    }
+  } finally {
+    approvalStatusPopoverLoading.value = false
+  }
 }
 
 // 审批后刷新
@@ -3287,6 +3482,19 @@ const collegeOverallStatus = computed(() => {
   return { label: '暂无指标', type: 'info' }
 })
 
+const currentCollegePlanStatusMeta = computed(() => {
+  if (!selectedCollege.value) {
+    return { label: '暂无指标', type: 'info' as const }
+  }
+
+  const planStatus = normalizedSelectedCollegePlanStatus.value
+  if (planStatus) {
+    return getPlanStatusDisplay(planStatus)
+  }
+
+  return collegeOverallStatus.value
+})
+
 // 计算当前选中学院基础性任务下子指标的总权重
 const collegeTotalWeight = computed(() => {
   if (!selectedCollege.value) {
@@ -3452,7 +3660,7 @@ const canManageChildDraft = (child: StrategicIndicator | undefined): boolean => 
 
   // 该页面按“学院维度”统一下发与撤回；
   // 一旦学院整体已进入待审批/进行中，不再允许对单条草稿指标做逐条编辑或删除。
-  if (collegeOverallStatus.value.label !== '草稿') {
+  if (currentCollegePlanActionState.value !== 'draft') {
     return false
   }
 
@@ -4066,9 +4274,68 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
           <div class="card-header">
             <div class="header-left">
               <span class="card-title">{{ selectedCollege }}</span>
-              <el-tag :type="collegeOverallStatus.type" size="default" style="margin-left: 12px">
-                状态: {{ collegeOverallStatus.label }}
+              <el-tag
+                :type="currentCollegePlanStatusMeta.type"
+                size="default"
+                style="margin-left: 12px"
+              >
+                计划状态: {{ currentCollegePlanStatusMeta.label }}
               </el-tag>
+              <el-popover
+                placement="top-start"
+                trigger="hover"
+                :width="320"
+                popper-class="approval-status-popper"
+                @show="handleApprovalStatusPopoverShow"
+              >
+                <template #reference>
+                  <el-tag
+                    :type="approvalFlowStatusMeta.tagType"
+                    size="default"
+                    style="margin-left: 12px; cursor: pointer"
+                    @click.stop="handleOpenApproval"
+                  >
+                    审批状态: {{ approvalFlowStatusMeta.label }}
+                  </el-tag>
+                </template>
+
+                <div class="approval-status-card" @click.stop="handleOpenApproval">
+                  <div class="approval-status-card__header">
+                    <span class="approval-status-card__title">流程状态</span>
+                  </div>
+                  <div class="approval-status-card__body">
+                    <div class="approval-status-card__row">
+                      <span class="approval-status-card__label">说明</span>
+                      <span class="approval-status-card__value">
+                        {{ approvalFlowStatusMeta.description }}
+                      </span>
+                    </div>
+                    <div
+                      v-if="approvalStatusPopoverLoading || currentApprovalFlowName"
+                      class="approval-status-card__row"
+                    >
+                      <span class="approval-status-card__label">审批流</span>
+                      <span class="approval-status-card__value">
+                        {{ approvalStatusPopoverLoading ? '加载中...' : currentApprovalFlowName }}
+                      </span>
+                    </div>
+                    <div v-if="currentApprovalStepName" class="approval-status-card__row">
+                      <span class="approval-status-card__label">当前节点</span>
+                      <span class="approval-status-card__value">{{ currentApprovalStepName }}</span>
+                    </div>
+                    <div
+                      v-if="currentApprovalCandidateNames.length > 0"
+                      class="approval-status-card__row"
+                    >
+                      <span class="approval-status-card__label">可审批人</span>
+                      <span class="approval-status-card__value">
+                        {{ currentApprovalCandidateNames.join('、') }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="approval-status-card__footer">点击可进入审批中心</div>
+                </div>
+              </el-popover>
               <el-tag
                 :type="collegeTotalWeight === 100 ? 'success' : 'danger'"
                 size="default"
@@ -4102,7 +4369,7 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
                     {{ distributionApprovalButtonText }}
                   </el-button>
                 </div>
-                <template v-if="collegeOverallStatus.label === '草稿' && canEditChild">
+                <template v-if="currentCollegePlanActionState === 'draft' && canEditChild">
                   <el-button type="primary" @click="openAddIndicatorForm">
                     <el-icon><Plus /></el-icon>
                     新增指标
@@ -5315,6 +5582,58 @@ const getRowClassName = ({ row }: { row: TableRowData }) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.approval-status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.approval-status-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.approval-status-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.approval-status-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.approval-status-card__row {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.approval-status-card__label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.approval-status-card__value {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--el-text-color-primary);
+  word-break: break-word;
+}
+
+.approval-status-card__footer {
+  padding-top: 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  font-size: 12px;
+  color: var(--el-color-primary);
 }
 
 .empty-placeholder {
