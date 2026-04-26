@@ -182,7 +182,7 @@ describe('Formatters - Label Functions', () => {
 
   describe('getStatusLabel', () => {
     it('should return correct label for pending', () => {
-      expect(getStatusLabel('pending')).toBe('待审批')
+      expect(getStatusLabel('pending')).toBe('审批中')
     })
 
     it('should return correct label for approved', () => {

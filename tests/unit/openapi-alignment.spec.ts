@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process'
 
 const repoRoot = join(__dirname, '..', '..')
 const frontendRoot = join(repoRoot, 'src')
-const openApiPath = join(repoRoot, '..', 'sism-backend', 'openapi-latest.json')
+const openApiPath = join(repoRoot, '..', 'sism-backend', 'openapi.json')
 
 const compatibilityWhitelist = [
   { method: 'post', path: '/api/v1/auth/refresh' },

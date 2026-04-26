@@ -298,6 +298,10 @@ const backendTaskTypeMap = ref<Record<string, string>>({})
 const currentPlanTaskTypeMap = ref<Record<string, string>>({})
 const currentPlanTaskIdSet = ref<Set<string>>(new Set())
 
+const currentPlanTaskIdSetSignature = computed(() =>
+  Array.from(currentPlanTaskIdSet.value).sort().join(',')
+)
+
 const milestoneCache = ref<Record<string, Record<string, Array<Record<string, unknown>>>>>({}) // key: "部门名_指标ID"
 
 const normalizeTaskId = (value: unknown): string => {
@@ -587,6 +591,8 @@ watch(
 const milestoneMap = ref<Record<string, Array<Record<string, unknown>>>>({})
 const loadedMilestoneIds = ref(new Set<string>())
 const loadingMilestoneIds = ref(new Set<string>())
+const milestoneLoadRequestId = ref(0)
+const milestoneFallbackConcurrency = 4
 
 const toMilestoneStatus = (status?: string): 'pending' | 'completed' | 'overdue' => {
   const normalized = String(status || '').toUpperCase()
@@ -664,8 +670,87 @@ const normalizedIndicators = computed(() =>
 
 const getCurrentScopeIndicatorsForMilestones = () => indicators.value
 
+const loadMilestonePayloadsIndividually = async (indicatorIds: string[]) => {
+  const payloadMap: Record<string, unknown> = {}
+  const concurrency = Math.min(milestoneFallbackConcurrency, indicatorIds.length)
+  let currentIndex = 0
+
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (currentIndex < indicatorIds.length) {
+        const indicatorId = indicatorIds[currentIndex]
+        currentIndex += 1
+
+        try {
+          const response = await milestoneApi.getMilestonesByIndicator(indicatorId)
+          payloadMap[indicatorId] = response.success ? response.data : []
+        } catch (error) {
+          logger.warn(`[StrategicTaskView] 加载指标 ${indicatorId} 里程碑失败`, error)
+          payloadMap[indicatorId] = []
+        }
+      }
+    })
+  )
+
+  return payloadMap
+}
+
+const loadMilestonePayloads = async (indicatorIds: string[]) => {
+  const payloadMap: Record<string, unknown> = {}
+  const persistedIndicatorIds = indicatorIds
+    .filter(id => /^\d+$/.test(id))
+    .map(id => Number(id))
+    .sort((a, b) => a - b)
+  const transientIndicatorIds = indicatorIds.filter(id => !/^\d+$/.test(id))
+
+  transientIndicatorIds.forEach(id => {
+    payloadMap[id] = []
+  })
+
+  if (persistedIndicatorIds.length === 0) {
+    return payloadMap
+  }
+
+  if (persistedIndicatorIds.length === 1) {
+    const indicatorId = String(persistedIndicatorIds[0])
+    const response = await milestoneApi.getMilestonesByIndicator(indicatorId)
+    payloadMap[indicatorId] = response.success ? response.data : []
+    return payloadMap
+  }
+
+  try {
+    const response = await milestoneApi.getMilestonesByIndicatorIds(persistedIndicatorIds)
+    if (!response.success || !response.data || typeof response.data !== 'object') {
+      throw new Error(response.message || '批量加载里程碑返回异常')
+    }
+
+    const batchPayload = response.data as Record<string, unknown>
+    persistedIndicatorIds.forEach(indicatorId => {
+      payloadMap[String(indicatorId)] = batchPayload[String(indicatorId)] ?? []
+    })
+
+    return payloadMap
+  } catch (error) {
+    logger.warn('[StrategicTaskView] 批量加载里程碑失败，回退逐个加载', error)
+    const fallbackPayloadMap = await loadMilestonePayloadsIndividually(
+      persistedIndicatorIds.map(indicatorId => String(indicatorId))
+    )
+    return {
+      ...payloadMap,
+      ...fallbackPayloadMap
+    }
+  }
+}
+
 const loadMilestonesForCurrentScope = async () => {
   const dept = selectedDepartment.value
+  if (!dept) {
+    return
+  }
+
+  const requestId = milestoneLoadRequestId.value + 1
+  milestoneLoadRequestId.value = requestId
+
   const indicatorsToLoad = getCurrentScopeIndicatorsForMilestones()
 
   // 当前部门的里程碑缓存
@@ -673,16 +758,14 @@ const loadMilestonesForCurrentScope = async () => {
 
   // 分离需要请求的指标和可以直接从缓存读取的指标
   const needRequestIds: string[] = []
-  const cachedIds: string[] = []
 
   indicatorsToLoad.forEach(i => {
-    const id = String(i.id)
+    const id = String(i.id ?? '').trim()
     if (!id) return
 
     if (deptMilestoneCache[id]) {
       // 从缓存读取
       milestoneMap.value[id] = deptMilestoneCache[id]
-      cachedIds.push(id)
       loadedMilestoneIds.value.add(id)
     } else if (!loadedMilestoneIds.value.has(id) && !loadingMilestoneIds.value.has(id)) {
       needRequestIds.push(id)
@@ -694,32 +777,59 @@ const loadMilestonesForCurrentScope = async () => {
     return
   }
 
-  await Promise.all(
-    needRequestIds.map(async indicatorId => {
-      loadingMilestoneIds.value.add(indicatorId)
-      try {
-        const response = await milestoneApi.getMilestonesByIndicator(indicatorId)
-        if (response.success) {
-          const rawMilestones = extractMilestones(response.data)
-          const normalizedMilestones = rawMilestones.map((m, idx) => normalizeMilestone(m, idx))
-          milestoneMap.value[indicatorId] = normalizedMilestones
-          // 存入缓存
-          milestoneCache.value[dept] = milestoneCache.value[dept] || {}
-          milestoneCache.value[dept][indicatorId] = normalizedMilestones
-        } else {
-          milestoneMap.value[indicatorId] = []
-          milestoneCache.value[dept] = milestoneCache.value[dept] || {}
-          milestoneCache.value[dept][indicatorId] = []
-        }
-      } catch (error) {
-        logger.warn(`[StrategicTaskView] 加载指标 ${indicatorId} 里程碑失败`, error)
-        milestoneMap.value[indicatorId] = []
-      } finally {
-        loadingMilestoneIds.value.delete(indicatorId)
-        loadedMilestoneIds.value.add(indicatorId)
-      }
+  needRequestIds.forEach(indicatorId => {
+    loadingMilestoneIds.value.add(indicatorId)
+  })
+
+  try {
+    const payloadMap = await loadMilestonePayloads(needRequestIds)
+    const nextMilestoneMap = { ...milestoneMap.value }
+    const nextDeptMilestoneCache = {
+      ...(milestoneCache.value[dept] || {})
+    }
+
+    needRequestIds.forEach(indicatorId => {
+      const rawMilestones = extractMilestones(payloadMap[indicatorId] ?? [])
+      const normalizedMilestones = rawMilestones.map((m, idx) => normalizeMilestone(m, idx))
+      nextMilestoneMap[indicatorId] = normalizedMilestones
+      nextDeptMilestoneCache[indicatorId] = normalizedMilestones
     })
-  )
+
+    milestoneCache.value = {
+      ...milestoneCache.value,
+      [dept]: nextDeptMilestoneCache
+    }
+
+    if (milestoneLoadRequestId.value === requestId && selectedDepartment.value === dept) {
+      milestoneMap.value = nextMilestoneMap
+    }
+  } catch (error) {
+    logger.warn('[StrategicTaskView] 加载当前范围里程碑失败', error)
+
+    const nextMilestoneMap = { ...milestoneMap.value }
+    const nextDeptMilestoneCache = {
+      ...(milestoneCache.value[dept] || {})
+    }
+
+    needRequestIds.forEach(indicatorId => {
+      nextMilestoneMap[indicatorId] = []
+      nextDeptMilestoneCache[indicatorId] = []
+    })
+
+    milestoneCache.value = {
+      ...milestoneCache.value,
+      [dept]: nextDeptMilestoneCache
+    }
+
+    if (milestoneLoadRequestId.value === requestId && selectedDepartment.value === dept) {
+      milestoneMap.value = nextMilestoneMap
+    }
+  } finally {
+    needRequestIds.forEach(indicatorId => {
+      loadingMilestoneIds.value.delete(indicatorId)
+      loadedMilestoneIds.value.add(indicatorId)
+    })
+  }
 }
 
 const reloadMilestonesForIndicator = async (indicatorId: string, dept: string) => {
@@ -744,7 +854,7 @@ watch(
     () => strategicStore.indicators.length,
     () => orgStore.departments.length,
     () => timeContext.currentYear,
-    () => Array.from(currentPlanTaskIdSet.value).sort().join(',')
+    currentPlanTaskIdSetSignature
   ],
   () => {
     if (isBootstrappingPage.value) {
@@ -3033,7 +3143,6 @@ watch([selectedDepartment, () => planStore.plans.length], async () => {
   }
   resetApprovalWorkflowStateCache()
   await refreshCurrentDepartmentView({ showLoading: true, force: true })
-  void loadMilestonesForCurrentScope()
 })
 
 watch(

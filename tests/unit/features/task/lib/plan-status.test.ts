@@ -24,7 +24,7 @@ describe('task/lib/planStatus', () => {
     expect(normalizePlanStatus('pending_review')).toBe('PENDING')
     expect(normalizePlanStatus('IN_REVIEW')).toBe('PENDING')
     expect(getPlanStatusDisplay('pending')).toEqual({
-      label: '待审批',
+      label: '审批中',
       type: 'warning'
     })
   })

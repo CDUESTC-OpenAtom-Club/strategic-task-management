@@ -104,7 +104,7 @@ describe('Advanced Status Management', () => {
   describe('Approval Status Display', () => {
     it('should get correct approval text', () => {
       expect(getApprovalStatusText(ProgressApprovalStatus.NONE)).toBe('无待审批')
-      expect(getApprovalStatusText(ProgressApprovalStatus.PENDING)).toBe('待审批')
+      expect(getApprovalStatusText(ProgressApprovalStatus.PENDING)).toBe('审批中')
       expect(getApprovalStatusText(ProgressApprovalStatus.APPROVED)).toBe('已通过')
       expect(getApprovalStatusText(ProgressApprovalStatus.REJECTED)).toBe('已驳回')
     })

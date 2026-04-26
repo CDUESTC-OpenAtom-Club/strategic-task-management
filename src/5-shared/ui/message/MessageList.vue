@@ -66,9 +66,7 @@
             >
               标为已读
             </el-button>
-            <el-button size="small" @click.stop="viewDetails(message)">
-              {{ message.canProcess ? '立即处理' : '查看详情' }}
-            </el-button>
+            <el-button size="small" @click.stop="viewDetails(message)"> 查看详情 </el-button>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useDashboardStore } from '@/features/dashboard/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { isSecondaryCollege } from '@/utils/colors'
+import { mockIndicators } from '@/shared/api/mocks/fixtures/mockIndicators'
 
 // Mock localStorage for node environment
 beforeAll(() => {
@@ -13,7 +14,7 @@ beforeAll(() => {
     removeItem: vi.fn(),
     clear: vi.fn(),
     length: 0,
-    key: vi.fn(() => null),
+    key: vi.fn(() => null)
   }
   ;(globalThis as any).localStorage = localStorageMock
 })
@@ -49,9 +50,17 @@ const createCollegeUser = () => ({
   updatedAt: new Date()
 })
 
+const createPersistedMockIndicators = () =>
+  mockIndicators.map((indicator, index) => ({
+    ...JSON.parse(JSON.stringify(indicator)),
+    id: String(index + 1)
+  }))
+
 describe('Dashboard Store - Three-tier Drilldown', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    const strategicStore = useStrategicStore()
+    strategicStore.indicators = createPersistedMockIndicators()
   })
 
   describe('Role-based data filtering', () => {
@@ -78,11 +87,16 @@ describe('Dashboard Store - Three-tier Drilldown', () => {
       const visible = dashboardStore.visibleIndicators
 
       expect(visible.some(i => i.responsibleDept === '就业创业指导中心')).toBe(true)
-      expect(visible.some(i => i.ownerDept === '就业创业指导中心' && isSecondaryCollege(i.responsibleDept))).toBe(true)
-      expect(visible.every(i =>
-        i.responsibleDept === '就业创业指导中心' ||
-        i.ownerDept === '就业创业指导中心'
-      )).toBe(true)
+      expect(
+        visible.some(
+          i => i.ownerDept === '就业创业指导中心' && isSecondaryCollege(i.responsibleDept)
+        )
+      ).toBe(true)
+      expect(
+        visible.every(
+          i => i.responsibleDept === '就业创业指导中心' || i.ownerDept === '就业创业指导中心'
+        )
+      ).toBe(true)
     })
 
     it('secondary_college should only see own indicators', () => {
@@ -139,9 +153,9 @@ describe('Dashboard Store - Three-tier Drilldown', () => {
       const afterDrillDown = dashboardStore.visibleIndicators.length
 
       expect(afterDrillDown).toBeLessThan(beforeDrillDown)
-      expect(dashboardStore.visibleIndicators.every(i =>
-        i.responsibleDept === '计算机学院'
-      )).toBe(true)
+      expect(dashboardStore.visibleIndicators.every(i => i.responsibleDept === '计算机学院')).toBe(
+        true
+      )
     })
   })
 

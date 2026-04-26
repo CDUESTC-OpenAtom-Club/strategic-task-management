@@ -109,6 +109,9 @@
             <div class="message-subfilters">
               <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
             </div>
+            <div class="message-subfilters">
+              <el-segmented v-model="processedFilter" :options="processedFilterOptions" />
+            </div>
             <MessageList
               :messages="filteredMessages"
               :empty-description="getEmptyDescription()"
@@ -152,6 +155,11 @@
         </div>
         <div class="detail-time">{{ formatDateTime(detailMessage.createdAt) }}</div>
         <div class="detail-body">{{ detailMessage.detailContent || detailMessage.content }}</div>
+
+        <div v-if="shouldShowDetailActionSelector(detailMessage)" class="detail-action-selector">
+          <span class="detail-action-selector__label">处理方式</span>
+          <el-segmented v-model="detailActionMode" :options="detailActionOptions(detailMessage)" />
+        </div>
 
         <div class="detail-actions">
           <el-button
@@ -197,8 +205,10 @@ const { openApprovalCenter } = useApprovalCenter()
 
 const activeTab = ref('all')
 const activeTypeFilter = ref<'all' | 'approval' | 'reminder' | 'system'>('all')
+const processedFilter = ref<'all' | 'approved' | 'rejected'>('all')
 const detailVisible = ref(false)
 const detailMessage = ref<Message | null>(null)
+const detailActionMode = ref<'approval-center' | 'route'>('approval-center')
 
 const allMessages = computed(() => messageStore.visibleMessages)
 const todoMessages = computed(() => messageStore.todoMessages)
@@ -220,12 +230,20 @@ const typeFilterOptions = [
   { label: '系统通知', value: 'system' }
 ] as const
 
+const processedFilterOptions = [
+  { label: '全部结果', value: 'all' },
+  { label: '已通过', value: 'approved' },
+  { label: '已驳回', value: 'rejected' }
+] as const
+
 const currentPrimaryMessages = computed(() => {
   if (activeTab.value === 'todo') {
     return todoMessages.value
   }
   if (activeTab.value === 'processed') {
-    return processedMessages.value
+    return processedMessages.value.filter(message =>
+      matchesProcessedResultFilter(message, processedFilter.value)
+    )
   }
   return allMessages.value
 })
@@ -278,6 +296,14 @@ const summaryCards = computed(() => {
 function getEmptyDescription(): string {
   const scopeLabel =
     activeTab.value === 'todo' ? '待处理' : activeTab.value === 'processed' ? '已处理' : '消息'
+  const resultLabel =
+    activeTab.value === 'processed'
+      ? processedFilter.value === 'approved'
+        ? '中的已通过审批'
+        : processedFilter.value === 'rejected'
+          ? '中的已驳回审批'
+          : ''
+      : ''
   const typeLabel =
     activeTypeFilter.value === 'approval'
       ? '审批通知'
@@ -287,7 +313,15 @@ function getEmptyDescription(): string {
           ? '系统通知'
           : ''
 
-  return typeLabel ? `当前没有${scopeLabel}中的${typeLabel}` : `当前没有${scopeLabel}`
+  if (typeLabel) {
+    return `当前没有${scopeLabel}中的${typeLabel}`
+  }
+
+  if (resultLabel) {
+    return `当前没有${scopeLabel}${resultLabel}`
+  }
+
+  return `当前没有${scopeLabel}`
 }
 
 async function refreshData() {
@@ -326,6 +360,61 @@ function buildApprovalCenterContext(message: Message) {
   }
 }
 
+function isApprovalMessage(message?: Message | null): boolean {
+  return message?.type === 'approval'
+}
+
+function normalizeResultKeywordTarget(message: Message): string {
+  return [
+    message.title,
+    message.content,
+    message.detailContent,
+    message.status,
+    message.readState,
+    message.actionState
+  ]
+    .filter(value => typeof value === 'string' && value.trim())
+    .join(' ')
+    .toUpperCase()
+}
+
+function isApprovedMessage(message: Message): boolean {
+  const normalized = normalizeResultKeywordTarget(message)
+  return (
+    message.bizType === 'APPROVAL_RESULT' &&
+    (normalized.includes('通过') ||
+      normalized.includes('已通过') ||
+      normalized.includes('APPROVED') ||
+      normalized.includes('SUCCESS'))
+  )
+}
+
+function isRejectedMessage(message: Message): boolean {
+  const normalized = normalizeResultKeywordTarget(message)
+  return (
+    message.bizType === 'APPROVAL_RESULT' &&
+    (normalized.includes('驳回') ||
+      normalized.includes('已驳回') ||
+      normalized.includes('REJECTED') ||
+      normalized.includes('REJECT'))
+  )
+}
+
+function matchesProcessedResultFilter(
+  message: Message,
+  filter: 'all' | 'approved' | 'rejected'
+): boolean {
+  if (filter === 'approved') {
+    return isApprovedMessage(message)
+  }
+
+  if (filter === 'rejected') {
+    return isRejectedMessage(message)
+  }
+
+  return true
+}
+
 function getMessageMetadataValue(message: Message, key: string): string {
   const value = message.metadata?.[key]
   return typeof value === 'string' ? value.trim() : ''
@@ -359,6 +448,39 @@ function buildApprovalPayload(message: Message) {
   }
 }
 
+function resolveMessageRouteTarget(message?: Message | null): string | null {
+  if (!message) {
+    return null
+  }
+
+  const approvalPayload = buildApprovalPayload(message)
+  if (message.type === 'approval') {
+    const approvalRoute = resolveApprovalRoute(approvalPayload)
+
+    if (approvalRoute) {
+      return approvalRoute
+    }
+  }
+
+  if (message.actionUrl) {
+    return message.actionUrl
+  }
+
+  return null
+}
+
+function canOpenApprovalCenter(message?: Message | null): boolean {
+  if (!message || !isApprovalMessage(message)) {
+    return false
+  }
+
+  const context = buildApprovalCenterContext(message)
+  return Boolean(
+    (context.workflowEntityType === 'PLAN' || context.workflowEntityType === 'PLAN_REPORT') &&
+    context.workflowEntityId !== undefined
+  )
+}
+
 function resolveMessageAction(
   message?: Message | null
 ): { mode: 'approval-center' } | { mode: 'route'; target: string } | { mode: 'none' } {
@@ -366,27 +488,25 @@ function resolveMessageAction(
     return { mode: 'none' }
   }
 
-  const approvalPayload = buildApprovalPayload(message)
-  const isProcessAction = Boolean(message.canProcess) || message.bizType === 'APPROVAL_TODO'
+  const routeTarget = resolveMessageRouteTarget(message)
 
-  if (message.type === 'approval') {
-    const approvalRoute = resolveApprovalRoute(approvalPayload)
-
-    if (approvalRoute && isProcessAction) {
-      return { mode: 'route', target: approvalRoute }
-    }
-
-    if (requiresApprovalCenterFallback(approvalPayload)) {
+  if (isApprovalMessage(message) && detailActionMode.value === 'approval-center') {
+    if (canOpenApprovalCenter(message)) {
       return { mode: 'approval-center' }
     }
 
-    if (approvalRoute) {
-      return { mode: 'route', target: approvalRoute }
+    const approvalPayload = buildApprovalPayload(message)
+    if (requiresApprovalCenterFallback(approvalPayload) && canOpenApprovalCenter(message)) {
+      return { mode: 'approval-center' }
     }
   }
 
-  if (message.actionUrl) {
-    return { mode: 'route', target: message.actionUrl }
+  if (routeTarget) {
+    return { mode: 'route', target: routeTarget }
+  }
+
+  if (canOpenApprovalCenter(message)) {
+    return { mode: 'approval-center' }
   }
 
   return { mode: 'none' }
@@ -394,6 +514,41 @@ function resolveMessageAction(
 
 function canHandleMessageAction(message?: Message | null): boolean {
   return resolveMessageAction(message).mode !== 'none'
+}
+
+function detailActionOptions(message?: Message | null) {
+  const options: Array<{ label: string; value: 'approval-center' | 'route' }> = []
+
+  if (canOpenApprovalCenter(message)) {
+    options.push({ label: '右侧打开审批中心', value: 'approval-center' })
+  }
+
+  if (resolveMessageRouteTarget(message)) {
+    options.push({ label: '跳转到对应页面', value: 'route' })
+  }
+
+  return options
+}
+
+function shouldShowDetailActionSelector(message?: Message | null): boolean {
+  return isApprovalMessage(message) && detailActionOptions(message).length > 1
+}
+
+function syncDetailActionMode(message?: Message | null) {
+  const options = detailActionOptions(message)
+  if (!options.length) {
+    return
+  }
+
+  const currentModeSupported = options.some(option => option.value === detailActionMode.value)
+  if (!currentModeSupported) {
+    detailActionMode.value = options[0].value
+    return
+  }
+
+  if (isApprovalMessage(message) && canOpenApprovalCenter(message)) {
+    detailActionMode.value = 'approval-center'
+  }
 }
 
 function getMessagePrimaryActionLabel(message?: Message | null): string {
@@ -404,24 +559,22 @@ function getMessagePrimaryActionLabel(message?: Message | null): string {
   const action = resolveMessageAction(message)
   if (action.mode === 'approval-center') {
     return message.canProcess || message.bizType === 'APPROVAL_TODO'
-      ? '打开审批处理'
-      : '打开关联审批'
+      ? '右侧打开审批中心'
+      : '右侧查看关联审批'
   }
 
   if (action.mode === 'route') {
-    return message.canProcess || message.bizType === 'APPROVAL_TODO' ? '立即处理' : '查看关联内容'
+    return message.canProcess || message.bizType === 'APPROVAL_TODO'
+      ? '跳转到对应页面'
+      : '查看关联内容'
   }
 
   return '查看详情'
 }
 
 async function handleMessageView(message: Message) {
-  if (message.canProcess || message.bizType === 'APPROVAL_TODO') {
-    navigateByMessage(message)
-    return
-  }
-
   if (
+    !isApprovalMessage(message) &&
     (!messageStore.capabilities.detailDrawerEnabled || message.canViewDetail === false) &&
     canHandleMessageAction(message)
   ) {
@@ -431,8 +584,10 @@ async function handleMessageView(message: Message) {
 
   detailVisible.value = true
   detailMessage.value = message
+  syncDetailActionMode(message)
   try {
     detailMessage.value = await messageStore.fetchMessageDetail(message.id)
+    syncDetailActionMode(detailMessage.value)
   } catch {
     ElMessage.warning('详情加载失败，已展示列表中的摘要内容')
   }
@@ -448,6 +603,7 @@ function handleDetailPrimaryAction() {
 }
 
 function navigateByMessage(message: Message) {
+  syncDetailActionMode(message)
   const action = resolveMessageAction(message)
 
   if (action.mode === 'approval-center') {
@@ -621,7 +777,19 @@ onMounted(() => {
 
 .detail-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.detail-action-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-action-selector__label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 @media (max-width: 768px) {
