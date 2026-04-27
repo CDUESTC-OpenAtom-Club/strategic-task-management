@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch as _watch } from 'vue'
 import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-plus/icons-vue'
 import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/shared/types'
