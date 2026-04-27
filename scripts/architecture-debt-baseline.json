@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-27T08:39:22.200Z",
+  "generatedAt": "2026-04-27T09:27:42.436Z",
   "tsNoCheckFiles": [
     "src/3-features/approval/ui/CustomApprovalFlow.vue",
     "src/3-features/auth/ui/LoginView.vue",
@@ -56,16 +56,12 @@
     "src/5-shared/api/mocks/handler.ts",
     "src/5-shared/api/monitoringApi.ts",
     "src/5-shared/api/websocket.ts",
-    "src/5-shared/lib/api/client.ts",
-    "src/5-shared/lib/api/wrappers.ts",
     "src/5-shared/lib/charts/useECharts.ts",
     "src/5-shared/lib/hooks/dashboard/useDashboardState.ts",
     "src/5-shared/lib/hooks/useECharts.ts",
     "src/5-shared/lib/layout/useNavigation.ts",
     "src/5-shared/lib/milestone-intelligence/milestoneStatusCalculator.ts",
     "src/5-shared/lib/milestone-intelligence/milestoneTooltipBuilder.ts",
-    "src/5-shared/lib/permissions/usePermission 2.ts",
-    "src/5-shared/lib/permissions/usePermission.ts",
     "src/5-shared/lib/store/createCrudStore.ts",
     "src/5-shared/lib/utils/apiDeduplication.ts",
     "src/5-shared/lib/utils/dataMappers.ts",

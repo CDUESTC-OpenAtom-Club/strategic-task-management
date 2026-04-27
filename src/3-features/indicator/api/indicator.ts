@@ -1,7 +1,12 @@
 // @ts-nocheck
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/lib/api/wrappers'
-import { buildQueryKey, fetchWithCache, invalidateQueries, refreshCachePattern } from '@/shared/lib/utils/cache'
+import { withRetry } from '@/shared/api/wrappers'
+import {
+  buildQueryKey,
+  fetchWithCache,
+  invalidateQueries,
+  refreshCachePattern
+} from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type {
   ApiResponse,
@@ -9,10 +14,7 @@ import type {
   IndicatorDistributionEligibility,
   BatchDistributionRequest
 } from '@/shared/types'
-import type {
-  IndicatorVO,
-  IndicatorCreateRequest
-} from '@/shared/types/backend-aligned'
+import type { IndicatorVO, IndicatorCreateRequest } from '@/shared/types/backend-aligned'
 
 /**
  * 指标 API 服务
@@ -44,7 +46,11 @@ function invalidateIndicatorListCaches(indicatorId?: string): void {
     targets.push(
       'indicator.detail',
       `indicator.detail.${indicatorId}`,
-      buildQueryKey('indicator', 'detail', withIndicatorCacheContext({ indicatorId: String(indicatorId) }))
+      buildQueryKey(
+        'indicator',
+        'detail',
+        withIndicatorCacheContext({ indicatorId: String(indicatorId) })
+      )
     )
   }
 
@@ -112,7 +118,11 @@ export const indicatorApi = {
    */
   async getIndicatorsByTask(taskId: string): Promise<ApiResponse<IndicatorVO[]>> {
     return fetchWithCache({
-      key: buildQueryKey('indicator', 'list', withIndicatorCacheContext({ taskId: String(taskId) })),
+      key: buildQueryKey(
+        'indicator',
+        'list',
+        withIndicatorCacheContext({ taskId: String(taskId) })
+      ),
       policy: {
         ttlMs: 2 * 60 * 1000,
         scope: 'session',
@@ -190,7 +200,8 @@ export const indicatorApi = {
         dedupeWindowMs: 1000,
         tags: ['indicator.list', 'indicator.search']
       },
-      fetcher: () => apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators/search', { params: { keyword } })
+      fetcher: () =>
+        apiClient.get<ApiResponse<IndicatorVO[]>>('/indicators/search', { params: { keyword } })
     })
   },
 
@@ -259,30 +270,32 @@ export const indicatorApi = {
     })
   },
 
-  async batchDistributePageIndicators(
-    request: {
-      indicators: Array<{
-        clientRequestId: string
-        indicatorId?: number
-        targetOrgId: number
-        customDesc?: string
-      }>
-    }
-  ): Promise<ApiResponse<{
-    totalCount: number
-    items: Array<{
+  async batchDistributePageIndicators(request: {
+    indicators: Array<{
       clientRequestId: string
-      indicatorId: number
+      indicatorId?: number
+      targetOrgId: number
+      customDesc?: string
     }>
-  }>> {
+  }): Promise<
+    ApiResponse<{
+      totalCount: number
+      items: Array<{
+        clientRequestId: string
+        indicatorId: number
+      }>
+    }>
+  > {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<{
-        totalCount: number
-        items: Array<{
-          clientRequestId: string
-          indicatorId: number
+      return apiClient.post<
+        ApiResponse<{
+          totalCount: number
+          items: Array<{
+            clientRequestId: string
+            indicatorId: number
+          }>
         }>
-      }>>('/indicators/actions/batch-distribute', request)
+      >('/indicators/actions/batch-distribute', request)
     })
   },
 
@@ -328,21 +341,25 @@ export const indicatorApi = {
     targetOrgId: number,
     planId?: number,
     reason?: string
-  ): Promise<ApiResponse<{
-    totalCount: number
-    successCount: number
-    failedCount: number
-    withdrawnIndicatorIds: number[]
-    errors: string[]
-  }>> {
+  ): Promise<
+    ApiResponse<{
+      totalCount: number
+      successCount: number
+      failedCount: number
+      withdrawnIndicatorIds: number[]
+      errors: string[]
+    }>
+  > {
     return withRetry(async () => {
-      return apiClient.post<ApiResponse<{
-        totalCount: number
-        successCount: number
-        failedCount: number
-        withdrawnIndicatorIds: number[]
-        errors: string[]
-      }>>('/indicators/batch-withdraw', {
+      return apiClient.post<
+        ApiResponse<{
+          totalCount: number
+          successCount: number
+          failedCount: number
+          withdrawnIndicatorIds: number[]
+          errors: string[]
+        }>
+      >('/indicators/batch-withdraw', {
         ownerOrgId,
         targetOrgId,
         ...(typeof planId === 'number' ? { planId } : {}),
@@ -368,7 +385,10 @@ export const indicatorApi = {
   ): Promise<ApiResponse<IndicatorVO>> {
     return withRetry(async () => {
       console.log('[API] updateIndicator request:', indicatorId, updates)
-      const result = await apiClient.put<ApiResponse<IndicatorVO>>(`/indicators/${indicatorId}`, updates)
+      const result = await apiClient.put<ApiResponse<IndicatorVO>>(
+        `/indicators/${indicatorId}`,
+        updates
+      )
       console.log('[API] updateIndicator response:', result)
       invalidateIndicatorListCaches(indicatorId)
       return result

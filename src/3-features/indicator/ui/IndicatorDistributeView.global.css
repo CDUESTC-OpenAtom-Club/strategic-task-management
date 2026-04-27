@@ -1,0 +1,6 @@
+/* 全局样式：强制表单标签不换行 */
+.add-row-form .el-form-item__label {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow: visible !important;
+}

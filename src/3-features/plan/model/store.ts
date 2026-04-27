@@ -11,7 +11,7 @@ import type { Plan, PlanStatus, PlanFill, IndicatorFill, IndicatorFillForm } fro
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
-import { withExponentialRetry } from '@/shared/lib/api/wrappers'
+import { withExponentialRetry } from '@/shared/api/wrappers'
 import { ElMessage } from 'element-plus'
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {

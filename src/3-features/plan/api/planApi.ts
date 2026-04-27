@@ -8,7 +8,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/lib/api/wrappers'
+import { withRetry } from '@/shared/api/wrappers'
 import { USE_MOCK } from '@/shared/config/api'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'

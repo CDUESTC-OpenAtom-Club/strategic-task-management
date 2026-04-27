@@ -6,7 +6,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/lib/api/wrappers'
+import { withRetry } from '@/shared/api/wrappers'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import { logger } from '@/shared/lib/utils/logger'
@@ -119,7 +119,9 @@ function shouldFallbackToWorkflowInstanceResolution(error: unknown): boolean {
   const message = getErrorMessage(error)
 
   if (status === 400 || status === 403) {
-    return /task not found|workflow task not found|pending task not found|invalid task/i.test(message)
+    return /task not found|workflow task not found|pending task not found|invalid task/i.test(
+      message
+    )
   }
 
   return status === 404
