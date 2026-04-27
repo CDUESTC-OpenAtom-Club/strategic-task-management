@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Dashboard Feature - Helper Functions
  *

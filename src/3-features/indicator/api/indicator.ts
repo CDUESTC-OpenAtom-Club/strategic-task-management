@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { apiClient } from '@/shared/api/client'
 import { withRetry } from '@/shared/api/wrappers'
 import {

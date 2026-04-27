@@ -1,7 +1,6 @@
-// @ts-nocheck
 /**
  * Organization Feature
- * 
+ *
  * Organization and department management functionality
  */
 
