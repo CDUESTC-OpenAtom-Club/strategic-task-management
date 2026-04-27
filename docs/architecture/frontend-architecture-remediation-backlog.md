@@ -19,15 +19,15 @@
 
 ## 2. 基线证据
 
-截至本轮审查，仓内可量化证据如下：
+截至 2026-04-27 本轮清零收尾，仓内可量化证据如下：
 
 | 指标                 |  当前值 | 风险判断 | 证据                                                                                                                         |
 | -------------------- | ------: | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@ts-nocheck` 文件数 |     105 | 高       | `rg -l "@ts-nocheck" src --glob '!**/*.d.ts' --glob '!_deprecated/**'`                                                       |
+| `@ts-nocheck` 文件数 |       0 | 已清零   | `npm run arch:check`                                                                                                         |
 | 顶层旧入口文件数     |      23 | 中       | `src/api`、`src/utils`、`src/types`、`src/composables`、`src/router`                                                         |
-| 最大 Vue 文件        | 8357 行 | 高       | `src/3-features/task/ui/StrategicTaskView.vue`                                                                               |
-| 第二大 Vue 文件      | 6921 行 | 高       | `src/3-features/indicator/ui/IndicatorDistributeView.vue`                                                                    |
-| 第三大 Vue 文件      | 6344 行 | 高       | `src/3-features/indicator/ui/IndicatorListView.vue`                                                                          |
+| 最大 Vue 文件        | 1624 行 | 中       | `src/3-features/task/ui/StrategicTaskView.vue`                                                                               |
+| 第二大 Vue 文件      | 1397 行 | 中       | `src/3-features/indicator/ui/IndicatorDistributeView.vue`                                                                    |
+| 第三大 Vue 文件      | 1374 行 | 中       | `src/3-features/dashboard/ui/DashboardView.vue`                                                                              |
 | ESLint 类型规则      |    关闭 | 高       | `.eslintrc.cjs:21-23`                                                                                                        |
 | TS 隐式 any          |    允许 | 高       | `tsconfig.app.json:18-24`                                                                                                    |
 | 权限 hook 实现/入口  |    4 个 | 中       | `authorization/usePermission.ts`、`hooks/usePermission.ts`、`permissions/usePermission.ts`、`permissions/usePermission 2.ts` |
@@ -61,7 +61,7 @@
 | Phase   | 建议周期 | 目标                        | 退出标准                                                    |
 | ------- | -------- | --------------------------- | ----------------------------------------------------------- |
 | Phase 0 | 1 周     | 建立质量基线和新增债务闸门  | 新增 `@ts-nocheck`、旧入口 import、超大文件增长能被 CI 检测 |
-| Phase 1 | 2 周     | 收敛类型债和 canonical path | `@ts-nocheck` 文件数下降到 80 以下，旧入口新增依赖为 0      |
+| Phase 1 | 2 周     | 收敛类型债和 canonical path | `@ts-nocheck` 文件数为 0，旧入口新增依赖为 0                |
 | Phase 2 | 3-4 周   | 拆分 Top 3 超大页面         | 最大 Vue 文件低于 2500 行，关键页面有 smoke test            |
 | Phase 3 | 2-3 周   | 清理兼容层和历史目录        | 兼容壳数量下降 70%，`legacy-indicator` 不再承载新需求       |
 | Phase 4 | 持续     | 固化架构治理                | CI 输出趋势报表，架构债进入常规 Sprint 管理                 |
@@ -93,12 +93,12 @@
 
 建议阈值：
 
-| 指标                  | 初始阈值 |              后续目标 |
-| --------------------- | -------: | --------------------: |
-| `@ts-nocheck` 文件数  |      105 | 每 Sprint 至少下降 10 |
-| Vue 单文件行数        |     8500 |         逐步降到 2500 |
-| 顶层旧入口新增 import |        0 |            永久保持 0 |
-| 权限真实实现数        |        1 |            永久保持 1 |
+| 指标                  | 初始阈值 |          后续目标 |
+| --------------------- | -------: | ----------------: |
+| `@ts-nocheck` 文件数  |        0 |            保持 0 |
+| Vue 单文件行数        |     1624 | 持续保持低于 2500 |
+| 顶层旧入口新增 import |        0 |        永久保持 0 |
+| 权限真实实现数        |        1 |        永久保持 1 |
 
 ### P0-02. 冻结新增 `@ts-nocheck`
 
