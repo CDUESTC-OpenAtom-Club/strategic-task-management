@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * WebSocket Service for Real-time Notifications
  *
