@@ -12,7 +12,7 @@ import {
   isFunctionalDept,
   isCollege,
   isValidDepartment
-} from '@/config/departments'
+} from '@/shared/config/departments'
 import { isSecondaryCollege } from '@/shared/lib/utils/colors'
 
 describe('Department Configuration', () => {

@@ -17,7 +17,7 @@ import {
   PROGRESS_APPROVAL_STATUS_VALUES,
   MILESTONE_STATUS_VALUES,
   USER_ROLE_VALUES
-} from '@/config/validationRules'
+} from '@/shared/config/validationRules'
 
 // ============================================================================
 // 测试数据生成器 (Arbitraries)

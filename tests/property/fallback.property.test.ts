@@ -9,17 +9,9 @@ import * as fc from 'fast-check'
 import type { AxiosError, AxiosResponse } from 'axios'
 import { shouldFallback } from '@/shared/api/fallback'
 
-vi.mock('@/shared/api/fallback', async importOriginal => {
-  const original = await importOriginal<typeof import('@/shared/api/fallback')>()
-  return {
-    ...original,
-    getFallbackConfig: () => ({ enabled: true, forceMock: false })
-  }
-})
-
 describe('Fallback Service Property Tests', () => {
   describe('Property 3: 降级触发一致性', () => {
-    it('should trigger fallback for any 5xx status code', () => {
+    it('should keep fallback disabled for any 5xx status code', () => {
       fc.assert(
         fc.property(fc.integer({ min: 500, max: 599 }), statusCode => {
           const mockError: AxiosError = {
@@ -36,7 +28,7 @@ describe('Fallback Service Property Tests', () => {
               data: {}
             } as AxiosResponse
           }
-          expect(shouldFallback(mockError)).toBe(true)
+          expect(shouldFallback(mockError)).toBe(false)
         }),
         { numRuns: 100 }
       )
@@ -68,7 +60,7 @@ describe('Fallback Service Property Tests', () => {
       )
     })
 
-    it('should trigger fallback for network errors (no response)', () => {
+    it('should keep fallback disabled for network errors (no response)', () => {
       fc.assert(
         fc.property(fc.string({ minLength: 1, maxLength: 100 }), errorMessage => {
           const mockError = {
@@ -78,7 +70,7 @@ describe('Fallback Service Property Tests', () => {
             config: { headers: {} as any },
             toJSON: () => ({})
           } as AxiosError
-          expect(shouldFallback(mockError)).toBe(true)
+          expect(shouldFallback(mockError)).toBe(false)
         }),
         { numRuns: 100 }
       )

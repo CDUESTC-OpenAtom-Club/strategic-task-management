@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
 import type { StrategicIndicator, ProgressApprovalStatus } from '@/shared/types'
-import { PROGRESS_APPROVAL_STATUS_VALUES } from '@/config/validationRules'
+import { PROGRESS_APPROVAL_STATUS_VALUES } from '@/shared/config/validationRules'
 
 // ============================================================================
 // Mock localStorage

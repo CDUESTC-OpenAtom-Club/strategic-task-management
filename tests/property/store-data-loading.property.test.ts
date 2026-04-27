@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
 import { useStrategicStore } from '@/features/task/model/strategic'
-import { MILESTONE_STATUS_VALUES } from '@/config/validationRules'
+import { MILESTONE_STATUS_VALUES } from '@/shared/config/validationRules'
 
 // ============================================================================
 // 测试环境设置 - Mock localStorage
@@ -393,10 +393,10 @@ describe('Property 7: Fallback Mechanism Trigger', () => {
 
           const result = shouldFallback(networkError)
 
-          // 网络错误应该触发降级
-          expect(result).toBe(true)
+          // 当前降级机制已禁用
+          expect(result).toBe(false)
 
-          return result === true
+          return result === false
         }),
         { numRuns: 10 }
       )
@@ -416,10 +416,10 @@ describe('Property 7: Fallback Mechanism Trigger', () => {
 
           const result = shouldFallback(serverError)
 
-          // 5xx 错误应该触发降级
-          expect(result).toBe(true)
+          // 当前降级机制已禁用
+          expect(result).toBe(false)
 
-          return result === true
+          return result === false
         }),
         { numRuns: 100 }
       )
@@ -513,16 +513,16 @@ describe('Property 7: Fallback Mechanism Trigger', () => {
       )
     })
 
-    it('should return "未知原因" when no error is provided', async () => {
+    it('should return disabled reason when no error is provided', async () => {
       const { getFallbackReason } = await import('@/shared/api/fallback')
 
       fc.assert(
         fc.property(fc.constant(null), () => {
           const reason = getFallbackReason(null as any)
 
-          expect(reason).toBe('未知原因')
+          expect(reason).toBe('降级机制已禁用')
 
-          return reason === '未知原因'
+          return reason === '降级机制已禁用'
         }),
         { numRuns: 10 }
       )
@@ -545,11 +545,7 @@ describe('Property 7: Fallback Mechanism Trigger', () => {
           url => {
             const result = getMockData(url)
 
-            // 应该返回有效的 ApiResponse
-            expect(result).not.toBeNull()
-            expect(result).toHaveProperty('success')
-            expect(result).toHaveProperty('data')
-            expect(result!.success).toBe(true)
+            expect(result).toBeNull()
 
             return true
           }
@@ -565,9 +561,7 @@ describe('Property 7: Fallback Mechanism Trigger', () => {
         fc.property(fc.constantFrom('/dashboard', '/dashboard/summary'), url => {
           const result = getMockData(url)
 
-          expect(result).not.toBeNull()
-          expect(result!.success).toBe(true)
-          expect(result!.data).toBeDefined()
+          expect(result).toBeNull()
 
           return true
         }),
@@ -582,10 +576,7 @@ describe('Property 7: Fallback Mechanism Trigger', () => {
         fc.property(fc.constantFrom('/indicators', '/dashboard', '/orgs'), url => {
           const result = getMockData(url)
 
-          if (result) {
-            // 降级数据应该有特定的消息标识
-            expect(result.message).toBe('降级数据')
-          }
+          expect(result).toBeNull()
 
           return true
         }),
