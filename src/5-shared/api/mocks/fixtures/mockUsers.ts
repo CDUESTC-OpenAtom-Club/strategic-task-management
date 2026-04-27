@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { User, UserRole } from '@/shared/types/entities'
 
 export const mockUsers: User[] = [

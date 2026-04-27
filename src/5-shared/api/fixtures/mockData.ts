@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ⚠️ 已废弃：现在所有数据都从后端真实数据库获取
  * 数据库：PostgreSQL @ 175.24.139.148:8386/strategic
@@ -7,7 +6,14 @@
  * @see src/api/fallback.ts 降级机制已禁用
  * 保留仅用于向后兼容，建议后续版本删除此文件
  */
-import type { DashboardData, Indicator, DepartmentProgress, PendingApproval, TabItem, RoleOption } from '@/shared/types'
+import type {
+  DashboardData,
+  Indicator,
+  DepartmentProgress,
+  PendingApproval,
+  TabItem,
+  RoleOption
+} from '@/shared/types'
 
 // 临时兼容:返回空数组
 const getAllFunctionalDepartments = () => []
@@ -24,10 +30,42 @@ export const dashboardData: DashboardData = {
 
 // 指标列表
 export const indicators: Indicator[] = [
-  { id: 1, name: '教学质量提升', type: '定量', progress: 85, status: 'normal', deadline: '2024-12-31', department: '教务处' },
-  { id: 2, name: '科研项目申报', type: '定量', progress: 60, status: 'warning', deadline: '2024-11-30', department: '科研处' },
-  { id: 3, name: '就业率提升', type: '定性', progress: 45, status: 'danger', deadline: '2024-12-15', department: '就业指导中心' },
-  { id: 4, name: '师资队伍建设', type: '定性', progress: 90, status: 'normal', deadline: '2024-12-31', department: '人事处' }
+  {
+    id: 1,
+    name: '教学质量提升',
+    type: '定量',
+    progress: 85,
+    status: 'normal',
+    deadline: '2024-12-31',
+    department: '教务处'
+  },
+  {
+    id: 2,
+    name: '科研项目申报',
+    type: '定量',
+    progress: 60,
+    status: 'warning',
+    deadline: '2024-11-30',
+    department: '科研处'
+  },
+  {
+    id: 3,
+    name: '就业率提升',
+    type: '定性',
+    progress: 45,
+    status: 'danger',
+    deadline: '2024-12-15',
+    department: '就业指导中心'
+  },
+  {
+    id: 4,
+    name: '师资队伍建设',
+    type: '定性',
+    progress: 90,
+    status: 'normal',
+    deadline: '2024-12-31',
+    department: '人事处'
+  }
 ]
 
 // 部门进度
@@ -42,7 +80,13 @@ export const departmentProgress: DepartmentProgress[] = [
 // 待审批列表
 export const pendingApprovals: PendingApproval[] = [
   { id: 1, title: '10月教学质量数据', submitter: '教务处-张三', time: '2小时前', type: '定量指标' },
-  { id: 2, title: '科研项目中期报告', submitter: '计算机学院-李四', time: '5小时前', type: '定性指标' },
+  {
+    id: 2,
+    title: '科研项目中期报告',
+    submitter: '计算机学院-李四',
+    time: '5小时前',
+    type: '定性指标'
+  },
   { id: 3, title: '就业数据统计', submitter: '就业指导中心-王五', time: '1天前', type: '定量指标' }
 ]
 

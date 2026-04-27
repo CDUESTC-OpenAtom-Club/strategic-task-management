@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Mock API 处理器 - 与后端完全对齐
  * 拦截 API 请求并返回模拟数据
@@ -188,18 +187,12 @@ export class MockApiHandler {
       // ============================================
       else if (normalizedPath === '/api/strategic-tasks' && normalizedMethod === 'GET') {
         response = await this.handleGetStrategicTasks(query)
-      } else if (
-        normalizedPath.startsWith('/api/strategic-tasks/') &&
-        normalizedMethod === 'GET'
-      ) {
+      } else if (normalizedPath.startsWith('/api/strategic-tasks/') && normalizedMethod === 'GET') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleGetStrategicTask(id ?? '0')
       } else if (normalizedPath === '/api/strategic-tasks' && normalizedMethod === 'POST') {
         response = await this.handleCreateStrategicTask(data)
-      } else if (
-        normalizedPath.startsWith('/api/strategic-tasks/') &&
-        normalizedMethod === 'PUT'
-      ) {
+      } else if (normalizedPath.startsWith('/api/strategic-tasks/') && normalizedMethod === 'PUT') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateStrategicTask(id ?? '0', data)
       } else if (
@@ -222,10 +215,7 @@ export class MockApiHandler {
       } else if (normalizedPath.startsWith('/api/indicators/') && normalizedMethod === 'PUT') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateIndicator(id ?? '0', data)
-      } else if (
-        normalizedPath.startsWith('/api/indicators/') &&
-        normalizedMethod === 'DELETE'
-      ) {
+      } else if (normalizedPath.startsWith('/api/indicators/') && normalizedMethod === 'DELETE') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleDeleteIndicator(id ?? '0')
       }
@@ -234,10 +224,7 @@ export class MockApiHandler {
       // ============================================
       else if (normalizedPath === '/api/milestones' && normalizedMethod === 'GET') {
         response = await this.handleGetMilestones(query)
-      } else if (
-        normalizedPath.startsWith('/api/milestones/') &&
-        normalizedMethod === 'GET'
-      ) {
+      } else if (normalizedPath.startsWith('/api/milestones/') && normalizedMethod === 'GET') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleGetMilestone(id ?? '0')
       } else if (normalizedPath === '/api/milestones' && normalizedMethod === 'POST') {
@@ -245,10 +232,7 @@ export class MockApiHandler {
       } else if (normalizedPath.startsWith('/api/milestones/') && normalizedMethod === 'PUT') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleUpdateMilestone(id ?? '0', data)
-      } else if (
-        normalizedPath.startsWith('/api/milestones/') &&
-        normalizedMethod === 'DELETE'
-      ) {
+      } else if (normalizedPath.startsWith('/api/milestones/') && normalizedMethod === 'DELETE') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleDeleteMilestone(id ?? '0')
       }
@@ -320,13 +304,19 @@ export class MockApiHandler {
         normalizedMethod === 'POST'
       ) {
         const id = normalizedPath.split('/')[4]
-        response = await this.handleUpdateAdminUserStatus(id ?? '0', new URLSearchParams('isActive=false'))
+        response = await this.handleUpdateAdminUserStatus(
+          id ?? '0',
+          new URLSearchParams('isActive=false')
+        )
       } else if (
         /^\/api\/auth\/users\/\d+\/unlock$/.test(normalizedPath) &&
         normalizedMethod === 'POST'
       ) {
         const id = normalizedPath.split('/')[4]
-        response = await this.handleUpdateAdminUserStatus(id ?? '0', new URLSearchParams('isActive=true'))
+        response = await this.handleUpdateAdminUserStatus(
+          id ?? '0',
+          new URLSearchParams('isActive=true')
+        )
       } else if (
         /^\/api\/auth\/users\/\d+$/.test(normalizedPath) &&
         normalizedMethod === 'DELETE'

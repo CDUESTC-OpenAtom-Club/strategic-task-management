@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { Milestone, MilestoneStatus } from '@/shared/types/entities'
 
 export const mockMilestones: Milestone[] = [

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { Indicator, StrategicTask, Milestone } from '@/shared/types/entities'
 import { mockIndicators } from './mockIndicators'
 import { mockStrategicTasks } from './mockStrategicTasks'

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { StrategicTask, TaskType } from '@/shared/types/entities'
 
 export const mockStrategicTasks: StrategicTask[] = [

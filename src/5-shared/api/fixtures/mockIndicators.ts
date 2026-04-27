@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 统一的模拟指标数据
  *
@@ -8,7 +7,12 @@
  * @deprecated 此文件已废弃，请使用后端API获取真实数据
  * @see src/api/fallback.ts 降级机制已禁用
  */
-import type { StrategicIndicator, Milestone, DashboardData, DepartmentProgress } from '@/shared/types'
+import type {
+  StrategicIndicator,
+  Milestone,
+  DashboardData,
+  DepartmentProgress
+} from '@/shared/types'
 
 // ============ 工具函数 ============
 
@@ -20,7 +24,8 @@ export const generateQuarterlyMilestones = (year: number, progress: number): Mil
   for (let q = 1; q <= 4; q++) {
     const targetProgress = q * 25
     const deadline = `${year}-${String(q * 3).padStart(2, '0')}-${q === 1 ? '31' : q === 2 ? '30' : q === 3 ? '30' : '31'}`
-    const status: 'completed' | 'pending' | 'overdue' = progress >= targetProgress ? 'completed' : 'pending'
+    const status: 'completed' | 'pending' | 'overdue' =
+      progress >= targetProgress ? 'completed' : 'pending'
     milestones.push({
       id: `mock-${year}-q${q}`,
       name: `Q${q}: 阶段目标`,
@@ -261,13 +266,69 @@ export const mockDashboardData: DashboardData = {
 // ============ 模拟部门进度数据 ============
 
 export const mockDepartmentProgress: DepartmentProgress[] = [
-  { dept: '教务处', progress: 85, score: 89.5, status: 'success', totalIndicators: 5, completedIndicators: 4, alertCount: 0 },
-  { dept: '科技处', progress: 72, score: 78.3, status: 'warning', totalIndicators: 4, completedIndicators: 2, alertCount: 1 },
-  { dept: '就业创业指导中心', progress: 65, score: 71.2, status: 'warning', totalIndicators: 6, completedIndicators: 3, alertCount: 1 },
-  { dept: '人力资源部', progress: 90, score: 94.1, status: 'success', totalIndicators: 3, completedIndicators: 3, alertCount: 0 },
-  { dept: '计算机学院', progress: 55, score: 62.8, status: 'exception', totalIndicators: 8, completedIndicators: 3, alertCount: 2 },
-  { dept: '商学院', progress: 68, score: 72.5, status: 'warning', totalIndicators: 6, completedIndicators: 3, alertCount: 1 },
-  { dept: '工学院', progress: 75, score: 80.2, status: 'success', totalIndicators: 5, completedIndicators: 4, alertCount: 0 }
+  {
+    dept: '教务处',
+    progress: 85,
+    score: 89.5,
+    status: 'success',
+    totalIndicators: 5,
+    completedIndicators: 4,
+    alertCount: 0
+  },
+  {
+    dept: '科技处',
+    progress: 72,
+    score: 78.3,
+    status: 'warning',
+    totalIndicators: 4,
+    completedIndicators: 2,
+    alertCount: 1
+  },
+  {
+    dept: '就业创业指导中心',
+    progress: 65,
+    score: 71.2,
+    status: 'warning',
+    totalIndicators: 6,
+    completedIndicators: 3,
+    alertCount: 1
+  },
+  {
+    dept: '人力资源部',
+    progress: 90,
+    score: 94.1,
+    status: 'success',
+    totalIndicators: 3,
+    completedIndicators: 3,
+    alertCount: 0
+  },
+  {
+    dept: '计算机学院',
+    progress: 55,
+    score: 62.8,
+    status: 'exception',
+    totalIndicators: 8,
+    completedIndicators: 3,
+    alertCount: 2
+  },
+  {
+    dept: '商学院',
+    progress: 68,
+    score: 72.5,
+    status: 'warning',
+    totalIndicators: 6,
+    completedIndicators: 3,
+    alertCount: 1
+  },
+  {
+    dept: '工学院',
+    progress: 75,
+    score: 80.2,
+    status: 'success',
+    totalIndicators: 5,
+    completedIndicators: 4,
+    alertCount: 0
+  }
 ]
 
 // ============ 模拟组织树数据 ============
