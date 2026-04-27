@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * useDashboardState - Dashboard 状态管理 Composable
  *

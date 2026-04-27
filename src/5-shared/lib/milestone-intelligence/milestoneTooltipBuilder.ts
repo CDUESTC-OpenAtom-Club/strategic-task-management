@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Milestone Intelligence - Tooltip Builder
  *
