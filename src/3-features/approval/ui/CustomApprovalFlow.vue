@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed } from 'vue'
 import { ElCard, ElSelect, ElOption, ElIcon, ElEmpty, ElMessage } from 'element-plus'
 import { Check, Close, Loading, Clock, Edit } from '@element-plus/icons-vue'

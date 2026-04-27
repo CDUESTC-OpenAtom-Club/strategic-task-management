@@ -120,7 +120,6 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -144,27 +143,32 @@ let bgInterval: ReturnType<typeof setInterval> | null = null
 const defaultBgImages: BgImage[] = [
   {
     id: 1,
-    background: 'url(https://images.unsplash.com/photo-1562774053-701939374585?w=1920&q=80) center/cover no-repeat',
+    background:
+      'url(https://images.unsplash.com/photo-1562774053-701939374585?w=1920&q=80) center/cover no-repeat',
     label: 'Campus Building'
   },
   {
     id: 2,
-    background: 'url(https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1920&q=80) center/cover no-repeat',
+    background:
+      'url(https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=1920&q=80) center/cover no-repeat',
     label: 'University Library'
   },
   {
     id: 3,
-    background: 'url(https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1920&q=80) center/cover no-repeat',
+    background:
+      'url(https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=1920&q=80) center/cover no-repeat',
     label: 'Graduation Ceremony'
   },
   {
     id: 4,
-    background: 'url(https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=1920&q=80) center/cover no-repeat',
+    background:
+      'url(https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?w=1920&q=80) center/cover no-repeat',
     label: 'Historic Hall'
   },
   {
     id: 5,
-    background: 'url(https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=1920&q=80) center/cover no-repeat',
+    background:
+      'url(https://images.unsplash.com/photo-1571260899304-425eee4c7efc?w=1920&q=80) center/cover no-repeat',
     label: 'Evening Campus'
   }
 ]
@@ -172,8 +176,8 @@ const defaultBgImages: BgImage[] = [
 // Preload background images and wait for completion
 const preloadImages = (): Promise<void[]> => {
   const tasks = defaultBgImages.map(
-    (img) =>
-      new Promise<void>((resolve) => {
+    img =>
+      new Promise<void>(resolve => {
         const match = img.background.match(/url\((.*?)\)/)
         if (!match) {
           resolve()
