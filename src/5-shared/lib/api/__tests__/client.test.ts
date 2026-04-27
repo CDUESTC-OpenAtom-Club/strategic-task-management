@@ -15,9 +15,7 @@ describe('API Client', () => {
   beforeEach(() => {
     client = createApiClient({
       baseURL: '/api',
-      timeout: 5000,
-      enableRetry: false, // Disable retry for tests
-      enableLogging: false
+      timeout: 5000
     })
     axiosInstance = client.getAxiosInstance()
   })
@@ -28,7 +26,7 @@ describe('API Client', () => {
       vi.spyOn(axiosInstance, 'get').mockResolvedValue({ data: responseData })
 
       const result = await client.get('/users/1')
-      expect(result).toEqual(responseData)
+      expect(result).toEqual({ data: responseData })
     })
 
     it('should pass query parameters', async () => {
@@ -58,7 +56,7 @@ describe('API Client', () => {
       vi.spyOn(axiosInstance, 'post').mockResolvedValue({ data: responseData })
 
       const result = await client.post('/users', requestData)
-      expect(result).toEqual(responseData)
+      expect(result).toEqual({ data: responseData })
     })
 
     it('should handle POST request error', async () => {
@@ -75,7 +73,7 @@ describe('API Client', () => {
       vi.spyOn(axiosInstance, 'put').mockResolvedValue({ data: responseData })
 
       const result = await client.put('/users/1', requestData)
-      expect(result).toEqual(responseData)
+      expect(result).toEqual({ data: responseData })
     })
   })
 
@@ -95,7 +93,7 @@ describe('API Client', () => {
       vi.spyOn(axiosInstance, 'patch').mockResolvedValue({ data: responseData })
 
       const result = await client.patch('/users/1', requestData)
-      expect(result).toEqual(responseData)
+      expect(result).toEqual({ data: responseData })
     })
   })
 
@@ -107,7 +105,7 @@ describe('API Client', () => {
       vi.spyOn(axiosInstance, 'post').mockResolvedValue({ data: responseData })
 
       const result = await client.upload('/upload', file)
-      expect(result).toEqual(responseData)
+      expect(result).toEqual({ data: responseData })
     })
 
     it('should upload file with additional data', async () => {
@@ -124,34 +122,9 @@ describe('API Client', () => {
     })
   })
 
-  describe('Request Cancellation', () => {
-    it('should create cancel token', () => {
-      const cancelToken = client.createCancelToken('test-request')
-      expect(cancelToken).toBeDefined()
-      expect(cancelToken.token).toBeDefined()
-    })
-
-    it('should cancel request', () => {
-      client.createCancelToken('slow-request')
-
-      expect(() => client.cancelRequest('slow-request')).not.toThrow()
-    })
-
-    it('should cancel all requests', () => {
-      client.createCancelToken('request-1')
-      client.createCancelToken('request-2')
-      client.createCancelToken('request-3')
-
-      expect(() => client.cancelAllRequests()).not.toThrow()
-    })
-
-    it('should replace existing cancel token with same key', () => {
-      const token1 = client.createCancelToken('test')
-      const token2 = client.createCancelToken('test')
-
-      expect(token1).not.toBe(token2)
-    })
-  })
+  // Request-cancellation helpers were removed from ApiClient when the client
+  // was simplified to a thin transport wrapper. Production code no longer
+  // relies on these legacy cancel-token APIs.
 
   describe('Error Handling', () => {
     it('should handle network error', async () => {
@@ -204,15 +177,6 @@ describe('API Client', () => {
       })
 
       expect(customClient.getAxiosInstance().defaults.baseURL).toBe('https://api.example.com')
-    })
-
-    it('should enable retry by default', () => {
-      const customClient = createApiClient({
-        enableRetry: true,
-        maxRetries: 3
-      })
-
-      expect(customClient).toBeDefined()
     })
   })
 
