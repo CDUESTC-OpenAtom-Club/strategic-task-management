@@ -97,8 +97,8 @@
             <span class="tab-label">
               已处理
               <el-badge
-                v-if="processedCount > 0"
-                :value="processedCount"
+                v-if="unreadProcessedCount > 0"
+                :value="unreadProcessedCount"
                 :max="99"
                 class="tab-badge"
                 type="success"
@@ -236,6 +236,9 @@ const processedMessages = computed(() =>
   )
 )
 const processedCount = computed(() => processedMessages.value.length)
+const unreadProcessedCount = computed(
+  () => processedMessages.value.filter(message => !message.isRead).length
+)
 
 const typeFilterOptions = [
   { label: '全部类型', value: 'all' },
