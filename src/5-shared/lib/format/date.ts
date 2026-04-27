@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Date Formatting Utilities
  *

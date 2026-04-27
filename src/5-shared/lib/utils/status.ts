@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Status Utility Functions
  *

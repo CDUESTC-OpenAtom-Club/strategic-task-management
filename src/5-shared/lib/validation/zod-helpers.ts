@@ -1,7 +1,6 @@
-// @ts-nocheck
 /**
  * Zod Validation Helpers
- * 
+ *
  * Common Zod schemas and helpers for data validation
  */
 
@@ -30,8 +29,8 @@ export const numberSchemas = {
  * Date schemas
  */
 export const dateSchemas = {
-  future: z.date().refine((date) => date > new Date(), 'Date must be in the future'),
-  past: z.date().refine((date) => date < new Date(), 'Date must be in the past')
+  future: z.date().refine(date => date > new Date(), 'Date must be in the future'),
+  past: z.date().refine(date => date < new Date(), 'Date must be in the past')
 }
 
 /**

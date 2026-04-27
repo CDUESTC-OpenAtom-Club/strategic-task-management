@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 统一颜色工具
  * 用于确保所有图表组件的颜色分级一致性
@@ -7,22 +6,22 @@
 // 进度阈值常量
 export const PROGRESS_THRESHOLDS = {
   EXCELLENT: 90, // 优秀 (≥90%)
-  GOOD: 70,      // 良好 (70%-90%)
-  POOR: 0        // 需关注 (<70%)
+  GOOD: 70, // 良好 (70%-90%)
+  POOR: 0 // 需关注 (<70%)
 } as const
 
 // 进度颜色常量 (与 Element Plus 主题色一致)
 export const PROGRESS_COLORS = {
   EXCELLENT: '#67C23A', // 绿色 - success
-  GOOD: '#E6A23C',      // 黄色 - warning
-  POOR: '#F56C6C'       // 红色 - danger
+  GOOD: '#E6A23C', // 黄色 - warning
+  POOR: '#F56C6C' // 红色 - danger
 } as const
 
 // 预警级别颜色
 export const ALERT_COLORS = {
-  severe: '#F56C6C',    // 严重 - 红色
-  moderate: '#E6A23C',  // 中度 - 黄色
-  normal: '#67C23A'     // 正常 - 绿色
+  severe: '#F56C6C', // 严重 - 红色
+  moderate: '#E6A23C', // 中度 - 黄色
+  normal: '#67C23A' // 正常 - 绿色
 } as const
 
 /**
@@ -80,7 +79,7 @@ export function getColorByIndex(index: number): string {
     '#67C23A', // 绿色变体
     '#13C2C2', // 青色
     '#722ED1', // 紫色
-    '#FA8C16'  // 橙色
+    '#FA8C16' // 橙色
   ]
   return colors[index % colors.length]
 }
@@ -136,7 +135,9 @@ export function getDepartmentStatusColor(status: 'success' | 'warning' | 'except
  * @returns true 表示二级学院，false 表示职能部门
  */
 export function isSecondaryCollege(deptName: string | undefined): boolean {
-  if (!deptName) {return false}
+  if (!deptName) {
+    return false
+  }
 
   // 职能部门特征后缀
   const functionalDeptSuffixes = ['处', '部', '办公室', '中心', '馆']
