@@ -21,16 +21,16 @@
 
 截至 2026-04-27 本轮清零收尾，仓内可量化证据如下：
 
-| 指标                 |  当前值 | 风险判断 | 证据                                                                                                                         |
-| -------------------- | ------: | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `@ts-nocheck` 文件数 |       0 | 已清零   | `npm run arch:check`                                                                                                         |
-| 顶层旧入口文件数     |      23 | 中       | `src/api`、`src/utils`、`src/types`、`src/composables`、`src/router`                                                         |
-| 最大 Vue 文件        | 1624 行 | 中       | `src/3-features/task/ui/StrategicTaskView.vue`                                                                               |
-| 第二大 Vue 文件      | 1397 行 | 中       | `src/3-features/indicator/ui/IndicatorDistributeView.vue`                                                                    |
-| 第三大 Vue 文件      | 1374 行 | 中       | `src/3-features/dashboard/ui/DashboardView.vue`                                                                              |
-| ESLint 类型规则      |    关闭 | 高       | `.eslintrc.cjs:21-23`                                                                                                        |
-| TS 隐式 any          |    允许 | 高       | `tsconfig.app.json:18-24`                                                                                                    |
-| 权限 hook 实现/入口  |    4 个 | 中       | `authorization/usePermission.ts`、`hooks/usePermission.ts`、`permissions/usePermission.ts`、`permissions/usePermission 2.ts` |
+| 指标                 |  当前值 | 风险判断 | 证据                                                      |
+| -------------------- | ------: | -------- | --------------------------------------------------------- |
+| `@ts-nocheck` 文件数 |       0 | 已清零   | `npm run arch:check`                                      |
+| 顶层旧入口文件数     |       0 | 已清零   | `npm run arch:check`                                      |
+| 最大 Vue 文件        | 1624 行 | 中       | `src/3-features/task/ui/StrategicTaskView.vue`            |
+| 第二大 Vue 文件      | 1397 行 | 中       | `src/3-features/indicator/ui/IndicatorDistributeView.vue` |
+| 第三大 Vue 文件      | 1374 行 | 中       | `src/3-features/dashboard/ui/DashboardView.vue`           |
+| ESLint 类型规则      |    warn | 中       | `.eslintrc.cjs:21-22`                                     |
+| TS 隐式 any          |    允许 | 高       | `tsconfig.app.json:18-24`                                 |
+| 权限 hook 实现/入口  |    1 个 | 已收敛   | `src/5-shared/lib/permissions/usePermission.ts`           |
 
 当前最主要的治理目标不是“目录看起来更整齐”，而是降低三类风险：
 
