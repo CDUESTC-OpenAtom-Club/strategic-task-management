@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-27T08:28:37.095Z",
+  "generatedAt": "2026-04-27T08:39:22.200Z",
   "tsNoCheckFiles": [
     "src/3-features/approval/ui/CustomApprovalFlow.vue",
     "src/3-features/auth/ui/LoginView.vue",
@@ -68,16 +68,12 @@
     "src/5-shared/lib/permissions/usePermission.ts",
     "src/5-shared/lib/store/createCrudStore.ts",
     "src/5-shared/lib/utils/apiDeduplication.ts",
-    "src/5-shared/lib/utils/apiHealth.ts",
-    "src/5-shared/lib/utils/authHelpers/responseParser.ts",
     "src/5-shared/lib/utils/dataMappers.ts",
     "src/5-shared/lib/utils/performance.ts",
     "src/5-shared/lib/utils/security.ts",
     "src/5-shared/lib/validation/dataValidator.ts",
     "src/5-shared/lib/validation/useDataValidator.ts",
     "src/5-shared/services/dashboard/DashboardCalculationService.ts",
-    "src/5-shared/services/dashboard/DashboardDataService.ts",
-    "src/5-shared/types/backend-aligned.ts",
     "src/5-shared/types/index.ts",
     "src/5-shared/ui/charts/BaseChart.vue",
     "src/5-shared/ui/charts/BasePieChart.vue",

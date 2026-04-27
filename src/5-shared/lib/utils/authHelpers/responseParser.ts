@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Auth Response Parser - 认证响应解析器
  *
@@ -15,6 +14,17 @@ import { logger } from '@/shared/lib/utils/logger'
 
 const KNOWN_USER_ROLES: UserRole[] = ['strategic_dept', 'functional_dept', 'secondary_college']
 
+type UnknownRecord = Record<string, unknown>
+
+interface LoginPayload extends UnknownRecord {
+  token?: unknown
+  accessToken?: unknown
+  refreshToken?: unknown
+  user?: unknown
+  userInfo?: unknown
+  data?: unknown
+}
+
 /** 登录响应数据接口 */
 export interface LoginResponseData {
   token: string
@@ -27,6 +37,48 @@ export interface ParseResult {
   success: boolean
   data?: LoginResponseData
   error?: string
+}
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null
+}
+
+function asLoginPayload(value: unknown): LoginPayload | null {
+  return isRecord(value) ? (value as LoginPayload) : null
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function getTokenValue(payload: LoginPayload | null): string | undefined {
+  if (!payload) {
+    return undefined
+  }
+
+  return toOptionalString(payload.token) ?? toOptionalString(payload.accessToken)
+}
+
+function getNestedPayload(payload: LoginPayload | null): LoginPayload | null {
+  return asLoginPayload(payload?.data)
+}
+
+function createLoginResponseData(
+  payload: LoginPayload,
+  fallbackUser: unknown = {}
+): LoginResponseData | null {
+  const token = getTokenValue(payload)
+  if (!token) {
+    return null
+  }
+
+  const user = isRecord(payload.user) ? payload.user : isRecord(fallbackUser) ? fallbackUser : {}
+
+  return {
+    token,
+    refreshToken: toOptionalString(payload.refreshToken),
+    user
+  }
 }
 
 export function isKnownUserRole(value: unknown): value is UserRole {
@@ -103,23 +155,29 @@ export function mapBackendUser(userData: Record<string, unknown>): User | null {
   const roles = Array.isArray(userData.roles)
     ? userData.roles.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
     : []
+  const permissions = Array.isArray(userData.permissions)
+    ? userData.permissions.filter((item): item is string => typeof item === 'string')
+    : []
 
   return {
-    id: userData.userId?.toString() || userData.id?.toString() || '',
-    username: userData.username || '',
-    name: userData.realName || userData.name || userData.username || '',
+    id: String(userData.userId ?? userData.id ?? ''),
+    username: String(userData.username ?? ''),
+    name: String(userData.realName ?? userData.name ?? userData.username ?? ''),
     role: resolvedRole,
-    department: userData.orgName || userData.department || '',
-    orgName: userData.orgName || userData.department || '',
+    department: String(userData.orgName ?? userData.department ?? ''),
+    orgName: String(userData.orgName ?? userData.department ?? ''),
     orgType: typeof userData.orgType === 'string' ? userData.orgType : null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     userId: Number(userData.userId || userData.id || 0),
     orgId: Number(userData.orgId || 0),
-    realName: userData.realName || userData.name || userData.username || '',
+    realName: String(userData.realName ?? userData.name ?? userData.username ?? ''),
+    email: typeof userData.email === 'string' ? userData.email : null,
+    phone: typeof userData.phone === 'string' ? userData.phone : null,
+    isActive: typeof userData.isActive === 'boolean' ? userData.isActive : true,
     roles,
-    permissions: Array.isArray(userData.permissions) ? userData.permissions : []
-  } as User
+    permissions
+  }
 }
 
 /**
@@ -133,52 +191,39 @@ export function mapBackendUser(userData: Record<string, unknown>): User | null {
  */
 export function parseLoginResponse(response: Record<string, unknown>): ParseResult {
   let loginData: LoginResponseData | null = null
+  const rootPayload = asLoginPayload(response)
+  const firstLevelPayload = getNestedPayload(rootPayload)
+  const secondLevelPayload = getNestedPayload(firstLevelPayload)
 
   // API拦截器返回 response.data，所以：
   // 后端返回 { code: 0, data: { token, user } }
   // 拦截器返回 { code: 0, data: { token, user } }
 
   // 格式1: { success: true, data: { token, user } } (经过拦截器转换)
-  if (response.success && (response.data?.token || response.data?.accessToken)) {
+  if (response.success === true && firstLevelPayload && getTokenValue(firstLevelPayload)) {
     logger.debug('✅ [Auth] 响应格式1: { success: true, data: { token, user } }')
-    loginData = {
-      token: response.data.token || response.data.accessToken,
-      refreshToken: response.data.refreshToken,
-      user: response.data.user
-    }
+    loginData = createLoginResponseData(firstLevelPayload)
   }
   // 格式2: { code: 0, data: { token, user } } (原始后端格式)
-  else if (response.code === 0 && (response.data?.token || response.data?.accessToken)) {
+  else if (response.code === 0 && firstLevelPayload && getTokenValue(firstLevelPayload)) {
     logger.debug('✅ [Auth] 响应格式2: { code: 0, data: {...} }')
-    loginData = {
-      token: response.data.token || response.data.accessToken,
-      refreshToken: response.data.refreshToken,
-      user: response.data.user
-    }
+    loginData = createLoginResponseData(firstLevelPayload)
   }
   // 格式3: { token, user } (直接返回)
-  else if (response.token && response.user) {
+  else if (rootPayload && getTokenValue(rootPayload) && rootPayload.user) {
     logger.debug('✅ [Auth] 响应格式3: { token, user }')
-    loginData = response
+    loginData = createLoginResponseData(rootPayload)
   }
   // 格式4: 嵌套的data.data (兼容某些特殊情况)
-  else if (response.data?.data?.token || response.data?.data?.accessToken) {
+  else if (secondLevelPayload && getTokenValue(secondLevelPayload)) {
     logger.debug('✅ [Auth] 响应格式4: { data: { token, user } }')
-    loginData = {
-      token: response.data.data.token || response.data.data.accessToken,
-      refreshToken: response.data.data.refreshToken,
-      user: response.data.data.user
-    }
+    loginData = createLoginResponseData(secondLevelPayload)
   }
   // 格式5: 尝试直接提取
-  else if (response) {
+  else if (rootPayload) {
     logger.debug('⚠️ [Auth] 尝试解析未知格式:', response)
-    if (response.token || response.accessToken) {
-      loginData = {
-        token: response.token || response.accessToken,
-        refreshToken: response.refreshToken,
-        user: response.user || response.userInfo || {}
-      }
+    if (getTokenValue(rootPayload)) {
+      loginData = createLoginResponseData(rootPayload, rootPayload.userInfo)
     }
   }
 
@@ -187,10 +232,13 @@ export function parseLoginResponse(response: Record<string, unknown>): ParseResu
   }
 
   logger.error('❌ [Auth] 响应中未找到token或user数据')
-  logger.error('❌ [Auth] 完整响应:', JSON.stringify(response.data, null, 2))
+  logger.error('❌ [Auth] 完整响应:', JSON.stringify(rootPayload?.data ?? response, null, 2))
+
+  const firstLevelMessage = toOptionalString(firstLevelPayload?.message)
+  const rootMessage = toOptionalString(rootPayload?.message)
 
   return {
     success: false,
-    error: response.data?.message || '登录失败：服务器响应格式错误'
+    error: firstLevelMessage || rootMessage || '登录失败：服务器响应格式错误'
   }
 }

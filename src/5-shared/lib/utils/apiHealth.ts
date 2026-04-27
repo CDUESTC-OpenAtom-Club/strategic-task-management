@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * API健康检查工具
  * 用于诊断后端服务连接问题
@@ -13,6 +12,25 @@ import { tokenManager } from '@/shared/lib/utils/tokenManager'
 
 const backendDisplayTarget = API_TARGET || API_BASE_URL
 
+type UnknownRecord = Record<string, unknown>
+
+interface HealthErrorPayload extends UnknownRecord {
+  message?: unknown
+  code?: unknown
+}
+
+interface HealthCheckErrorLike extends UnknownRecord {
+  message?: unknown
+  response?: {
+    status?: unknown
+  }
+  originalError?: {
+    response?: {
+      status?: unknown
+    }
+  }
+}
+
 // 创建一个不使用认证的axios实例，专门用于健康检查
 const healthApi = axios.create({
   baseURL: API_BASE_URL,
@@ -21,6 +39,30 @@ const healthApi = axios.create({
     'Content-Type': 'application/json'
   }
 })
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null
+}
+
+function normalizeDetails(value: unknown): Record<string, unknown> | undefined {
+  if (isRecord(value)) {
+    return value
+  }
+  if (value === undefined) {
+    return undefined
+  }
+  return { value }
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (!isRecord(error)) {
+    return undefined
+  }
+
+  const wrapped = error as HealthCheckErrorLike
+  const statusCandidate = wrapped.response?.status ?? wrapped.originalError?.response?.status
+  return typeof statusCandidate === 'number' ? statusCandidate : undefined
+}
 
 async function probeEndpoint(url: string, timeout: number) {
   const token = tokenManager.getAccessToken()
@@ -68,7 +110,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
               service: 'Backend API',
               status: 'success',
               message: '后端服务运行正常',
-              details: publicResponse.data,
+              details: normalizeDetails(publicResponse.data),
               timestamp: new Date()
             }
           }
@@ -93,7 +135,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
         service: 'Backend API',
         status: 'success',
         message: '后端服务运行正常',
-        details: response.data,
+        details: normalizeDetails(response.data),
         timestamp: new Date()
       }
     }
@@ -172,7 +214,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
             service: 'Backend API',
             status: 'success',
             message: '后端服务运行正常',
-            details: fallbackResponse.data,
+            details: normalizeDetails(fallbackResponse.data),
             timestamp: new Date()
           }
         }
@@ -206,7 +248,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       typeof responseData === 'string'
         ? responseData
         : typeof responseData === 'object' && responseData !== null && 'message' in responseData
-          ? String(responseData.message || '')
+          ? String((responseData as HealthErrorPayload).message || '')
           : ''
 
     // Vite dev proxy may convert upstream ECONNREFUSED into an HTTP 500 with
@@ -214,12 +256,11 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
     // misleading server-side 500.
     const looksLikeProxyConnectionFailure =
       responseStatus === 500 &&
-      (
-        (responseContentType.includes('text/plain') && (responseData === '' || responseData == null)) ||
+      ((responseContentType.includes('text/plain') &&
+        (responseData === '' || responseData == null)) ||
         /Error occurred while trying to proxy|ECONNREFUSED|ERR_CONNECTION_REFUSED|socket hang up|connect ECONNREFUSED/i.test(
           `${errorMessage}\n${responseText}`
-        )
-      )
+        ))
 
     // 处理超时错误
     if (errorCode === 'ECONNABORTED' && errorMessage.includes('timeout')) {
@@ -250,7 +291,9 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
 
     // 提取后端返回的详细错误信息
     const detailedMessage =
-      (typeof responseData === 'object' && responseData?.message) || errorMessage
+      (typeof responseData === 'object' && responseData !== null && 'message' in responseData
+        ? String((responseData as HealthErrorPayload).message || '')
+        : '') || errorMessage
     logger.error('❌ [Health Check] 后端服务异常:', error)
 
     return {
@@ -416,7 +459,7 @@ export async function checkAuthFlow(credentials?: {
 
     // Check both error.response.status and error.originalError.response.status
     // (error might be wrapped by interceptor)
-    const status = error.response?.status || error.originalError?.response?.status
+    const status = getErrorStatus(error)
     logger.debug('🔍 [Health Check] Error response status:', status)
 
     if (status === 401) {
@@ -442,8 +485,10 @@ export async function checkAuthFlow(credentials?: {
     return {
       service: 'Authentication',
       status: 'error',
-      message: `认证流程异常: ${error.message}`,
-      details: { error: error.message },
+      message: `认证流程异常: ${error instanceof Error ? error.message : String(error)}`,
+      details: {
+        error: error instanceof Error ? error.message : String(error)
+      },
       timestamp: new Date()
     }
   }
