@@ -8,7 +8,6 @@
   - 支持返回按钮
 -->
 <script setup lang="ts">
-// @ts-nocheck
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -101,12 +100,7 @@ const showBreadcrumb = computed(() => props.breadcrumb && props.breadcrumb.lengt
       <!-- 左侧：标题和描述 -->
       <div class="page-header__content">
         <!-- 返回按钮 -->
-        <el-button
-          v-if="showBack"
-          class="page-header__back"
-          link
-          @click="handleBack"
-        >
+        <el-button v-if="showBack" class="page-header__back" link @click="handleBack">
           <el-icon><ArrowLeft /></el-icon>
           <span>{{ backText }}</span>
         </el-button>

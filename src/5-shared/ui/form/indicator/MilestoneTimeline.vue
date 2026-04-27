@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { computed } from 'vue'
 import { Check, Clock, Warning } from '@element-plus/icons-vue'
 import type { Milestone, MilestoneUI } from '@/shared/types'
@@ -20,25 +19,34 @@ const getDisplayState = (milestone: MilestoneUI) =>
 
 const getStatusIcon = (status: ReturnType<typeof getDisplayState>['status']) => {
   switch (status) {
-    case 'completed': return Check
-    case 'overdue': return Warning
-    default: return Clock
+    case 'completed':
+      return Check
+    case 'overdue':
+      return Warning
+    default:
+      return Clock
   }
 }
 
 const getStatusType = (status: ReturnType<typeof getDisplayState>['status']) => {
   switch (status) {
-    case 'completed': return 'success'
-    case 'overdue': return 'danger'
-    default: return 'primary'
+    case 'completed':
+      return 'success'
+    case 'overdue':
+      return 'danger'
+    default:
+      return 'primary'
   }
 }
 
 const getStatusLabel = (status: ReturnType<typeof getDisplayState>['status']) => {
   switch (status) {
-    case 'completed': return '已完成'
-    case 'overdue': return '已逾期'
-    default: return '进行中'
+    case 'completed':
+      return '已完成'
+    case 'overdue':
+      return '已逾期'
+    default:
+      return '进行中'
   }
 }
 
@@ -51,8 +59,12 @@ const getDaysRemaining = (deadline: string) => {
   const deadlineDate = new Date(deadline)
   const diff = deadlineDate.getTime() - now.value.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days < 0) {return `已逾期 ${Math.abs(days)} 天`}
-  if (days === 0) {return '今日截止'}
+  if (days < 0) {
+    return `已逾期 ${Math.abs(days)} 天`
+  }
+  if (days === 0) {
+    return '今日截止'
+  }
   return `剩余 ${days} 天`
 }
 </script>
@@ -80,16 +92,16 @@ const getDaysRemaining = (deadline: string) => {
           </div>
           <div class="milestone-meta">
             <span class="deadline">截止: {{ formatDate(milestone.deadline) }}</span>
-            <span 
-              v-if="getDisplayState(milestone).status !== 'completed'" 
+            <span
+              v-if="getDisplayState(milestone).status !== 'completed'"
               class="remaining"
               :class="{ 'is-overdue': getDisplayState(milestone).status === 'overdue' }"
             >
               {{ getDaysRemaining(milestone.deadline) }}
             </span>
           </div>
-          <el-progress 
-            :percentage="milestone.targetProgress" 
+          <el-progress
+            :percentage="milestone.targetProgress"
             :status="getDisplayState(milestone).progressStatus"
             :stroke-width="6"
             class="milestone-progress"
@@ -97,7 +109,7 @@ const getDaysRemaining = (deadline: string) => {
         </div>
       </el-timeline-item>
     </el-timeline>
-    
+
     <el-empty v-if="sortedMilestones.length === 0" description="暂无里程碑" :image-size="60" />
   </div>
 </template>
