@@ -3,7 +3,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useDashboardStore } from '@/features/dashboard/model/store'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useStrategicStore } from '@/features/task/model/strategic'
-import { isSecondaryCollege } from '@/utils/colors'
+import { isSecondaryCollege } from '@/shared/lib/utils/colors'
 import { mockIndicators } from '@/shared/api/mocks/fixtures/mockIndicators'
 
 // Mock localStorage for node environment
