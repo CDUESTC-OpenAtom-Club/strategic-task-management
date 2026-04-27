@@ -17,7 +17,7 @@ import { Document, User, Timer, Right } from '@element-plus/icons-vue'
 import type { StrategicIndicator, Plan } from '@/shared/types'
 import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
-import { getUserById } from '@/features/user/api/query'
+import { getUserById, tryGetUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
 import { notifyApprovalStateRefresh } from '@/features/approval/lib'
 import { usePlanStore } from '@/features/plan/model/store'
@@ -254,7 +254,10 @@ async function ensureWorkflowUserAvatarLoaded(userIdValue: unknown): Promise<voi
   }
 
   try {
-    const user = await getUserById(userId)
+    const user = await tryGetUserById(userId)
+    if (!user) {
+      return
+    }
     cacheWorkflowUserAvatar(userId, (user as { avatar?: unknown; avatarUrl?: unknown }).avatar)
     cacheWorkflowUserAvatar(userId, (user as { avatarUrl?: unknown }).avatarUrl)
   } catch (error) {
@@ -306,7 +309,12 @@ async function ensureSubmitterNameLoaded(
   }
 
   try {
-    const user = await getUserById(userId)
+    const user = await tryGetUserById(userId)
+    if (!user) {
+      const fallbackDisplayName = normalizeDisplayName(fallbackName) || getFallbackSubmitterValue()
+      cacheSubmitterName(userId, fallbackDisplayName)
+      return
+    }
     const realName = normalizeDisplayName(user.realName)
     const username = normalizeDisplayName(user.username)
     submitterNameCache.value = {
