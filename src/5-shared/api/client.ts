@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 简化的 API Client
  *
