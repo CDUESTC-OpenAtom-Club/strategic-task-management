@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Strategic Store
  *

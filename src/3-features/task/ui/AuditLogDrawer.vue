@@ -127,7 +127,6 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CircleCheck, CircleClose, Download } from '@element-plus/icons-vue'
