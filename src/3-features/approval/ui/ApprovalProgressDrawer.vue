@@ -101,7 +101,10 @@ const emit = defineEmits<Emits>()
 const authStore = useAuthStore()
 const planStore = usePlanStore()
 const timeContext = useTimeContextStore()
-const canLookupWorkflowUsers = computed(() => authStore.effectiveRole === 'strategic_dept')
+const canLookupWorkflowUsers = computed(() => {
+  const roles = currentUserRoleCodes.value
+  return roles.includes('STRATEGY_DEPT_HEAD') || roles.includes('VICE_PRESIDENT')
+})
 const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
 const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
 const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'

@@ -2656,11 +2656,6 @@ const removeChildIndicator = async (child: StrategicIndicator) => {
     return
   }
 
-  if (!canDeletePersistedChild(child)) {
-    ElMessage.warning('当前角色无权删除已存在的子指标')
-    return
-  }
-
   try {
     await ElMessageBox.confirm(`确认删除子指标"${child.name}"？此操作不可恢复。`, '删除确认', {
       confirmButtonText: '确认删除',
@@ -3673,11 +3668,7 @@ const canManageChildDraft = (child: StrategicIndicator | undefined): boolean => 
 }
 
 const canDeletePersistedChild = (child: StrategicIndicator | undefined): boolean => {
-  if (!canManageChildDraft(child)) {
-    return false
-  }
-
-  return authStore.effectiveRole === 'strategic_dept'
+  return canManageChildDraft(child)
 }
 
 // 获取状态标签类型

@@ -113,7 +113,10 @@ const authStore = useAuthStore()
 const planStore = usePlanStore()
 const timeContext = useTimeContextStore()
 const permissionUtil = usePermission()
-const canLookupWorkflowUsers = computed(() => authStore.effectiveRole === 'strategic_dept')
+const canLookupWorkflowUsers = computed(() => {
+  const roles = currentUserRoleCodes.value
+  return roles.includes('STRATEGY_DEPT_HEAD') || roles.includes('VICE_PRESIDENT')
+})
 const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'
 const INDICATOR_REPORT_APPROVE_PERMISSION = 'BTN_INDICATOR_REPORT_APPROVE'
 const currentUserId = computed(() => Number(authStore.user?.userId ?? authStore.user?.id ?? 0))
