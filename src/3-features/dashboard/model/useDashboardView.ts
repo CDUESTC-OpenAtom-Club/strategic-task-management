@@ -2396,6 +2396,8 @@ export function useDashboardView(props: DashboardViewProps) {
     selectedMonthInDrillDown,
     selectedOwnerDeptFilter,
     selectedStatusFilter,
+    pageHasError,
+    showSkeleton,
     showCollegeMonthIndicatorCard,
     showFilterPanel,
     showIndicatorCard,

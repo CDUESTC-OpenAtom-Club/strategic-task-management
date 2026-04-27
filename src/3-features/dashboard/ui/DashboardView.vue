@@ -120,6 +120,8 @@ const {
   selectedMonthInDrillDown,
   selectedOwnerDeptFilter,
   selectedStatusFilter,
+  pageHasError,
+  showSkeleton,
   showCollegeMonthIndicatorCard,
   showFilterPanel,
   showIndicatorCard,
