@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Plan Feature - Helper Functions
  *
