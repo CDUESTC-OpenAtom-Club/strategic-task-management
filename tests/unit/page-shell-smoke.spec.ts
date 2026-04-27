@@ -168,6 +168,15 @@ describe('page shell smoke', () => {
     expect(wrapper.find('.strategic-task-container').exists()).toBe(true)
   })
 
+  it('exposes StrategicTaskView primary action shell', () => {
+    const wrapper = shallowMount(StrategicTaskView, {
+      props: { selectedRole: 'strategic_dept' },
+      ...mountOptions
+    })
+
+    expect(wrapper.text()).toContain('新增行')
+  })
+
   it('renders IndicatorDistributeView shell', () => {
     const wrapper = shallowMount(IndicatorDistributeView, {
       props: { viewingRole: 'functional_dept', viewingDept: '教务处' },
@@ -175,6 +184,15 @@ describe('page shell smoke', () => {
     })
 
     expect(wrapper.find('.distribution-view').exists()).toBe(true)
+  })
+
+  it('exposes IndicatorDistributeView distribution shell', () => {
+    const wrapper = shallowMount(IndicatorDistributeView, {
+      props: { viewingRole: 'functional_dept', viewingDept: '教务处' },
+      ...mountOptions
+    })
+
+    expect(wrapper.text()).toContain('学院列表')
   })
 
   it('renders IndicatorListView shell', () => {
@@ -186,6 +204,15 @@ describe('page shell smoke', () => {
     expect(wrapper.find('.indicator-list-container').exists()).toBe(true)
   })
 
+  it('exposes IndicatorListView filter shell', () => {
+    const wrapper = shallowMount(IndicatorListView, {
+      props: { viewingRole: 'strategic_dept', viewingDept: '战略发展部' },
+      ...mountOptions
+    })
+
+    expect(wrapper.text()).toContain('指标列表')
+  })
+
   it('renders DashboardView shell', () => {
     const wrapper = shallowMount(DashboardView, {
       props: { viewingRole: 'strategic_dept', viewingDept: '战略发展部' },
@@ -193,5 +220,14 @@ describe('page shell smoke', () => {
     })
 
     expect(wrapper.find('.dashboard-view').exists()).toBe(true)
+  })
+
+  it('exposes DashboardView toolbar shell', () => {
+    const wrapper = shallowMount(DashboardView, {
+      props: { viewingRole: 'strategic_dept', viewingDept: '战略发展部' },
+      ...mountOptions
+    })
+
+    expect(wrapper.text()).toContain('导出报表')
   })
 })
