@@ -1,15 +1,15 @@
 /**
  * 指标过滤属性测试
- * 
+ *
  * **Feature: page-data-verification**
  * - **Property 2: Filter Logic Correctness** (年份、部门过滤)
- * 
+ *
  * **Validates: Requirements 2.2, 2.3**
  */
 import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
-import type { StrategicIndicator, ProgressApprovalStatus } from '@/types'
+import type { StrategicIndicator, ProgressApprovalStatus } from '@/shared/types'
 import { PROGRESS_APPROVAL_STATUS_VALUES } from '@/config/validationRules'
 
 // ============================================================================
@@ -19,10 +19,18 @@ const createLocalStorageMock = () => {
   let store: Record<string, string> = {}
   return {
     getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => { store[key] = value }),
-    removeItem: vi.fn((key: string) => { delete store[key] }),
-    clear: vi.fn(() => { store = {} }),
-    get length() { return Object.keys(store).length },
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: vi.fn(() => {
+      store = {}
+    }),
+    get length() {
+      return Object.keys(store).length
+    },
     key: vi.fn((index: number) => Object.keys(store)[index] || null)
   }
 }
@@ -42,14 +50,20 @@ beforeAll(() => {
 // ============================================================================
 
 const departmentNames = [
-  '战略发展部', '教务处', '科研处', '人事处', '财务处',
-  '计算机学院', '机械工程学院', '电子信息学院', '经济管理学院'
+  '战略发展部',
+  '教务处',
+  '科研处',
+  '人事处',
+  '财务处',
+  '计算机学院',
+  '机械工程学院',
+  '电子信息学院',
+  '经济管理学院'
 ]
 
 const departmentArbitrary = fc.constantFrom(...departmentNames)
 const yearArbitrary = fc.integer({ min: 2023, max: 2026 })
 const progressArbitrary = fc.integer({ min: 0, max: 100 })
-
 
 /**
  * 生成有效的指标对象
@@ -71,13 +85,16 @@ const indicatorArbitrary: fc.Arbitrary<StrategicIndicator> = fc.record({
   unit: fc.constantFrom('%', '个', '项'),
   responsibleDept: departmentArbitrary,
   responsiblePerson: fc.string({ minLength: 1, maxLength: 20 }).filter(s => s.trim().length > 0),
-  status: fc.constantFrom('active', 'pending', 'approved', 'draft') as fc.Arbitrary<'active' | 'pending' | 'approved' | 'draft' | 'archived' | 'distributed'>,
+  status: fc.constantFrom('active', 'pending', 'approved', 'draft') as fc.Arbitrary<
+    'active' | 'pending' | 'approved' | 'draft' | 'archived' | 'distributed'
+  >,
   isStrategic: fc.boolean(),
   ownerDept: departmentArbitrary,
   year: yearArbitrary,
-  progressApprovalStatus: fc.constantFrom(...PROGRESS_APPROVAL_STATUS_VALUES) as fc.Arbitrary<ProgressApprovalStatus>
+  progressApprovalStatus: fc.constantFrom(
+    ...PROGRESS_APPROVAL_STATUS_VALUES
+  ) as fc.Arbitrary<ProgressApprovalStatus>
 })
-
 
 // ============================================================================
 // 过滤函数（从 IndicatorListView 提取的纯函数）
@@ -104,7 +121,9 @@ function filterByResponsibleDept(
   indicators: StrategicIndicator[],
   dept: string | undefined
 ): StrategicIndicator[] {
-  if (!dept) {return indicators}
+  if (!dept) {
+    return indicators
+  }
   return indicators.filter(i => i.responsibleDept === dept)
 }
 
@@ -115,7 +134,9 @@ function filterByOwnerDept(
   indicators: StrategicIndicator[],
   dept: string | undefined
 ): StrategicIndicator[] {
-  if (!dept) {return indicators}
+  if (!dept) {
+    return indicators
+  }
   return indicators.filter(i => i.ownerDept === dept)
 }
 
@@ -126,12 +147,11 @@ function filterByDeptMatch(
   indicators: StrategicIndicator[],
   viewingDept: string | undefined
 ): StrategicIndicator[] {
-  if (!viewingDept) {return indicators}
-  return indicators.filter(i => 
-    i.responsibleDept === viewingDept || i.ownerDept === viewingDept
-  )
+  if (!viewingDept) {
+    return indicators
+  }
+  return indicators.filter(i => i.responsibleDept === viewingDept || i.ownerDept === viewingDept)
 }
-
 
 // ============================================================================
 // Property 2: Filter Logic Correctness - 年份过滤
@@ -155,13 +175,13 @@ describe('Property 2: Filter Logic Correctness - Year Filter', () => {
         yearArbitrary,
         (indicators, targetYear) => {
           const result = filterByYear(indicators, targetYear)
-          
+
           // 所有结果的年份应匹配目标年份
           result.forEach(i => {
             const year = i.year || 2025
             expect(year).toBe(targetYear)
           })
-          
+
           return true
         }
       ),
@@ -176,12 +196,12 @@ describe('Property 2: Filter Logic Correctness - Year Filter', () => {
         yearArbitrary,
         (indicators, targetYear) => {
           const result = filterByYear(indicators, targetYear)
-          
+
           expect(result.length).toBeLessThanOrEqual(indicators.length)
           result.forEach(r => {
             expect(indicators.some(i => i.id === r.id)).toBe(true)
           })
-          
+
           return true
         }
       ),
@@ -195,14 +215,13 @@ describe('Property 2: Filter Logic Correctness - Year Filter', () => {
       { ...createMinimalIndicator('2'), year: 2025 },
       { ...createMinimalIndicator('3'), year: 2024 }
     ]
-    
+
     const result = filterByYear(indicatorsWithoutYear, 2025, 2025)
-    
+
     // 应该返回 year=2025 和 year=undefined（默认2025）的指标
     expect(result.length).toBe(2)
   })
 })
-
 
 // ============================================================================
 // Property 2: Filter Logic Correctness - 部门过滤
@@ -226,11 +245,11 @@ describe('Property 2: Filter Logic Correctness - Department Filter', () => {
         departmentArbitrary,
         (indicators, targetDept) => {
           const result = filterByResponsibleDept(indicators, targetDept)
-          
+
           result.forEach(i => {
             expect(i.responsibleDept).toBe(targetDept)
           })
-          
+
           return true
         }
       ),
@@ -245,11 +264,11 @@ describe('Property 2: Filter Logic Correctness - Department Filter', () => {
         departmentArbitrary,
         (indicators, targetDept) => {
           const result = filterByOwnerDept(indicators, targetDept)
-          
+
           result.forEach(i => {
             expect(i.ownerDept).toBe(targetDept)
           })
-          
+
           return true
         }
       ),
@@ -264,12 +283,12 @@ describe('Property 2: Filter Logic Correctness - Department Filter', () => {
         departmentArbitrary,
         (indicators, viewingDept) => {
           const result = filterByDeptMatch(indicators, viewingDept)
-          
+
           result.forEach(i => {
             const matches = i.responsibleDept === viewingDept || i.ownerDept === viewingDept
             expect(matches).toBe(true)
           })
-          
+
           return true
         }
       ),
@@ -279,25 +298,21 @@ describe('Property 2: Filter Logic Correctness - Department Filter', () => {
 
   it('should return all indicators when department filter is undefined', () => {
     fc.assert(
-      fc.property(
-        fc.array(indicatorArbitrary, { minLength: 0, maxLength: 30 }),
-        (indicators) => {
-          const result1 = filterByResponsibleDept(indicators, undefined)
-          const result2 = filterByOwnerDept(indicators, undefined)
-          const result3 = filterByDeptMatch(indicators, undefined)
-          
-          expect(result1.length).toBe(indicators.length)
-          expect(result2.length).toBe(indicators.length)
-          expect(result3.length).toBe(indicators.length)
-          
-          return true
-        }
-      ),
+      fc.property(fc.array(indicatorArbitrary, { minLength: 0, maxLength: 30 }), indicators => {
+        const result1 = filterByResponsibleDept(indicators, undefined)
+        const result2 = filterByOwnerDept(indicators, undefined)
+        const result3 = filterByDeptMatch(indicators, undefined)
+
+        expect(result1.length).toBe(indicators.length)
+        expect(result2.length).toBe(indicators.length)
+        expect(result3.length).toBe(indicators.length)
+
+        return true
+      }),
       { numRuns: 100 }
     )
   })
 })
-
 
 // ============================================================================
 // 辅助函数

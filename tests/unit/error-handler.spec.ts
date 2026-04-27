@@ -1,18 +1,18 @@
 /**
  * 错误处理单元测试
- * 
+ *
  * 测试 useErrorHandler composable 的各项功能：
  * - 友好消息生成
  * - 重试逻辑判断
  * - 错误类型检测
- * 
+ *
  * @requirements 10.2 - 超时提示和重试选项
  * @requirements 10.3 - 网络错误提示
  * @requirements 10.4 - 错误详情和建议操作
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useErrorHandler } from '@/shared/lib/error-handling/useErrorHandler'
 
 // Mock Element Plus ElMessage
 vi.mock('element-plus', () => ({
@@ -33,7 +33,7 @@ describe('ErrorHandler Composable', () => {
 
   /**
    * 友好消息生成测试
-   * 
+   *
    * @requirement 10.3 - 网络错误提示
    * @requirement 10.4 - 错误详情和建议操作
    */
@@ -156,9 +156,9 @@ describe('ErrorHandler Composable', () => {
       const validationError = {
         isAxiosError: true,
         message: 'Request failed with status code 400',
-        response: { 
-          status: 400, 
-          data: { message: '参数格式错误' } 
+        response: {
+          status: 400,
+          data: { message: '参数格式错误' }
         }
       }
 
@@ -197,7 +197,7 @@ describe('ErrorHandler Composable', () => {
 
   /**
    * 重试逻辑测试
-   * 
+   *
    * @requirement 10.2 - 超时提示和重试选项
    */
   describe('Retry Logic (isRetryable)', () => {
@@ -321,7 +321,7 @@ describe('ErrorHandler Composable', () => {
 
   /**
    * 错误类型检测测试
-   * 
+   *
    * @requirement 10.3 - 网络错误提示
    * @requirement 10.4 - 错误详情和建议操作
    */

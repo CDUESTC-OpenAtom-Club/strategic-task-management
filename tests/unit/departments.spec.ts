@@ -13,7 +13,7 @@ import {
   isCollege,
   isValidDepartment
 } from '@/config/departments'
-import { isSecondaryCollege } from '@/utils/colors'
+import { isSecondaryCollege } from '@/shared/lib/utils/colors'
 
 describe('Department Configuration', () => {
   describe('Constants', () => {
@@ -67,7 +67,6 @@ describe('Department Configuration', () => {
       expect(depts).toEqual([...ALL_DEPARTMENTS])
     })
   })
-
 
   describe('Role Identification Functions', () => {
     it('isStrategicDept should identify 战略发展部 correctly', () => {

@@ -29,7 +29,7 @@ import {
   truncateText,
   groupBy,
   sortBy
-} from '@/utils/formatters'
+} from '@/shared/lib/utils/formatters'
 
 describe('Formatters - Date Functions', () => {
   describe('formatDate', () => {

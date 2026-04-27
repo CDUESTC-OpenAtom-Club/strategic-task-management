@@ -14,7 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fc from 'fast-check'
 import axios, { AxiosError } from 'axios'
 import { ApiClient, type AppError } from '@/shared/api/client'
-import { tokenManager } from '@/utils/tokenManager'
+import { tokenManager } from '@/shared/lib/utils/tokenManager'
 
 function toAppError(error: AxiosError): AppError {
   const responseData = error.response?.data as { message?: string; details?: unknown } | undefined

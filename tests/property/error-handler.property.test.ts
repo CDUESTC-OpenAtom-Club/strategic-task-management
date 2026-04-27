@@ -19,7 +19,7 @@ import {
   formatErrorMessage,
   isRetryableError,
   getErrorSeverity
-} from '@/api/errorHandler'
+} from '@/shared/api/errorHandler'
 import { isApiErrorResponse, ErrorSeverity } from '@/shared/types/error'
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 

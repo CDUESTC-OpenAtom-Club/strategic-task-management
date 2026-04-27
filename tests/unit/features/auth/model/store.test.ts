@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/features/auth/model/store'
-import type { User } from '@/types'
+import type { User } from '@/shared/types'
 import { getTestCredentials } from '../../../../helpers/testCredentials'
 
 // Mock dependencies

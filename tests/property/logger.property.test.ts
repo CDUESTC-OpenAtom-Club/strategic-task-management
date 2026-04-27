@@ -18,7 +18,7 @@ import {
   shouldLog,
   REDACTED_VALUE,
   type LogLevel
-} from '@/utils/logger'
+} from '@/shared/lib/utils/logger'
 import { getTestCredentials, getMockToken } from '../helpers/testCredentials'
 
 // 所有日志级别
