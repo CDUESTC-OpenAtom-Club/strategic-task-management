@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 /**
  * 任务审批卡片组件
  * 展示任务/指标信息，支持内联审批操作

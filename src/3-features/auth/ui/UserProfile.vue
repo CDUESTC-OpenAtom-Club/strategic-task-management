@@ -154,7 +154,6 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, reactive, computed } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Phone } from '@element-plus/icons-vue'
