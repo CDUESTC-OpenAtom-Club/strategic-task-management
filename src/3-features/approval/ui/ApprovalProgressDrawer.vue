@@ -101,6 +101,7 @@ const emit = defineEmits<Emits>()
 const authStore = useAuthStore()
 const planStore = usePlanStore()
 const timeContext = useTimeContextStore()
+const canLookupWorkflowUsers = computed(() => authStore.effectiveRole === 'strategic_dept')
 const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
 const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
 const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'
@@ -243,6 +244,10 @@ function cacheWorkflowUserAvatar(userIdValue: unknown, avatarValue: unknown): bo
 }
 
 async function ensureWorkflowUserAvatarLoaded(userIdValue: unknown): Promise<void> {
+  if (!canLookupWorkflowUsers.value) {
+    return
+  }
+
   const userId = parsePositiveUserId(userIdValue)
   if (!userId) {
     return
@@ -305,6 +310,12 @@ async function ensureSubmitterNameLoaded(
 
   const cacheKey = String(userId)
   if (submitterNameCache.value[cacheKey]) {
+    return
+  }
+
+  if (!canLookupWorkflowUsers.value) {
+    const fallbackDisplayName = normalizeDisplayName(fallbackName) || getFallbackSubmitterValue()
+    cacheSubmitterName(userId, fallbackDisplayName)
     return
   }
 
