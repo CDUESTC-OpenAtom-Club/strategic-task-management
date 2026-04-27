@@ -17,6 +17,7 @@ This directory contains TypeScript type definitions for the SISM frontend applic
 所有新代码都应该使用这里的类型定义。
 
 **包含:**
+
 - `StrategicTask` - 对应后端 `strategic_task` 表
 - `Indicator` - 对应后端 `indicator` 表
 - `Milestone` - 对应后端 `milestone` 表
@@ -28,14 +29,15 @@ This directory contains TypeScript type definitions for the SISM frontend applic
 - 实用工具类型
 
 **示例:**
+
 ```typescript
-import { StrategicTask, Indicator, Milestone } from '@/types/entities'
+import { StrategicTask, Indicator, Milestone } from '@/shared/types/entities'
 
 const task: StrategicTask = {
   taskId: 1,
   taskName: '提升教学质量',
   taskDesc: '战略任务描述',
-  taskType: TaskType.DEVELOPMENT,
+  taskType: TaskType.DEVELOPMENT
   // ...
 }
 ```
@@ -47,13 +49,15 @@ Zod 运行时验证 Schema。
 提供运行时类型验证,用于 API 响应验证和表单验证。
 
 **使用场景:**
+
 - API 响应验证
 - 表单数据验证
 - 运行时类型检查
 
 **示例:**
+
 ```typescript
-import { validateIndicator } from '@/types'
+import { validateIndicator } from '@/shared/types'
 
 const isValid = validateIndicator(apiResponse.data)
 ```
@@ -63,30 +67,33 @@ const isValid = validateIndicator(apiResponse.data)
 统一导出入口。
 
 **重新导出:**
+
 - `entities.ts` 的所有类型
 - `schemas.ts` 的所有 Schema
 
 **使用方式:**
+
 ```typescript
-// 推荐: 直接从 @/types 导入
-import { StrategicTask, Indicator } from '@/types'
+// 推荐: 直接从 @/shared/types 导入
+import { StrategicTask, Indicator } from '@/shared/types'
 
 // 等价于:
-import { StrategicTask, Indicator } from '@/types/entities'
+import { StrategicTask, Indicator } from '@/shared/types/entities'
 ```
 
 ## 命名规范
 
 ### 实体类型命名
 
-| 后端表名 | 前端类型名 | 字段命名 |
-|---------|----------|---------|
-| `strategic_task` | `StrategicTask` | `taskId`, `taskName`, `taskDesc` |
-| `indicator` | `Indicator` | `indicatorId`, `indicatorName`, `indicatorDesc` |
-| `milestone` | `Milestone` | `milestoneId`, `milestoneName`, `milestoneDesc` |
-| `app_user` | `User` | `userId`, `username`, `passwordHash` |
+| 后端表名         | 前端类型名      | 字段命名                                        |
+| ---------------- | --------------- | ----------------------------------------------- |
+| `strategic_task` | `StrategicTask` | `taskId`, `taskName`, `taskDesc`                |
+| `indicator`      | `Indicator`     | `indicatorId`, `indicatorName`, `indicatorDesc` |
+| `milestone`      | `Milestone`     | `milestoneId`, `milestoneName`, `milestoneDesc` |
+| `app_user`       | `User`          | `userId`, `username`, `passwordHash`            |
 
 **规则:**
+
 - ✅ 类型名: PascalCase,去掉下划线,首字母大写
 - ✅ 字段名: camelCase,与后端 VO 完全一致
 - ❌ 不要创建"翻译层" (如 Plan, Task 等别名)
@@ -103,7 +110,7 @@ enum TaskType {
 
 // ❌ 错误: 创建中文别名
 enum TaskType {
-  BASIC = '基础性',  // 不要这样做!
+  BASIC = '基础性', // 不要这样做!
   DEVELOPMENT = '发展性'
 }
 ```
@@ -113,11 +120,11 @@ enum TaskType {
 ### API 调用
 
 ```typescript
-import { strategicTaskApi } from '@/api/strategic'
-import type { StrategicTask, ApiResponse } from '@/types'
+import { planApi } from '@/features/plan/api/planApi'
+import type { StrategicTask, ApiResponse } from '@/shared/types'
 
 async function loadStrategicTasks(): Promise<StrategicTask[]> {
-  const response = await strategicTaskApi.getAllStrategicTasks()
+  const response = await planApi.getPlans()
 
   if (response.success && response.data) {
     return response.data
@@ -173,6 +180,7 @@ const props = defineProps<Props>()
 ### 1. 识别需要修改的文件
 
 搜索以下模式:
+
 - `from '@/types/backend-aligned'` → 改为 `from '@/types/entities'`
 - `: Plan` → 改为 `: StrategicTask`
 - `: Task` → 改为 `: Milestone` (如果是里程碑) 或 `: Indicator` (如果是指標)
@@ -219,7 +227,7 @@ task.taskName
 // ✅ 好: TypeScript 自动推导类型
 const task: StrategicTask = {
   taskId: 1,
-  taskName: '任务名称',
+  taskName: '任务名称'
   // ...
 }
 
@@ -269,7 +277,7 @@ describe('StrategicTask Validation', () => {
     const task = {
       taskId: 1,
       taskName: '任务名称',
-      taskType: TaskType.DEVELOPMENT,
+      taskType: TaskType.DEVELOPMENT
       // ...
     }
 
@@ -293,6 +301,7 @@ describe('StrategicTask Validation', () => {
    - 添加 JSDoc 注释
 
 3. **运行类型检查**
+
    ```bash
    npm run type-check
    ```

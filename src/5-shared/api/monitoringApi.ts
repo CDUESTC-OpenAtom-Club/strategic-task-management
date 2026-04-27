@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 预警告警 API
  * 用于 Dashboard 和消息中心的预警统计
@@ -123,10 +122,7 @@ async function requestUnclosedAlerts(path: string): Promise<AlertEvent[] | null>
   const payload = response.data as ApiEnvelope<AlertEvent[]> | AlertEvent[] | undefined
   if (
     response.status === 404 ||
-    (payload &&
-      typeof payload === 'object' &&
-      'success' in payload &&
-      payload.success === false)
+    (payload && typeof payload === 'object' && 'success' in payload && payload.success === false)
   ) {
     return null
   }
@@ -155,10 +151,7 @@ export const alertApi = {
     const payload = response.data as ApiEnvelope<AlertStats> | AlertStats | undefined
     if (
       response.status === 404 ||
-      (payload &&
-        typeof payload === 'object' &&
-        'success' in payload &&
-        payload.success === false)
+      (payload && typeof payload === 'object' && 'success' in payload && payload.success === false)
     ) {
       markAlertsApiUnavailable()
       logger.warn('[alertApi] alerts stats endpoint unavailable, degrade to empty stats')
@@ -227,11 +220,14 @@ export const alertApi = {
    * 处理告警
    * 复用通知 handle/status 能力近似表达告警处理
    */
-  processAlert: async (id: number, data: {
-    assigneeId?: number
-    status: string
-    actionLog: string
-  }) => {
+  processAlert: async (
+    id: number,
+    data: {
+      assigneeId?: number
+      status: string
+      actionLog: string
+    }
+  ) => {
     const handledByUserId = data.assigneeId ?? 0
     const handleParams = new URLSearchParams({
       handledByUserId: String(handledByUserId)
