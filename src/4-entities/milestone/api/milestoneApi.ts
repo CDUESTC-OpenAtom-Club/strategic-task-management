@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 里程碑 API 服务
  * 包含配对机制相关的接口
@@ -64,7 +63,9 @@ function normalizeDueDate(dueDate: string | null): string | null {
   return normalized
 }
 
-function normalizeMilestoneMutationRequest(request: MilestoneMutationRequest): MilestoneMutationRequest {
+function normalizeMilestoneMutationRequest(
+  request: MilestoneMutationRequest
+): MilestoneMutationRequest {
   return {
     ...request,
     milestoneName: request.milestoneName.trim(),
@@ -80,7 +81,10 @@ function withMilestoneCacheContext(params?: Record<string, unknown>): Record<str
   }
 }
 
-function invalidateMilestoneCaches(indicatorId?: string | number, milestoneId?: string | number): void {
+function invalidateMilestoneCaches(
+  indicatorId?: string | number,
+  milestoneId?: string | number
+): void {
   const targets: Array<string | ReturnType<typeof buildQueryKey>> = [
     'milestone.list',
     'indicator.detail',
@@ -93,13 +97,23 @@ function invalidateMilestoneCaches(indicatorId?: string | number, milestoneId?: 
 
   if (indicatorId !== undefined) {
     targets.push(`milestone.indicator.${indicatorId}`)
-    targets.push(buildQueryKey('milestone', 'list', withMilestoneCacheContext({ indicatorId: String(indicatorId) })))
+    targets.push(
+      buildQueryKey(
+        'milestone',
+        'list',
+        withMilestoneCacheContext({ indicatorId: String(indicatorId) })
+      )
+    )
   }
 
   if (milestoneId !== undefined) {
     targets.push(`milestone.detail.${milestoneId}`)
     targets.push(
-      buildQueryKey('milestone', 'detail', withMilestoneCacheContext({ milestoneId: String(milestoneId) }))
+      buildQueryKey(
+        'milestone',
+        'detail',
+        withMilestoneCacheContext({ milestoneId: String(milestoneId) })
+      )
     )
   }
 
@@ -161,7 +175,10 @@ export const milestoneApi = {
     request: MilestoneMutationRequest
   ): Promise<ApiResponse<Milestone>> {
     const payload = normalizeMilestoneMutationRequest(request)
-    const response = await apiClient.put<ApiResponse<Milestone>>(`/milestones/${milestoneId}`, payload)
+    const response = await apiClient.put<ApiResponse<Milestone>>(
+      `/milestones/${milestoneId}`,
+      payload
+    )
     invalidateMilestoneCaches(request.indicatorId, milestoneId)
     return response
   },
@@ -220,7 +237,13 @@ export const milestoneApi = {
     indicatorIds: number[]
   ): Promise<ApiResponse<Record<number, Milestone[]>>> {
     if (indicatorIds.length === 0) {
-      return { success: true, data: {}, message: '', timestamp: new Date().toISOString(), code: 200 }
+      return {
+        success: true,
+        data: {},
+        message: '',
+        timestamp: new Date().toISOString(),
+        code: 200
+      }
     }
     const ids = indicatorIds.join(',')
     return fetchWithCache({
@@ -231,7 +254,10 @@ export const milestoneApi = {
           tags: ['milestone.list']
         })
       },
-      fetcher: () => apiClient.get<ApiResponse<Record<number, Milestone[]>>>(`/milestones/by-indicators?ids=${ids}`)
+      fetcher: () =>
+        apiClient.get<ApiResponse<Record<number, Milestone[]>>>(
+          `/milestones/by-indicators?ids=${ids}`
+        )
     })
   },
 
@@ -248,7 +274,9 @@ export const milestoneApi = {
         })
       },
       fetcher: () =>
-        apiClient.get<ApiResponse<Milestone | null>>(`/milestones/indicator/${indicatorId}/next-to-report`)
+        apiClient.get<ApiResponse<Milestone | null>>(
+          `/milestones/indicator/${indicatorId}/next-to-report`
+        )
     })
   },
 
@@ -263,16 +291,15 @@ export const milestoneApi = {
           tags: ['milestone.list', `milestone.indicator.${indicatorId}`]
         })
       },
-      fetcher: () => apiClient.get<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}/unpaired`)
+      fetcher: () =>
+        apiClient.get<ApiResponse<Milestone[]>>(`/milestones/indicator/${indicatorId}/unpaired`)
     })
   },
 
   /**
    * 检查里程碑是否已配对
    */
-  async isMilestonePaired(
-    milestoneId: string
-  ): Promise<
+  async isMilestonePaired(milestoneId: string): Promise<
     ApiResponse<{
       milestoneId: string
       isPaired: boolean
@@ -281,7 +308,11 @@ export const milestoneApi = {
     }>
   > {
     return fetchWithCache({
-      key: buildQueryKey('milestone', 'pairingStatusByMilestone', withMilestoneCacheContext({ milestoneId })),
+      key: buildQueryKey(
+        'milestone',
+        'pairingStatusByMilestone',
+        withMilestoneCacheContext({ milestoneId })
+      ),
       policy: {
         ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_SHORT, {
           tags: ['milestone.list', `milestone.detail.${milestoneId}`]
@@ -303,7 +334,9 @@ export const milestoneApi = {
         })
       },
       fetcher: () =>
-        apiClient.get<ApiResponse<MilestonePairingStatus>>(`/milestones/indicator/${indicatorId}/pairing-status`)
+        apiClient.get<ApiResponse<MilestonePairingStatus>>(
+          `/milestones/indicator/${indicatorId}/pairing-status`
+        )
     })
   },
 
@@ -322,7 +355,11 @@ export const milestoneApi = {
       ),
       policy: {
         ...createShortMemoryPolicy(CACHE_TTL.MILESTONE_HOT, {
-          tags: ['milestone.list', `milestone.indicator.${indicatorId}`, `milestone.detail.${milestoneId}`]
+          tags: [
+            'milestone.list',
+            `milestone.indicator.${indicatorId}`,
+            `milestone.detail.${milestoneId}`
+          ]
         })
       },
       fetcher: () =>
