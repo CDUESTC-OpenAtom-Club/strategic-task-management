@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Canonical permissions entry for permission-aware composables.
  *

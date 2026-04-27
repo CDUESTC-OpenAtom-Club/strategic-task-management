@@ -1,3 +1,9 @@
+/**
+ * @deprecated Compatibility entrypoint.
+ * Canonical path: `@/shared/api` or feature-local `api` modules.
+ * Remove after 2026-05-31.
+ */
+
 import { apiClient } from '@/shared/api/client'
 
 export * from '@/shared/api'

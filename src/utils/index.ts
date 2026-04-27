@@ -1,3 +1,9 @@
+/**
+ * @deprecated Compatibility entrypoint.
+ * Canonical path: `@/shared/lib/utils`.
+ * Remove after 2026-05-31.
+ */
+
 export * from '@/shared/lib/utils'
 
 export function getProgressColor(progress: number): string {

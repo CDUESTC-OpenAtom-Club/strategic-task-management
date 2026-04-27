@@ -1,3 +1,9 @@
+/**
+ * @deprecated Compatibility entrypoint.
+ * Canonical path: `@/shared/lib/utils/tokenManager`.
+ * Remove after 2026-05-31.
+ */
+
 const SESSION_TOKEN_KEY = 'sism_session_access_token'
 
 export const DEFAULT_REFRESH_THRESHOLD_MS = 5 * 60 * 1000

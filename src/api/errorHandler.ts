@@ -1,3 +1,9 @@
+/**
+ * @deprecated Compatibility entrypoint.
+ * Canonical path: `@/shared/api/errorHandler`.
+ * Remove after 2026-05-31.
+ */
+
 import type { AxiosError } from 'axios'
 import { ErrorSeverity } from '@/shared/types/error'
 

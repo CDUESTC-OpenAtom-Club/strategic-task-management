@@ -1,3 +1,9 @@
+/**
+ * @deprecated Compatibility entrypoint.
+ * Canonical path: `@/shared/api/fallback`.
+ * Remove after 2026-05-31.
+ */
+
 import type { AxiosError } from 'axios'
 
 export interface FallbackConfig {

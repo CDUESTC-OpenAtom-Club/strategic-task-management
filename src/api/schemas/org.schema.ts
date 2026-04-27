@@ -1,3 +1,9 @@
+/**
+ * @deprecated Compatibility entrypoint.
+ * Canonical path: `@/features/organization/api/org` or `@/shared/types/backend-aligned`.
+ * Remove after 2026-05-31.
+ */
+
 import { z } from 'zod'
 
 export const orgTypeSchema = z.enum([
