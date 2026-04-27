@@ -20,6 +20,44 @@ import {
   type ExtendedTokenManager
 } from '@/shared/lib/utils/tokenManager'
 
+let sharedLocalStorageData: Record<string, string> = {}
+const originalLocalStorage = global.localStorage
+
+beforeEach(() => {
+  sharedLocalStorageData = {}
+
+  Object.defineProperty(global, 'localStorage', {
+    value: {
+      getItem: (key: string) => sharedLocalStorageData[key] ?? null,
+      setItem: (key: string, value: string) => {
+        sharedLocalStorageData[key] = value
+      },
+      removeItem: (key: string) => {
+        delete sharedLocalStorageData[key]
+      },
+      clear: () => {
+        sharedLocalStorageData = {}
+      },
+      get length() {
+        return Object.keys(sharedLocalStorageData).length
+      },
+      key: (index: number) => Object.keys(sharedLocalStorageData)[index] ?? null
+    },
+    writable: true,
+    configurable: true
+  })
+})
+
+afterEach(() => {
+  if (originalLocalStorage) {
+    Object.defineProperty(global, 'localStorage', {
+      value: originalLocalStorage,
+      writable: true,
+      configurable: true
+    })
+  }
+})
+
 /**
  * 生成有效的 JWT Token (用于测试)
  *
