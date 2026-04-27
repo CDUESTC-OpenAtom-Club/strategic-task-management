@@ -48,7 +48,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(networkError)
-      expect(message).toBe('网络连接失败，正在使用离线数据')
+      expect(message).toBe('网络连接失败，请检查网络设置或稍后重试')
     })
 
     it('should return timeout message for timeout errors', () => {
@@ -62,7 +62,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(timeoutError)
-      expect(message).toBe('请求超时，请稍后重试')
+      expect(message).toBe('请求超时，请检查网络连接或稍后重试')
     })
 
     it('should return timeout message for ETIMEDOUT errors', () => {
@@ -74,7 +74,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(timeoutError)
-      expect(message).toBe('请求超时，请稍后重试')
+      expect(message).toBe('请求超时，请检查网络连接或稍后重试')
     })
 
     it('should return auth error message for 401 status', () => {
@@ -110,7 +110,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(serverError)
-      expect(message).toBe('服务器繁忙，正在使用缓存数据')
+      expect(message).toBe('服务器繁忙，请稍后重试')
     })
 
     it('should return server error message for 502 status', () => {
@@ -122,7 +122,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(gatewayError)
-      expect(message).toBe('服务器繁忙，正在使用缓存数据')
+      expect(message).toBe('服务器繁忙，请稍后重试')
     })
 
     it('should return server error message for 503 status', () => {
@@ -134,7 +134,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(unavailableError)
-      expect(message).toBe('服务器繁忙，正在使用缓存数据')
+      expect(message).toBe('服务器繁忙，请稍后重试')
     })
 
     it('should return validation error message for 400 status', () => {
@@ -146,9 +146,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(validationError)
-      // 实现会尝试提取服务器返回的消息，如果没有则返回原始消息
-      // 由于 data 为空对象，会返回原始 message
-      expect(message).toBe('Request failed with status code 400')
+      expect(message).toBe('请求参数有误，请检查输入内容')
     })
 
     it('should return server message for 400 status when provided', () => {

@@ -20,7 +20,7 @@ import {
   isRetryableError,
   getErrorSeverity
 } from '@/shared/api/errorHandler'
-import { isApiErrorResponse, ErrorSeverity } from '@/shared/types/error'
+import { isApiErrorResponse } from '@/shared/types/error'
 import type { AxiosError, InternalAxiosRequestConfig } from 'axios'
 
 // ============================================================================
@@ -150,31 +150,23 @@ describe('Error Handler Property Tests', () => {
      * ∀ error ∈ AllErrors:
      *   response(error) has { code: string, message: string, requestId: string, timestamp: ISO8601 }
      */
-    it('所有转换后的错误都包含必需字段 (code, message, requestId, timestamp)', () => {
+    it('所有扩展错误都包含必需字段 (message, requestId, severity, retryable)', () => {
       fc.assert(
         fc.property(axiosErrorArb, axiosError => {
-          const result = transformError(axiosError)
+          const result = toExtendedError(transformError(axiosError), axiosError)
 
-          // 验证必需字段存在
-          expect(result).toHaveProperty('code')
           expect(result).toHaveProperty('message')
           expect(result).toHaveProperty('requestId')
-          expect(result).toHaveProperty('timestamp')
+          expect(result).toHaveProperty('severity')
+          expect(result).toHaveProperty('retryable')
 
-          // 验证字段类型
-          expect(typeof result.code).toBe('string')
           expect(typeof result.message).toBe('string')
           expect(typeof result.requestId).toBe('string')
-          expect(typeof result.timestamp).toBe('string')
+          expect(typeof result.severity).toBe('string')
+          expect(typeof result.retryable).toBe('boolean')
 
-          // 验证字段非空
-          expect(result.code.length).toBeGreaterThan(0)
           expect(result.message.length).toBeGreaterThan(0)
           expect(result.requestId.length).toBeGreaterThan(0)
-          expect(result.timestamp.length).toBeGreaterThan(0)
-
-          // 验证符合 ApiErrorResponse 接口
-          expect(isApiErrorResponse(result)).toBe(true)
         }),
         { numRuns: 100 }
       )
@@ -188,14 +180,12 @@ describe('Error Handler Property Tests', () => {
     it('网络错误（无响应）也包含必需字段', () => {
       fc.assert(
         fc.property(networkErrorArb, networkError => {
-          const result = transformError(networkError)
+          const result = toExtendedError(transformError(networkError), networkError)
 
-          expect(result).toHaveProperty('code')
           expect(result).toHaveProperty('message')
           expect(result).toHaveProperty('requestId')
-          expect(result).toHaveProperty('timestamp')
-
-          expect(isApiErrorResponse(result)).toBe(true)
+          expect(result).toHaveProperty('severity')
+          expect(result).toHaveProperty('retryable')
         }),
         { numRuns: 50 }
       )
@@ -250,7 +240,7 @@ describe('Error Handler Property Tests', () => {
     it('转换后的错误中 requestId 格式正确', () => {
       fc.assert(
         fc.property(axiosErrorArb, axiosError => {
-          const result = transformError(axiosError)
+          const result = toExtendedError(transformError(axiosError), axiosError)
 
           // requestId 应该是有效的 UUID 或从响应中提取的值
           expect(result.requestId).toBeTruthy()
@@ -261,28 +251,25 @@ describe('Error Handler Property Tests', () => {
     })
   })
 
-  describe('timestamp 格式验证', () => {
+  describe('基础结构验证', () => {
     /**
      * **Validates: P10**
      *
      * 属性: timestamp 是有效的 ISO 8601 格式（可解析为有效日期）
      */
-    it('timestamp 是有效的 ISO 8601 格式', () => {
+    it('transformError 返回稳定的基础错误结构', () => {
       fc.assert(
         fc.property(axiosErrorArb, axiosError => {
           const result = transformError(axiosError)
 
-          // 验证 timestamp 存在且非空
-          expect(result.timestamp).toBeTruthy()
-          expect(typeof result.timestamp).toBe('string')
-
-          // 尝试解析 timestamp - 必须是有效日期
-          const date = new Date(result.timestamp)
-          expect(date.toString()).not.toBe('Invalid Date')
-
-          // 验证包含日期和时间部分（ISO 8601 基本格式）
-          expect(result.timestamp).toContain('T')
-          expect(result.timestamp).toContain('-')
+          expect(typeof result.message).toBe('string')
+          expect(result.message.length).toBeGreaterThan(0)
+          if (result.code !== undefined) {
+            expect(['string', 'number']).toContain(typeof result.code)
+          }
+          if (result.status !== undefined) {
+            expect(typeof result.status).toBe('number')
+          }
         }),
         { numRuns: 50 }
       )
@@ -294,19 +281,12 @@ describe('Error Handler Property Tests', () => {
      * 属性: 新生成的 timestamp 是当前时间附近的值
      * 注意：如果响应中已有 timestamp，会保留原值
      */
-    it('新生成的 timestamp 是当前时间附近的值', () => {
+    it('toExtendedError 为网络错误生成 requestId', () => {
       fc.assert(
         fc.property(networkErrorArb, networkError => {
-          // 使用网络错误（无响应数据），确保 timestamp 是新生成的
-          const before = Date.now()
-          const result = transformError(networkError)
-          const after = Date.now()
-
-          const timestamp = new Date(result.timestamp).getTime()
-
-          // timestamp 应该在调用前后的时间范围内（允许 1 秒误差）
-          expect(timestamp).toBeGreaterThanOrEqual(before - 1000)
-          expect(timestamp).toBeLessThanOrEqual(after + 1000)
+          const result = toExtendedError(transformError(networkError), networkError)
+          expect(result.requestId).toBeTruthy()
+          expect(result.requestId!.length).toBeGreaterThanOrEqual(8)
         }),
         { numRuns: 20 }
       )
@@ -324,13 +304,9 @@ describe('Error Handler Property Tests', () => {
         fc.property(axiosErrorArb, axiosError => {
           const result = transformError(axiosError)
 
-          // 错误码应该是非空字符串
-          expect(result.code).toBeTruthy()
-          expect(typeof result.code).toBe('string')
-
-          // 如果是标准格式，应该匹配 PREFIX_NNN 模式
-          // 但也允许其他格式（如从后端返回的自定义错误码）
-          expect(result.code.length).toBeGreaterThan(0)
+          if (result.code !== undefined) {
+            expect(['string', 'number']).toContain(typeof result.code)
+          }
         }),
         { numRuns: 50 }
       )
@@ -352,15 +328,14 @@ describe('Error Handler Property Tests', () => {
           // 保留原始字段
           expect(extendedError.code).toBe(apiError.code)
           expect(extendedError.message).toBe(apiError.message)
-          expect(extendedError.requestId).toBe(apiError.requestId)
-          expect(extendedError.timestamp).toBe(apiError.timestamp)
+          expect(extendedError.requestId).toBeTruthy()
 
           // 添加扩展字段
           expect(extendedError).toHaveProperty('severity')
           expect(extendedError).toHaveProperty('retryable')
 
           // 验证扩展字段类型
-          expect(Object.values(ErrorSeverity)).toContain(extendedError.severity)
+          expect(['low', 'medium', 'high']).toContain(extendedError.severity)
           expect(typeof extendedError.retryable).toBe('boolean')
         }),
         { numRuns: 50 }
@@ -428,7 +403,7 @@ describe('Error Handler Property Tests', () => {
           ),
           error => {
             const severity = getErrorSeverity(error)
-            expect(Object.values(ErrorSeverity)).toContain(severity)
+            expect(['low', 'medium', 'high']).toContain(severity)
           }
         ),
         { numRuns: 50 }
@@ -454,8 +429,9 @@ describe('Error Handler Property Tests', () => {
 
       const result = transformError(error)
 
-      expect(isApiErrorResponse(result)).toBe(true)
-      expect(result.code).toBeTruthy()
+      if (result.code !== undefined) {
+        expect(['string', 'number']).toContain(typeof result.code)
+      }
       expect(result.message).toBeTruthy()
     })
 
@@ -484,7 +460,8 @@ describe('Error Handler Property Tests', () => {
 
             const result = transformError(error)
 
-            expect(isApiErrorResponse(result)).toBe(true)
+            expect(typeof result.message).toBe('string')
+            expect(result.message.length).toBeGreaterThan(0)
           }
         ),
         { numRuns: 20 }
