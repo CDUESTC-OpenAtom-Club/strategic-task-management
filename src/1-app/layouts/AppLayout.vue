@@ -298,6 +298,7 @@ const handleDropdownCommand = async (command: string) => {
       :workflow-entity-id="approvalCenterContext?.workflowEntityId"
       :secondary-workflow-entity-type="approvalCenterContext?.secondaryWorkflowEntityType"
       :secondary-workflow-entity-id="approvalCenterContext?.secondaryWorkflowEntityId"
+      :route-target="approvalCenterContext?.routeTarget"
       approval-type="submission"
       @update:model-value="value => !value && closeApprovalCenter()"
       @close="closeApprovalCenter"

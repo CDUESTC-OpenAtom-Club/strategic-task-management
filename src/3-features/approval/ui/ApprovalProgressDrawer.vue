@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ElDrawer,
   ElDialog,
@@ -69,6 +70,7 @@ interface Props {
   workflowEntityId?: number | string
   secondaryWorkflowEntityType?: 'PLAN' | 'PLAN_REPORT'
   secondaryWorkflowEntityId?: number | string
+  routeTarget?: string
 }
 
 interface Emits {
@@ -94,10 +96,12 @@ const props = withDefaults(defineProps<Props>(), {
   workflowEntityType: 'PLAN',
   workflowEntityId: undefined,
   secondaryWorkflowEntityType: undefined,
-  secondaryWorkflowEntityId: undefined
+  secondaryWorkflowEntityId: undefined,
+  routeTarget: ''
 })
 
 const emit = defineEmits<Emits>()
+const router = useRouter()
 const authStore = useAuthStore()
 const planStore = usePlanStore()
 const timeContext = useTimeContextStore()
@@ -111,6 +115,10 @@ const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'
 const INDICATOR_REPORT_APPROVE_PERMISSION = 'BTN_INDICATOR_REPORT_APPROVE'
 const currentUserId = computed(() => Number(authStore.user?.userId ?? authStore.user?.id ?? 0))
 const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
+const normalizedRouteTarget = computed(() => {
+  const value = typeof props.routeTarget === 'string' ? props.routeTarget.trim() : ''
+  return value || ''
+})
 const currentUserPermissionCodes = computed(() => {
   const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
   if (!Array.isArray(permissions)) {
@@ -139,6 +147,30 @@ function normalizeWorkflowCode(value: unknown): string {
   return String(value || '')
     .trim()
     .toUpperCase()
+}
+
+function normalizeWorkflowStatus(value: unknown): string {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+
+  if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(normalized)) {
+    return 'PENDING'
+  }
+
+  if (['APPROVED', 'DISTRIBUTED'].includes(normalized)) {
+    return 'APPROVED'
+  }
+
+  if (['REJECTED', 'RETURNED'].includes(normalized)) {
+    return 'REJECTED'
+  }
+
+  if (['WITHDRAWN', 'CANCELLED'].includes(normalized)) {
+    return 'WITHDRAWN'
+  }
+
+  return normalized
 }
 
 const expectedWorkflowCodes = computed(() => {
@@ -2015,6 +2047,15 @@ async function openPlanApprovalDetails(item?: PlanApprovalDetailItem) {
   selectedHistoryInstanceDetailLoading.value = false
 }
 
+async function navigateToRouteTarget() {
+  if (!normalizedRouteTarget.value) {
+    return
+  }
+
+  handleClose()
+  await router.push(normalizedRouteTarget.value)
+}
+
 // 处理自定义审批流程事件
 function handleAddNode() {
   // 暂不实现，可后续扩展
@@ -2128,7 +2169,8 @@ watch(
   () => props.modelValue,
   val => {
     if (val) {
-      planWorkflowDetail.value = props.initialPlanWorkflowDetail ?? null
+      const retainedDetail = getRetainedWorkflowDetail()
+      planWorkflowDetail.value = retainedDetail ?? props.initialPlanWorkflowDetail ?? null
       // 打开时重置到工作流标签页
       activeTab.value = props.showPlanApprovals
         ? isPlanPendingApproval.value
@@ -2272,7 +2314,18 @@ watch(
     <!-- 统计信息 -->
     <template #header>
       <div class="drawer-header">
-        <h3 class="drawer-title">{{ showPlanApprovals ? '审批中心' : '审批进度' }}</h3>
+        <div class="drawer-title-group">
+          <h3 class="drawer-title">{{ showPlanApprovals ? '审批中心' : '审批进度' }}</h3>
+          <ElButton
+            v-if="normalizedRouteTarget"
+            size="small"
+            text
+            type="primary"
+            @click="navigateToRouteTarget"
+          >
+            跳转到对应页面
+          </ElButton>
+        </div>
         <div class="stats-tags">
           <ElTag v-if="showPlanApprovals && scopedPendingPlanCount > 0" type="warning" size="small">
             当前计划审批中: {{ scopedPendingPlanCount }}
@@ -2674,6 +2727,12 @@ watch(
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.drawer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .drawer-title {

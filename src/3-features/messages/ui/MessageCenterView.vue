@@ -163,9 +163,23 @@
 
         <div class="detail-actions">
           <el-button
-            v-if="canHandleMessageAction(detailMessage)"
+            v-if="shouldShowOpenApprovalCenterAction(detailMessage)"
             type="primary"
-            @click="handleDetailPrimaryAction"
+            @click="openMessageApprovalCenter(detailMessage)"
+          >
+            右侧打开审批中心
+          </el-button>
+          <el-button
+            v-if="shouldShowRouteAction(detailMessage)"
+            :type="shouldShowOpenApprovalCenterAction(detailMessage) ? 'default' : 'primary'"
+            @click="navigateMessageRoute(detailMessage)"
+          >
+            {{ getMessageRouteActionLabel(detailMessage) }}
+          </el-button>
+          <el-button
+            v-else-if="canHandleMessageAction(detailMessage)"
+            type="primary"
+            @click="navigateByMessage(detailMessage)"
           >
             {{ getMessagePrimaryActionLabel(detailMessage) }}
           </el-button>
@@ -342,6 +356,7 @@ async function handleMessageRead(messageId: string) {
 }
 
 function buildApprovalCenterContext(message: Message) {
+  const routeTarget = resolveMessageRouteTarget(message)
   const workflowEntityType =
     message.entityType === 'PLAN_REPORT' || message.entityType === 'PLAN'
       ? message.entityType
@@ -356,7 +371,8 @@ function buildApprovalCenterContext(message: Message) {
     workflowEntityId,
     approvalInstanceId: message.approvalInstanceId,
     departmentName: resolveApprovalDepartment(message),
-    planName: message.title
+    planName: message.title,
+    routeTarget: routeTarget || undefined
   }
 }
 
@@ -531,7 +547,10 @@ function detailActionOptions(message?: Message | null) {
 }
 
 function shouldShowDetailActionSelector(message?: Message | null): boolean {
-  return isApprovalMessage(message) && detailActionOptions(message).length > 1
+  return (
+    Boolean(message && !shouldShowOpenApprovalCenterAction(message)) &&
+    detailActionOptions(message).length > 1
+  )
 }
 
 function syncDetailActionMode(message?: Message | null) {
@@ -573,6 +592,11 @@ function getMessagePrimaryActionLabel(message?: Message | null): string {
 }
 
 async function handleMessageView(message: Message) {
+  if (shouldAutoOpenApprovalCenter(message)) {
+    openApprovalCenter(buildApprovalCenterContext(message))
+    return
+  }
+
   if (
     !isApprovalMessage(message) &&
     (!messageStore.capabilities.detailDrawerEnabled || message.canViewDetail === false) &&
@@ -593,15 +617,6 @@ async function handleMessageView(message: Message) {
   }
 }
 
-function handleDetailPrimaryAction() {
-  if (!detailMessage.value) {
-    return
-  }
-
-  navigateByMessage(detailMessage.value)
-  detailVisible.value = false
-}
-
 function navigateByMessage(message: Message) {
   syncDetailActionMode(message)
   const action = resolveMessageAction(message)
@@ -615,6 +630,51 @@ function navigateByMessage(message: Message) {
     void router.push(action.target)
     return
   }
+}
+
+function shouldAutoOpenApprovalCenter(message?: Message | null): boolean {
+  return Boolean(message && isApprovalMessage(message) && canOpenApprovalCenter(message))
+}
+
+function shouldShowOpenApprovalCenterAction(message?: Message | null): boolean {
+  return canOpenApprovalCenter(message)
+}
+
+function shouldShowRouteAction(message?: Message | null): boolean {
+  return resolveMessageRouteTarget(message) !== null
+}
+
+function openMessageApprovalCenter(message?: Message | null) {
+  if (!message || !canOpenApprovalCenter(message)) {
+    return
+  }
+
+  openApprovalCenter(buildApprovalCenterContext(message))
+  detailVisible.value = false
+}
+
+function navigateMessageRoute(message?: Message | null) {
+  if (!message) {
+    return
+  }
+
+  const routeTarget = resolveMessageRouteTarget(message)
+  if (!routeTarget) {
+    return
+  }
+
+  detailVisible.value = false
+  void router.push(routeTarget)
+}
+
+function getMessageRouteActionLabel(message?: Message | null): string {
+  if (!message) {
+    return '查看关联内容'
+  }
+
+  return message.canProcess || message.bizType === 'APPROVAL_TODO'
+    ? '跳转到对应页面'
+    : '查看关联内容'
 }
 
 async function markAllAsRead() {

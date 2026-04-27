@@ -8,6 +8,7 @@ export interface ApprovalCenterContext {
   approvalInstanceId?: number | string
   departmentName?: string
   planName?: string
+  routeTarget?: string
 }
 
 const approvalCenterVisible = ref(false)
@@ -66,6 +67,11 @@ function normalizeApprovalCenterContext(
   const planName = typeof context.planName === 'string' ? context.planName.trim() : ''
   if (planName) {
     normalized.planName = planName
+  }
+
+  const routeTarget = typeof context.routeTarget === 'string' ? context.routeTarget.trim() : ''
+  if (routeTarget) {
+    normalized.routeTarget = routeTarget
   }
 
   return Object.keys(normalized).length > 0 ? normalized : null
