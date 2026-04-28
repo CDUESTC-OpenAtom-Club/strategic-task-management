@@ -436,13 +436,61 @@ function matchesProcessedResultFilter(
 
 function getMessageMetadataValue(message: Message, key: string): string {
   const value = message.metadata?.[key]
-  return typeof value === 'string' ? value.trim() : ''
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+
+  const metadataJsonRaw = message.metadata?.metadataJson
+  if (typeof metadataJsonRaw === 'string' && metadataJsonRaw.trim()) {
+    try {
+      const parsed = JSON.parse(metadataJsonRaw) as Record<string, unknown>
+      const nestedValue = parsed[key]
+      return typeof nestedValue === 'string' ? nestedValue.trim() : ''
+    } catch {
+      return ''
+    }
+  }
+
+  return ''
+}
+
+function resolvePlanReportCollegeFromBusinessName(message: Message): string {
+  const businessName = getMessageMetadataValue(message, 'businessName')
+  if (!businessName) {
+    return ''
+  }
+
+  const normalized = businessName.replace(/\s+/g, ' ').trim()
+  const reportMatch = normalized.match(/([\u4e00-\u9fa5A-Za-z0-9()（）·\-_]+)月报/)
+  if (reportMatch?.[1]) {
+    return reportMatch[1].replace(/^\d+/, '').trim()
+  }
+
+  return ''
 }
 
 function resolveApprovalDepartment(message: Message): string {
   const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
   const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
   return targetOrgName || sourceOrgName || message.senderDisplay || ''
+}
+
+function resolveApprovalRouteDepartment(message: Message): string {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
+  const entityType = String(message.entityType || '')
+    .trim()
+    .toUpperCase()
+
+  if (entityType === 'PLAN_REPORT') {
+    return sourceOrgName || targetOrgName || resolvePlanReportCollegeFromBusinessName(message) || ''
+  }
+
+  if (entityType === 'PLAN') {
+    return targetOrgName || sourceOrgName || ''
+  }
+
+  return targetOrgName || sourceOrgName || ''
 }
 
 function resolveApprovalRouteDisplay(message: Message): string {
@@ -463,7 +511,7 @@ function buildApprovalPayload(message: Message) {
     entityId: message.entityId,
     actionUrl: message.actionUrl,
     viewerRole: authStore.effectiveRole || authStore.userRole,
-    departmentName: resolveApprovalDepartment(message)
+    departmentName: resolveApprovalRouteDepartment(message)
   }
 }
 

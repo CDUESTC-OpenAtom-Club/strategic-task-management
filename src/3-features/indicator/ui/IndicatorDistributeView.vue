@@ -1153,25 +1153,6 @@ const {
     </el-drawer>
 
     <!-- 任务审批进度抽屉 -->
-    <DistributionApprovalProgressDrawer
-      v-model="taskApprovalVisible"
-      :indicators="approvalIndicators"
-      :plan="approvalDrawerPlan"
-      :department-name="selectedCollege || currentDept || '当前部门'"
-      :plan-name="selectedCollege || currentDept || '当前部门'"
-      :show-plan-approvals="true"
-      :show-approval-section="true"
-      :workflow-code="currentApprovalWorkflowCode"
-      :workflow-entity-type="currentApprovalEntityType"
-      :workflow-entity-id="currentApprovalEntityId"
-      :secondary-workflow-entity-type="secondaryApprovalEntityType"
-      :secondary-workflow-entity-id="secondaryApprovalEntityId"
-      history-view-mode="card-only"
-      :approval-type="currentApprovalType"
-      @close="taskApprovalVisible = false"
-      @refresh="handleApprovalRefresh"
-    />
-
     <el-dialog
       v-model="approvalSetupDialogVisible"
       title="发起下发审批"
@@ -1233,6 +1214,25 @@ const {
         </el-button>
       </template>
     </el-dialog>
+
+    <DistributionApprovalProgressDrawer
+      v-model="taskApprovalVisible"
+      :indicators="approvalIndicators"
+      :plan="approvalDrawerPlan"
+      :initial-plan-workflow-detail="currentCollegeWorkflowDetail"
+      :department-name="selectedCollege || currentDept || '当前部门'"
+      :plan-name="selectedCollege || currentDept || '当前部门'"
+      :show-plan-approvals="true"
+      :show-approval-section="true"
+      :workflow-code="currentApprovalWorkflowCode"
+      :workflow-entity-type="currentApprovalEntityType"
+      :workflow-entity-id="currentApprovalEntityId"
+      :secondary-workflow-entity-type="secondaryApprovalEntityType"
+      :secondary-workflow-entity-id="secondaryApprovalEntityId"
+      :approval-type="currentApprovalType"
+      @close="taskApprovalVisible = false"
+      @refresh="handleApprovalRefresh"
+    />
 
     <!-- 里程碑编辑弹窗 -->
     <el-dialog

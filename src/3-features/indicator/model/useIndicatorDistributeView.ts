@@ -23,7 +23,6 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useApprovalRouteAutopen } from '@/features/approval/lib'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
-import { DistributionApprovalProgressDrawer } from '@/features/approval'
 import { indicatorApi } from '@/features/indicator/api'
 import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import { logger } from '@/shared/lib/utils/logger'
@@ -758,8 +757,28 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     )
   })
 
+  const retainedRouteApprovalEntityType = ref<'PLAN' | 'PLAN_REPORT' | undefined>(undefined)
+  const retainedRouteApprovalEntityId = ref<string | undefined>(undefined)
+  const retainedRouteApprovalDepartment = ref<string | undefined>(undefined)
+
+  const effectiveRouteApprovalEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
+    return routeApprovalEntityType.value || retainedRouteApprovalEntityType.value
+  })
+
+  const effectiveRouteApprovalEntityId = computed<string | undefined>(() => {
+    return routeApprovalEntityId.value || retainedRouteApprovalEntityId.value
+  })
+
+  const effectiveRouteApprovalDepartment = computed<string | undefined>(() => {
+    return routeApprovalDepartment.value || retainedRouteApprovalDepartment.value
+  })
+
   const routeApprovalPlan = computed<Plan | null>(() => {
-    const routePlanId = Number(routeApprovalEntityId.value ?? NaN)
+    if (effectiveRouteApprovalEntityType.value === 'PLAN_REPORT') {
+      return null
+    }
+
+    const routePlanId = Number(effectiveRouteApprovalEntityId.value ?? NaN)
     if (!Number.isFinite(routePlanId) || routePlanId <= 0) {
       return null
     }
@@ -789,32 +808,76 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     )
   })
 
-  const approvalWorkflowReportSummary = computed(() => {
-    const currentWorkflowInstanceId = Number(
-      currentCollegePlanReportSummary.value?.workflowInstanceId ?? NaN
-    )
-    const currentStatus = String(
-      currentCollegePlanReportSummary.value?.workflowStatus ||
-        currentCollegePlanReportSummary.value?.status ||
-        ''
-    )
+  const hasActiveCollegePlanWorkflow = computed(() => {
+    const workflowStatus = String(currentActiveCollegePlan.value?.workflowStatus || '')
       .trim()
       .toUpperCase()
+    const currentTaskId = Number(currentActiveCollegePlan.value?.currentTaskId ?? NaN)
+    const currentStepName = String(currentActiveCollegePlan.value?.currentStepName || '').trim()
 
-    if (
-      currentCollegePlanReportSummary.value?.id &&
-      Number.isFinite(currentWorkflowInstanceId) &&
-      currentWorkflowInstanceId > 0 &&
-      currentStatus !== 'DRAFT'
-    ) {
+    return (
+      ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus) ||
+      (Number.isFinite(currentTaskId) && currentTaskId > 0) ||
+      Boolean(currentStepName)
+    )
+  })
+
+  const hasPlanReportWorkflowContext = (
+    summary:
+      | {
+          id?: number | string
+          status?: string | null
+          workflowStatus?: string | null
+          workflowInstanceId?: number | string | null
+          currentTaskId?: number | string | null
+          currentStepName?: string | null
+        }
+      | null
+      | undefined
+  ) => {
+    if (!summary?.id) {
+      return false
+    }
+
+    const workflowStatus = String(summary.workflowStatus || summary.status || '')
+      .trim()
+      .toUpperCase()
+    const workflowInstanceId = Number(summary.workflowInstanceId ?? NaN)
+    const currentTaskId = Number(summary.currentTaskId ?? NaN)
+    const currentStepName = String(summary.currentStepName || '').trim()
+
+    return (
+      (workflowStatus !== '' &&
+        workflowStatus !== 'DRAFT' &&
+        workflowStatus !== 'WITHDRAWN' &&
+        workflowStatus !== 'CANCELLED') ||
+      (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) ||
+      (Number.isFinite(currentTaskId) && currentTaskId > 0) ||
+      Boolean(currentStepName)
+    )
+  }
+
+  const approvalWorkflowReportSummary = computed(() => {
+    if (hasActiveCollegePlanWorkflow.value) {
+      return null
+    }
+
+    if (hasPlanReportWorkflowContext(currentCollegePlanReportSummary.value)) {
       return currentCollegePlanReportSummary.value
+    }
+
+    if (hasPlanReportWorkflowContext(latestCollegePlanReportSummary.value)) {
+      return latestCollegePlanReportSummary.value
     }
 
     return latestCollegePlanReportSummary.value
   })
 
   const currentApprovalWorkflowCode = computed<string | string[]>(() => {
-    if (approvalWorkflowReportSummary.value?.id) {
+    if (
+      approvalWorkflowReportSummary.value?.id ||
+      hasPlanReportWorkflowContext(latestCollegePlanReportSummary.value)
+    ) {
       return ['PLAN_APPROVAL_COLLEGE', currentDispatchWorkflowCode.value]
     }
 
@@ -833,7 +896,12 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     return candidate.realName || candidate.username || `用户${candidate.userId}`
   }
 
-  const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
+  const {
+    routeApprovalEntityType,
+    routeApprovalEntityId,
+    routeApprovalDepartment,
+    shouldAutoOpenApprovalFromRoute
+  } = useApprovalRouteAutopen({
     supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
     onAutoOpen: () => Promise.resolve().then(() => handleOpenApproval()),
     onClearFailure: error => {
@@ -842,25 +910,34 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   })
 
   const currentApprovalEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
-    if (routeApprovalEntityType.value) {
-      return routeApprovalEntityType.value
+    if (effectiveRouteApprovalEntityType.value) {
+      return effectiveRouteApprovalEntityType.value
     }
-    return approvalWorkflowReportSummary.value?.id ? 'PLAN_REPORT' : 'PLAN'
+    if (hasActiveCollegePlanWorkflow.value) {
+      return 'PLAN'
+    }
+    if (approvalWorkflowReportSummary.value?.id) {
+      return 'PLAN_REPORT'
+    }
+    return currentActiveCollegePlan.value?.id ? 'PLAN' : 'PLAN_REPORT'
   })
 
   const currentApprovalEntityId = computed<number | string | undefined>(() => {
-    if (routeApprovalEntityId.value) {
-      return routeApprovalEntityId.value
+    if (effectiveRouteApprovalEntityId.value) {
+      return effectiveRouteApprovalEntityId.value
+    }
+    if (hasActiveCollegePlanWorkflow.value) {
+      return currentActiveCollegePlan.value?.id
     }
     if (approvalWorkflowReportSummary.value?.id) {
       return approvalWorkflowReportSummary.value.id
     }
 
-    return currentActiveCollegePlan.value?.id
+    return currentActiveCollegePlan.value?.id || latestCollegePlanReportSummary.value?.id
   })
 
   const secondaryApprovalEntityType = computed<'PLAN' | 'PLAN_REPORT' | undefined>(() => {
-    if (approvalWorkflowReportSummary.value?.id) {
+    if (currentApprovalEntityType.value === 'PLAN_REPORT') {
       return 'PLAN'
     }
 
@@ -868,23 +945,27 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   })
 
   const secondaryApprovalEntityId = computed<number | string | undefined>(() => {
-    if (approvalWorkflowReportSummary.value?.id) {
+    if (currentApprovalEntityType.value === 'PLAN_REPORT') {
       return currentActiveCollegePlan.value?.id
+    }
+
+    if (currentApprovalEntityType.value === 'PLAN') {
+      return latestCollegePlanReportSummary.value?.id
     }
 
     return latestCollegePlanReportSummary.value?.id
   })
 
   const currentApprovalType = computed<'distribution' | 'submission'>(() => {
-    return approvalWorkflowReportSummary.value?.id ? 'submission' : 'distribution'
+    return currentApprovalEntityType.value === 'PLAN_REPORT' ? 'submission' : 'distribution'
   })
 
   const currentApprovalWorkflowStatus = computed(() => {
     return String(
       currentCollegeWorkflowDetail.value?.status ||
+        currentActiveCollegePlan.value?.workflowStatus ||
         currentCollegePlanReportSummary.value?.workflowStatus ||
         currentCollegePlanReportSummary.value?.status ||
-        currentActiveCollegePlan.value?.workflowStatus ||
         selectedCollegePlanUiStatus.value ||
         ''
     )
@@ -895,8 +976,8 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const currentApprovalStepName = computed(() => {
     return String(
       currentCollegeWorkflowDetail.value?.currentStepName ||
-        currentCollegePlanReportSummary.value?.currentStepName ||
         currentActiveCollegePlan.value?.currentStepName ||
+        currentCollegePlanReportSummary.value?.currentStepName ||
         ''
     ).trim()
   })
@@ -904,8 +985,8 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const currentApprovalApproverName = computed(() => {
     return String(
       currentCollegeWorkflowDetail.value?.currentApproverName ||
-        currentCollegePlanReportSummary.value?.currentApproverName ||
         currentActiveCollegePlan.value?.currentApproverName ||
+        currentCollegePlanReportSummary.value?.currentApproverName ||
         ''
     ).trim()
   })
@@ -1522,17 +1603,26 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       currentApproverName?: string | undefined
     }
   ) {
+    const effectivePatch = (() => {
+      if (!usePlanReportFlow.value) {
+        return patch
+      }
+
+      const { status: _ignoredStatus, ...rest } = patch
+      return rest
+    })()
+
     if (currentDepartmentPlanDetails.value) {
       currentDepartmentPlanDetails.value = {
         ...currentDepartmentPlanDetails.value,
-        ...patch
+        ...effectivePatch
       }
     }
 
     if (currentSelectedCollegePlanDetails.value) {
       currentSelectedCollegePlanDetails.value = {
         ...currentSelectedCollegePlanDetails.value,
-        ...patch
+        ...effectivePatch
       }
     }
   }
@@ -1569,32 +1659,39 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   }
 
   const syncSelectedCollegeFromApprovalRoute = async () => {
-    const routePlanId = Number(routeApprovalEntityId.value ?? NaN)
-    if (!Number.isFinite(routePlanId) || routePlanId <= 0) {
-      return
-    }
-
     await waitForPageBootstrap()
 
-    let routePlan = planStore.getPlanById(routePlanId) || null
-    if (!routePlan) {
-      routePlan = await planStore.loadPlanDetails(routePlanId, { force: true, background: true })
-    }
+    const routeDepartmentName = normalizeDepartmentName(effectiveRouteApprovalDepartment.value)
 
-    if (!routePlan) {
-      return
-    }
+    let nextCollege = routeDepartmentName
 
-    const planAny = routePlan as Plan & {
-      targetOrgId?: number | string
-      targetOrgName?: string
-      orgId?: number | string
-      orgName?: string
-    }
+    if (!nextCollege && effectiveRouteApprovalEntityType.value !== 'PLAN_REPORT') {
+      const routePlanId = Number(effectiveRouteApprovalEntityId.value ?? NaN)
+      if (!Number.isFinite(routePlanId) || routePlanId <= 0) {
+        return
+      }
 
-    const nextCollege =
-      normalizeDepartmentName(planAny.targetOrgName || planAny.orgName || '') ||
-      getDeptNameByOrgId(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId)
+      let routePlan = planStore.getPlanById(routePlanId) || null
+      if (!routePlan) {
+        routePlan = await planStore.loadPlanDetails(routePlanId, { force: true, background: true })
+      }
+
+      if (!routePlan) {
+        return
+      }
+
+      const planAny = routePlan as Plan & {
+        targetOrgId?: number | string
+        targetOrgName?: string
+        orgId?: number | string
+        orgName?: string
+      }
+
+      nextCollege =
+        normalizeDepartmentName(planAny.targetOrgName || planAny.orgName || '') ||
+        getDeptNameByOrgId(planAny.targetOrgId ?? planAny.org_id ?? planAny.orgId) ||
+        ''
+    }
 
     if (
       !nextCollege ||
@@ -1611,10 +1708,27 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
 
   // 打开任务审批抽屉
   const handleOpenApproval = async () => {
+    if (shouldAutoOpenApprovalFromRoute.value) {
+      retainedRouteApprovalEntityType.value = routeApprovalEntityType.value
+      retainedRouteApprovalEntityId.value = routeApprovalEntityId.value
+      retainedRouteApprovalDepartment.value = routeApprovalDepartment.value
+    }
+
     await syncSelectedCollegeFromApprovalRoute()
+    await loadCurrentCollegePlanReportSummary()
     await preloadCurrentCollegeWorkflowDetail()
     taskApprovalVisible.value = true
   }
+
+  watch(taskApprovalVisible, visible => {
+    if (visible) {
+      return
+    }
+
+    retainedRouteApprovalEntityType.value = undefined
+    retainedRouteApprovalEntityId.value = undefined
+    retainedRouteApprovalDepartment.value = undefined
+  })
 
   async function preloadCurrentCollegeWorkflowDetail(): Promise<void> {
     currentCollegeWorkflowDetail.value = null
@@ -3163,16 +3277,6 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
           throw new Error('无法识别当前部门计划，不能执行批量撤回')
         }
 
-        await planStore.withdrawPlan(planId)
-        applyLocalCollegePlanPatch({
-          status: 'DRAFT' as Plan['status'],
-          workflowStatus: 'WITHDRAWN',
-          canWithdraw: false,
-          currentTaskId: undefined,
-          currentStepName: undefined,
-          currentApproverId: undefined,
-          currentApproverName: undefined
-        })
         applyLocalCollegePlanReportSummaryPatch('withdrawn')
 
         const result = await indicatorApi.batchWithdrawIndicators(
@@ -3518,6 +3622,12 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const currentCollegePlanStatusMeta = computed(() => {
     if (!selectedCollege.value) {
       return { label: '暂无指标', type: 'info' as const }
+    }
+
+    if (currentActiveCollegePlan.value) {
+      return getPlanStatusDisplay(
+        currentActiveCollegePlan.value.status || currentActiveCollegePlan.value.workflowStatus
+      )
     }
 
     const planStatus = normalizedSelectedCollegePlanStatus.value

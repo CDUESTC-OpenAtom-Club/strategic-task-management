@@ -5,7 +5,8 @@ const APPROVAL_ROUTE_QUERY_KEYS = [
   'openApproval',
   'approvalEntityType',
   'approvalEntityId',
-  'approvalInstanceId'
+  'approvalInstanceId',
+  'approvalDepartment'
 ] as const
 
 type ApprovalRouteAutopenOptions<T extends string> = {
@@ -17,6 +18,7 @@ type ApprovalRouteAutopenOptions<T extends string> = {
 type ApprovalRouteAutopenResult<T extends string> = {
   routeApprovalEntityType: ComputedRef<T | undefined>
   routeApprovalEntityId: ComputedRef<string | undefined>
+  routeApprovalDepartment: ComputedRef<string | undefined>
   shouldAutoOpenApprovalFromRoute: ComputedRef<boolean>
 }
 
@@ -45,6 +47,10 @@ export function useApprovalRouteAutopen<T extends string>(
 
   const routeApprovalEntityId = computed<string | undefined>(() =>
     normalizeApprovalRouteQueryValue(route.query.approvalEntityId)
+  )
+
+  const routeApprovalDepartment = computed<string | undefined>(() =>
+    normalizeApprovalRouteQueryValue(route.query.approvalDepartment)
   )
 
   const shouldAutoOpenApprovalFromRoute = computed(() => {
@@ -106,6 +112,7 @@ export function useApprovalRouteAutopen<T extends string>(
   return {
     routeApprovalEntityType,
     routeApprovalEntityId,
+    routeApprovalDepartment,
     shouldAutoOpenApprovalFromRoute
   }
 }
