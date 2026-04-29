@@ -360,16 +360,6 @@ const getCandidateSummary = (node: WorkflowNode) => {
           </div>
         </div>
       </div>
-
-      <!-- 驳回原因提示 -->
-      <ElAlert
-        v-if="hasRejection && rejectionReason"
-        type="error"
-        :title="'驳回原因：' + rejectionReason"
-        show-icon
-        :closable="false"
-        class="rejection-alert"
-      />
     </div>
   </div>
 </template>

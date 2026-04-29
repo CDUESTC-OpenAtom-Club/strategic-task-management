@@ -4,6 +4,7 @@ import ApprovalHistory from './ApprovalHistory.vue'
 import CustomApprovalFlow from './CustomApprovalFlow.vue'
 import {
   useApprovalProgressDrawer,
+  type ApprovalProgressDrawerEmit,
   type ApprovalProgressDrawerProps
 } from '@/3-features/approval/model/useApprovalProgressDrawer'
 
@@ -27,6 +28,8 @@ const props = withDefaults(defineProps<ApprovalProgressDrawerProps>(), {
   secondaryWorkflowEntityId: undefined,
   routeTarget: ''
 })
+
+const emit = defineEmits<ApprovalProgressDrawerEmit>()
 
 const {
   INDICATOR_DISPATCH_APPROVE_PERMISSION,
@@ -61,7 +64,6 @@ const {
   currentUserPermissionCodes,
   currentUserRoleCodes,
   detailDialogStatusTag,
-  emit,
   ensureSubmitterNameLoaded,
   ensureWorkflowRelatedAvatarsLoaded,
   ensureWorkflowUserAvatarLoaded,
@@ -163,7 +165,7 @@ const {
   workflowDefinitionPreview,
   workflowNodes,
   workflowUserAvatarCache
-} = useApprovalProgressDrawer(props)
+} = useApprovalProgressDrawer(props, emit)
 </script>
 
 <template>
@@ -217,11 +219,7 @@ const {
     <div v-else class="approval-content">
       <!-- 标签页 -->
       <ElTabs v-model="activeTab" class="approval-tabs">
-        <ElTabPane
-          v-if="showPlanApprovals"
-          name="pending-plans"
-          :label="hasPlanWorkflowData ? '计划审批' : `审批中 (${scopedPendingPlanCount})`"
-        >
+        <ElTabPane v-if="showPlanApprovals" name="pending-plans" label="计划审批">
           <div v-loading="planApprovalsLoading" class="plan-approval-pane">
             <ElEmpty
               v-if="!planApprovalsLoading && !showPlanPendingCard"
@@ -331,21 +329,17 @@ const {
         </ElTabPane>
 
         <!-- 审批流程视图（使用CustomApprovalFlow组件） -->
-        <ElTabPane v-if="hasWorkflowTabContent" name="workflow" label="审批流程">
+        <ElTabPane
+          v-if="showPlanApprovals || hasWorkflowTabContent"
+          name="workflow"
+          label="审批流程"
+        >
           <ElEmpty
             v-if="showArchivedPlanWorkflowEmptyState || (!hasApprovalData && !hasPlanWorkflowData)"
             description="暂无审批数据"
             :image-size="120"
           />
           <template v-else>
-            <ElAlert
-              v-if="rejectionReason"
-              type="error"
-              :title="'驳回原因：' + rejectionReason"
-              show-icon
-              :closable="false"
-              style="margin-bottom: 16px"
-            />
             <ElAlert
               v-if="hasPlanWorkflowData"
               type="info"

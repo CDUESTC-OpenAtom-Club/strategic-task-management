@@ -3667,10 +3667,67 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const getSortedMilestones = (milestones?: StrategicIndicator['milestones']) =>
     sortMilestonesByProgress(milestones || [])
 
+  const normalizeMilestonesForDetail = (
+    milestones: Array<Record<string, unknown>>
+  ): StrategicIndicator['milestones'] =>
+    milestones.map((milestone, index) => {
+      const rawTargetProgress = Number(
+        milestone.targetProgress ?? milestone.progress ?? milestone.weightPercent ?? 0
+      )
+
+      return {
+        id: String(
+          milestone.id ?? milestone.milestoneId ?? milestone.indicatorId ?? `milestone-${index + 1}`
+        ),
+        name: String(milestone.name ?? milestone.milestoneName ?? `里程碑 ${index + 1}`),
+        targetProgress: Number.isFinite(rawTargetProgress) ? rawTargetProgress : 0,
+        deadline: String(milestone.deadline ?? milestone.dueDate ?? milestone.expectedDate ?? ''),
+        status: 'pending' as const
+      }
+    })
+
   // 查看详情
-  const handleViewDetail = (indicator: StrategicIndicator) => {
-    currentDetailIndicator.value = indicator
+  const handleViewDetail = async (indicator: StrategicIndicator) => {
+    const indicatorId = String(indicator.id ?? '').trim()
+    const persistedIndicator = indicatorId
+      ? strategicStore.indicators.find(item => String(item.id) === indicatorId)
+      : null
+
+    const detailIndicator: StrategicIndicator = {
+      ...(persistedIndicator || indicator),
+      ...indicator,
+      milestones: indicator.milestones?.length
+        ? indicator.milestones
+        : (persistedIndicator?.milestones ?? [])
+    }
+
+    currentDetailIndicator.value = detailIndicator
     detailDrawerVisible.value = true
+
+    if (!indicatorId || !/^\d+$/.test(indicatorId) || detailIndicator.milestones?.length) {
+      return
+    }
+
+    try {
+      const response = await milestoneApi.getMilestonesByIndicator(indicatorId)
+      if (!response?.success || !Array.isArray(response.data) || response.data.length === 0) {
+        return
+      }
+
+      const normalizedMilestones = normalizeMilestonesForDetail(
+        response.data as Array<Record<string, unknown>>
+      )
+
+      currentDetailIndicator.value = {
+        ...detailIndicator,
+        milestones: normalizedMilestones
+      }
+    } catch (error) {
+      logger.warn('[IndicatorDistributeView] 加载指标详情里程碑失败:', {
+        indicatorId,
+        error
+      })
+    }
   }
 
   const resolveSelectedCollegePlanDrivenChildStatus = (

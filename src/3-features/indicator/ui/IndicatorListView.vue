@@ -11,6 +11,7 @@ import {
   Edit,
   Refresh
 } from '@element-plus/icons-vue'
+import IndicatorMilestoneTimeline from '@/features/indicator/ui/IndicatorMilestoneTimeline.vue'
 import { ApprovalProgressDrawer } from '@/features/approval'
 import {
   useIndicatorListView,
@@ -150,13 +151,11 @@ const {
   getSpanMethod,
   getTaskTypeColor,
   handleApprovalStatusPopoverShow,
-  handleApproveIndicatorWorkflow,
   handleDeleteIndicator,
   handleIndicatorDblClick,
   handleInlineAttachmentRemove,
   handleOpenApproval,
   handleOpenReportDialog,
-  handleRejectIndicatorWorkflow,
   handleReportAttachmentOpen,
   handleReportFileChange,
   handleReportFileRemove,
@@ -237,6 +236,7 @@ const {
   reportForm,
   reportUploadFiles,
   resetFilters,
+  resolveMilestoneDisplayState,
   resolveDialogAttachments,
   resolveExpectedApproverOrgIdForPage,
   resolveExpectedApproverRoleCodesForPage,
@@ -696,25 +696,6 @@ const {
                         >删除</el-button
                       >
                     </div>
-
-                    <div v-if="canHandleIndicatorWorkflow(row)" class="workflow-inline-actions">
-                      <el-button
-                        link
-                        type="success"
-                        size="small"
-                        @click="handleApproveIndicatorWorkflow(row)"
-                      >
-                        通过
-                      </el-button>
-                      <el-button
-                        link
-                        type="danger"
-                        size="small"
-                        @click="handleRejectIndicatorWorkflow(row)"
-                      >
-                        驳回
-                      </el-button>
-                    </div>
                   </div>
                 </template>
               </el-table-column>
@@ -864,24 +845,6 @@ const {
           </div>
         </div>
 
-        <div v-if="canHandleIndicatorWorkflow(currentDetail)" class="detail-workflow-actions">
-          <el-button
-            type="success"
-            size="small"
-            @click="handleApproveIndicatorWorkflow(currentDetail)"
-          >
-            审批通过
-          </el-button>
-          <el-button
-            type="danger"
-            plain
-            size="small"
-            @click="handleRejectIndicatorWorkflow(currentDetail)"
-          >
-            审批驳回
-          </el-button>
-        </div>
-
         <!-- 里程碑信息 -->
         <div
           v-if="currentDetail.milestones && currentDetail.milestones.length > 0"
@@ -889,28 +852,10 @@ const {
         >
           <div class="divider"></div>
           <h4>里程碑节点</h4>
-          <el-timeline style="margin-top: 20px; padding-left: 5px">
-            <el-timeline-item
-              v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
-              :key="index"
-              :timestamp="milestone.deadline"
-              :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).timelineType"
-              placement="top"
-            >
-              <div class="timeline-card">
-                <div class="timeline-header">
-                  <span class="action-text">{{ milestone.name }}</span>
-                  <el-tag
-                    size="small"
-                    :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).tagType"
-                  >
-                    {{ resolveMilestoneDisplayState(milestone, currentDetail.progress).label }}
-                  </el-tag>
-                </div>
-                <div class="timeline-comment">目标进度: {{ milestone.targetProgress }}%</div>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
+          <IndicatorMilestoneTimeline
+            :milestones="currentDetail.milestones"
+            :current-progress="currentDetail.progress"
+          />
         </div>
       </div>
     </el-drawer>

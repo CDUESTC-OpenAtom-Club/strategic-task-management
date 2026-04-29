@@ -884,24 +884,6 @@ async function resolveIndicatorReportContext(
   const numericIndicatorId = Number(indicatorData.id ?? indicatorData.indicatorId ?? indicatorId)
   const taskId = Number(indicatorData.taskId ?? indicatorData.task_id)
 
-  if (!Number.isFinite(taskId)) {
-    throw new Error('指标缺少 taskId，无法保存填报')
-  }
-
-  const taskResponse = await apiClient.get<ApiResponse<Record<string, unknown>>>(`/tasks/${taskId}`)
-  if (!hasApiData(taskResponse) || !taskResponse.data) {
-    throw new Error('加载任务详情失败，无法定位关联计划')
-  }
-
-  const planId = Number(
-    (taskResponse.data as Record<string, unknown>).planId ??
-      (taskResponse.data as Record<string, unknown>).plan_id
-  )
-
-  if (!Number.isFinite(planId)) {
-    throw new Error('任务缺少 planId，无法保存填报')
-  }
-
   const authStore = useAuthStore()
   const orgStore = useOrgStore()
   if (!orgStore.loaded || orgStore.departments.length === 0) {
@@ -936,19 +918,23 @@ async function resolveIndicatorReportContext(
       Number(indicatorData.ownerOrgId ?? NaN) > 0 &&
       Number(indicatorData.ownerOrgId ?? NaN) !== reportOrgId)
 
-  let resolvedPlanId = planId
-  if (isCollegeReportContext) {
-    const sourceOrgId = Number(indicatorData.ownerOrgId ?? NaN)
-    const currentYear = Number(timeContext.currentYear ?? NaN)
+  const sourceOrgId = Number(indicatorData.ownerOrgId ?? NaN)
+  const currentYear = Number(timeContext.currentYear ?? NaN)
 
+  const resolvePlanIdFromVisiblePlans = async (): Promise<number | null> => {
     if (
-      Number.isFinite(sourceOrgId) &&
-      sourceOrgId > 0 &&
-      Number.isFinite(currentYear) &&
-      currentYear > 0
+      !Number.isFinite(reportOrgId) ||
+      reportOrgId <= 0 ||
+      !Number.isFinite(currentYear) ||
+      currentYear <= 0
     ) {
-      const resolveCycleYear = await getCycleYearResolver()
-      const allPlans = await fetchAllPlansFromPages(resolveCycleYear)
+      return null
+    }
+
+    const resolveCycleYear = await getCycleYearResolver()
+    const allPlans = await fetchAllPlansFromPages(resolveCycleYear)
+
+    if (isCollegeReportContext) {
       const matchedCollegeReceivingPlan = allPlans.find(plan => {
         const candidateTargetOrgId = Number(plan.targetOrgId ?? plan.orgId ?? NaN)
         const candidateCreatedByOrgId = Number(
@@ -971,9 +957,73 @@ async function resolveIndicatorReportContext(
       })
 
       if (matchedCollegeReceivingPlan?.id) {
-        resolvedPlanId = Number(matchedCollegeReceivingPlan.id)
+        return Number(matchedCollegeReceivingPlan.id)
       }
     }
+
+    const matchedPlan = allPlans.find(plan => {
+      const candidateTargetOrgId = Number(plan.targetOrgId ?? plan.orgId ?? NaN)
+      const candidateYear = Number(plan.year ?? resolveCycleYear(plan.cycleId) ?? NaN)
+      return (
+        Number.isFinite(candidateTargetOrgId) &&
+        candidateTargetOrgId === reportOrgId &&
+        Number.isFinite(candidateYear) &&
+        candidateYear === currentYear
+      )
+    })
+
+    return matchedPlan?.id ? Number(matchedPlan.id) : null
+  }
+
+  let resolvedPlanId = Number(indicatorData.planId ?? indicatorData.plan_id ?? NaN)
+
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0) {
+    if (Number.isFinite(taskId) && taskId > 0) {
+      try {
+        const taskResponse = await apiClient
+          .getAxiosInstance()
+          .get<ApiResponse<Record<string, unknown>> | Record<string, unknown>>(`/tasks/${taskId}`, {
+            validateStatus: () => true,
+            _skipBusinessErrorThrow: true
+          })
+
+        if (taskResponse.status >= 200 && taskResponse.status < 300) {
+          const taskPayload =
+            taskResponse.data &&
+            typeof taskResponse.data === 'object' &&
+            'data' in taskResponse.data
+              ? ((taskResponse.data as { data?: Record<string, unknown> }).data ?? null)
+              : (taskResponse.data as Record<string, unknown> | null)
+
+          if (taskPayload) {
+            const taskPlanId = Number(taskPayload.planId ?? taskPayload.plan_id)
+            if (Number.isFinite(taskPlanId) && taskPlanId > 0) {
+              resolvedPlanId = taskPlanId
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          '[indicatorFillApi] Failed to load task detail for report context, fallback to visible plan lookup',
+          {
+            indicatorId,
+            taskId,
+            error
+          }
+        )
+      }
+    }
+  }
+
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0) {
+    const fallbackPlanId = await resolvePlanIdFromVisiblePlans()
+    if (Number.isFinite(fallbackPlanId) && (fallbackPlanId as number) > 0) {
+      resolvedPlanId = fallbackPlanId as number
+    }
+  }
+
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0) {
+    throw new Error('无法定位关联计划，无法保存填报')
   }
 
   return {

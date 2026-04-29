@@ -45,12 +45,20 @@ const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
 const { approvalCenterVisible, approvalCenterContext, closeApprovalCenter } = useApprovalCenter()
 
 const approvalCenterPlanId = computed(() => {
-  if (approvalCenterContext.value?.workflowEntityType !== 'PLAN') {
-    return null
+  if (approvalCenterContext.value?.workflowEntityType === 'PLAN') {
+    const entityId = Number(approvalCenterContext.value.workflowEntityId ?? NaN)
+    return Number.isFinite(entityId) && entityId > 0 ? entityId : null
   }
 
-  const entityId = Number(approvalCenterContext.value.workflowEntityId ?? NaN)
-  return Number.isFinite(entityId) && entityId > 0 ? entityId : null
+  if (
+    approvalCenterContext.value?.workflowEntityType === 'PLAN_REPORT' &&
+    approvalCenterContext.value?.secondaryWorkflowEntityType === 'PLAN'
+  ) {
+    const secondaryEntityId = Number(approvalCenterContext.value.secondaryWorkflowEntityId ?? NaN)
+    return Number.isFinite(secondaryEntityId) && secondaryEntityId > 0 ? secondaryEntityId : null
+  }
+
+  return null
 })
 
 const approvalCenterPlan = computed(() => {

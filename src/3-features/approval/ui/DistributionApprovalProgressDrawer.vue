@@ -4,6 +4,7 @@ import ApprovalHistory from './ApprovalHistory.vue'
 import CustomApprovalFlow from './CustomApprovalFlow.vue'
 import {
   useDistributionApprovalProgressDrawer,
+  type DistributionApprovalProgressDrawerEmit,
   type DistributionApprovalProgressDrawerProps
 } from '@/3-features/approval/model/useDistributionApprovalProgressDrawer'
 
@@ -27,6 +28,8 @@ const props = withDefaults(defineProps<DistributionApprovalProgressDrawerProps>(
   secondaryWorkflowEntityId: undefined,
   routeTarget: ''
 })
+
+const emit = defineEmits<DistributionApprovalProgressDrawerEmit>()
 
 const {
   INDICATOR_DISPATCH_APPROVE_PERMISSION,
@@ -58,7 +61,6 @@ const {
   currentUserPermissionCodes,
   currentUserRoleCodes,
   detailDialogStatusTag,
-  emit,
   ensureSubmitterNameLoaded,
   ensureWorkflowRelatedAvatarsLoaded,
   ensureWorkflowUserAvatarLoaded,
@@ -152,7 +154,7 @@ const {
   workflowDefinitionPreview,
   workflowNodes,
   workflowUserAvatarCache
-} = useDistributionApprovalProgressDrawer(props)
+} = useDistributionApprovalProgressDrawer(props, emit)
 </script>
 
 <template>
@@ -199,11 +201,7 @@ const {
     <div v-else class="approval-content">
       <!-- 标签页 -->
       <el-tabs v-model="activeTab" class="approval-tabs">
-        <el-tab-pane
-          v-if="showPlanApprovals"
-          name="pending-plans"
-          :label="hasPlanWorkflowData ? '计划审批' : `审批中 (${scopedPendingPlanCount})`"
-        >
+        <el-tab-pane v-if="showPlanApprovals" name="pending-plans" label="计划审批">
           <div v-loading="planApprovalsLoading" class="plan-approval-pane">
             <el-empty
               v-if="!planApprovalsLoading && !showPlanPendingCard"

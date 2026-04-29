@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Plus, View, Download, Delete, ArrowDown, Check, Loading } from '@element-plus/icons-vue'
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
+import IndicatorMilestoneTimeline from '@/features/indicator/ui/IndicatorMilestoneTimeline.vue'
 import { ApprovalProgressDrawer } from '@/features/approval'
 import {
   useStrategicTaskView,
@@ -1334,28 +1335,10 @@ const {
         >
           <div class="divider"></div>
           <h4>里程碑节点</h4>
-          <el-timeline style="margin-top: 20px; padding-left: 5px">
-            <el-timeline-item
-              v-for="(milestone, index) in getSortedMilestones(currentDetail.milestones)"
-              :key="index"
-              :timestamp="milestone.deadline"
-              :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).timelineType"
-              placement="top"
-            >
-              <div class="timeline-card">
-                <div class="timeline-header">
-                  <span class="action-text">{{ milestone.name }}</span>
-                  <el-tag
-                    size="small"
-                    :type="resolveMilestoneDisplayState(milestone, currentDetail.progress).tagType"
-                  >
-                    {{ resolveMilestoneDisplayState(milestone, currentDetail.progress).label }}
-                  </el-tag>
-                </div>
-                <div class="timeline-comment">目标进度: {{ milestone.targetProgress }}%</div>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
+          <IndicatorMilestoneTimeline
+            :milestones="currentDetail.milestones"
+            :current-progress="currentDetail.progress"
+          />
         </div>
       </div>
     </el-drawer>

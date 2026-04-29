@@ -4,7 +4,7 @@ import { Edit, Promotion, RefreshLeft, Document as _Document } from '@element-pl
 import type { StrategicIndicator, ApprovalHistoryItem, AuditLogItem } from '@/shared/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuditLogStore } from '@/features/admin/model/auditLog'
-import MilestoneTimeline from '@/shared/ui/form/indicator/MilestoneTimeline.vue'
+import IndicatorMilestoneTimeline from '@/features/indicator/ui/IndicatorMilestoneTimeline.vue'
 import ApprovalHistory from '@/features/approval/ui/ApprovalHistory.vue'
 
 const props = defineProps<{
@@ -179,7 +179,7 @@ const getActionLabel = (action: string) => {
 
         <!-- 里程碑进度 -->
         <el-tab-pane label="里程碑" name="milestones">
-          <MilestoneTimeline
+          <IndicatorMilestoneTimeline
             :milestones="indicator.milestones"
             :current-progress="indicator.progress"
           />

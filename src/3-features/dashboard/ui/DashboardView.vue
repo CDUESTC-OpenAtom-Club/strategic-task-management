@@ -1297,7 +1297,7 @@ const {
                   <div style="display: flex; align-items: center; gap: 4px">
                     <span class="card-title">本部门任务下发流向</span>
                     <el-tooltip
-                      content="显示本部门向各学院分发的任务情况"
+                      content="显示本部门向各学院分发的任务情况，双击对应看板进入对应视图"
                       placement="top"
                       effect="light"
                     >

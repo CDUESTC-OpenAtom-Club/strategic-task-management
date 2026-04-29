@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { Check, Close, Upload, RefreshLeft } from '@element-plus/icons-vue'
 import type { ApprovalHistoryItem } from '@/shared/types'
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
@@ -18,11 +18,24 @@ const approvalTypeTagType = computed(() => {
   return props.approvalType === 'distribution' ? 'primary' : 'success'
 })
 
+const historySortOrder = ref<'asc' | 'desc'>('asc')
+
 const sortedHistory = computed(() =>
-  [...props.history].sort(
-    (a, b) => new Date(b.operateTime).getTime() - new Date(a.operateTime).getTime()
-  )
+  [...props.history].sort((a, b) => {
+    const leftTime = new Date(a.operateTime).getTime()
+    const rightTime = new Date(b.operateTime).getTime()
+
+    return historySortOrder.value === 'asc' ? leftTime - rightTime : rightTime - leftTime
+  })
 )
+
+const historySortOrderLabel = computed(() => {
+  return historySortOrder.value === 'asc' ? '正序' : '倒序'
+})
+
+function toggleHistorySortOrder() {
+  historySortOrder.value = historySortOrder.value === 'asc' ? 'desc' : 'asc'
+}
 
 const getActionIcon = (action: ApprovalHistoryItem['action']) => {
   switch (action) {
@@ -81,12 +94,16 @@ const formatTime = (date: Date) => {
 
 <template>
   <div class="approval-history">
-    <!-- 审批类型标识 -->
-    <div v-if="approvalType && sortedHistory.length > 0" class="history-header-type">
-      <ElTag :type="approvalTypeTagType" size="small">
-        {{ approvalTypeLabel }}
-      </ElTag>
-      <span class="history-header-desc">审批历史记录</span>
+    <div v-if="sortedHistory.length > 0" class="history-header">
+      <div class="history-header-type">
+        <ElTag v-if="approvalType" :type="approvalTypeTagType" size="small">
+          {{ approvalTypeLabel }}
+        </ElTag>
+        <span class="history-header-desc">审批历史记录</span>
+      </div>
+      <ElButton type="primary" @click="toggleHistorySortOrder">
+        {{ historySortOrderLabel }}
+      </ElButton>
     </div>
     <el-timeline>
       <el-timeline-item
@@ -131,14 +148,22 @@ const formatTime = (date: Date) => {
   padding: 8px 0;
 }
 
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .history-header-type {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  margin-bottom: 12px;
   background: var(--el-fill-color-light);
   border-radius: 4px;
+  flex: 1;
 }
 
 .history-header-desc {
