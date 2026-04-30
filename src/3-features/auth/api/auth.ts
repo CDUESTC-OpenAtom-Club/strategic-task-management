@@ -1,7 +1,6 @@
-
-
 import { apiClient as api } from '@/shared/api/client'
 import type { LoginCredentials, LoginResponse } from '@/entities/user/model/types'
+import type { User } from '@/shared/types'
 import type { ApiResponse, LoginRequest } from './types'
 
 /**
@@ -15,9 +14,7 @@ export const authApi = {
    * @param credentials - Username and password
    * @returns Login response with token and user info
    */
-  async login(
-    credentials: LoginCredentials | LoginRequest
-  ): Promise<ApiResponse<LoginResponse>> {
+  async login(credentials: LoginCredentials | LoginRequest): Promise<ApiResponse<LoginResponse>> {
     return api.post('/auth/login', credentials)
   },
 
@@ -52,7 +49,7 @@ export const authApi = {
    *
    * @returns Current user information
    */
-  async getCurrentUser(): Promise<ApiResponse<any>> {
+  async getCurrentUser(): Promise<ApiResponse<User>> {
     return api.get('/auth/me')
   },
 
@@ -63,7 +60,14 @@ export const authApi = {
    * @param userData - User registration data
    * @returns Registration response
    */
-  async register(userData: { username: string; password: string; realName: string; email: string; phone?: string; orgId: number }): Promise<ApiResponse<{ userId: number; status: string }>> {
+  async register(userData: {
+    username: string
+    password: string
+    realName: string
+    email: string
+    phone?: string
+    orgId: number
+  }): Promise<ApiResponse<{ userId: number; status: string }>> {
     return api.post('/auth/register', userData)
   }
 }

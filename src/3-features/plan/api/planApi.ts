@@ -368,6 +368,45 @@ const mockPlans: PlanVO[] = [
     updatedAt: '2025-02-01T00:00:00',
     createdBy: 'dept_admin',
     description: '第一季度教学相关指标填报'
+  },
+  {
+    planId: 100,
+    planName: '2026 教务处年度计划',
+    cycle: '2026',
+    year: '2026',
+    orgId: 3,
+    orgName: '教务处',
+    status: 'DRAFT',
+    createdAt: '2026-01-05T00:00:00',
+    updatedAt: '2026-03-15T10:00:00',
+    createdBy: 'jiaowuchu',
+    description: '2026年度教务处下发计划',
+    targetOrgId: 3,
+    targetOrgName: '教务处',
+    createdByOrgId: 3
+  },
+  {
+    planId: 101,
+    planName: '2026 计算机学院计划',
+    cycle: '2026',
+    year: '2026',
+    orgId: 5,
+    orgName: '计算机学院',
+    status: 'PENDING',
+    createdAt: '2026-03-15T10:00:00',
+    updatedAt: '2026-03-15T10:00:00',
+    createdBy: 'jiaowuchu',
+    description: '教务处下发给计算机学院的年度计划',
+    targetOrgId: 5,
+    targetOrgName: '计算机学院',
+    createdByOrgId: 3,
+    workflowStatus: 'PENDING',
+    workflowInstanceId: 9001,
+    currentTaskId: 9001,
+    currentStepName: '职能部门审批',
+    currentApproverId: 4,
+    currentApproverName: '王五',
+    canWithdraw: false
   }
 ]
 
@@ -394,6 +433,14 @@ const mockTasks: TaskVO[] = [
     taskName: '学生满意度',
     taskType: 'QUANTITATIVE',
     description: '学生满意度调查统计',
+    sortOrder: 1
+  },
+  {
+    taskId: 10101,
+    planId: 101,
+    taskName: '教学质量提升',
+    taskType: 'QUANTITATIVE',
+    description: '计算机学院年度教学质量指标',
     sortOrder: 1
   }
 ]

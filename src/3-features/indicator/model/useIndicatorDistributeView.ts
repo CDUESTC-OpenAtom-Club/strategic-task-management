@@ -960,6 +960,8 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     return currentApprovalEntityType.value === 'PLAN_REPORT' ? 'submission' : 'distribution'
   })
 
+  const usePlanReportFlow = computed(() => currentApprovalType.value === 'submission')
+
   const currentApprovalWorkflowStatus = computed(() => {
     return String(
       currentCollegeWorkflowDetail.value?.status ||
@@ -1286,16 +1288,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   })
 
   const distributionSubmitButtonText = computed(() => {
-    if (!selectedCollege.value) {
-      return '下发'
-    }
-
-    const draftCount = getCollegeStatus(selectedCollege.value).draft
-    if (draftCount > 0) {
-      return `下发 (${draftCount})`
-    }
-
-    return '下发'
+    return '发起下发审批'
   })
 
   const approvalSetupDialogVisible = ref(false)
@@ -2878,11 +2871,15 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       }
     }
 
-    ElMessageBox.confirm(`确认下发 ${children.length} 个子指标到对应学院？`, '下发确认', {
-      confirmButtonText: '确认下发',
-      cancelButtonText: '取消',
-      type: 'info'
-    }).then(() => {
+    ElMessageBox.confirm(
+      `确认发起下发审批，将 ${children.length} 个子指标下发到对应学院？`,
+      '发起下发审批确认',
+      {
+        confirmButtonText: '确认发起',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    ).then(() => {
       // 创建子指标
       children.forEach(child => {
         const newIndicator: StrategicIndicator = {
@@ -2927,7 +2924,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       delete newChildIndicators[parentId]
       addingParentId.value = null
 
-      ElMessage.success(`已成功添加 ${children.length} 个子指标，请点击"下发子指标"按钮进行下发`)
+      ElMessage.success(`已成功添加 ${children.length} 个子指标，请点击“发起下发审批”按钮继续操作`)
     })
   }
 
@@ -3425,10 +3422,10 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
 
     try {
       await ElMessageBox.confirm(
-        `确认下发【${college}】的 ${draftIndicators.length} 个子指标？`,
-        '下发确认',
+        `确认发起下发审批，将【${college}】的 ${draftIndicators.length} 个子指标下发？`,
+        '发起下发审批确认',
         {
-          confirmButtonText: '确认下发',
+          confirmButtonText: '确认发起',
           cancelButtonText: '取消',
           type: 'success'
         }

@@ -761,12 +761,6 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       return false
     }
 
-    // 职能部门/学院走 PlanReport 流程时，列表可见性只取决于“是否已接收到计划”，
-    // 不应随着本部门上报草稿/撤回状态而把整个 Plan 隐掉。
-    if (usePlanReportFlow.value) {
-      return true
-    }
-
     return canViewReceivedPlanContentByStatus(currentPlanStatus.value, isStrategicDept.value)
   })
 
@@ -2384,8 +2378,13 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
   })
 
   const currentPlanStatusMeta = computed(() => {
+    const workflowStatus = pagePlanWorkflowStatus.value
+    if (workflowStatus) {
+      return getPlanStatusDisplay(workflowStatus)
+    }
+
     if (usePlanReportFlow.value && hasCurrentUserPlanData.value) {
-      return getPlanStatusDisplay('DISTRIBUTED')
+      return getPlanStatusDisplay(currentPlanReportUiStatus.value || currentPlanStatus.value)
     }
 
     return getPlanStatusDisplay(currentPlanStatus.value)

@@ -2,7 +2,7 @@
 import { Plus, View, Download, Delete, ArrowDown, Check, Loading } from '@element-plus/icons-vue'
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import IndicatorMilestoneTimeline from '@/features/indicator/ui/IndicatorMilestoneTimeline.vue'
-import { ApprovalProgressDrawer } from '@/features/approval'
+import { DistributionApprovalProgressDrawer } from '@/features/approval'
 import {
   useStrategicTaskView,
   type StrategicTaskViewProps
@@ -1480,7 +1480,7 @@ const {
     </el-dialog>
 
     <!-- 任务审批抽屉 -->
-    <ApprovalProgressDrawer
+    <DistributionApprovalProgressDrawer
       v-model="taskApprovalVisible"
       :indicators="approvalIndicators"
       :plan="currentPlan"

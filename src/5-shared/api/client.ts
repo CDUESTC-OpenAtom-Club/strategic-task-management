@@ -209,10 +209,8 @@ export class ApiClient {
    * PUT 请求
    */
   async put<T>(url: string, data?: unknown): Promise<T> {
-    console.log('[API Client] PUT request:', url, data)
-    const result = await this.client.put(url, data)
-    console.log('[API Client] PUT response:', result)
-    return result
+    logger.debug('[API Client] PUT request', { url, data })
+    return this.client.put(url, data)
   }
 
   /**

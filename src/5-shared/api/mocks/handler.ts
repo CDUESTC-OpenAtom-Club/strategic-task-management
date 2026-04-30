@@ -73,6 +73,139 @@ const mockPendingApprovals = [
   }
 ]
 
+const mockWorkflowPreview = {
+  workflowCode: 'PLAN_DISPATCH_FUNCDEPT',
+  workflowName: '计划下发审批',
+  entityType: 'PLAN',
+  steps: [
+    {
+      stepDefId: 1,
+      stepOrder: 1,
+      stepName: '战略发展部审批',
+      selectable: true,
+      candidateApprovers: [
+        { userId: 4, username: 'jiaowuchu', realName: '王五', orgId: 44, orgName: '教务处' }
+      ]
+    }
+  ]
+}
+
+const mockWorkflowTaskPage = {
+  items: [
+    {
+      taskId: '9001',
+      instanceId: '9001',
+      taskName: '职能部门审批',
+      taskKey: 'strategy_approve',
+      status: 'PENDING',
+      entityType: 'PLAN',
+      entityId: 101,
+      businessEntityId: 101,
+      currentStepName: '职能部门审批',
+      assigneeId: 4,
+      assigneeName: '王五',
+      approverOrgId: 44,
+      approverOrgName: '教务处',
+      stepNo: 1,
+      createdTime: '2026-03-15T10:00:00Z',
+      flowCode: 'PLAN_DISPATCH_FUNCDEPT',
+      flowName: '计划下发审批',
+      planId: 101,
+      planName: '2026 计算机学院计划',
+      sourceOrgId: 44,
+      sourceOrgName: '教务处',
+      targetOrgId: 57,
+      targetOrgName: '计算机学院'
+    }
+  ],
+  total: 1,
+  pageNum: 1,
+  pageSize: 10
+}
+
+const mockWorkflowInstanceDetail = {
+  instanceId: '9001',
+  definitionId: 'PLAN_DISPATCH_FUNCDEPT',
+  definitionName: '计划下发审批',
+  status: 'PENDING',
+  flowCode: 'PLAN_DISPATCH_FUNCDEPT',
+  flowName: '计划下发审批',
+  businessEntityId: 101,
+  businessEntityType: 'PLAN',
+  planId: 101,
+  planName: '2026 计算机学院计划',
+  sourceOrgId: 44,
+  sourceOrgName: '教务处',
+  targetOrgId: 57,
+  targetOrgName: '计算机学院',
+  startTime: '2026-03-15T10:00:00Z',
+  currentTaskId: '9001',
+  currentStepName: '职能部门审批',
+  currentApproverId: 4,
+  currentApproverName: '王五',
+  canWithdraw: false,
+  tasks: [
+    {
+      taskId: '9001',
+      instanceId: '9001',
+      taskName: '职能部门审批',
+      taskKey: 'strategy_approve',
+      status: 'PENDING',
+      entityType: 'PLAN',
+      entityId: 101,
+      businessEntityId: 101,
+      currentStepName: '职能部门审批',
+      assigneeId: 4,
+      assigneeName: '王五',
+      approverOrgId: 44,
+      approverOrgName: '教务处',
+      stepNo: 1,
+      createdTime: '2026-03-15T10:00:00Z'
+    }
+  ],
+  history: []
+}
+
+const mockWorkflowHistoryCards = [
+  {
+    instanceId: '8001',
+    instanceNo: 'HIS-8001',
+    entityType: 'PLAN',
+    entityId: 101,
+    planId: 101,
+    planName: '2026 计算机学院计划',
+    flowCode: 'PLAN_DISPATCH_FUNCDEPT',
+    flowName: '计划下发审批',
+    sourceOrgId: 44,
+    sourceOrgName: '教务处',
+    targetOrgId: 57,
+    targetOrgName: '计算机学院',
+    status: 'APPROVED',
+    startedAt: '2026-03-01T09:00:00Z',
+    completedAt: '2026-03-02T10:00:00Z',
+    requesterId: 4,
+    requesterName: '王五'
+  }
+]
+
+const mockPlanReports = [
+  {
+    id: 201,
+    planId: 101,
+    reportOrgId: 5,
+    reportMonth: '2026-03',
+    status: 'SUBMITTED',
+    workflowStatus: 'PENDING',
+    workflowInstanceId: 9001,
+    currentTaskId: 9001,
+    currentStepName: '战略发展部审批',
+    currentApproverId: 4,
+    currentApproverName: '王五',
+    canWithdraw: false,
+    title: '2026 计算机学院计划月报'
+  }
+]
+
 const mockAdminUsers = mockUsers.map((user, index) => ({
   id: user.userId,
   username: user.username,
@@ -165,10 +298,32 @@ export class MockApiHandler {
       // ============================================
       if (normalizedPath === '/auth/login' && normalizedMethod === 'POST') {
         response = await this.handleLogin(data)
+      } else if (normalizedPath === '/auth/permissions' && normalizedMethod === 'GET') {
+        response = createMockResponse(
+          [
+            'BTN_STRATEGY_TASK_DISPATCH_APPROVE',
+            'BTN_INDICATOR_DISPATCH_APPROVE',
+            'BTN_STRATEGY_TASK_REPORT_APPROVE',
+            'BTN_INDICATOR_REPORT_APPROVE'
+          ],
+          '获取权限成功'
+        )
       } else if (normalizedPath === '/auth/info' && normalizedMethod === 'GET') {
         response = await this.handleAuthInfo()
       } else if (normalizedPath === '/auth/logout' && normalizedMethod === 'POST') {
         response = await this.handleLogout()
+      } else if (normalizedPath === '/api/cycles/list' && normalizedMethod === 'GET') {
+        response = createMockResponse(mockAssessmentCycles, '获取周期列表成功')
+      } else if (normalizedPath === '/api/message-center/summary' && normalizedMethod === 'GET') {
+        response = createMockResponse(
+          { unreadCount: 0, todoCount: 0, riskCount: 0 },
+          '获取消息概览成功'
+        )
+      } else if (normalizedPath === '/api/message-center/messages' && normalizedMethod === 'GET') {
+        response = createMockResponse(
+          { items: [], total: 0, pageNum: 1, pageSize: 100 },
+          '获取消息列表成功'
+        )
       }
       // ============================================
       // 评估周期 API
@@ -207,6 +362,29 @@ export class MockApiHandler {
       // ============================================
       else if (normalizedPath === '/api/indicators' && normalizedMethod === 'GET') {
         response = await this.handleGetIndicators(query)
+      } else if (
+        /^\/api\/tasks\/by-plan\/\d+$/.test(normalizedPath) &&
+        normalizedMethod === 'GET'
+      ) {
+        const planId = Number(normalizedPath.split('/').pop() || 0)
+        response = createMockResponse(
+          planId === 101
+            ? [
+                {
+                  taskId: 10101,
+                  planId: 101,
+                  taskName: '教学质量提升',
+                  taskType: 'QUANTITATIVE',
+                  createdAt: '2026-03-15T10:00:00Z'
+                }
+              ]
+            : [],
+          '获取计划任务成功'
+        )
+      } else if (/^\/api\/reports\/plan\/\d+$/.test(normalizedPath) && normalizedMethod === 'GET') {
+        response = createMockResponse(mockPlanReports, '获取计划报告成功')
+      } else if (/^\/api\/reports\/\d+$/.test(normalizedPath) && normalizedMethod === 'GET') {
+        response = createMockResponse(mockPlanReports[0], '获取报告详情成功')
       } else if (normalizedPath.startsWith('/api/indicators/') && normalizedMethod === 'GET') {
         const id = normalizedPath.split('/').pop()
         response = await this.handleGetIndicator(id ?? '0')
@@ -244,6 +422,16 @@ export class MockApiHandler {
         normalizedMethod === 'GET'
       ) {
         response = await this.handleGetOrgs()
+      } else if (normalizedPath === '/api/cycles' && normalizedMethod === 'GET') {
+        response = createMockResponse(
+          {
+            items: mockAssessmentCycles,
+            total: mockAssessmentCycles.length,
+            pageNum: 1,
+            pageSize: mockAssessmentCycles.length
+          },
+          '获取周期分页成功'
+        )
       }
       // ============================================
       // 系统公告 API
@@ -281,6 +469,54 @@ export class MockApiHandler {
         normalizedMethod === 'POST'
       ) {
         response = createMockResponse('审批驳回', '审批驳回成功')
+      } else if (normalizedPath === '/api/workflows/my-tasks' && normalizedMethod === 'GET') {
+        response = createMockResponse(mockWorkflowTaskPage, '获取待办任务成功')
+      } else if (
+        /^\/api\/workflows\/definitions\/code\/[^/]+\/preview$/.test(normalizedPath) &&
+        normalizedMethod === 'GET'
+      ) {
+        response = createMockResponse(mockWorkflowPreview, '获取流程预览成功')
+      } else if (
+        /^\/api\/workflows\/instances\/entity\/[^/]+\/[^/]+\/list$/.test(normalizedPath) &&
+        normalizedMethod === 'GET'
+      ) {
+        response = createMockResponse(mockWorkflowHistoryCards, '获取审批历史成功')
+      } else if (
+        /^\/api\/workflows\/instances\/entity\/[^/]+\/[^/]+$/.test(normalizedPath) &&
+        normalizedMethod === 'GET'
+      ) {
+        response = createMockResponse(mockWorkflowInstanceDetail, '获取流程详情成功')
+      } else if (
+        /^\/api\/workflows\/instances\/\d+$/.test(normalizedPath) &&
+        normalizedMethod === 'GET'
+      ) {
+        response = createMockResponse(mockWorkflowInstanceDetail, '获取流程详情成功')
+      } else if (
+        /^\/api\/workflows\/tasks\/\d+\/approve$/.test(normalizedPath) &&
+        normalizedMethod === 'POST'
+      ) {
+        response = createMockResponse(
+          {
+            ...mockWorkflowInstanceDetail,
+            status: 'APPROVED',
+            currentTaskId: undefined,
+            currentStepName: '审批完成'
+          },
+          '审批通过成功'
+        )
+      } else if (
+        /^\/api\/workflows\/tasks\/\d+\/reject$/.test(normalizedPath) &&
+        normalizedMethod === 'POST'
+      ) {
+        response = createMockResponse(
+          {
+            ...mockWorkflowInstanceDetail,
+            status: 'REJECTED',
+            currentTaskId: undefined,
+            currentStepName: '已驳回'
+          },
+          '审批驳回成功'
+        )
       } else if (normalizedPath === '/api/auth/users' && normalizedMethod === 'GET') {
         response = createMockResponse(
           {

@@ -1,4 +1,5 @@
 export * from './approvalNotifications'
+export * from './approval-utils'
 export * from './useApprovalCenter'
 export * from './approverMatch'
 export * from './useApprovalRouteAutopen'

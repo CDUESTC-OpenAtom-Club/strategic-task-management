@@ -1,5 +1,4 @@
-import { ref, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
 import {
   ElDrawer,
   ElDialog,
@@ -14,13 +13,34 @@ import {
   ElLoading
 } from 'element-plus'
 import { Document, User, Timer, Right } from '@element-plus/icons-vue'
-import type { StrategicIndicator, Plan } from '@/shared/types'
+import { PermissionCode, type StrategicIndicator, type Plan } from '@/shared/types'
 import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
+import { indicatorFillApi } from '@/features/plan/api/planApi'
 import { getUserById, tryGetUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
-import { notifyApprovalStateRefresh } from '@/features/approval/lib'
+import {
+  isDistributionFlow,
+  isSubmissionFlow,
+  isTerminalHistoryStatus,
+  normalizeDisplayName,
+  normalizeWorkflowAction,
+  normalizeWorkflowCode,
+  notifyApprovalStateRefresh,
+  parsePositiveUserId,
+  resolveApprovalRouteTitle,
+  resolveHistoryStatusTag,
+  shouldDisplayWorkflowHistoryItem,
+  toPositiveNumber
+} from '@/features/approval/lib'
 import { usePlanStore } from '@/features/plan/model/store'
+import type {
+  DistributionApprovalProgressDrawerEmit,
+  DistributionApprovalProgressDrawerProps,
+  PlanApprovalDetailItem,
+  WorkflowHistoryTarget
+} from '@/features/approval/model/types'
+import { usePermission } from '@/shared/lib/permissions'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
 import {
@@ -29,7 +49,6 @@ import {
   getWorkflowInstanceDetailByBusiness,
   getWorkflowInstanceHistoryByBusiness
 } from '@/features/workflow/api/queries'
-import { canCurrentUserHandleWorkflowApproval } from '@/features/approval/lib'
 import type {
   ApproverCandidateResponse,
   WorkflowDefinitionPreviewResponse,
@@ -48,58 +67,22 @@ import type {
  * 用于展示指标审批进度和历史记录
  */
 
-interface Props {
-  modelValue: boolean
-  indicators?: StrategicIndicator[]
-  plan?: Plan | null
-  initialPlanWorkflowDetail?: WorkflowInstanceDetailResponse | null
-  indicatorId?: string | number
-  departmentName?: string
-  planName?: string
-  showApprovalSection?: boolean
-  showPlanApprovals?: boolean
-  readonly?: boolean
-  // 审批类型：'distribution' = 下发审批, 'submission' = 上报审批
-  approvalType?: 'distribution' | 'submission'
-  historyViewMode?: 'auto' | 'card-only'
-  workflowCode?: string | string[]
-  workflowEntityType?: 'PLAN' | 'PLAN_REPORT'
-  workflowEntityId?: number | string
-  secondaryWorkflowEntityType?: 'PLAN' | 'PLAN_REPORT'
-  secondaryWorkflowEntityId?: number | string
-  routeTarget?: string
-}
-
-export interface ApprovalProgressDrawerEmit {
-  (e: 'update:modelValue', value: boolean): void
-  (e: 'close'): void
-  (e: 'refresh'): void
-}
-
-export interface ApprovalProgressDrawerProps extends Props {}
-
-export function useApprovalProgressDrawer(
-  props: ApprovalProgressDrawerProps,
-  emit: ApprovalProgressDrawerEmit
+export function useApprovalProgressState(
+  props: DistributionApprovalProgressDrawerProps,
+  emit: DistributionApprovalProgressDrawerEmit
 ) {
-  const router = useRouter()
   const authStore = useAuthStore()
   const planStore = usePlanStore()
   const timeContext = useTimeContextStore()
+  const permissionUtil = usePermission()
   const canLookupWorkflowUsers = computed(() => {
     const roles = currentUserRoleCodes.value
     return roles.includes('STRATEGY_DEPT_HEAD') || roles.includes('VICE_PRESIDENT')
   })
-  const PLAN_DISPATCH_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
-  const PLAN_REPORT_APPROVE_PERMISSION = 'BTN_STRATEGY_TASK_REPORT_APPROVE'
   const INDICATOR_DISPATCH_APPROVE_PERMISSION = 'BTN_INDICATOR_DISPATCH_APPROVE'
   const INDICATOR_REPORT_APPROVE_PERMISSION = 'BTN_INDICATOR_REPORT_APPROVE'
   const currentUserId = computed(() => Number(authStore.user?.userId ?? authStore.user?.id ?? 0))
   const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
-  const normalizedRouteTarget = computed(() => {
-    const value = typeof props.routeTarget === 'string' ? props.routeTarget.trim() : ''
-    return value || ''
-  })
   const currentUserPermissionCodes = computed(() => {
     const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
     if (!Array.isArray(permissions)) {
@@ -119,44 +102,28 @@ export function useApprovalProgressDrawer(
   })
   const submitterNameCache = ref<Record<string, string>>({})
   const workflowUserAvatarCache = ref<Record<string, string>>({})
-
-  function normalizeDisplayName(value: unknown): string {
-    return typeof value === 'string' ? value.trim() : ''
-  }
-
-  function normalizeWorkflowCode(value: unknown): string {
-    return String(value || '')
-      .trim()
-      .toUpperCase()
-  }
-
-  function normalizeWorkflowStatus(value: unknown): string {
-    const normalized = String(value || '')
-      .trim()
-      .toUpperCase()
-
-    if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(normalized)) {
-      return 'PENDING'
-    }
-
-    if (['APPROVED', 'DISTRIBUTED'].includes(normalized)) {
-      return 'APPROVED'
-    }
-
-    if (['REJECTED', 'RETURNED'].includes(normalized)) {
-      return 'REJECTED'
-    }
-
-    if (['WITHDRAWN', 'CANCELLED'].includes(normalized)) {
-      return 'WITHDRAWN'
-    }
-
-    return normalized
-  }
+  const relatedPlanReportSummary = ref<{
+    id?: number | string
+    workflowStatus?: string | null
+    status?: string | null
+    workflowInstanceId?: number | string | null
+    currentTaskId?: number | string | null
+    currentStepName?: string | null
+  } | null>(null)
 
   const expectedWorkflowCodes = computed(() => {
     const rawCodes = Array.isArray(props.workflowCode) ? props.workflowCode : [props.workflowCode]
-    return rawCodes.map(normalizeWorkflowCode).filter(Boolean)
+    const normalizedCodes = rawCodes.map(normalizeWorkflowCode).filter(Boolean)
+    const shouldIncludeSubmissionWorkflow =
+      props.workflowEntityType === 'PLAN_REPORT' ||
+      props.secondaryWorkflowEntityType === 'PLAN_REPORT' ||
+      Boolean(relatedPlanReportSummary.value?.id)
+
+    if (shouldIncludeSubmissionWorkflow) {
+      normalizedCodes.push('PLAN_APPROVAL_COLLEGE')
+    }
+
+    return Array.from(new Set(normalizedCodes))
   })
 
   function matchesExpectedWorkflowCode(workflowCode: unknown): boolean {
@@ -165,79 +132,6 @@ export function useApprovalProgressDrawer(
     }
 
     return expectedWorkflowCodes.value.includes(normalizeWorkflowCode(workflowCode))
-  }
-
-  function normalizeWorkflowEntityType(value: unknown): 'PLAN' | 'PLAN_REPORT' | '' {
-    const normalized = String(value || '')
-      .trim()
-      .toUpperCase()
-    if (normalized === 'PLAN_REPORT') {
-      return 'PLAN_REPORT'
-    }
-    if (normalized === 'PLAN') {
-      return 'PLAN'
-    }
-    return ''
-  }
-
-  function parsePositiveEntityId(value: unknown): number | null {
-    const numericValue = Number(value)
-    if (!Number.isFinite(numericValue) || numericValue <= 0) {
-      return null
-    }
-    return numericValue
-  }
-
-  function isRetainableWorkflowDetail(
-    detail: WorkflowInstanceDetailResponse | null | undefined
-  ): boolean {
-    if (!detail || !matchesExpectedWorkflowCode(detail.flowCode)) {
-      return false
-    }
-
-    const detailEntityType = normalizeWorkflowEntityType(
-      detail.businessEntityType ?? (detail as { entityType?: unknown }).entityType
-    )
-    const expectedEntityType = normalizeWorkflowEntityType(props.workflowEntityType)
-    if (detailEntityType && expectedEntityType && detailEntityType !== expectedEntityType) {
-      return false
-    }
-
-    const expectedEntityId = parsePositiveEntityId(props.workflowEntityId ?? props.plan?.id)
-    const detailEntityId = parsePositiveEntityId(
-      detail.businessEntityId ?? (detail as { entityId?: unknown }).entityId ?? detail.planId
-    )
-    if (expectedEntityId && detailEntityId && expectedEntityId !== detailEntityId) {
-      return false
-    }
-
-    return Boolean(
-      parsePositiveEntityId(detail.instanceId) ||
-      detail.status ||
-      detail.currentStepName ||
-      (Array.isArray(detail.tasks) && detail.tasks.length > 0) ||
-      (Array.isArray(detail.history) && detail.history.length > 0)
-    )
-  }
-
-  function getRetainedWorkflowDetail(): WorkflowInstanceDetailResponse | null {
-    if (isRetainableWorkflowDetail(props.initialPlanWorkflowDetail)) {
-      return props.initialPlanWorkflowDetail
-    }
-
-    if (isRetainableWorkflowDetail(planWorkflowDetail.value)) {
-      return planWorkflowDetail.value
-    }
-
-    return null
-  }
-
-  function parsePositiveUserId(value: unknown): number | null {
-    const numericValue = Number(value)
-    if (!Number.isFinite(numericValue) || numericValue <= 0) {
-      return null
-    }
-    return numericValue
   }
 
   function cacheWorkflowUserAvatar(userIdValue: unknown, avatarValue: unknown): boolean {
@@ -282,7 +176,7 @@ export function useApprovalProgressDrawer(
       cacheWorkflowUserAvatar(userId, (user as { avatar?: unknown; avatarUrl?: unknown }).avatar)
       cacheWorkflowUserAvatar(userId, (user as { avatarUrl?: unknown }).avatarUrl)
     } catch (error) {
-      logger.warn('[ApprovalProgressDrawer] 用户头像解析失败:', { userId, error })
+      logger.warn('[DistributionApprovalProgressDrawer] 用户头像解析失败:', { userId, error })
     }
   }
 
@@ -387,42 +281,11 @@ export function useApprovalProgressDrawer(
   )
   const workflowDefinitionPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
   const planWorkflowHistoryCards = ref<WorkflowHistoryCardResponse[]>([])
+  const planWorkflowDetailRequestSeq = ref(0)
   const selectedHistoryInstanceId = ref<string | null>(null)
   const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)
   const selectedHistoryInstanceDetailLoading = ref(false)
   const historyInstanceDetailCache = ref<Record<string, WorkflowInstanceDetailResponse>>({})
-
-  function resolvePreferredActiveTab(): 'pending-plans' | 'workflow' | 'history' {
-    if (props.showPlanApprovals) {
-      return isPlanPendingApproval.value || scopedPendingPlanCount.value > 0
-        ? 'pending-plans'
-        : 'history'
-    }
-
-    return hasWorkflowTabContent.value ? 'workflow' : 'history'
-  }
-
-  interface PlanApprovalDetailItem {
-    instanceId: number
-    instanceNo: string
-    title: string
-    routeTitle?: string
-    flowName?: string
-    flowCode?: string
-    submitterName: string
-    currentStepName: string
-    createdAt?: string
-    completedAt?: string
-    statusLabel?: string
-    statusType?: 'success' | 'warning' | 'danger' | 'info'
-    entityId?: string | number
-    planName?: string
-  }
-
-  interface WorkflowHistoryTarget {
-    entityType: 'PLAN' | 'PLAN_REPORT'
-    entityId: number
-  }
 
   // 当前选中的指标
   const currentIndicator = computed(() => {
@@ -463,15 +326,24 @@ export function useApprovalProgressDrawer(
   })
 
   const currentPlanEntityIds = computed(() => {
-    if (props.plan?.id) {
-      return new Set([Number(props.plan.id)])
+    const entityIds = new Set<number>()
+
+    const planId = Number(props.plan?.id ?? NaN)
+    if (Number.isFinite(planId) && planId > 0) {
+      entityIds.add(planId)
     }
 
-    if (props.plan?.workflowInstanceId) {
-      return new Set([Number(props.plan.workflowInstanceId)])
+    const workflowEntityId = Number(props.workflowEntityId ?? NaN)
+    if (Number.isFinite(workflowEntityId) && workflowEntityId > 0) {
+      entityIds.add(workflowEntityId)
     }
 
-    return new Set<number>()
+    const workflowInstanceId = Number(props.plan?.workflowInstanceId ?? NaN)
+    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+      entityIds.add(workflowInstanceId)
+    }
+
+    return entityIds
   })
 
   const scopedDepartmentPlan = computed(() => {
@@ -499,30 +371,93 @@ export function useApprovalProgressDrawer(
     return entityIds
   })
 
+  const relevantDepartmentOrgIds = computed(() => {
+    const orgIds = new Set<number>()
+
+    const currentOrgId = toPositiveNumber(currentUserOrgId.value)
+    if (currentOrgId) {
+      orgIds.add(currentOrgId)
+    }
+
+    const rawPlan = props.plan as
+      | (Plan & {
+          createdByOrgId?: number | string
+          sourceOrgId?: number | string
+        })
+      | null
+      | undefined
+
+    const createdByOrgId = toPositiveNumber(rawPlan?.createdByOrgId)
+    if (createdByOrgId) {
+      orgIds.add(createdByOrgId)
+    }
+
+    const sourceOrgId = toPositiveNumber(rawPlan?.sourceOrgId)
+    if (sourceOrgId) {
+      orgIds.add(sourceOrgId)
+    }
+
+    const activeSourceOrgId = toPositiveNumber(activePlanWorkflow.value?.sourceOrgId)
+    if (activeSourceOrgId) {
+      orgIds.add(activeSourceOrgId)
+    }
+
+    return orgIds
+  })
+
+  function isDepartmentRelevantApproval(instance: Record<string, any>): boolean {
+    if (relevantDepartmentOrgIds.value.size === 0) {
+      return false
+    }
+
+    const approverOrgId = toPositiveNumber(instance.approverOrgId)
+    if (approverOrgId && relevantDepartmentOrgIds.value.has(approverOrgId)) {
+      return true
+    }
+
+    const sourceOrgId = toPositiveNumber(instance.sourceOrgId)
+    if (sourceOrgId && relevantDepartmentOrgIds.value.has(sourceOrgId)) {
+      return true
+    }
+
+    return false
+  }
+
   const scopedPlanApprovals = computed(() => {
-    if (scopedPlanEntityIds.value.size === 0) {
-      if (props.departmentName || props.planName) {
-        return []
-      }
-      return pendingPlanApprovals.value
-    }
-
-    const withEntityId = pendingPlanApprovals.value.filter(instance => {
-      const entityId = Number(instance.entityId)
-      return Number.isFinite(entityId) && entityId > 0
-    })
-
-    if (withEntityId.length === 0) {
-      return []
-    }
-
-    return withEntityId.filter(instance => {
-      if (!scopedPlanEntityIds.value.has(Number(instance.entityId))) {
+    const matchingApprovals = pendingPlanApprovals.value.filter(instance => {
+      const flowCode = (instance as { flowCode?: string }).flowCode
+      if (!matchesExpectedWorkflowCode(flowCode)) {
         return false
       }
 
-      const flowCode = (instance as { flowCode?: string }).flowCode
-      return matchesExpectedWorkflowCode(flowCode)
+      const entityId = Number(instance.entityId)
+      const matchesEntity =
+        Number.isFinite(entityId) && entityId > 0 && scopedPlanEntityIds.value.has(entityId)
+
+      const matchesDepartment = isDepartmentRelevantApproval(instance)
+
+      if (scopedPlanEntityIds.value.size === 0) {
+        return matchesDepartment || !props.departmentName
+      }
+
+      return matchesEntity || matchesDepartment
+    })
+
+    const seenKeys = new Set<string>()
+    return matchingApprovals.filter(instance => {
+      const key =
+        String(
+          (instance as { instanceId?: string | number }).instanceId ||
+            (instance as { taskId?: string | number }).taskId ||
+            (instance as { entityId?: string | number }).entityId ||
+            ''
+        ).trim() || JSON.stringify(instance)
+
+      if (seenKeys.has(key)) {
+        return false
+      }
+      seenKeys.add(key)
+      return true
     })
   })
 
@@ -554,44 +489,52 @@ export function useApprovalProgressDrawer(
 
     appendTarget(props.workflowEntityType, props.workflowEntityId ?? props.plan?.id)
     appendTarget(props.secondaryWorkflowEntityType, props.secondaryWorkflowEntityId)
-    if (
-      normalizeWorkflowEntityType(props.workflowEntityType) === 'PLAN_REPORT' &&
-      normalizeWorkflowEntityType(props.secondaryWorkflowEntityType) !== 'PLAN'
-    ) {
-      appendTarget('PLAN', planWorkflowDetail.value?.planId ?? activePlanWorkflow.value?.id)
-    }
+    appendTarget('PLAN_REPORT', relatedPlanReportSummary.value?.id)
 
     return targets
   })
-  const activePlanWorkflow = computed(() => {
-    const detail = planWorkflowDetail.value
-    const useDetail = detail && matchesExpectedWorkflowCode(detail.flowCode)
-    if (!props.plan) {
-      if (!useDetail) {
-        return null
-      }
 
-      return {
-        id: parsePositiveEntityId(props.secondaryWorkflowEntityId) ?? undefined,
-        name: props.planName || props.departmentName || '当前计划',
-        workflowInstanceId: Number(detail.instanceId || 0) || undefined,
-        workflowStatus: detail.status,
-        status: detail.status,
-        currentTaskId: detail.currentTaskId,
-        currentStepName: detail.currentStepName,
-        currentApproverId: detail.currentApproverId,
-        currentApproverName: detail.currentApproverName,
-        canWithdraw: detail.canWithdraw,
-        workflowHistory: Array.isArray(detail.history) ? detail.history : [],
-        submittedAt: detail.startTime,
-        createdAt: detail.startTime,
-        createdByName: props.departmentName || '',
-        submittedByName: props.departmentName || '',
-        sourceOrgName: detail.sourceOrgName,
-        targetOrgName: detail.targetOrgName
-      } as Plan
+  function hasPlanReportWorkflowContext(
+    summary:
+      | {
+          id?: number | string
+          status?: string | null
+          workflowStatus?: string | null
+          workflowInstanceId?: number | string | null
+          currentTaskId?: number | string | null
+          currentStepName?: string | null
+        }
+      | null
+      | undefined
+  ): boolean {
+    if (!summary?.id) {
+      return false
     }
 
+    const workflowStatus = String(summary.workflowStatus || summary.status || '')
+      .trim()
+      .toUpperCase()
+    const workflowInstanceId = Number(summary.workflowInstanceId ?? NaN)
+    const currentTaskId = Number(summary.currentTaskId ?? NaN)
+    const currentStepName = normalizeDisplayName(summary.currentStepName)
+
+    return (
+      (workflowStatus !== '' &&
+        workflowStatus !== 'DRAFT' &&
+        workflowStatus !== 'WITHDRAWN' &&
+        workflowStatus !== 'CANCELLED') ||
+      (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) ||
+      (Number.isFinite(currentTaskId) && currentTaskId > 0) ||
+      Boolean(currentStepName)
+    )
+  }
+  const activePlanWorkflow = computed(() => {
+    if (!props.plan) {
+      return null
+    }
+
+    const detail = planWorkflowDetail.value
+    const useDetail = detail && matchesExpectedWorkflowCode(detail.flowCode)
     return {
       ...props.plan,
       workflowInstanceId:
@@ -599,6 +542,10 @@ export function useApprovalProgressDrawer(
         undefined,
       workflowStatus:
         (useDetail ? detail.status : undefined) || props.plan.workflowStatus || props.plan.status,
+      startedAt:
+        (useDetail ? detail.startTime : undefined) ||
+        props.plan.submittedAt ||
+        props.plan.createdAt,
       currentTaskId: (useDetail ? detail.currentTaskId : undefined) || props.plan.currentTaskId,
       currentStepName:
         (useDetail ? detail.currentStepName : undefined) || props.plan.currentStepName,
@@ -620,27 +567,67 @@ export function useApprovalProgressDrawer(
   )
 
   const hasPlanWorkflowData = computed(() => {
-    if (
-      planWorkflowDetail.value &&
-      (parsePositiveEntityId(planWorkflowDetail.value.instanceId) ||
-        normalizeWorkflowStatus(planWorkflowDetail.value.status) ||
-        normalizeDisplayName(planWorkflowDetail.value.currentStepName) ||
-        (Array.isArray(planWorkflowDetail.value.tasks) &&
-          planWorkflowDetail.value.tasks.length > 0) ||
-        (Array.isArray(planWorkflowDetail.value.history) &&
-          planWorkflowDetail.value.history.length > 0))
-    ) {
+    const workflowInstanceId = Number(
+      props.plan?.workflowInstanceId ?? planWorkflowDetail.value?.instanceId ?? NaN
+    )
+    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
+      return true
+    }
+
+    if (planWorkflowTasks.value.length > 0) {
+      return true
+    }
+
+    if (planWorkflowHistory.value.length > 0 || planWorkflowHistoryCards.value.length > 0) {
       return true
     }
 
     return Boolean(
-      activePlanWorkflow.value &&
-      (activePlanWorkflow.value.workflowInstanceId ||
-        activePlanWorkflow.value.workflowStatus ||
-        activePlanWorkflow.value.currentStepName ||
-        (Array.isArray(activePlanWorkflow.value.workflowHistory) &&
-          activePlanWorkflow.value.workflowHistory.length > 0))
+      normalizeDisplayName(props.plan?.currentStepName) ||
+      normalizeDisplayName(props.plan?.workflowStatus) ||
+      props.plan?.currentTaskId ||
+      normalizeDisplayName(planWorkflowDetail.value?.currentStepName) ||
+      normalizeDisplayName(planWorkflowDetail.value?.flowCode) ||
+      normalizeDisplayName(planWorkflowDetail.value?.status)
     )
+  })
+
+  const hasRelatedPlanReportActiveWorkflow = computed(() => {
+    if (!hasPlanReportWorkflowContext(relatedPlanReportSummary.value)) {
+      return false
+    }
+
+    const workflowStatus = String(
+      relatedPlanReportSummary.value?.workflowStatus || relatedPlanReportSummary.value?.status || ''
+    )
+      .trim()
+      .toUpperCase()
+
+    return ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)
+  })
+
+  const relatedPlanReportStepDisplay = computed(() => {
+    const workflowStatus = String(
+      relatedPlanReportSummary.value?.workflowStatus || relatedPlanReportSummary.value?.status || ''
+    )
+      .trim()
+      .toUpperCase()
+    const currentStepName = normalizeDisplayName(relatedPlanReportSummary.value?.currentStepName)
+
+    if (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) {
+      return currentStepName || '审批中'
+    }
+    if (workflowStatus === 'APPROVED') {
+      return '已通过'
+    }
+    if (workflowStatus === 'REJECTED' || workflowStatus === 'RETURNED') {
+      return '已驳回'
+    }
+    if (workflowStatus === 'WITHDRAWN' || workflowStatus === 'CANCELLED') {
+      return '已撤回'
+    }
+
+    return currentStepName || workflowStatus || '审批中'
   })
 
   const normalizedPlanBusinessStatus = computed(() => {
@@ -671,26 +658,6 @@ export function useApprovalProgressDrawer(
 
   const currentPlanOperationLabel = computed(() => {
     if (!hasPlanWorkflowData.value) {
-      return null
-    }
-
-    if (props.workflowEntityType === 'PLAN_REPORT') {
-      if (['DRAFT', 'WITHDRAWN', 'CANCELLED'].includes(planWorkflowStatus.value)) {
-        return '已撤回，可重新发起审批'
-      }
-
-      if (['RETURNED', 'REJECTED'].includes(planWorkflowStatus.value)) {
-        return '已退回，可修改后重新发起审批'
-      }
-
-      if (isPlanCompletedApproval.value) {
-        return '审批已完成'
-      }
-
-      if (isPlanPendingApproval.value) {
-        return activePlanWorkflow.value?.canWithdraw ? '提交方仍可撤回' : '审批流已锁定'
-      }
-
       return null
     }
 
@@ -725,8 +692,8 @@ export function useApprovalProgressDrawer(
 
   const requiredPlanApprovalPermissionCodes = computed(() => {
     return props.approvalType === 'distribution'
-      ? [PLAN_DISPATCH_APPROVE_PERMISSION, INDICATOR_DISPATCH_APPROVE_PERMISSION]
-      : [PLAN_REPORT_APPROVE_PERMISSION, INDICATOR_REPORT_APPROVE_PERMISSION]
+      ? [PermissionCode.BTN_STRATEGY_TASK_DISPATCH_APPROVE, INDICATOR_DISPATCH_APPROVE_PERMISSION]
+      : [PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE, INDICATOR_REPORT_APPROVE_PERMISSION]
   })
 
   const requiredPlanApprovalPermissionCode = computed(() => {
@@ -766,7 +733,7 @@ export function useApprovalProgressDrawer(
 
   function resolveExpectedApproverOrgId(): number | null {
     const stepName = String(activePlanWorkflow.value?.currentStepName || '').trim()
-    const currentTaskId = String(currentPlanTaskId.value || '').trim()
+    const currentTaskId = String(activePlanWorkflow.value?.currentTaskId || '').trim()
     if (currentTaskId && Array.isArray(planWorkflowDetail.value?.tasks)) {
       const currentTask = planWorkflowDetail.value.tasks.find(
         task => String(task.taskId || '').trim() === currentTaskId
@@ -790,23 +757,6 @@ export function useApprovalProgressDrawer(
     return null
   }
 
-  const currentPendingPlanTask = computed<WorkflowTaskResponse | null>(() => {
-    const currentTaskId = String(currentPlanTaskId.value || '').trim()
-    if (!currentTaskId) {
-      return null
-    }
-
-    return (
-      planWorkflowTasks.value.find(task => {
-        const taskId = String(task.taskId || '').trim()
-        const status = String(task.status || '')
-          .trim()
-          .toUpperCase()
-        return taskId === currentTaskId && status === 'PENDING'
-      }) || null
-    )
-  })
-
   const canCurrentUserHandlePlanApproval = computed(() => {
     if (
       !hasPlanWorkflowData.value ||
@@ -816,21 +766,27 @@ export function useApprovalProgressDrawer(
       return false
     }
 
-    if (!currentPendingPlanTask.value) {
-      return false
+    const expectedApproverRoleCodes = resolveExpectedApproverRoleCodes()
+    if (expectedApproverRoleCodes.length > 0) {
+      const hasExpectedRole = expectedApproverRoleCodes.some(roleCode =>
+        currentUserRoleCodes.value.includes(roleCode)
+      )
+      if (!hasExpectedRole) {
+        return false
+      }
     }
 
-    return canCurrentUserHandleWorkflowApproval({
-      currentUserId: currentUserId.value,
-      currentUserOrgId: currentUserOrgId.value,
-      currentUserRoleCodes: currentUserRoleCodes.value,
-      hasApprovalPermission: hasPlanApprovalPermission.value,
-      isPendingApproval: isPlanPendingApproval.value,
-      explicitApproverId:
-        currentPendingPlanTask.value.assigneeId ?? activePlanWorkflow.value?.currentApproverId,
-      expectedApproverRoleCodes: resolveExpectedApproverRoleCodes(),
-      expectedApproverOrgId: resolveExpectedApproverOrgId()
-    })
+    const expectedApproverOrgId = resolveExpectedApproverOrgId()
+    if (
+      Number.isFinite(currentUserOrgId.value) &&
+      currentUserOrgId.value > 0 &&
+      Number.isFinite(expectedApproverOrgId) &&
+      (expectedApproverOrgId as number) > 0
+    ) {
+      return currentUserOrgId.value === expectedApproverOrgId
+    }
+
+    return false
   })
 
   const currentPlanTaskId = computed(() => {
@@ -871,6 +827,8 @@ export function useApprovalProgressDrawer(
       return null
     }
 
+    // 必须按任务创建的先后顺序（taskId 或时间）排序，而不是 stepNo。
+    // 因为流程可能回退到前面的步骤（如撤回/驳回），此时最新的节点 stepNo 可能更小。
     const sorted = [...planWorkflowTasks.value].sort((left, right) => {
       const leftId = Number(left.taskId ?? 0)
       const rightId = Number(right.taskId ?? 0)
@@ -900,6 +858,38 @@ export function useApprovalProgressDrawer(
     return 0
   })
 
+  const resolveTaskStatusTag = (
+    task: WorkflowTaskResponse
+  ): { label: string; type: 'success' | 'warning' | 'danger' | 'info' } => {
+    const normalizedStatus = String(task.status || '')
+      .trim()
+      .toUpperCase()
+
+    if (normalizedStatus === 'WITHDRAWN') {
+      return { label: '已撤回', type: 'info' }
+    }
+    if (normalizedStatus === 'REJECTED') {
+      return { label: '已驳回', type: 'danger' }
+    }
+    if (normalizedStatus === 'COMPLETED') {
+      return { label: '已通过', type: 'success' }
+    }
+    if (normalizedStatus === 'WAITING') {
+      return { label: '等待中', type: 'info' }
+    }
+    if (normalizedStatus === 'PENDING') {
+      if (
+        isPlanWorkflowTerminated.value &&
+        String(task.taskId || '') !== String(currentPlanTaskId.value || '')
+      ) {
+        return { label: '等待中', type: 'info' }
+      }
+      return { label: '审批中', type: 'warning' }
+    }
+
+    return { label: normalizedStatus || '未知', type: 'info' }
+  }
+
   const planWorkflowStatusTag = computed(() => {
     const rawStatus = currentPlanInstanceStatus.value
     if (rawStatus === 'DISTRIBUTED' || rawStatus === 'APPROVED') {
@@ -915,15 +905,14 @@ export function useApprovalProgressDrawer(
       return { label: '审批中', type: 'warning' as const }
     }
 
-    const allTaskStatuses = new Set(
-      planWorkflowTasks.value.map(task =>
-        String(task.status || '')
-          .trim()
-          .toUpperCase()
-      )
-    )
-
     if (normalizedPlanBusinessStatus.value === 'DRAFT') {
+      const allTaskStatuses = new Set(
+        planWorkflowTasks.value.map(task =>
+          String(task.status || '')
+            .trim()
+            .toUpperCase()
+        )
+      )
       if (allTaskStatuses.has('WITHDRAWN')) {
         return { label: '已撤回', type: 'info' as const }
       }
@@ -933,38 +922,30 @@ export function useApprovalProgressDrawer(
       return { label: '草稿', type: 'info' as const }
     }
 
-    const latestTaskStatus = String(latestPlanTask.value?.status || '')
-      .trim()
-      .toUpperCase()
-
-    if (latestTaskStatus === 'WITHDRAWN') {
-      return { label: '已撤回', type: 'info' as const }
-    }
-    if (latestTaskStatus === 'REJECTED') {
-      return { label: '已驳回', type: 'danger' as const }
-    }
     return { label: rawStatus || '未发起', type: 'info' as const }
   })
 
   const planWorkflowHistory = computed<ApprovalHistoryItem[]>(() => {
-    if (!Array.isArray(activePlanWorkflow.value?.workflowHistory)) {
+    const workflowHistorySource = Array.isArray(planWorkflowDetail.value?.history)
+      ? planWorkflowDetail.value.history
+      : activePlanWorkflow.value?.workflowHistory
+
+    if (!Array.isArray(workflowHistorySource)) {
       return []
     }
 
-    return activePlanWorkflow.value.workflowHistory
-      .filter(shouldDisplayWorkflowHistoryItem)
-      .map((item, index) => ({
-        id: String(item.taskId ?? index),
-        action: normalizeWorkflowAction(item.action),
-        operator: String(item.operatorId ?? index),
-        operatorName: String(item.operatorName || '系统'),
-        operatorAvatar: item.operatorId
-          ? workflowUserAvatarCache.value[String(item.operatorId)] || undefined
-          : undefined,
-        operateTime: new Date(item.operateTime || Date.now()),
-        stepName: typeof item.stepName === 'string' ? item.stepName : undefined,
-        comment: item.comment
-      }))
+    return workflowHistorySource.filter(shouldDisplayWorkflowHistoryItem).map((item, index) => ({
+      id: String(item.taskId ?? index),
+      action: normalizeWorkflowAction(item.action),
+      operator: String(item.operatorId ?? index),
+      operatorName: String(item.operatorName || '系统'),
+      operatorAvatar: item.operatorId
+        ? workflowUserAvatarCache.value[String(item.operatorId)] || undefined
+        : undefined,
+      operateTime: new Date(item.operateTime || Date.now()),
+      stepName: typeof item.stepName === 'string' ? item.stepName : undefined,
+      comment: item.comment
+    }))
   })
 
   const planWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {
@@ -972,13 +953,16 @@ export function useApprovalProgressDrawer(
       return []
     }
 
+    // 同理，取最新任务时应遵循时间轴/ID顺序
     return [...planWorkflowDetail.value.tasks].sort((left, right) => {
-      const leftStepNo = Number(left.stepNo ?? Number.MAX_SAFE_INTEGER)
-      const rightStepNo = Number(right.stepNo ?? Number.MAX_SAFE_INTEGER)
-      if (leftStepNo !== rightStepNo) {
-        return leftStepNo - rightStepNo
+      const leftId = Number(left.taskId ?? 0)
+      const rightId = Number(right.taskId ?? 0)
+      if (leftId !== rightId) {
+        return leftId - rightId
       }
-      return String(left.taskId || '').localeCompare(String(right.taskId || ''))
+      const leftTime = new Date(left.createdTime || 0).getTime()
+      const rightTime = new Date(right.createdTime || 0).getTime()
+      return leftTime - rightTime
     })
   })
 
@@ -1100,6 +1084,8 @@ export function useApprovalProgressDrawer(
     const normalizedStatus = String(task.status || '')
       .trim()
       .toUpperCase()
+    const isCurrentTask = String(task.taskId || '') === String(currentPlanTaskId.value || '')
+
     if (normalizedStatus === 'COMPLETED') {
       return 'completed'
     }
@@ -1115,14 +1101,7 @@ export function useApprovalProgressDrawer(
     if (normalizedStatus === 'PENDING' && isPlanWorkflowTerminated.value) {
       return 'waiting'
     }
-    if (
-      normalizedStatus === 'PENDING' &&
-      currentPlanInstanceStatus.value === 'WITHDRAWN' &&
-      String(task.taskId || '') !== String(currentPlanTaskId.value || '')
-    ) {
-      return 'waiting'
-    }
-    if (String(task.taskId || '') === String(currentPlanTaskId.value || '')) {
+    if (isCurrentTask) {
       return 'current'
     }
     return 'pending'
@@ -1140,92 +1119,8 @@ export function useApprovalProgressDrawer(
     return normalizeDisplayName(task.assigneeName) || normalizeDisplayName(task.approverOrgName)
   }
 
-  function resolveSourceDepartmentDisplayName(): string {
-    const detailSourceOrgName = normalizeDisplayName(planWorkflowDetail.value?.sourceOrgName)
-    if (detailSourceOrgName) {
-      return detailSourceOrgName
-    }
-
-    const activeSourceOrgName = normalizeDisplayName(
-      (activePlanWorkflow.value as { sourceOrgName?: unknown } | null)?.sourceOrgName
-    )
-    if (activeSourceOrgName) {
-      return activeSourceOrgName
-    }
-
-    const planSourceOrgName = normalizeDisplayName(
-      (props.plan as { sourceOrgName?: unknown } | null)?.sourceOrgName
-    )
-    if (planSourceOrgName) {
-      return planSourceOrgName
-    }
-
-    const ownerDeptName = props.indicators
-      .map(indicator => normalizeDisplayName((indicator as { ownerDept?: unknown }).ownerDept))
-      .find(Boolean)
-    if (ownerDeptName) {
-      return ownerDeptName
-    }
-
-    return '来源部门'
-  }
-
-  function resolveWorkflowTaskDisplayName(task: WorkflowTaskResponse): string {
-    const rawStepName =
-      normalizeDisplayName(task.currentStepName) ||
-      normalizeDisplayName(task.taskName) ||
-      '审批节点'
-
-    if (rawStepName.includes('职能部门终审')) {
-      return `${resolveSourceDepartmentDisplayName()}终审人审批`
-    }
-
-    return rawStepName
-  }
-
-  function resolveWorkflowTaskDisplayOperatorName(task: WorkflowTaskResponse): string | undefined {
-    const resolvedOperatorName = resolveWorkflowTaskOperatorName(task)
-    if (resolvedOperatorName) {
-      return resolvedOperatorName
-    }
-
-    const rawStepName =
-      normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || ''
-
-    if (rawStepName.includes('职能部门终审')) {
-      return resolveSourceDepartmentDisplayName()
-    }
-
-    return undefined
-  }
-
   function resolveTaskStatusLabel(task: WorkflowTaskResponse): string {
-    const normalizedStatus = String(task.status || '')
-      .trim()
-      .toUpperCase()
-    if (normalizedStatus === 'WAITING') {
-      return '等待中'
-    }
-    if (normalizedStatus === 'WITHDRAWN') {
-      return '已撤回'
-    }
-    if (normalizedStatus === 'REJECTED') {
-      return '已驳回'
-    }
-    if (normalizedStatus === 'PENDING' && isPlanWorkflowTerminated.value) {
-      return '等待中'
-    }
-    if (
-      normalizedStatus === 'PENDING' &&
-      currentPlanInstanceStatus.value === 'WITHDRAWN' &&
-      String(task.taskId || '') !== String(currentPlanTaskId.value || '')
-    ) {
-      return '等待中'
-    }
-    if (normalizedStatus === 'COMPLETED') {
-      return '已通过'
-    }
-    return '审批中'
+    return resolveTaskStatusTag(task).label
   }
 
   const latestPlanTaskDisplayLabel = computed(() => {
@@ -1252,16 +1147,6 @@ export function useApprovalProgressDrawer(
       return '已通过'
     }
 
-    if (props.workflowEntityType === 'PLAN_REPORT') {
-      if (['已撤回', '已驳回', '已通过'].includes(latestPlanTaskDisplayLabel.value)) {
-        return latestPlanTaskDisplayLabel.value
-      }
-
-      return (
-        activePlanWorkflow.value?.currentStepName || latestPlanTaskDisplayLabel.value || '审批中'
-      )
-    }
-
     if (normalizedPlanBusinessStatus.value === 'DRAFT') {
       if (planWorkflowStatusTag.value.label === '已撤回') {
         return '已撤回'
@@ -1280,24 +1165,22 @@ export function useApprovalProgressDrawer(
   })
 
   const currentPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
-    if (
-      props.workflowEntityType === 'PLAN_REPORT' &&
-      hasPlanWorkflowData.value &&
-      planWorkflowDetail.value
-    ) {
+    if (hasRelatedPlanReportActiveWorkflow.value && relatedPlanReportSummary.value?.id) {
       return [
         {
-          instanceId: Number(planWorkflowDetail.value.instanceId ?? 0) || 0,
-          instanceNo: String(planWorkflowDetail.value.instanceId || '待回填'),
-          title: props.planName || `${props.departmentName || '当前部门'}上报审批`,
-          routeTitle: `上报审批 · ${normalizeDisplayName(planWorkflowDetail.value.targetOrgName) || props.departmentName || '当前部门'} -> ${normalizeDisplayName(planWorkflowDetail.value.sourceOrgName) || '上级部门'}`,
-          submitterName:
-            props.departmentName ||
-            normalizeDisplayName(planWorkflowDetail.value.targetOrgName) ||
-            '当前部门',
-          currentStepName: String(currentPlanStepDisplay.value),
-          createdAt: planWorkflowDetail.value.startTime,
-          entityId: props.workflowEntityId,
+          instanceId: Number(relatedPlanReportSummary.value.workflowInstanceId ?? 0) || 0,
+          instanceNo: String(
+            relatedPlanReportSummary.value.workflowInstanceId ||
+              relatedPlanReportSummary.value.id ||
+              '待回填'
+          ),
+          title: `${props.departmentName || '当前部门'}上报审批`,
+          routeTitle: `上报审批 · ${props.departmentName || '当前部门'} -> ${normalizeDisplayName(props.plan?.createdByOrgName) || '上级部门'}`,
+          flowCode: 'PLAN_APPROVAL_COLLEGE',
+          submitterName: props.departmentName || '当前部门',
+          currentStepName: relatedPlanReportStepDisplay.value,
+          createdAt: undefined,
+          entityId: relatedPlanReportSummary.value.id,
           planName: props.planName || props.departmentName || '当前计划'
         }
       ]
@@ -1313,8 +1196,14 @@ export function useApprovalProgressDrawer(
           ),
           submitterName: planSubmitterName.value,
           currentStepName: String(currentPlanStepDisplay.value),
-          createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
-          entityId: activePlanWorkflow.value?.id,
+          createdAt:
+            activePlanWorkflow.value?.startedAt ||
+            activePlanWorkflow.value?.submittedAt ||
+            activePlanWorkflow.value?.createdAt,
+          entityId:
+            activePlanWorkflow.value?.businessEntityId ||
+            props.workflowEntityId ||
+            activePlanWorkflow.value?.id,
           planName: activePlanWorkflow.value?.name
         }
       ]
@@ -1348,66 +1237,13 @@ export function useApprovalProgressDrawer(
     }))
   })
 
-  function isSubmissionFlow(flowCode?: string): boolean {
-    return String(flowCode || '')
-      .toUpperCase()
-      .startsWith('PLAN_APPROVAL_')
-  }
-
-  function isDistributionFlow(flowCode?: string): boolean {
-    return String(flowCode || '')
-      .toUpperCase()
-      .startsWith('PLAN_DISPATCH_')
-  }
-
-  function resolveApprovalRouteTitle(
-    card: Pick<WorkflowHistoryCardResponse, 'flowCode' | 'sourceOrgName' | 'targetOrgName'>
-  ): string {
-    const sourceOrgName = normalizeDisplayName(card.sourceOrgName) || '战略发展部'
-    const targetOrgName = normalizeDisplayName(card.targetOrgName) || '目标部门'
-
-    if (isSubmissionFlow(card.flowCode)) {
-      return `上报审批 · ${targetOrgName} -> ${sourceOrgName}`
-    }
-
-    if (isDistributionFlow(card.flowCode)) {
-      return `下发审批 · ${sourceOrgName} -> ${targetOrgName}`
-    }
-
-    return normalizeDisplayName(card.flowCode) || '审批流程'
-  }
-
-  function resolveHistoryStatusTag(status?: string): {
-    label: string
-    type: 'success' | 'warning' | 'danger' | 'info'
-  } {
-    const normalized = String(status || '').toUpperCase()
-    if (normalized === 'APPROVED') {
-      return { label: '已通过', type: 'success' }
-    }
-    if (normalized === 'REJECTED') {
-      return { label: '已驳回', type: 'danger' }
-    }
-    if (normalized === 'WITHDRAWN') {
-      return { label: '已撤回', type: 'info' }
-    }
-    if (normalized === 'IN_REVIEW' || normalized === 'PENDING' || normalized === 'SUBMITTED') {
-      return { label: '审批中', type: 'warning' }
-    }
-    return { label: normalized || '未知', type: 'info' }
-  }
-
-  function isTerminalHistoryStatus(status?: string): boolean {
-    const normalized = String(status || '')
-      .trim()
-      .toUpperCase()
-    // 业务约定：审批历史只展示已审批完成的结果，不包含撤回中的流程。
-    return ['APPROVED', 'REJECTED'].includes(normalized)
-  }
-
   const historicalPlanApprovalItems = computed<PlanApprovalDetailItem[]>(() => {
     return planWorkflowHistoryCards.value
-      .filter(item => isTerminalHistoryStatus(item.status) || Boolean(item.completedAt))
+      .filter(
+        item =>
+          matchesExpectedWorkflowCode(item.flowCode) &&
+          (isTerminalHistoryStatus(item.status) || Boolean(item.completedAt))
+      )
       .map((item, index) => {
         const statusTag = resolveHistoryStatusTag(item.status)
         return {
@@ -1430,20 +1266,13 @@ export function useApprovalProgressDrawer(
   })
 
   const currentPlanApprovalSummary = computed(() => {
-    if (
-      props.workflowEntityType === 'PLAN_REPORT' &&
-      hasPlanWorkflowData.value &&
-      planWorkflowDetail.value
-    ) {
+    if (hasRelatedPlanReportActiveWorkflow.value && relatedPlanReportSummary.value?.id) {
       return {
-        key: `plan-report-${props.workflowEntityId || planWorkflowDetail.value.instanceId || 'current'}`,
-        planName: props.planName || `${props.departmentName || '当前部门'}上报审批`,
-        currentStepName: currentPlanStepDisplay.value,
-        submitterName:
-          props.departmentName ||
-          normalizeDisplayName(planWorkflowDetail.value.targetOrgName) ||
-          '当前部门',
-        createdAt: planWorkflowDetail.value.startTime,
+        key: `plan-report-${relatedPlanReportSummary.value.id}`,
+        planName: `${props.departmentName || '当前部门'}上报审批`,
+        currentStepName: relatedPlanReportStepDisplay.value,
+        submitterName: props.departmentName || '当前部门',
+        createdAt: undefined,
         count: 1
       }
     }
@@ -1461,7 +1290,10 @@ export function useApprovalProgressDrawer(
           `${props.departmentName || '当前部门'}计划`,
         currentStepName: currentPlanStepDisplay.value,
         submitterName: planSubmitterName.value,
-        createdAt: activePlanWorkflow.value?.submittedAt || activePlanWorkflow.value?.createdAt,
+        createdAt:
+          activePlanWorkflow.value?.startedAt ||
+          activePlanWorkflow.value?.submittedAt ||
+          activePlanWorkflow.value?.createdAt,
         count: 1
       }
     }
@@ -1500,16 +1332,19 @@ export function useApprovalProgressDrawer(
       return []
     }
 
-    if (props.showPlanApprovals && !hasPlanWorkflowData.value) {
-      return []
-    }
-
     if (hasPlanWorkflowData.value && props.plan) {
+      if (planWorkflowTasks.value.length === 0) {
+        return []
+      }
+
       return planWorkflowTasks.value.map(task => ({
         id: String(task.taskId || task.taskKey || task.currentStepName || task.taskName),
-        name: resolveWorkflowTaskDisplayName(task),
+        name:
+          normalizeDisplayName(task.currentStepName) ||
+          normalizeDisplayName(task.taskName) ||
+          '审批节点',
         status: mapWorkflowTaskStatusToNodeStatus(task),
-        operatorName: resolveWorkflowTaskDisplayOperatorName(task),
+        operatorName: resolveWorkflowTaskOperatorName(task),
         operatorAvatar: task.assigneeId
           ? workflowUserAvatarCache.value[String(task.assigneeId)] || undefined
           : undefined,
@@ -1527,6 +1362,10 @@ export function useApprovalProgressDrawer(
               ? '当前仍可撤回'
               : undefined
       }))
+    }
+
+    if (props.showPlanApprovals) {
+      return []
     }
 
     const indicator = currentIndicator.value
@@ -1591,7 +1430,24 @@ export function useApprovalProgressDrawer(
   // ============ 审批历史数据 ============
   const approvalHistory = computed<ApprovalHistoryItem[]>(() => {
     if (props.showPlanApprovals) {
-      return planWorkflowHistory.value
+      if (planWorkflowHistory.value.length > 0) {
+        return planWorkflowHistory.value
+      }
+
+      if (historicalPlanApprovalItems.value.length > 0) {
+        return historicalPlanApprovalItems.value.map((item, index) => ({
+          id: `history-card-${item.instanceId}-${index}`,
+          action: item.statusLabel || '已完成',
+          operator: String(item.instanceId || index),
+          operatorName: item.submitterName || '系统',
+          operatorAvatar: undefined,
+          operateTime: new Date(item.completedAt || item.createdAt || Date.now()),
+          stepName: item.routeTitle || item.title,
+          comment: item.flowName || item.currentStepName
+        }))
+      }
+
+      return []
     }
 
     if (planWorkflowHistory.value.length > 0) {
@@ -1682,16 +1538,10 @@ export function useApprovalProgressDrawer(
       await planStore.loadPlanDetails(planId, { force: true, background: true })
     }
 
-    notifyApprovalStateRefresh({ source: 'approval-progress-drawer' })
-    emit('refresh')
+    notifyApprovalStateRefresh({ source: 'distribution-approval-progress-drawer' })
   }
 
   async function loadPendingPlanApprovals() {
-    if (hasPlanWorkflowData.value) {
-      pendingPlanApprovals.value = []
-      return
-    }
-
     if (!props.showPlanApprovals) {
       pendingPlanApprovals.value = []
       return
@@ -1707,9 +1557,6 @@ export function useApprovalProgressDrawer(
       const response = await approvalApi.getPendingApprovals(userId)
       if (response.success && Array.isArray(response.data)) {
         pendingPlanApprovals.value = response.data
-        if (props.modelValue && props.showPlanApprovals && scopedPendingPlanCount.value > 0) {
-          activeTab.value = 'pending-plans'
-        }
         return
       }
 
@@ -1726,75 +1573,128 @@ export function useApprovalProgressDrawer(
     }
   }
 
+  async function loadRelatedPlanReportSummary() {
+    if (!props.showPlanApprovals || !props.plan) {
+      relatedPlanReportSummary.value = null
+      return
+    }
+
+    const planId = Number(props.plan.id ?? NaN)
+    const reportOrgId = Number(
+      (
+        props.plan as Plan & {
+          targetOrgId?: number | string
+          orgId?: number | string
+          target_org_id?: number | string
+        }
+      ).targetOrgId ??
+        (
+          props.plan as Plan & {
+            orgId?: number | string
+            target_org_id?: number | string
+          }
+        ).target_org_id ??
+        props.plan.orgId ??
+        NaN
+    )
+
+    if (
+      !Number.isFinite(planId) ||
+      planId <= 0 ||
+      !Number.isFinite(reportOrgId) ||
+      reportOrgId <= 0
+    ) {
+      relatedPlanReportSummary.value = null
+      return
+    }
+
+    try {
+      const { currentReport, latestReport } =
+        await indicatorFillApi.getCurrentMonthPlanReportSummaries(planId, reportOrgId)
+
+      if (hasPlanReportWorkflowContext(currentReport)) {
+        relatedPlanReportSummary.value = currentReport
+        return
+      }
+
+      if (hasPlanReportWorkflowContext(latestReport)) {
+        relatedPlanReportSummary.value = latestReport
+        return
+      }
+
+      relatedPlanReportSummary.value = latestReport || currentReport || null
+    } catch (error) {
+      relatedPlanReportSummary.value = null
+      logger.warn('[DistributionApprovalProgressDrawer] 加载关联上报审批摘要失败:', error)
+    }
+  }
+
   async function loadPlanWorkflowDetail() {
-    if (!props.showPlanApprovals) {
+    if (!props.showPlanApprovals || !props.plan) {
       planWorkflowDetail.value = null
       return
     }
 
-    const retainedDetail = getRetainedWorkflowDetail()
+    const requestSeq = ++planWorkflowDetailRequestSeq.value
 
     try {
+      if (hasRelatedPlanReportActiveWorkflow.value && relatedPlanReportSummary.value?.id) {
+        const response = await getWorkflowInstanceDetailByBusiness(
+          'PLAN_REPORT',
+          Number(relatedPlanReportSummary.value.id)
+        )
+        if (
+          requestSeq === planWorkflowDetailRequestSeq.value &&
+          response.success &&
+          response.data &&
+          matchesExpectedWorkflowCode(response.data.flowCode)
+        ) {
+          planWorkflowDetail.value = response.data
+          return
+        }
+      }
+
       const businessEntityType = props.workflowEntityType || 'PLAN'
-      const businessEntityId = Number(props.workflowEntityId ?? props.plan?.id ?? 0)
+      const businessEntityId = Number(props.workflowEntityId ?? props.plan.id ?? 0)
       if (Number.isFinite(businessEntityId) && businessEntityId > 0) {
         const response = await getWorkflowInstanceDetailByBusiness(
           businessEntityType,
           businessEntityId
         )
         if (
+          requestSeq === planWorkflowDetailRequestSeq.value &&
           response.success &&
           response.data &&
           matchesExpectedWorkflowCode(response.data.flowCode)
         ) {
           planWorkflowDetail.value = response.data
-          if (
-            props.modelValue &&
-            props.showPlanApprovals &&
-            normalizeWorkflowStatus(response.data.status) === 'PENDING'
-          ) {
-            activeTab.value = 'pending-plans'
-          }
           return
         }
       }
-    } catch (error) {
-      logger.warn('[ApprovalProgressDrawer] 按业务实体加载计划工作流详情失败，回退旧实例ID:', error)
-    }
 
-    const workflowInstanceId = Number(props.plan?.workflowInstanceId ?? 0)
-    if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
-      try {
+      const workflowInstanceId = Number(props.plan.workflowInstanceId ?? 0)
+      if (Number.isFinite(workflowInstanceId) && workflowInstanceId > 0) {
         const response = await getWorkflowInstanceDetail(String(workflowInstanceId))
         if (
+          requestSeq === planWorkflowDetailRequestSeq.value &&
           response.success &&
           response.data &&
           matchesExpectedWorkflowCode(response.data.flowCode)
         ) {
           planWorkflowDetail.value = response.data
-          if (
-            props.modelValue &&
-            props.showPlanApprovals &&
-            normalizeWorkflowStatus(response.data.status) === 'PENDING'
-          ) {
-            activeTab.value = 'pending-plans'
-          }
           return
         }
-      } catch (error) {
-        logger.warn('[ApprovalProgressDrawer] 旧实例ID详情加载失败:', {
-          workflowInstanceId,
-          error
-        })
       }
-    }
 
-    if (retainedDetail) {
-      planWorkflowDetail.value = retainedDetail
-      return
+      if (requestSeq === planWorkflowDetailRequestSeq.value) {
+        planWorkflowDetail.value = null
+      }
+    } catch (error) {
+      if (requestSeq === planWorkflowDetailRequestSeq.value) {
+        planWorkflowDetail.value = null
+      }
+      logger.warn('[ApprovalProgressDrawer] 加载计划工作流详情失败:', error)
     }
-
-    planWorkflowDetail.value = null
   }
 
   async function loadWorkflowDefinitionPreview() {
@@ -1814,7 +1714,10 @@ export function useApprovalProgressDrawer(
       workflowDefinitionPreview.value = response.success && response.data ? response.data : null
     } catch (error) {
       workflowDefinitionPreview.value = null
-      logger.warn('[ApprovalProgressDrawer] 加载流程定义预览失败:', { flowCode, error })
+      logger.warn('[DistributionApprovalProgressDrawer] 加载流程定义预览失败:', {
+        flowCode,
+        error
+      })
     }
   }
 
@@ -1935,6 +1838,15 @@ export function useApprovalProgressDrawer(
             currentApproverId: null,
             currentApproverName: null
           })
+          emit('refresh', {
+            status: 'DISTRIBUTED',
+            workflowStatus: 'APPROVED',
+            canWithdraw: false,
+            currentTaskId: null,
+            currentStepName: '审批完成',
+            currentApproverId: null,
+            currentApproverName: null
+          })
           await refreshPlanApprovalAfterMutation()
           ElMessage.success('审批通过')
         } finally {
@@ -1984,6 +1896,15 @@ export function useApprovalProgressDrawer(
         }
 
         applyOptimisticPlanWorkflowPatch({
+          status: 'DISTRIBUTED',
+          workflowStatus: 'APPROVED',
+          canWithdraw: false,
+          currentTaskId: null,
+          currentStepName: '审批完成',
+          currentApproverId: null,
+          currentApproverName: null
+        })
+        emit('refresh', {
           status: 'DISTRIBUTED',
           workflowStatus: 'APPROVED',
           canWithdraw: false,
@@ -2050,6 +1971,13 @@ export function useApprovalProgressDrawer(
             currentTaskId: null,
             currentStepName: '已驳回'
           })
+          emit('refresh', {
+            status: 'DRAFT',
+            workflowStatus: 'REJECTED',
+            canWithdraw: false,
+            currentTaskId: null,
+            currentStepName: '已驳回'
+          })
           await refreshPlanApprovalAfterMutation()
           ElMessage.success('审批已驳回')
         } finally {
@@ -2096,6 +2024,13 @@ export function useApprovalProgressDrawer(
         }
 
         applyOptimisticPlanWorkflowPatch({
+          status: 'DRAFT',
+          workflowStatus: 'REJECTED',
+          canWithdraw: false,
+          currentTaskId: null,
+          currentStepName: '已驳回'
+        })
+        emit('refresh', {
           status: 'DRAFT',
           workflowStatus: 'REJECTED',
           canWithdraw: false,
@@ -2189,15 +2124,6 @@ export function useApprovalProgressDrawer(
     selectedHistoryInstanceDetailLoading.value = false
   }
 
-  async function navigateToRouteTarget() {
-    if (!normalizedRouteTarget.value) {
-      return
-    }
-
-    handleClose()
-    await router.push(normalizedRouteTarget.value)
-  }
-
   // 处理自定义审批流程事件
   function handleAddNode() {
     // 暂不实现，可后续扩展
@@ -2215,29 +2141,6 @@ export function useApprovalProgressDrawer(
     // 暂不实现，可后续扩展
   }
 
-  function normalizeWorkflowAction(action?: string): ApprovalHistoryItem['action'] {
-    const normalized = String(action || '')
-      .trim()
-      .toUpperCase()
-    if (normalized.includes('REJECT')) {
-      return 'reject'
-    }
-    if (normalized.includes('WITHDRAW') || normalized.includes('CANCEL')) {
-      return 'withdraw'
-    }
-    if (normalized.includes('START') || normalized.includes('SUBMIT')) {
-      return 'submit'
-    }
-    return 'approve'
-  }
-
-  function shouldDisplayWorkflowHistoryItem(item: { action?: string } | null | undefined): boolean {
-    const normalized = String(item?.action || '')
-      .trim()
-      .toUpperCase()
-    return !normalized.includes('START')
-  }
-
   const detailDialogStatusTag = computed(() => {
     if (hasPlanWorkflowData.value) {
       return planWorkflowStatusTag.value
@@ -2246,6 +2149,14 @@ export function useApprovalProgressDrawer(
   })
 
   const hasDisplayableApprovalContent = computed(() => {
+    if (props.showPlanApprovals) {
+      return (
+        currentPlanApprovalItems.value.length > 0 ||
+        historicalPlanApprovalItems.value.length > 0 ||
+        hasPlanWorkflowData.value
+      )
+    }
+
     if (hasPlanWorkflowData.value) {
       return true
     }
@@ -2253,9 +2164,6 @@ export function useApprovalProgressDrawer(
   })
 
   const hasWorkflowTabContent = computed(() => {
-    if (props.showPlanApprovals) {
-      return true
-    }
     return hasPlanWorkflowData.value || hasApprovalData.value
   })
 
@@ -2280,6 +2188,7 @@ export function useApprovalProgressDrawer(
     if (props.showPlanApprovals) {
       return false
     }
+
     return props.historyViewMode !== 'card-only' && !showPlanHistoryCard.value
   })
 
@@ -2295,163 +2204,11 @@ export function useApprovalProgressDrawer(
     )
   })
 
-  // ============ 监听 ============
-  watch(
-    () => props.initialPlanWorkflowDetail,
-    detail => {
-      if (!props.modelValue || !isRetainableWorkflowDetail(detail)) {
-        return
-      }
-
-      planWorkflowDetail.value = detail ?? null
-    }
-  )
-
-  watch(
-    () => props.modelValue,
-    val => {
-      if (val) {
-        const retainedDetail = getRetainedWorkflowDetail()
-        planWorkflowDetail.value = retainedDetail ?? props.initialPlanWorkflowDetail ?? null
-        // 打开时重置到工作流标签页
-        activeTab.value = props.showPlanApprovals
-          ? isPlanPendingApproval.value
-            ? 'pending-plans'
-            : 'history'
-          : hasWorkflowTabContent.value
-            ? 'workflow'
-            : 'history'
-        cacheSubmitterName(props.plan?.submittedBy, props.plan?.submittedByName)
-        cacheSubmitterName(props.plan?.createdBy, props.plan?.createdByName)
-        if (!normalizeDisplayName(props.plan?.submittedByName)) {
-          void ensureSubmitterNameLoaded(props.plan?.submittedBy, props.plan?.createdByName)
-        }
-        void loadPendingPlanApprovals()
-        void loadPlanWorkflowDetail()
-        void loadWorkflowDefinitionPreview()
-        void ensureWorkflowRelatedAvatarsLoaded()
-        void loadPlanWorkflowHistoryCards()
-      } else {
-        selectedHistoryInstanceId.value = null
-        selectedHistoryInstanceDetail.value = null
-      }
-    }
-  )
-
-  watch(
-    () => [
-      props.showPlanApprovals,
-      props.plan?.id,
-      props.plan?.workflowInstanceId,
-      props.plan?.status,
-      props.plan?.workflowStatus,
-      props.plan?.canWithdraw,
-      props.plan?.currentStepName,
-      props.workflowEntityType,
-      props.workflowEntityId,
-      props.secondaryWorkflowEntityType,
-      props.secondaryWorkflowEntityId,
-      JSON.stringify(props.plan?.workflowHistory ?? []),
-      expectedWorkflowCodes.value.join('|')
-    ],
-    ([showPlanApprovals, planId]) => {
-      if (!showPlanApprovals || !planId) {
-        planWorkflowDetail.value = null
-        planWorkflowHistoryCards.value = []
-        return
-      }
-
-      const retainedDetail = getRetainedWorkflowDetail()
-      if (retainedDetail) {
-        planWorkflowDetail.value = retainedDetail
-      }
-      void loadPlanWorkflowDetail()
-      void loadWorkflowDefinitionPreview()
-      void ensureWorkflowRelatedAvatarsLoaded()
-      void loadPlanWorkflowHistoryCards()
-    },
-    { immediate: true }
-  )
-
-  watch(
-    () => [planWorkflowDetail.value?.flowCode, props.workflowCode],
-    () => {
-      if (!props.modelValue) {
-        return
-      }
-      void loadWorkflowDefinitionPreview()
-    },
-    { immediate: true }
-  )
-
-  watch(
-    () => [
-      planWorkflowTasks.value.map(task => task.assigneeId).join('|'),
-      (workflowDefinitionPreview.value?.steps || [])
-        .flatMap(step => (step.candidateApprovers || []).map(candidate => candidate.userId))
-        .join('|')
-    ],
-    () => {
-      if (!props.modelValue) {
-        return
-      }
-      void ensureWorkflowRelatedAvatarsLoaded()
-    },
-    { immediate: true }
-  )
-
-  watch(
-    () => [
-      props.plan?.submittedBy,
-      props.plan?.submittedByName,
-      props.plan?.createdBy,
-      props.plan?.createdByName
-    ],
-    ([submittedBy, submittedByName, createdBy, createdByName]) => {
-      if (!props.modelValue) {
-        return
-      }
-
-      cacheSubmitterName(submittedBy, submittedByName)
-      cacheSubmitterName(createdBy, createdByName)
-      if (!normalizeDisplayName(submittedByName)) {
-        void ensureSubmitterNameLoaded(submittedBy, normalizeDisplayName(createdByName))
-      }
-    },
-    { immediate: true }
-  )
-
-  watch(
-    () => [
-      props.modelValue,
-      props.showPlanApprovals,
-      scopedPendingPlanCount.value,
-      isPlanPendingApproval.value,
-      hasWorkflowTabContent.value
-    ],
-    ([isVisible]) => {
-      if (!isVisible) {
-        return
-      }
-
-      const preferredTab = resolvePreferredActiveTab()
-      if (
-        activeTab.value !== preferredTab &&
-        (activeTab.value === 'history' || activeTab.value === 'workflow')
-      ) {
-        activeTab.value = preferredTab
-      }
-    }
-  )
-
   return {
     INDICATOR_DISPATCH_APPROVE_PERMISSION,
     INDICATOR_REPORT_APPROVE_PERMISSION,
-    PLAN_DISPATCH_APPROVE_PERMISSION,
-    PLAN_REPORT_APPROVE_PERMISSION,
     activePlanWorkflow,
     activeTab,
-    applyOptimisticPlanWorkflowPatch,
     approvalHistory,
     approvedCount,
     authStore,
@@ -2463,7 +2220,6 @@ export function useApprovalProgressDrawer(
     currentDetailWorkflow,
     currentIndicator,
     currentNodeId,
-    currentPendingPlanTask,
     currentPlanApprovalItems,
     currentPlanApprovalSummary,
     currentPlanEntityIds,
@@ -2477,74 +2233,59 @@ export function useApprovalProgressDrawer(
     currentUserPermissionCodes,
     currentUserRoleCodes,
     detailDialogStatusTag,
-    ensureSubmitterNameLoaded,
-    ensureWorkflowRelatedAvatarsLoaded,
-    ensureWorkflowUserAvatarLoaded,
     expectedWorkflowCodes,
-    formatTime,
     getFallbackSubmitterValue,
     getFunctionalStatus,
-    getRetainedWorkflowDetail,
     getStrategicStatus,
     handleAddNode,
     handleApplyTemplate,
-    handleApprovePlanBatch,
     handleClose,
-    handleRejectPlanBatch,
     handleSaveTemplate,
     handleUpdateApprover,
     hasApprovalData,
     hasDisplayableApprovalContent,
     hasPlanApprovalPermission,
+    hasRelatedPlanReportActiveWorkflow,
     hasPlanWorkflowData,
     hasWorkflowTabContent,
     historicalPlanApprovalItems,
     historyInstanceDetailCache,
     historyTargets,
+    isDepartmentRelevantApproval,
     isDistributionFlow,
     isPlanCompletedApproval,
     isPlanHistoryOnlyMode,
     isPlanPendingApproval,
     isPlanWorkflowTerminated,
-    isRetainableWorkflowDetail,
     isSubmissionFlow,
-    isTerminalHistoryStatus,
     latestPlanTask,
     latestPlanTaskDisplayLabel,
-    loadPendingPlanApprovals,
-    loadPlanWorkflowDetail,
-    loadPlanWorkflowHistoryCards,
-    loadSelectedHistoryInstanceDetail,
-    loadWorkflowDefinitionPreview,
     mapWorkflowTaskStatusToNodeStatus,
     matchesExpectedWorkflowCode,
-    navigateToRouteTarget,
     normalizeDisplayName,
     normalizeStepMatchKey,
     normalizeWorkflowAction,
     normalizeWorkflowCode,
-    normalizeWorkflowEntityType,
-    normalizeWorkflowStatus,
     normalizedPlanBusinessStatus,
-    normalizedRouteTarget,
-    openPlanApprovalDetails,
-    parsePositiveEntityId,
     parsePositiveUserId,
     pendingCount,
     pendingPlanApprovals,
+    permissionUtil,
     planApprovalsLoading,
     planDetailDialogVisible,
     planStore,
     planSubmitterName,
     planWorkflowDetail,
+    planWorkflowDetailRequestSeq,
     planWorkflowHistory,
     planWorkflowHistoryCards,
     planWorkflowStatus,
     planWorkflowStatusTag,
     planWorkflowTasks,
-    refreshPlanApprovalAfterMutation,
     rejectedCount,
     rejectionReason,
+    relevantDepartmentOrgIds,
+    relatedPlanReportSummary,
     requiredPlanApprovalPermissionCode,
     requiredPlanApprovalPermissionCodes,
     resolveApprovalRouteTitle,
@@ -2552,14 +2293,10 @@ export function useApprovalProgressDrawer(
     resolveExpectedApproverOrgId,
     resolveExpectedApproverRoleCodes,
     resolveHistoryStatusTag,
-    resolvePreferredActiveTab,
-    resolveSourceDepartmentDisplayName,
     resolveTaskCandidateApprovers,
     resolveTaskStatusLabel,
-    resolveWorkflowTaskDisplayName,
-    resolveWorkflowTaskDisplayOperatorName,
+    resolveTaskStatusTag,
     resolveWorkflowTaskOperatorName,
-    router,
     scopedDepartmentPlan,
     scopedPendingPlanCount,
     scopedPlanApprovals,
@@ -2575,8 +2312,12 @@ export function useApprovalProgressDrawer(
     showPlanPendingCard,
     submitterNameCache,
     timeContext,
+    toPositiveNumber,
+    hasPlanReportWorkflowContext,
     workflowDefinitionPreview,
     workflowNodes,
     workflowUserAvatarCache
   }
 }
+
+export type ApprovalProgressState = ReturnType<typeof useApprovalProgressState>

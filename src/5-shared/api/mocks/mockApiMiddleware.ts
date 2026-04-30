@@ -133,6 +133,139 @@ const mockPendingApprovals = [
   }
 ]
 
+const mockWorkflowPreview = {
+  workflowCode: 'PLAN_DISPATCH_FUNCDEPT',
+  workflowName: '计划下发审批',
+  entityType: 'PLAN',
+  steps: [
+    {
+      stepDefId: 1,
+      stepOrder: 1,
+      stepName: '战略发展部审批',
+      selectable: true,
+      candidateApprovers: [
+        { userId: 4, username: 'jiaowuchu', realName: '王五', orgId: 44, orgName: '教务处' }
+      ]
+    }
+  ]
+}
+
+const mockWorkflowTaskPage = {
+  items: [
+    {
+      taskId: '9001',
+      instanceId: '9001',
+      taskName: '职能部门审批',
+      taskKey: 'strategy_approve',
+      status: 'PENDING',
+      entityType: 'PLAN',
+      entityId: 101,
+      businessEntityId: 101,
+      currentStepName: '职能部门审批',
+      assigneeId: 4,
+      assigneeName: '王五',
+      approverOrgId: 44,
+      approverOrgName: '教务处',
+      stepNo: 1,
+      createdTime: '2026-03-15T10:00:00Z',
+      flowCode: 'PLAN_DISPATCH_FUNCDEPT',
+      flowName: '计划下发审批',
+      planId: 101,
+      planName: '2026 计算机学院计划',
+      sourceOrgId: 44,
+      sourceOrgName: '教务处',
+      targetOrgId: 57,
+      targetOrgName: '计算机学院'
+    }
+  ],
+  total: 1,
+  pageNum: 1,
+  pageSize: 10
+}
+
+const mockWorkflowInstanceDetail = {
+  instanceId: '9001',
+  definitionId: 'PLAN_DISPATCH_FUNCDEPT',
+  definitionName: '计划下发审批',
+  status: 'PENDING',
+  flowCode: 'PLAN_DISPATCH_FUNCDEPT',
+  flowName: '计划下发审批',
+  businessEntityId: 101,
+  businessEntityType: 'PLAN',
+  planId: 101,
+  planName: '2026 计算机学院计划',
+  sourceOrgId: 44,
+  sourceOrgName: '教务处',
+  targetOrgId: 57,
+  targetOrgName: '计算机学院',
+  startTime: '2026-03-15T10:00:00Z',
+  currentTaskId: '9001',
+  currentStepName: '职能部门审批',
+  currentApproverId: 4,
+  currentApproverName: '王五',
+  canWithdraw: false,
+  tasks: [
+    {
+      taskId: '9001',
+      instanceId: '9001',
+      taskName: '职能部门审批',
+      taskKey: 'strategy_approve',
+      status: 'PENDING',
+      entityType: 'PLAN',
+      entityId: 101,
+      businessEntityId: 101,
+      currentStepName: '职能部门审批',
+      assigneeId: 4,
+      assigneeName: '王五',
+      approverOrgId: 44,
+      approverOrgName: '教务处',
+      stepNo: 1,
+      createdTime: '2026-03-15T10:00:00Z'
+    }
+  ],
+  history: []
+}
+
+const mockWorkflowHistoryCards = [
+  {
+    instanceId: '8001',
+    instanceNo: 'HIS-8001',
+    entityType: 'PLAN',
+    entityId: 101,
+    planId: 101,
+    planName: '2026 计算机学院计划',
+    flowCode: 'PLAN_DISPATCH_FUNCDEPT',
+    flowName: '计划下发审批',
+    sourceOrgId: 44,
+    sourceOrgName: '教务处',
+    targetOrgId: 57,
+    targetOrgName: '计算机学院',
+    status: 'APPROVED',
+    startedAt: '2026-03-01T09:00:00Z',
+    completedAt: '2026-03-02T10:00:00Z',
+    requesterId: 4,
+    requesterName: '王五'
+  }
+]
+
+const mockPlanReports = [
+  {
+    id: 201,
+    planId: 101,
+    reportOrgId: 5,
+    reportMonth: '2026-03',
+    status: 'SUBMITTED',
+    workflowStatus: 'PENDING',
+    workflowInstanceId: 9001,
+    currentTaskId: 9001,
+    currentStepName: '战略发展部审批',
+    currentApproverId: 4,
+    currentApproverName: '王五',
+    canWithdraw: false,
+    title: '2026 计算机学院计划月报'
+  }
+]
+
 const mockAdminUsers = mockUsers.map((user, index) => ({
   id: user.userId,
   username: user.username,
@@ -156,9 +289,11 @@ function sendJson(res: ServerResponse, status: number, data: any) {
 
 // 解析请求体
 function parseBody(req: IncomingMessage): Promise<Record<string, any>> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     let body = ''
-    req.on('data', chunk => { body += chunk.toString() })
+    req.on('data', chunk => {
+      body += chunk.toString()
+    })
     req.on('end', () => {
       resolve(body ? JSON.parse(body) : {})
     })
@@ -236,9 +371,7 @@ function toBackendIndicatorShape(raw: Record<string, any> | undefined, requested
     year: Number(raw.year ?? 2026),
     ownerDept: raw.ownerDept ?? null,
     parentIndicatorId:
-      raw.parentIndicatorId != null
-        ? extractNumericId(raw.parentIndicatorId, 0)
-        : null,
+      raw.parentIndicatorId != null ? extractNumericId(raw.parentIndicatorId, 0) : null,
     progressApprovalStatus: raw.progressApprovalStatus ?? 'DRAFT',
     pendingProgress: raw.pendingProgress ?? null,
     pendingRemark: raw.pendingRemark ?? null,
@@ -253,7 +386,7 @@ function toBackendIndicatorShape(raw: Record<string, any> | undefined, requested
 // 简单的 Mock API 中间件
 export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, next: () => void) {
   const { method, url } = req
-  
+
   // 只处理 API 请求
   if (!url || !url.startsWith('/api/')) {
     return next()
@@ -269,7 +402,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
     try {
       const [normalizedPath, queryString = ''] = normalizedUrl.split('?')
       const query = new URLSearchParams(queryString)
-      
+
       if (normalizedPath === '/api/auth/login' && method === 'POST') {
         const body = await parseBody(req)
         const username = String(body.username || 'admin')
@@ -295,6 +428,19 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取用户信息成功',
           timestamp: Date.now()
         })
+      } else if (normalizedPath === '/api/auth/permissions' && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: [
+            'BTN_STRATEGY_TASK_DISPATCH_APPROVE',
+            'BTN_INDICATOR_DISPATCH_APPROVE',
+            'BTN_STRATEGY_TASK_REPORT_APPROVE',
+            'BTN_INDICATOR_REPORT_APPROVE'
+          ],
+          message: '获取权限成功',
+          timestamp: Date.now()
+        })
       } else if (normalizedPath === '/api/auth/logout' && method === 'POST') {
         sendJson(res, 200, {
           code: 200,
@@ -303,12 +449,36 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '退出登录成功',
           timestamp: Date.now()
         })
-      } else if (normalizedPath === '/api/orgs' && method === 'GET') {
+      } else if (normalizedPath === '/api/cycles/list' && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockAssessmentCycles,
+          message: '获取周期列表成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        (normalizedPath === '/api/orgs' || normalizedPath === '/api/organizations') &&
+        method === 'GET'
+      ) {
         sendJson(res, 200, {
           code: 200,
           success: true,
           data: mockOrgs,
           message: '获取组织架构成功',
+          timestamp: Date.now()
+        })
+      } else if (normalizedPath === '/api/cycles' && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: {
+            items: mockAssessmentCycles,
+            total: mockAssessmentCycles.length,
+            pageNum: 1,
+            pageSize: mockAssessmentCycles.length
+          },
+          message: '获取周期分页成功',
           timestamp: Date.now()
         })
       } else if (normalizedPath === '/api/assessment-cycles' && method === 'GET') {
@@ -341,6 +511,42 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           success: true,
           data: filteredIndicators,
           message: '获取指标成功',
+          timestamp: Date.now()
+        })
+      } else if (/^\/api\/tasks\/by-plan\/\d+$/.test(normalizedPath) && method === 'GET') {
+        const planId = Number(normalizedPath.split('/').pop() || 0)
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data:
+            planId === 101
+              ? [
+                  {
+                    taskId: 10101,
+                    planId: 101,
+                    taskName: '教学质量提升',
+                    taskType: 'QUANTITATIVE',
+                    createdAt: '2026-03-15T10:00:00Z'
+                  }
+                ]
+              : [],
+          message: '获取计划任务成功',
+          timestamp: Date.now()
+        })
+      } else if (/^\/api\/reports\/plan\/\d+$/.test(normalizedPath) && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockPlanReports,
+          message: '获取计划报告成功',
+          timestamp: Date.now()
+        })
+      } else if (/^\/api\/reports\/\d+$/.test(normalizedPath) && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockPlanReports[0],
+          message: '获取报告详情成功',
           timestamp: Date.now()
         })
       } else if (/^\/api\/indicators\/[^/]+$/.test(normalizedPath) && method === 'GET') {
@@ -402,10 +608,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取最近活动成功',
           timestamp: Date.now()
         })
-      } else if (
-        normalizedPath === '/api/analytics/dashboard/overview' &&
-        method === 'GET'
-      ) {
+      } else if (normalizedPath === '/api/analytics/dashboard/overview' && method === 'GET') {
         sendJson(res, 200, {
           code: 200,
           success: true,
@@ -413,10 +616,7 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取分析看板成功',
           timestamp: Date.now()
         })
-      } else if (
-        normalizedPath === '/api/analytics/dashboard/charts' &&
-        method === 'GET'
-      ) {
+      } else if (normalizedPath === '/api/analytics/dashboard/charts' && method === 'GET') {
         sendJson(res, 200, {
           code: 200,
           success: true,
@@ -460,7 +660,107 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '获取待审批数量成功',
           timestamp: Date.now()
         })
-      } else if (/^\/api\/plans\/approval\/instances\/\d+\/approve$/.test(normalizedPath) && method === 'POST') {
+      } else if (normalizedPath === '/api/workflows/my-tasks' && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockWorkflowTaskPage,
+          message: '获取待办任务成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        /^\/api\/workflows\/definitions\/code\/[^/]+\/preview$/.test(normalizedPath) &&
+        method === 'GET'
+      ) {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockWorkflowPreview,
+          message: '获取流程预览成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        /^\/api\/workflows\/instances\/entity\/[^/]+\/[^/]+\/list$/.test(normalizedPath) &&
+        method === 'GET'
+      ) {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockWorkflowHistoryCards,
+          message: '获取审批历史成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        /^\/api\/workflows\/instances\/entity\/[^/]+\/[^/]+$/.test(normalizedPath) &&
+        method === 'GET'
+      ) {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockWorkflowInstanceDetail,
+          message: '获取流程详情成功',
+          timestamp: Date.now()
+        })
+      } else if (/^\/api\/workflows\/instances\/\d+$/.test(normalizedPath) && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: mockWorkflowInstanceDetail,
+          message: '获取流程详情成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        /^\/api\/workflows\/tasks\/\d+\/approve$/.test(normalizedPath) &&
+        method === 'POST'
+      ) {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: {
+            ...mockWorkflowInstanceDetail,
+            status: 'APPROVED',
+            currentTaskId: undefined,
+            currentStepName: '审批完成'
+          },
+          message: '审批通过成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        /^\/api\/workflows\/tasks\/\d+\/reject$/.test(normalizedPath) &&
+        method === 'POST'
+      ) {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: {
+            ...mockWorkflowInstanceDetail,
+            status: 'REJECTED',
+            currentTaskId: undefined,
+            currentStepName: '已驳回'
+          },
+          message: '审批驳回成功',
+          timestamp: Date.now()
+        })
+      } else if (normalizedPath === '/api/message-center/summary' && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: { unreadCount: 0, todoCount: 0, riskCount: 0 },
+          message: '获取消息概览成功',
+          timestamp: Date.now()
+        })
+      } else if (normalizedPath === '/api/message-center/messages' && method === 'GET') {
+        sendJson(res, 200, {
+          code: 200,
+          success: true,
+          data: { items: [], total: 0, pageNum: 1, pageSize: 100 },
+          message: '获取消息列表成功',
+          timestamp: Date.now()
+        })
+      } else if (
+        /^\/api\/plans\/approval\/instances\/\d+\/approve$/.test(normalizedPath) &&
+        method === 'POST'
+      ) {
         sendJson(res, 200, {
           code: 200,
           success: true,
@@ -468,7 +768,10 @@ export function mockApiMiddleware(req: IncomingMessage, res: ServerResponse, nex
           message: '审批通过成功',
           timestamp: Date.now()
         })
-      } else if (/^\/api\/plans\/approval\/instances\/\d+\/reject$/.test(normalizedPath) && method === 'POST') {
+      } else if (
+        /^\/api\/plans\/approval\/instances\/\d+\/reject$/.test(normalizedPath) &&
+        method === 'POST'
+      ) {
         sendJson(res, 200, {
           code: 200,
           success: true,

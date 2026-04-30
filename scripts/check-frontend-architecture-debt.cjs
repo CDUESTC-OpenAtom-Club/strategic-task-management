@@ -52,6 +52,13 @@ const RESTRICTED_IMPORT_PATTERNS = [
 ]
 const LARGE_VUE_FILE_THRESHOLD = 2500
 const REPORT_LIMIT = 20
+const APPROVED_DIRECT_NETWORK_FILES = new Set([
+  'src/5-shared/api/client.ts',
+  'src/5-shared/api/interceptors/responseInterceptors.ts',
+  'src/5-shared/lib/utils/apiHealth.ts',
+  'src/5-shared/lib/utils/tokenManager.ts',
+  'src/5-shared/lib/utils/performance.ts'
+])
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join('/')
@@ -169,6 +176,35 @@ function scanPermissionEntrypoints() {
   return PERMISSION_ENTRYPOINTS.filter(filePath => fs.existsSync(path.join(projectRoot, filePath)))
 }
 
+function scanDirectAxiosUsage(files) {
+  const violations = []
+
+  for (const file of files) {
+    if (
+      APPROVED_DIRECT_NETWORK_FILES.has(file.relativePath) ||
+      file.relativePath.includes('/__tests__/')
+    ) {
+      continue
+    }
+
+    const content = fs.readFileSync(file.absolutePath, 'utf8')
+    const importsAxiosRuntime =
+      /import\s+axios(?:\s|,|\{)/.test(content) ||
+      /import\s+\{[^}]*axios[^}]*\}\s+from\s+['"]axios['"]/.test(content)
+    const usesAxiosRuntime = /\baxios\./.test(content) || /\baxios\s*\(/.test(content)
+    const callsFetch = /\bfetch\s*\(/.test(content)
+
+    if ((importsAxiosRuntime && usesAxiosRuntime) || callsFetch) {
+      violations.push({
+        file: file.relativePath,
+        kind: importsAxiosRuntime && usesAxiosRuntime ? 'axios' : 'fetch'
+      })
+    }
+  }
+
+  return violations.sort((left, right) => left.file.localeCompare(right.file))
+}
+
 function printList(title, items, formatter = value => value) {
   console.log(`\n${title}`)
   if (items.length === 0) {
@@ -201,6 +237,7 @@ function main() {
     fileCount: countDirectoryFiles(dirPath)
   }))
   const permissionEntrypoints = scanPermissionEntrypoints()
+  const directAxiosViolations = scanDirectAxiosUsage(sourceFiles)
 
   const baseline = fs.existsSync(baselinePath)
     ? readJson(baselinePath)
@@ -233,6 +270,11 @@ function main() {
     item => `${item.directory} (${item.fileCount} files)`
   )
   printList('Permission hook entrypoints', permissionEntrypoints)
+  printList(
+    'Direct network-call bypasses',
+    directAxiosViolations,
+    item => `${item.file} (${item.kind})`
+  )
   printList('New @ts-nocheck files vs baseline', newTsNoCheckFiles)
   printList(
     'New old-import violations vs baseline',
