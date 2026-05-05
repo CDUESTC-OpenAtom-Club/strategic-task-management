@@ -7,14 +7,6 @@
         <el-form-item label="接收邮件通知">
           <el-switch v-model="form.emailNotifications" active-text="开启" inactive-text="关闭" />
         </el-form-item>
-
-        <el-form-item v-if="form.emailNotifications" label="邮件地址">
-          <el-input
-            v-model="form.emailAddress"
-            placeholder="请输入接收通知的邮箱地址"
-            style="max-width: 300px"
-          />
-        </el-form-item>
       </div>
 
       <el-divider />
@@ -43,37 +35,39 @@
       <div class="settings-section">
         <h3 class="section-title">通知频率</h3>
 
-        <el-form-item label="预警通知频率">
-          <el-radio-group v-model="form.alertFrequency">
+        <el-form-item label="预警通知频率" class="compact-form-item">
+          <el-radio-group v-model="form.alertFrequency" class="frequency-group">
             <el-radio value="immediate">立即</el-radio>
             <el-radio value="hourly">每小时</el-radio>
             <el-radio value="daily">每天</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="审批通知频率">
-          <el-radio-group v-model="form.approvalFrequency">
+        <el-form-item label="审批通知频率" class="compact-form-item">
+          <el-radio-group v-model="form.approvalFrequency" class="frequency-group">
             <el-radio value="immediate">立即</el-radio>
             <el-radio value="hourly">每小时</el-radio>
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="免打扰时间">
-          <el-time-picker
-            v-model="form.doNotDisturbStart"
-            placeholder="开始时间"
-            format="HH:mm"
-            value-format="HH:mm"
-            style="margin-right: 8px"
-          />
-          <span>至</span>
-          <el-time-picker
-            v-model="form.doNotDisturbEnd"
-            placeholder="结束时间"
-            format="HH:mm"
-            value-format="HH:mm"
-            style="margin-left: 8px"
-          />
+        <el-form-item label="免打扰时间" class="compact-form-item">
+          <div class="time-range-row">
+            <el-time-picker
+              v-model="form.doNotDisturbStart"
+              placeholder="开始时间"
+              format="HH:mm"
+              value-format="HH:mm"
+              class="time-input"
+            />
+            <span class="time-separator">至</span>
+            <el-time-picker
+              v-model="form.doNotDisturbEnd"
+              placeholder="结束时间"
+              format="HH:mm"
+              value-format="HH:mm"
+              class="time-input"
+            />
+          </div>
         </el-form-item>
       </div>
 
@@ -188,7 +182,54 @@ onMounted(() => {
   line-height: 1.4;
 }
 
+.compact-form-item {
+  margin-bottom: 20px;
+}
+
+.frequency-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+}
+
+.time-range-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) auto minmax(180px, 260px);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 560px;
+}
+
+.time-separator {
+  color: var(--text-secondary);
+  font-size: 14px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.time-input {
+  width: 100%;
+}
+
+:deep(.time-input .el-input__wrapper) {
+  width: 100%;
+}
+
 .el-divider {
   margin: 24px 0;
+}
+
+@media (max-width: 768px) {
+  .time-range-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    max-width: 320px;
+  }
+
+  .time-separator {
+    text-align: left;
+  }
 }
 </style>

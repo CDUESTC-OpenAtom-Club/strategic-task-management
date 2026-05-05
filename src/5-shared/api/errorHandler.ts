@@ -189,13 +189,15 @@ export function transformError(error: unknown): {
   message: string
   code?: string
   status?: number
+  details?: unknown
 } {
   if (isAxiosError(error)) {
     const responseCode = (error.response?.data as AxiosErrorResponseData | undefined)?.code
     return {
       message: formatErrorMessage(error),
       code: typeof responseCode === 'string' ? responseCode : error.code,
-      status: error.response?.status
+      status: error.response?.status,
+      details: error.response?.data
     }
   }
 
@@ -203,7 +205,8 @@ export function transformError(error: unknown): {
     return {
       message: typeof error.message === 'string' ? error.message : '未知错误',
       code: typeof error.code === 'string' ? error.code : undefined,
-      status: typeof error.status === 'number' ? error.status : undefined
+      status: typeof error.status === 'number' ? error.status : undefined,
+      details: 'details' in error ? error.details : undefined
     }
   }
 
@@ -226,6 +229,7 @@ export function toExtendedError(error: unknown): {
   message: string
   code?: string | number
   status?: number
+  details?: unknown
   requestId?: string
   severity: 'low' | 'medium' | 'high'
   retryable?: boolean
@@ -237,6 +241,7 @@ export function toExtendedError(
   message: string
   code?: string | number
   status?: number
+  details?: unknown
   requestId?: string
   severity: 'low' | 'medium' | 'high'
   retryable?: boolean
@@ -253,6 +258,7 @@ export function toExtendedError(
     message,
     code: normalized?.code,
     status: normalized?.status,
+    details: normalized && 'details' in normalized ? normalized.details : undefined,
     severity,
     requestId,
     retryable:
