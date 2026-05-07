@@ -2,12 +2,13 @@ name: Build and Push Frontend Image
 
 on:
   push:
-    branches: [main, codex/docker-image-test]
+    branches: [main, baseline/frontend-verified-20260426]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
+  actions: read
 
 concurrency:
   group: frontend-image-${{ github.ref }}
@@ -100,3 +101,25 @@ jobs:
             VITE_USE_MOCK=false
             VITE_ENABLE_DEVTOOLS=false
             VITE_LOG_LEVEL=warn
+
+      - name: Trigger backend system deployment
+        if: github.ref_name == 'baseline/frontend-verified-20260426'
+        env:
+          DISPATCH_TOKEN: ${{ secrets.BACKEND_REPO_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${DISPATCH_TOKEN:?Missing BACKEND_REPO_DISPATCH_TOKEN secret}"
+          curl -fsS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+            https://api.github.com/repos/CDUESTC-OpenAtom-Club/sism-backend/actions/workflows/build-and-push-image.yml/dispatches \
+            -d @- <<EOF
+          {
+            "ref": "baseline/backend-verified-20260426",
+            "inputs": {
+              "deploy_mode": "frontend-only",
+              "frontend_tag": "${GITHUB_SHA}",
+              "target_env": "production"
+            }
+          }
+          EOF
