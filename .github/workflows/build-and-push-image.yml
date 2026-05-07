@@ -105,13 +105,13 @@ jobs:
       - name: Trigger backend system deployment
         if: github.ref_name == 'baseline/frontend-verified-20260426'
         env:
-          DISPATCH_TOKEN: ${{ secrets.BACKEND_REPO_DISPATCH_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
           set -euo pipefail
-          : "${DISPATCH_TOKEN:?Missing BACKEND_REPO_DISPATCH_TOKEN secret}"
+          : "${GHCR_TOKEN:?Missing GHCR_TOKEN secret}"
           curl -fsS -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+            -H "Authorization: Bearer ${GHCR_TOKEN}" \
             https://api.github.com/repos/CDUESTC-OpenAtom-Club/sism-backend/actions/workflows/build-and-push-image.yml/dispatches \
             -d @- <<EOF
           {
