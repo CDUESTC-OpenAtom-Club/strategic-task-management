@@ -232,9 +232,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // ============ Actions ============
-  const login = async (credentials: { username: string; password: string }) => {
+  const login = async (credentials: { account: string; password: string }) => {
     loading.value = true
-    logger.debug('🔐 [Auth] 开始登?', credentials.username)
+    logger.debug('🔐 [Auth] 开始登录', credentials.account)
 
     try {
       const response = await api.post('/auth/login', credentials)
@@ -537,6 +537,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  const updateCurrentUser = (partial: Partial<User>) => {
+    if (user.value) {
+      user.value = {
+        ...user.value,
+        ...partial
+      }
+      persistUser(user.value)
+      logger.debug('[Auth] 当前用户信息已更新:', partial)
+    }
+  }
+
   return {
     // State
     user,
@@ -563,6 +574,7 @@ export const useAuthStore = defineStore('auth', () => {
     hasPermission,
     setViewingAs,
     resetViewingAs,
-    updateUserAvatar
+    updateUserAvatar,
+    updateCurrentUser
   }
 })

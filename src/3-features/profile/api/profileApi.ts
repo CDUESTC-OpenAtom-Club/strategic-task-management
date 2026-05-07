@@ -74,6 +74,10 @@ export const profileApi = {
     return await apiClient.put('/profile', data)
   },
 
+  async updateContact(data: { email?: string | null; phone?: string | null }) {
+    return await apiClient.put('/auth/users/me/contact', data)
+  },
+
   /**
    * Change password
    * 修改密码

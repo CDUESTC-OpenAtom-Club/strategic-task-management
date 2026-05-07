@@ -3,6 +3,26 @@ import type { LoginCredentials, LoginResponse } from '@/entities/user/model/type
 import type { User } from '@/shared/types'
 import type { ApiResponse, LoginRequest } from './types'
 
+export interface UpdateContactInfoRequest {
+  email?: string | null
+  phone?: string | null
+}
+
+export interface PasswordResetSendRequest {
+  email: string
+}
+
+export interface PasswordResetVerifyRequest {
+  email: string
+  code: string
+}
+
+export interface PasswordResetConfirmRequest {
+  email: string
+  code: string
+  newPassword: string
+}
+
 /**
  * Authentication API endpoints
  */
@@ -69,6 +89,37 @@ export const authApi = {
     orgId: number
   }): Promise<ApiResponse<{ userId: number; status: string }>> {
     return api.post('/auth/register', userData)
+  },
+
+  async updateContactInfo(
+    data: UpdateContactInfoRequest
+  ): Promise<ApiResponse<User>> {
+    return api.put('/auth/users/me/contact', data)
+  },
+
+  async sendResetCode(
+    email: string
+  ): Promise<ApiResponse<{ message: string; expiresIn: number }>> {
+    return api.post('/auth/password-reset/send', { email } satisfies PasswordResetSendRequest)
+  },
+
+  async verifyResetCode(
+    email: string,
+    code: string
+  ): Promise<ApiResponse<{ valid: boolean; message: string }>> {
+    return api.post('/auth/password-reset/verify', { email, code } satisfies PasswordResetVerifyRequest)
+  },
+
+  async confirmResetPassword(
+    email: string,
+    code: string,
+    newPassword: string
+  ): Promise<ApiResponse<{ message: string }>> {
+    return api.post('/auth/password-reset/confirm', {
+      email,
+      code,
+      newPassword
+    } satisfies PasswordResetConfirmRequest)
   }
 }
 

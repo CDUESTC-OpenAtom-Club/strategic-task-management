@@ -1,0 +1,63 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  quality:
+    name: Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install test prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+
+      - name: Checkout backend OpenAPI baseline
+        run: |
+          rm -rf ../sism-backend
+          git clone --depth 1 https://github.com/CDUESTC-OpenAtom-Club/sism-backend.git ../sism-backend
+
+      - name: Verify architecture baseline
+        run: npm run arch:check
+
+      - name: Run type check
+        run: npm run type-check
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: /api/v1
+          VITE_USE_MOCK: false
+          VITE_ENABLE_DEVTOOLS: false
+          VITE_LOG_LEVEL: warn

@@ -113,6 +113,16 @@
 
         <div class="copyright">
           <p>© 2024-2025 战略发展部 版权所有</p>
+          <p>
+            <a
+              href="https://beian.miit.gov.cn/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="icp-link"
+            >
+              蜀ICP备2025177084号
+            </a>
+          </p>
         </div>
       </div>
     </div>
@@ -228,13 +238,13 @@ const errorMessage = ref('')
 const loginFormRef = ref<InstanceType<typeof LoginForm> | null>(null)
 
 // Handle login submit
-const handleSubmit = async (credentials: { username: string; password: string }) => {
+const handleSubmit = async (credentials: { account: string; password: string }) => {
   loading.value = true
   errorMessage.value = ''
 
   try {
     const result = await authStore.login({
-      username: credentials.username,
+      account: credentials.account,
       password: credentials.password
     })
 
@@ -258,7 +268,7 @@ const handleSubmit = async (credentials: { username: string; password: string })
 }
 
 const handleForgotPassword = () => {
-  ElMessage.info('请联系管理员重置密码')
+  void router.push('/forgot-password')
 }
 
 // Lifecycle
@@ -607,6 +617,16 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.8;
+}
+
+.copyright .icp-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.copyright .icp-link:hover {
+  color: var(--color-primary);
 }
 
 /* Responsive */

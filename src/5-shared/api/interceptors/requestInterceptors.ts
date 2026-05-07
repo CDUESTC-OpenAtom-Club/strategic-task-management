@@ -29,7 +29,15 @@ import { USE_MOCK } from '@/shared/config/api'
 
 // 需要签名验证的敏感操作路径
 const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
-const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/validate', '/auth/register']
+const PUBLIC_AUTH_PATHS = [
+  '/auth/login',
+  '/auth/refresh',
+  '/auth/validate',
+  '/auth/register',
+  '/auth/password-reset/send',
+  '/auth/password-reset/verify',
+  '/auth/password-reset/confirm'
+]
 
 /**
  * 请求拦截器配置

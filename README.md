@@ -288,7 +288,7 @@ Private - All Rights Reserved
 
 ## 相关项目
 
-- **后端项目**: [sism-backend](../sism-backend/)
+- **后端项目**: [sism-backend](https://github.com/CDUESTC-OpenAtom-Club/sism-backend)
 - **Vue 3 文档**: https://vuejs.org/
 - **Element Plus 文档**: https://element-plus.org/
 - **ECharts 文档**: https://echarts.apache.org/

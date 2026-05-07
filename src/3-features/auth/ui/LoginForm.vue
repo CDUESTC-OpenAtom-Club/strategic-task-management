@@ -6,14 +6,14 @@
     class="login-form"
     @keyup.enter="handleSubmit"
   >
-    <el-form-item prop="username">
+    <el-form-item prop="account">
       <div class="input-wrapper">
-        <label class="input-label" for="login-username">用户名</label>
+        <label class="input-label" for="login-account">账号</label>
         <el-input
-          id="login-username"
-          v-model="formData.username"
-          aria-label="用户名"
-          placeholder="请输入用户名"
+          id="login-account"
+          v-model="formData.account"
+          aria-label="账号"
+          placeholder="用户名 / 邮箱 / 手机号"
           size="large"
           :disabled="loading"
           @input="resetError"
@@ -46,7 +46,7 @@
     </el-form-item>
 
     <div class="form-options">
-      <el-checkbox v-model="formData.rememberMe" :disabled="loading"> 记住用户名 </el-checkbox>
+      <el-checkbox v-model="formData.rememberMe" :disabled="loading"> 记住账号 </el-checkbox>
       <el-button type="primary" link :disabled="loading" @click="$emit('forgot-password')">
         忘记密码？
       </el-button>
@@ -114,7 +114,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Emits
 interface Emits {
-  (e: 'submit', credentials: { username: string; password: string }): void
+  (e: 'submit', credentials: { account: string; password: string }): void
   (e: 'forgot-password'): void
 }
 
@@ -125,7 +125,7 @@ const formRef = ref<FormInstance>()
 
 // Form data
 const formData = reactive<LoginFormState>({
-  username: '',
+  account: '',
   password: '',
   rememberMe: false
 })
@@ -150,14 +150,9 @@ const buttonText = computed(() => {
 
 // Validation rules
 const rules: FormRules = {
-  username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    {
-      min: VALIDATION_RULES.USERNAME_MIN_LENGTH,
-      max: VALIDATION_RULES.USERNAME_MAX_LENGTH,
-      message: `用户名长度应在 ${VALIDATION_RULES.USERNAME_MIN_LENGTH}-${VALIDATION_RULES.USERNAME_MAX_LENGTH} 个字符之间`,
-      trigger: 'blur'
-    }
+  account: [
+    { required: true, message: '请输入账号', trigger: 'blur' },
+    { max: 100, message: '账号长度不能超过100个字符', trigger: 'blur' }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -191,13 +186,13 @@ const handleSubmit = async () => {
 
     // Emit submit event
     emit('submit', {
-      username: formData.username,
+      account: formData.account,
       password: formData.password
     })
 
     // Handle remember me
     if (formData.rememberMe) {
-      localStorage.setItem(TOKEN_KEYS.REMEMBERED_USERNAME, formData.username)
+      localStorage.setItem(TOKEN_KEYS.REMEMBERED_USERNAME, formData.account)
     } else {
       localStorage.removeItem(TOKEN_KEYS.REMEMBERED_USERNAME)
     }
@@ -239,7 +234,7 @@ const startAutoUnlock = () => {
 const initRememberedUsername = () => {
   const remembered = localStorage.getItem(TOKEN_KEYS.REMEMBERED_USERNAME)
   if (remembered) {
-    formData.username = remembered
+    formData.account = remembered
     formData.rememberMe = true
   }
 }

@@ -53,6 +53,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false, title: '登录 - 战略指标管理系统' }
   },
   {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/features/auth/ui/ForgotPassword.vue'),
+    meta: { requiresAuth: false, title: '找回密码 - 战略指标管理系统' }
+  },
+  {
     path: '/403',
     name: 'Forbidden',
     component: () => import('@/shared/ui/error/ForbiddenView.vue'),

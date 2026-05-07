@@ -132,7 +132,7 @@ export interface UserProfile extends User {
  * Data for user authentication
  */
 export interface LoginCredentials {
-  username: string
+  account: string
   password: string
 }
 

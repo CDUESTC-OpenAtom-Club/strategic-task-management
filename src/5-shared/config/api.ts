@@ -91,7 +91,11 @@ export const API_ENDPOINTS = {
     userInfo: '/auth/me',
     validate: '/auth/validate',
     register: '/auth/register',
-    refresh: '/auth/refresh'
+    refresh: '/auth/refresh',
+    forgotPasswordSend: '/auth/password-reset/send',
+    forgotPasswordVerify: '/auth/password-reset/verify',
+    forgotPasswordConfirm: '/auth/password-reset/confirm',
+    updateContact: '/auth/users/me/contact'
   },
 
   // Users

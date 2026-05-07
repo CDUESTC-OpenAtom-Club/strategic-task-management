@@ -85,7 +85,6 @@ const rules = {
     { min: 2, max: 20, message: '姓名长度应在2-20个字符之间', trigger: 'blur' }
   ],
   email: [
-    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     {
       validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
         if (value && !validateEmail(value)) {
@@ -166,11 +165,22 @@ const handleSubmit = async () => {
 
   try {
     await formRef.value.validate()
-
-    // TODO: Call API to update user info
+    await profileApi.updateProfile({
+      realName: form.name
+    })
+    await profileApi.updateContact({
+      email: form.email || null,
+      phone: form.phone || null
+    })
+    authStore.updateCurrentUser({
+      realName: form.name,
+      name: form.name,
+      email: form.email || null,
+      phone: form.phone || null
+    })
     ElMessage.success('个人信息更新成功')
   } catch (error) {
-    // Form validation failed
+    ElMessage.error('个人信息更新失败')
   }
 }
 

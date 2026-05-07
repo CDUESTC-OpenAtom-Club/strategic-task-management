@@ -17,6 +17,7 @@ import { usePlanStore } from '@/features/plan/model/store'
 import YearSelector from '@/shared/ui/form/YearSelector.vue'
 import CacheDebugPanel from '@/shared/ui/dev/CacheDebugPanel.vue'
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
+import { AppFooter } from '@/shared/ui/layout'
 import { useNavigation } from '@/shared/lib/layout'
 import { useAppLayout, useDepartmentSwitcher, useNotificationCenter } from './lib'
 import {
@@ -292,6 +293,8 @@ const handleDropdownCommand = async (command: string) => {
         />
       </div>
     </main>
+
+    <AppFooter />
 
     <CacheDebugPanel v-if="isDev" />
 

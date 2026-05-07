@@ -21,7 +21,7 @@ export interface ApiResponse<T> {
  * Login request
  */
 export interface LoginRequest {
-  username: string
+  account: string
   password: string
   captcha?: string
   captchaKey?: string

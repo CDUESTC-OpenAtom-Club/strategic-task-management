@@ -22,7 +22,7 @@ export interface AuthState {
  * Login form state
  */
 export interface LoginFormState {
-  username: string
+  account: string
   password: string
   rememberMe: boolean
   captcha?: string
