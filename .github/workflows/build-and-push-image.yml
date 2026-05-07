@@ -2,7 +2,7 @@ name: Build and Push Frontend Image
 
 on:
   push:
-    branches: [main, codex/docker-image-test]
+    branches: [main, baseline/frontend-verified-20260426]
   workflow_dispatch:
 
 permissions:
