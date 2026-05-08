@@ -101,6 +101,7 @@ jobs:
             VITE_USE_MOCK=false
             VITE_ENABLE_DEVTOOLS=false
             VITE_LOG_LEVEL=warn
+            VITE_APP_COMMIT_HASH=${{ github.sha }}
 
       - name: Trigger backend system deployment
         if: github.ref_name == 'baseline/frontend-verified-20260426'
