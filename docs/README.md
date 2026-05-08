@@ -22,6 +22,8 @@
   - 接口调用规范
 - `frontend-api-guide.md`
   - 前端接口接入说明
+- `../sism-backend/docs/architecture/main-branch-release-and-deploy-runbook.md`
+  - 系统级主线发布与自动部署手册，前端发版后派发后端部署时应以该文档为准
 - `architecture/`
   - 当前 ADR 与架构专题文档
 
