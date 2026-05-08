@@ -49,7 +49,7 @@ export const WORKFLOW_STATUS_CONFIG = {
     type: 'success'
   },
   [WorkflowStatus.PENDING_APPROVAL]: {
-    label: '待审批',
+    label: '审批中',
     type: 'warning'
   },
   [WorkflowStatus.REJECTED]: {

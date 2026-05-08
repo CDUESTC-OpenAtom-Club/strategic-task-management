@@ -21,7 +21,6 @@ export interface ApiResponse<T = any> {
 export interface UserDetail extends User {
   createdAt: string
   updatedAt: string
-  lastLoginAt?: string
   orgName?: string
 }
 

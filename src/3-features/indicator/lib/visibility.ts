@@ -1,5 +1,6 @@
 import type { StrategicIndicator } from '@/shared/types'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
+import { normalizePlanStatus } from '@/features/task/lib/planStatus'
 
 export const RECEIVED_PLAN_VISIBLE_STATUSES = ['DISTRIBUTED'] as const
 
@@ -11,7 +12,11 @@ export function canViewReceivedPlanContent(
     return true
   }
 
-  const normalizedPlanStatus = String(planStatus || '').trim().toUpperCase()
+  const normalizedPlanStatus =
+    normalizePlanStatus(planStatus)?.toUpperCase() ||
+    String(planStatus || '')
+      .trim()
+      .toUpperCase()
   return RECEIVED_PLAN_VISIBLE_STATUSES.includes(
     normalizedPlanStatus as (typeof RECEIVED_PLAN_VISIBLE_STATUSES)[number]
   )

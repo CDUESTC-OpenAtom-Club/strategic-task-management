@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * useNavigation - 导航管理 Composable
  *
@@ -10,7 +9,7 @@
  * @module composables/layout
  */
 
-import { computed } from 'vue'
+import { computed, type ComputedRef } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { UserRole } from '@/shared/types'
 import type { Component } from 'vue'
@@ -41,7 +40,7 @@ const ROLE_BASED_TABS: Record<UserRole, TabConfig[]> = {
   ]
 }
 
-export function useNavigation(viewingRole: computed<UserRole | null>) {
+export function useNavigation(viewingRole: ComputedRef<UserRole | null>) {
   const router = useRouter()
   const route = useRoute()
 
@@ -62,6 +61,7 @@ export function useNavigation(viewingRole: computed<UserRole | null>) {
     // 路径到标签ID的映射（不依赖 viewingRole 状态）
     const pathToTabId: Record<string, string> = {
       '/dashboard': 'dashboard',
+      '/workflow-tasks': 'workflowTasks',
       '/strategic-tasks': 'strategic',
       '/indicators': 'indicators',
       '/distribution': 'distribution',

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Request Interceptors - 请求拦截器模块
  *
@@ -30,7 +29,15 @@ import { USE_MOCK } from '@/shared/config/api'
 
 // 需要签名验证的敏感操作路径
 const SENSITIVE_PATHS = ['/auth/password', '/indicators', '/tasks', '/milestones']
-const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/refresh', '/auth/validate', '/auth/register']
+const PUBLIC_AUTH_PATHS = [
+  '/auth/login',
+  '/auth/refresh',
+  '/auth/validate',
+  '/auth/register',
+  '/auth/password-reset/send',
+  '/auth/password-reset/verify',
+  '/auth/password-reset/confirm'
+]
 
 /**
  * 请求拦截器配置
@@ -127,13 +134,13 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     // Debug logging for token checks (development only)
     if (import.meta.env.DEV) {
       // eslint-disable-next-line no-console
-        console.log('[RequestInterceptor] Token检查:', {
-          url: config.url,
-          hasStoreToken: false,
-          hasLocalToken: !!token,
-          willUseToken: !!token,
-          tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
-        })
+      console.log('[RequestInterceptor] Token检查:', {
+        url: config.url,
+        hasStoreToken: false,
+        hasLocalToken: !!token,
+        willUseToken: !!token,
+        tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
+      })
     }
 
     logger.debug('🔍 [API Auth] Token检查:', {

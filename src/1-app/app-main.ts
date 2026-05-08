@@ -63,13 +63,16 @@ app.mount('#app')
  * Print application version information
  */
 const version = import.meta.env['VITE_APP_VERSION'] || '1.0.1'
+const commitHash = import.meta.env['VITE_APP_COMMIT_HASH'] || 'unknown'
 const buildTime = new Date().toISOString()
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV || import.meta.env.PROD) {
   // eslint-disable-next-line no-console
   console.log(
     `%c🚀 战略指标管理系统 SISM v${version}`,
     'color: #409EFF; font-size: 16px; font-weight: bold'
   )
+  // eslint-disable-next-line no-console
+  console.log(`%c🔖 Commit: ${commitHash}`, 'color: #909399; font-size: 12px')
   // eslint-disable-next-line no-console
   console.log(`%c📅 构建时间: ${buildTime}`, 'color: #67C23A; font-size: 12px')
   // eslint-disable-next-line no-console
@@ -98,8 +101,13 @@ if (import.meta.env.DEV) {
 
 /**
  * Auto health check
+ * Delay diagnostics until the initial route/auth state settles.
  */
-autoHealthCheck()
+void router.isReady().then(() => {
+  window.setTimeout(() => {
+    autoHealthCheck()
+  }, 3000)
+})
 
 /**
  * Export app instance for testing purposes

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Shared API - Fixtures
  *

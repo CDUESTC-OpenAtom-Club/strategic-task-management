@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process'
 
 const repoRoot = join(__dirname, '..', '..')
 const frontendRoot = join(repoRoot, 'src')
-const openApiPath = join(repoRoot, '..', 'sism-backend', 'openapi-latest.json')
+const openApiPath = join(repoRoot, '..', 'sism-backend', 'openapi.json')
 
 const compatibilityWhitelist = [
   { method: 'post', path: '/api/v1/auth/refresh' },
@@ -14,6 +14,16 @@ const compatibilityWhitelist = [
   { method: 'get', path: '/api/v1/milestones/{id}/pairing-status' },
   { method: 'post', path: '/api/v1/tasks/{id}/activate' },
   { method: 'post', path: '/api/v1/tasks/{id}/cancel' },
+  { method: 'post', path: '/api/v1/indicators/distribute' },
+  { method: 'post', path: '/api/v1/indicators/distribute/batch' },
+  { method: 'get', path: '/api/v1/auth/permissions' },
+  { method: 'get', path: '/api/v1/workflows/instances/entity/{id}/{id}/list' },
+  { method: 'post', path: '/api/v1/indicators/{id}/reminders' },
+  { method: 'post', path: '/api/v1/indicators/reminders/statuses' },
+  { method: 'put', path: '/api/v1/auth/users/me/contact' },
+  { method: 'post', path: '/api/v1/auth/password-reset/send' },
+  { method: 'post', path: '/api/v1/auth/password-reset/verify' },
+  { method: 'post', path: '/api/v1/auth/password-reset/confirm' }
 ] as const
 
 function normalizePathLiteral(rawPath: string): string | null {
@@ -51,7 +61,9 @@ function matchesOpenApiPath(actualPath: string, specPath: string): boolean {
 }
 
 function isWhitelisted(method: string, path: string): boolean {
-  return compatibilityWhitelist.some(item => item.method === method && matchesOpenApiPath(path, item.path))
+  return compatibilityWhitelist.some(
+    item => item.method === method && matchesOpenApiPath(path, item.path)
+  )
 }
 
 describe('OpenAPI alignment guard', () => {

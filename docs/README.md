@@ -25,6 +25,17 @@
 - `architecture/`
   - 当前 ADR 与架构专题文档
 
+## 架构专题文档
+
+- `architecture/src-directory-governance-plan.md`
+  - `src` 目录治理方案与边界定义
+- `architecture/src-directory-governance-todo.md`
+  - 目录治理执行 TODO 与 canonical path 决策
+- `architecture/frontend-architecture-remediation-backlog.md`
+  - 前端架构审查整改执行清单，包含优先级、负责人、工时、验收标准
+- `architecture/milestone-intelligence-adr.md`
+  - 里程碑智能能力相关 ADR
+
 ## 归档目录
 
 - `archive/2026-03-delivery-history/`
@@ -55,3 +66,6 @@
 3. `backup-migration-strategy.md`
 4. `testing-strategy.md`
 5. `implementation-guide.md`
+6. `architecture/src-directory-governance-plan.md`
+7. `architecture/src-directory-governance-todo.md`
+8. `architecture/frontend-architecture-remediation-backlog.md`

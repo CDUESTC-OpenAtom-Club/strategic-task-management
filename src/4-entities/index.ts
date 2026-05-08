@@ -1,11 +1,10 @@
-// @ts-nocheck
 /**
  * Entities Layer Exports
- * 
+ *
  * The entities layer contains domain models that represent core business entities.
  * These are shared across features and represent the fundamental building blocks
  * of the application domain.
- * 
+ *
  * In FSD architecture, entities:
  * - Represent business domain models
  * - Are shared across multiple features

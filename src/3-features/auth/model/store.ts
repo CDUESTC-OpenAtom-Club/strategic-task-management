@@ -11,7 +11,7 @@ import { apiClient as api } from '@/shared/api/client'
 import type { User, UserRole } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/shared/lib/utils/tokenManager'
-import { parseLoginResponse, mapBackendUser } from '@/shared/lib/utils/authHelpers'
+import { parseLoginResponse, mapBackendUser, isKnownUserRole } from '@/shared/lib/utils/authHelpers'
 import { getUserPermissions } from '@/features/auth/api/query'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
@@ -22,6 +22,8 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(tokenManager.getAccessToken())
   const loading = ref(false)
   const sessionRestoring = ref(false)
+  const authInitialized = ref(false)
+  let initializePromise: Promise<void> | null = null
 
   // 视角切换状态（用于战略发展部查看其他部门视角）
   const viewingAsRole = ref<UserRole | null>(null)
@@ -50,11 +52,9 @@ export const useAuthStore = defineStore('auth', () => {
       return []
     }
 
-    return [...new Set(
-      value
-        .map(item => (typeof item === 'string' ? item.trim() : ''))
-        .filter(Boolean)
-    )]
+    return [
+      ...new Set(value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean))
+    ]
   }
 
   const fetchPermissionCodes = async (fallbackPermissions?: unknown): Promise<string[]> => {
@@ -82,8 +82,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   const restorePersistedUser = (savedUser: string): User | null => {
     try {
-      const parsedUser = JSON.parse(savedUser) as User & { permissions?: unknown }
+      const parsedUser = JSON.parse(savedUser) as User & {
+        permissions?: unknown
+        role?: unknown
+      }
       if (!parsedUser) {
+        return null
+      }
+
+      if (!isKnownUserRole(parsedUser.role)) {
+        logger.warn('[Auth] 本地缓存用户缺少有效角色，忽略缓存用户:', parsedUser.role)
         return null
       }
 
@@ -143,6 +151,10 @@ export const useAuthStore = defineStore('auth', () => {
   ): Promise<Record<string, unknown>> => {
     const orgId = userData.orgId
 
+    if (!token.value || !tokenManager.hasValidToken()) {
+      return userData
+    }
+
     const hasOrgMetadata = Boolean(
       String(userData.orgName ?? userData.department ?? '').trim() &&
       String(userData.orgType ?? userData.role ?? '').trim()
@@ -153,31 +165,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      if (token.value && tokenManager.hasValidToken()) {
-        const response = await api.get('/organizations')
+      const response = await api.get('/organizations')
 
-        const organizations =
-          response &&
-          typeof response === 'object' &&
-          'data' in response &&
-          Array.isArray(response.data)
-            ? (response.data as Array<Record<string, unknown>>)
-            : []
+      const organizations =
+        response &&
+        typeof response === 'object' &&
+        'data' in response &&
+        Array.isArray(response.data)
+          ? (response.data as Array<Record<string, unknown>>)
+          : []
 
-        const matchedOrg = organizations.find(org => {
-          const candidateId = org.id ?? org.orgId
-          return String(candidateId) === String(orgId)
-        })
+      const matchedOrg = organizations.find(org => {
+        const candidateId = org.id ?? org.orgId
+        return String(candidateId) === String(orgId)
+      })
 
-        if (matchedOrg) {
-          return {
-            ...userData,
-            orgType: (matchedOrg.orgType as string | undefined) || userData.orgType,
-            orgName:
-              (matchedOrg.orgName as string | undefined) ||
-              (matchedOrg.name as string | undefined) ||
-              userData.orgName
-          }
+      if (matchedOrg) {
+        return {
+          ...userData,
+          orgType: (matchedOrg.orgType as string | undefined) || userData.orgType,
+          orgName:
+            (matchedOrg.orgName as string | undefined) ||
+            (matchedOrg.name as string | undefined) ||
+            userData.orgName
         }
       }
 
@@ -185,6 +195,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (savedUser) {
         const parsedUser = JSON.parse(savedUser) as {
           department?: string
+          orgType?: string | null
           role?: string
           orgId?: string | number
         }
@@ -197,7 +208,7 @@ export const useAuthStore = defineStore('auth', () => {
             ...userData,
             orgName: parsedUser.department || userData.orgName,
             department: parsedUser.department || userData.department,
-            orgType: parsedUser.role || userData.orgType,
+            orgType: parsedUser.orgType || userData.orgType,
             role: parsedUser.role || userData.role
           }
         }
@@ -205,8 +216,8 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       const status = Number(
         (error as { code?: number; response?: { status?: number } }).code ??
-        (error as { response?: { status?: number } }).response?.status ??
-        NaN
+          (error as { response?: { status?: number } }).response?.status ??
+          NaN
       )
 
       if (status === 401 || status === 403) {
@@ -221,9 +232,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // ============ Actions ============
-  const login = async (credentials: { username: string; password: string }) => {
+  const login = async (credentials: { account: string; password: string }) => {
     loading.value = true
-    logger.debug('🔐 [Auth] 开始登?', credentials.username)
+    logger.debug('🔐 [Auth] 开始登录', credentials.account)
 
     try {
       const response = await api.post('/auth/login', credentials)
@@ -247,11 +258,24 @@ export const useAuthStore = defineStore('auth', () => {
         const enrichedUserData = await enrichUserWithOrganization(userData)
         const userWithPermissions = await attachPermissionCodes(enrichedUserData)
         const mappedUser = mapBackendUser(userWithPermissions)
+        if (!mappedUser) {
+          logger.warn('[Auth] 登录响应未能解析出有效前端角色，终止登录流程')
+          tokenManager.clearAccessToken()
+          clearLegacyAccessTokenStorage()
+          token.value = null
+          localStorage.removeItem('refreshToken')
+          persistUser(null)
+          return {
+            success: false,
+            error: '登录失败：未识别的用户角色，请联系管理员确认账号权限'
+          }
+        }
         logger.debug('?[Auth] 映射后的用户:', mappedUser)
 
         user.value = mappedUser
         persistUser(mappedUser)
         invalidateQueries(['auth.user'])
+        authInitialized.value = true
 
         logger.debug('?[Auth] 登录状态已保存')
 
@@ -294,7 +318,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const logout = () => {
+  const logout = (options: { redirect?: boolean } = {}) => {
+    const shouldRedirect = options.redirect !== false
     user.value = null
     token.value = null
     tokenManager.clearAccessToken()
@@ -302,10 +327,11 @@ export const useAuthStore = defineStore('auth', () => {
     clearLegacyAccessTokenStorage()
     localStorage.removeItem('refreshToken')
     invalidateQueries(['auth.user'])
+    authInitialized.value = true
 
     logger.debug('[Auth] 用户已登出，所有凭证已清除')
 
-    if (!window.location.pathname.includes('/login')) {
+    if (shouldRedirect && !window.location.pathname.includes('/login')) {
       window.location.href = '/login'
     }
   }
@@ -338,14 +364,19 @@ export const useAuthStore = defineStore('auth', () => {
         const enrichedUserData = await enrichUserWithOrganization(authResponse.data)
         const userWithPermissions = await attachPermissionCodes(enrichedUserData)
         const mappedUser = mapBackendUser(userWithPermissions)
+        if (!mappedUser) {
+          logger.warn('[Auth] 当前会话用户缺少有效角色，清除登录状态')
+          logout({ redirect: false })
+          return
+        }
         user.value = mappedUser
         persistUser(mappedUser)
       } else {
-        logout()
+        logout({ redirect: false })
       }
     } catch (error) {
       logger.error('Fetch user error:', error)
-      logout()
+      logout({ redirect: false })
     }
   }
 
@@ -388,61 +419,96 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const initializeAuth = async () => {
-    const savedUser = localStorage.getItem('currentUser')
-    const memoryToken = tokenManager.getAccessToken()
-    clearLegacyAccessTokenStorage()
+    if (authInitialized.value) {
+      return
+    }
 
-    if (memoryToken && savedUser) {
-      const parsedUser = restorePersistedUser(savedUser)
-      if (parsedUser && parsedUser.role && tokenManager.hasValidToken()) {
+    if (initializePromise) {
+      await initializePromise
+      return
+    }
+
+    initializePromise = (async () => {
+      const savedUser = localStorage.getItem('currentUser')
+      const memoryToken = tokenManager.getAccessToken()
+      clearLegacyAccessTokenStorage()
+
+      if (memoryToken && savedUser) {
+        const parsedUser = restorePersistedUser(savedUser)
+        if (parsedUser && tokenManager.hasValidToken()) {
           user.value = parsedUser
           token.value = memoryToken
           localStorage.setItem('user', JSON.stringify(parsedUser))
           logger.debug('[Auth] 从内存恢复会?', parsedUser.name, parsedUser.role)
+          if (!String(parsedUser.orgType ?? '').trim()) {
+            logger.debug('[Auth] 本地缓存缺少 orgType，主动刷新当前用户')
+            await fetchUser()
+          }
           void refreshCurrentUserPermissions()
+          authInitialized.value = true
           return
-      }
-
-      if (!tokenManager.hasValidToken()) {
-        logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
-        tokenManager.clearAccessToken()
-      }
-    }
-
-    if (savedUser) {
-      sessionRestoring.value = true
-      logger.debug('[Auth] 尝试通过 Refresh Token 恢复会话...')
-
-      try {
-        const newToken = await tokenManager.refreshAccessToken()
-        const parsedUser = restorePersistedUser(savedUser)
-        if (parsedUser && parsedUser.role) {
-          user.value = parsedUser
-          token.value = newToken
-          persistUser(parsedUser)
-          logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
-          void refreshCurrentUserPermissions()
-        } else {
-          logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
-          logout()
         }
-      } catch (error) {
-        if (error instanceof TokenRefreshError) {
-          logger.warn('[Auth] Refresh Token 无效，需要重新登录', error.message)
-        } else {
-          logger.error('[Auth] 会话恢复失败:', error)
-        }
-        logout()
-      } finally {
-        sessionRestoring.value = false
-      }
-    }
 
-    clearLegacyAccessTokenStorage()
+        if (!parsedUser) {
+          logger.warn('[Auth] 本地缓存用户角色无效，清除登录状态')
+          logout({ redirect: false })
+          authInitialized.value = true
+          return
+        }
+
+        if (!tokenManager.hasValidToken()) {
+          logger.warn('[Auth] 检测到过期 access token，改为走 refresh 恢复流程')
+          tokenManager.clearAccessToken()
+          token.value = null
+        }
+      }
+
+      if (savedUser) {
+        sessionRestoring.value = true
+        logger.debug('[Auth] 尝试通过 Refresh Token 恢复会话...')
+
+        try {
+          const newToken = await tokenManager.refreshAccessToken()
+          const parsedUser = restorePersistedUser(savedUser)
+          if (parsedUser) {
+            user.value = parsedUser
+            token.value = newToken
+            persistUser(parsedUser)
+            logger.debug('[Auth] 会话恢复成功:', parsedUser.name)
+            if (!String(parsedUser.orgType ?? '').trim()) {
+              logger.debug('[Auth] 恢复会话后缺少 orgType，主动刷新当前用户')
+              await fetchUser()
+            }
+            void refreshCurrentUserPermissions()
+          } else {
+            logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
+            logout({ redirect: false })
+          }
+        } catch (error) {
+          if (error instanceof TokenRefreshError) {
+            logger.warn('[Auth] Refresh Token 无效，需要重新登录', error.message)
+          } else {
+            logger.error('[Auth] 会话恢复失败:', error)
+          }
+          logout({ redirect: false })
+        } finally {
+          sessionRestoring.value = false
+        }
+      }
+
+      clearLegacyAccessTokenStorage()
+      authInitialized.value = true
+    })()
+
+    try {
+      await initializePromise
+    } finally {
+      initializePromise = null
+    }
   }
 
   // 立即初始?
-  initializeAuth()
+  void initializeAuth()
 
   // 切换视角
   const setViewingAs = (role: UserRole | null, department: string | null) => {
@@ -455,12 +521,40 @@ export const useAuthStore = defineStore('auth', () => {
     viewingAsDepartment.value = null
   }
 
+  /**
+   * Update user avatar
+   * 更新用户头像URL
+   */
+  const updateUserAvatar = (avatarUrl: string) => {
+    if (user.value) {
+      user.value = {
+        ...user.value,
+        avatar: avatarUrl,
+        avatarUrl: avatarUrl
+      }
+      persistUser(user.value)
+      logger.debug('[Auth] 用户头像已更新:', avatarUrl)
+    }
+  }
+
+  const updateCurrentUser = (partial: Partial<User>) => {
+    if (user.value) {
+      user.value = {
+        ...user.value,
+        ...partial
+      }
+      persistUser(user.value)
+      logger.debug('[Auth] 当前用户信息已更新:', partial)
+    }
+  }
+
   return {
     // State
     user,
     token,
     loading,
     sessionRestoring,
+    authInitialized,
     viewingAsRole,
     viewingAsDepartment,
 
@@ -476,8 +570,11 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     logout,
     fetchUser,
+    initializeAuth,
     hasPermission,
     setViewingAs,
-    resetViewingAs
+    resetViewingAs,
+    updateUserAvatar,
+    updateCurrentUser
   }
 })

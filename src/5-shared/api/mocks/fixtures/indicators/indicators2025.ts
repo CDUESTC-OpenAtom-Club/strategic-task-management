@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 2025年指标数据
  * 历史数据，状态为 archived（已归档）
@@ -925,5 +924,5 @@ export const indicators2025: StrategicIndicator[] = [
     parentIndicatorId: '2025-301',
     year: 2025,
     statusAudit: []
-  },
+  }
 ]

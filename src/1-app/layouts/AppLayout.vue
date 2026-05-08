@@ -16,9 +16,14 @@ import { ApprovalProgressDrawer, useApprovalCenter } from '@/features/approval'
 import { usePlanStore } from '@/features/plan/model/store'
 import YearSelector from '@/shared/ui/form/YearSelector.vue'
 import CacheDebugPanel from '@/shared/ui/dev/CacheDebugPanel.vue'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
+import { AppFooter } from '@/shared/ui/layout'
 import { useNavigation } from '@/shared/lib/layout'
 import { useAppLayout, useDepartmentSwitcher, useNotificationCenter } from './lib'
-import { initApprovalNotifications } from '@/features/approval/lib/approvalNotifications'
+import {
+  initApprovalNotifications,
+  destroyApprovalNotifications
+} from '@/features/approval/lib/approvalNotifications'
 import { disconnectWebSocket } from '@/shared/api/websocket'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 
@@ -28,7 +33,8 @@ const router = useRouter()
 const isDev = import.meta.env.DEV
 
 // 使用 Layout Composables
-const { currentUser, isStrategicDept, strategicDeptName, handleLogout } = useAppLayout()
+const { currentUser, isStrategicDept, strategicDeptName, canAccessAdminConsole, handleLogout } =
+  useAppLayout()
 
 const { viewingDept, viewingRole, viewingDeptName, deptOptions } = useDepartmentSwitcher()
 const planStore = usePlanStore()
@@ -37,12 +43,34 @@ const timeContext = useTimeContextStore()
 const { tabs, activeTab, handleTabClick } = useNavigation(viewingRole)
 
 const { unreadCount, handleNotificationClick, Bell } = useNotificationCenter()
-const { approvalCenterVisible, closeApprovalCenter } = useApprovalCenter()
+const { approvalCenterVisible, approvalCenterContext, closeApprovalCenter } = useApprovalCenter()
+
+const approvalCenterPlanId = computed(() => {
+  if (approvalCenterContext.value?.workflowEntityType === 'PLAN') {
+    const entityId = Number(approvalCenterContext.value.workflowEntityId ?? NaN)
+    return Number.isFinite(entityId) && entityId > 0 ? entityId : null
+  }
+
+  if (
+    approvalCenterContext.value?.workflowEntityType === 'PLAN_REPORT' &&
+    approvalCenterContext.value?.secondaryWorkflowEntityType === 'PLAN'
+  ) {
+    const secondaryEntityId = Number(approvalCenterContext.value.secondaryWorkflowEntityId ?? NaN)
+    return Number.isFinite(secondaryEntityId) && secondaryEntityId > 0 ? secondaryEntityId : null
+  }
+
+  return null
+})
 
 const approvalCenterPlan = computed(() => {
+  if (approvalCenterPlanId.value) {
+    return planStore.getPlanById(approvalCenterPlanId.value) || null
+  }
+
   if (!viewingDept.value) {
     return null
   }
+
   return planStore.getPlanByTargetOrgAndYear(viewingDept.value, timeContext.currentYear) || null
 })
 
@@ -57,6 +85,7 @@ onMounted(() => {
  * Clean up WebSocket connection on unmount
  */
 onUnmounted(() => {
+  destroyApprovalNotifications()
   disconnectWebSocket()
 })
 
@@ -76,6 +105,11 @@ watch(viewingDept, (newDept, oldDept) => {
 
 watch(approvalCenterVisible, isVisible => {
   if (!isVisible) {
+    return
+  }
+
+  if (approvalCenterPlanId.value) {
+    void planStore.loadPlanDetails(approvalCenterPlanId.value, { force: true, background: true })
     return
   }
 
@@ -171,19 +205,37 @@ const handleDropdownCommand = async (command: string) => {
           </div>
 
           <!-- Notification badge -->
-          <el-badge :value="unreadCount" :max="99" class="notification-badge">
-            <el-button :icon="Bell" circle @click="handleNotificationClick" />
+          <el-badge
+            :value="unreadCount"
+            :max="99"
+            :hidden="unreadCount <= 0"
+            class="notification-badge"
+          >
+            <el-button
+              :icon="Bell"
+              circle
+              :aria-label="
+                unreadCount > 0 ? `消息中心，当前有 ${unreadCount} 条未处理消息` : '消息中心'
+              "
+              @click="handleNotificationClick"
+            />
           </el-badge>
 
           <!-- User dropdown menu -->
           <el-dropdown @command="handleDropdownCommand">
-            <el-avatar class="user-avatar" :size="32">
-              {{ currentUser?.name?.charAt(0)?.toUpperCase() || 'U' }}
-            </el-avatar>
+            <AppAvatar
+              class="user-avatar"
+              :size="32"
+              :src="
+                (currentUser as { avatar?: string; avatarUrl?: string } | null)?.avatar ||
+                (currentUser as { avatar?: string; avatarUrl?: string } | null)?.avatarUrl
+              "
+              :name="currentUser?.name || currentUser?.realName || currentUser?.username || '用户'"
+            />
             <template #dropdown>
               <el-dropdown-menu>
                 <!-- Admin exclusive menu -->
-                <el-dropdown-item v-if="isStrategicDept" command="console">
+                <el-dropdown-item v-if="canAccessAdminConsole" command="console">
                   <el-icon><Monitor /></el-icon>
                   控制台
                 </el-dropdown-item>
@@ -194,7 +246,7 @@ const handleDropdownCommand = async (command: string) => {
                   修改密码
                 </el-dropdown-item>
 
-                <el-dropdown-item command="logout" :divided="isStrategicDept">
+                <el-dropdown-item command="logout" :divided="canAccessAdminConsole">
                   <el-icon><SwitchButton /></el-icon>
                   退出登录
                 </el-dropdown-item>
@@ -242,17 +294,24 @@ const handleDropdownCommand = async (command: string) => {
       </div>
     </main>
 
+    <AppFooter />
+
     <CacheDebugPanel v-if="isDev" />
 
     <ApprovalProgressDrawer
       :model-value="approvalCenterVisible"
       :plan="approvalCenterPlan"
-      :department-name="viewingDept"
-      :plan-name="approvalCenterPlan?.name || viewingDeptName"
+      :department-name="approvalCenterContext?.departmentName || viewingDept"
+      :plan-name="approvalCenterContext?.planName || approvalCenterPlan?.name || viewingDeptName"
       :show-plan-approvals="true"
       :show-approval-section="true"
+      :workflow-entity-type="approvalCenterContext?.workflowEntityType || 'PLAN'"
+      :workflow-entity-id="approvalCenterContext?.workflowEntityId"
+      :secondary-workflow-entity-type="approvalCenterContext?.secondaryWorkflowEntityType"
+      :secondary-workflow-entity-id="approvalCenterContext?.secondaryWorkflowEntityId"
+      :route-target="approvalCenterContext?.routeTarget"
       approval-type="submission"
-      @update:model-value="(value) => !value && closeApprovalCenter()"
+      @update:model-value="value => !value && closeApprovalCenter()"
       @close="closeApprovalCenter"
     />
   </div>
@@ -431,6 +490,7 @@ const handleDropdownCommand = async (command: string) => {
 
 .notification-badge :deep(.el-badge__content) {
   background: #dc2626;
+  pointer-events: none;
 }
 
 .user-avatar {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * useDashboardState - Dashboard 状态管理 Composable
  *
@@ -20,10 +19,10 @@ export type IndicatorStatus = 'normal' | 'ahead' | 'warning' | 'delayed'
 
 /** 状态颜色配置 */
 export const STATUS_COLORS = {
-  ahead: '#67C23A',   // 绿色 - 超前完成
-  normal: '#409EFF',  // 蓝色 - 正常
+  ahead: '#67C23A', // 绿色 - 超前完成
+  normal: '#409EFF', // 蓝色 - 正常
   warning: '#E6A23C', // 黄色 - 预警
-  delayed: '#F56C6C'  // 红色 - 延期
+  delayed: '#F56C6C' // 红色 - 延期
 }
 
 export interface DashboardStateOptions {
@@ -72,14 +71,17 @@ export function useDashboardState(options: DashboardStateOptions = {}) {
 
   // 帮助文本
   const helpTexts = {
-    totalScore: '总得分 = 基础性指标得分 + 发展性指标得分，满分120分。基础性指标满分100分，发展性指标满分20分。',
+    totalScore:
+      '总得分 = 基础性指标得分 + 发展性指标得分，满分120分。基础性指标满分100分，发展性指标满分20分。',
     basicScore: '基础性指标是必须完成的核心指标，根据各指标完成进度加权计算得分，满分100分。',
     developmentScore: '发展性指标是鼓励性指标，完成后可获得额外加分，满分20分。',
     warningCount: '预警任务指进度低于50%的指标数量，需要重点关注和推进。',
     scoreComposition: '展示基础性指标和发展性指标的得分占比，帮助了解整体得分构成。',
-    alertDistribution: '按预警级别统计指标数量：严重（进度<30%）、中度（30%-60%）、正常（≥60%）。点击可筛选对应级别的指标。',
+    alertDistribution:
+      '按预警级别统计指标数量：严重（进度<30%）、中度（30%-60%）、正常（≥60%）。点击可筛选对应级别的指标。',
     completionRate: '完成率 = 已完成指标数 / 总指标数 × 100%，反映整体任务完成情况。',
-    departmentProgress: '展示各部门的指标完成进度，进度条颜色表示状态：绿色（≥80%）、黄色（50%-80%）、红色（<50%）。',
+    departmentProgress:
+      '展示各部门的指标完成进度，进度条颜色表示状态：绿色（≥80%）、黄色（50%-80%）、红色（<50%）。',
     benchmark: '展示各部门执行进度与基准线对比，红色表示低于基准线，蓝色表示达标。',
     radar: '多维度分析各项核心指标的完成情况，帮助识别短板领域。',
     delayedTasks: '展示当前进度滞后、且需优先处理的任务清单，支持一键发送催办提醒。',

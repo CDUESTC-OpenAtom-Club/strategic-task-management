@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 数据验证组合式函数
  *
@@ -788,3 +787,18 @@ export type {
   ArrayValidationRule,
   EnumValidationRule
 } from '@/shared/config/validationRules'
+
+const defaultValidator = useDataValidator()
+
+export const validateIndicator = defaultValidator.validateIndicator
+export const validateMilestone = defaultValidator.validateMilestone
+export const validateUser = defaultValidator.validateUser
+export const validateStatusAuditEntry = defaultValidator.validateStatusAuditEntry
+export const validateDateFormat = defaultValidator.validateDateFormat
+export const validateProgress = defaultValidator.validateProgress
+export const validateEnum = defaultValidator.validateEnum
+export const safeGet = defaultValidator.safeGet
+export const validateArray = defaultValidator.validateArray
+export const fillDefaults = defaultValidator.fillDefaults
+export const createEmptyResult = defaultValidator.createEmptyResult
+export const mergeResults = defaultValidator.mergeResults

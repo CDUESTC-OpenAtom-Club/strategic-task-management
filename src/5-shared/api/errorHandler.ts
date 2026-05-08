@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 简化的错误处理器
  *
@@ -8,6 +7,11 @@
 
 import type { AxiosError } from 'axios'
 
+interface RequestIdHeaderCarrier {
+  headers?: Record<string, string>
+  _requestId?: string
+}
+
 interface NormalizedErrorLike {
   message?: string
   code?: string | number
@@ -15,6 +19,11 @@ interface NormalizedErrorLike {
   retryable?: boolean
   requestId?: string
   severity?: 'low' | 'medium' | 'high'
+}
+
+interface AxiosErrorResponseData {
+  message?: unknown
+  code?: string | number
 }
 
 /**
@@ -26,7 +35,7 @@ export function generateRequestId(): string {
   }
 
   // 降级方案
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0
     const v = c === 'x' ? r : (r & 0x3) | 0x8
     return v.toString(16)
@@ -36,7 +45,7 @@ export function generateRequestId(): string {
 /**
  * 为请求配置添加请求ID
  */
-export function addRequestId(config: Record<string, unknown>): void {
+export function addRequestId(config: RequestIdHeaderCarrier): void {
   const requestId = generateRequestId()
   config.headers = config.headers || {}
   config.headers['X-Request-ID'] = requestId
@@ -63,7 +72,7 @@ export function stringifyMessage(value: unknown): string {
 export function formatErrorMessage(error: unknown): string {
   // Axios 错误
   if (isAxiosError(error)) {
-    const serverMessage = error.response?.data?.message
+    const serverMessage = (error.response?.data as AxiosErrorResponseData | undefined)?.message
     if (serverMessage) {
       return stringifyMessage(serverMessage)
     }
@@ -176,12 +185,19 @@ function isNormalizedErrorLike(error: unknown): error is NormalizedErrorLike {
 /**
  * 转换错误为扩展错误信息 (用于响应拦截器)
  */
-export function transformError(error: unknown): { message: string; code?: string; status?: number } {
+export function transformError(error: unknown): {
+  message: string
+  code?: string
+  status?: number
+  details?: unknown
+} {
   if (isAxiosError(error)) {
+    const responseCode = (error.response?.data as AxiosErrorResponseData | undefined)?.code
     return {
       message: formatErrorMessage(error),
-      code: error.code,
-      status: error.response?.status
+      code: typeof responseCode === 'string' ? responseCode : error.code,
+      status: error.response?.status,
+      details: error.response?.data
     }
   }
 
@@ -189,7 +205,8 @@ export function transformError(error: unknown): { message: string; code?: string
     return {
       message: typeof error.message === 'string' ? error.message : '未知错误',
       code: typeof error.code === 'string' ? error.code : undefined,
-      status: typeof error.status === 'number' ? error.status : undefined
+      status: typeof error.status === 'number' ? error.status : undefined,
+      details: 'details' in error ? error.details : undefined
     }
   }
 
@@ -212,27 +229,41 @@ export function toExtendedError(error: unknown): {
   message: string
   code?: string | number
   status?: number
+  details?: unknown
+  requestId?: string
+  severity: 'low' | 'medium' | 'high'
+  retryable?: boolean
+}
+export function toExtendedError(
+  error: unknown,
+  originalError?: unknown
+): {
+  message: string
+  code?: string | number
+  status?: number
+  details?: unknown
   requestId?: string
   severity: 'low' | 'medium' | 'high'
   retryable?: boolean
 } {
   const normalized = isNormalizedErrorLike(error) ? error : undefined
-  const severity =
-    normalized?.severity || getErrorSeverity(error)
+  const severity = normalized?.severity || getErrorSeverity(originalError ?? error)
   const message =
     typeof normalized?.message === 'string' && normalized.message
       ? normalized.message
-      : formatErrorMessage(error)
-  const requestId =
-    normalized?.requestId || crypto.randomUUID?.() || Math.random().toString(36)
+      : formatErrorMessage(originalError ?? error)
+  const requestId = normalized?.requestId || crypto.randomUUID?.() || Math.random().toString(36)
 
   return {
     message,
     code: normalized?.code,
     status: normalized?.status,
+    details: normalized && 'details' in normalized ? normalized.details : undefined,
     severity,
     requestId,
     retryable:
-      typeof normalized?.retryable === 'boolean' ? normalized.retryable : isRetryableError(error)
+      typeof normalized?.retryable === 'boolean'
+        ? normalized.retryable
+        : isRetryableError(originalError ?? error)
   }
 }

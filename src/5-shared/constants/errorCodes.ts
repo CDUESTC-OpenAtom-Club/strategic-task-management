@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * 错误码常量定义
- * 
+ *
  * 定义系统中所有错误码及其描述和解决方案
- * 
+ *
  * **Validates: Requirements 3.1.4**
  */
 
@@ -37,7 +36,7 @@ export const AUTH_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: 'Access Token 已过期',
     solution: '请重新登录或刷新页面',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   TOKEN_INVALID: {
     code: `${ErrorCodePrefix.AUTH}_002`,
@@ -45,7 +44,7 @@ export const AUTH_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: 'Token 格式错误或已被篡改',
     solution: '请重新登录',
     severity: ErrorSeverity.ERROR,
-    retryable: false,
+    retryable: false
   },
   UNAUTHORIZED: {
     code: `${ErrorCodePrefix.AUTH}_003`,
@@ -53,7 +52,7 @@ export const AUTH_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '用户未登录或登录状态已失效',
     solution: '请先登录后再进行操作',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
+    retryable: false
   },
   FORBIDDEN: {
     code: `${ErrorCodePrefix.AUTH}_004`,
@@ -61,7 +60,7 @@ export const AUTH_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '当前用户没有执行此操作的权限',
     solution: '请联系管理员获取相应权限',
     severity: ErrorSeverity.ERROR,
-    retryable: false,
+    retryable: false
   },
   LOGIN_FAILED: {
     code: `${ErrorCodePrefix.AUTH}_005`,
@@ -69,7 +68,7 @@ export const AUTH_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '用户名或密码错误',
     solution: '请检查用户名和密码是否正确',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   REFRESH_TOKEN_EXPIRED: {
     code: `${ErrorCodePrefix.AUTH}_006`,
@@ -77,8 +76,8 @@ export const AUTH_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: 'Refresh Token 已过期',
     solution: '请重新登录',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
-  },
+    retryable: false
+  }
 }
 
 /**
@@ -91,7 +90,7 @@ export const VALIDATION_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '请求中缺少必要的字段',
     solution: '请检查并填写所有必填字段',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   INVALID_FORMAT: {
     code: `${ErrorCodePrefix.VAL}_002`,
@@ -99,7 +98,7 @@ export const VALIDATION_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '字段值的格式不符合要求',
     solution: '请检查数据格式是否正确',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   VALUE_OUT_OF_RANGE: {
     code: `${ErrorCodePrefix.VAL}_003`,
@@ -107,7 +106,7 @@ export const VALIDATION_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '字段值超出允许的范围',
     solution: '请输入有效范围内的值',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   INVALID_DATE: {
     code: `${ErrorCodePrefix.VAL}_004`,
@@ -115,8 +114,8 @@ export const VALIDATION_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '日期字段的格式不正确',
     solution: '请使用正确的日期格式',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
-  },
+    retryable: true
+  }
 }
 
 /**
@@ -129,7 +128,7 @@ export const BUSINESS_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '尝试创建的资源已经存在',
     solution: '请检查是否重复创建，或修改资源名称',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
+    retryable: false
   },
   RESOURCE_NOT_FOUND: {
     code: `${ErrorCodePrefix.BIZ}_002`,
@@ -137,7 +136,7 @@ export const BUSINESS_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '请求的资源未找到',
     solution: '请检查资源 ID 是否正确',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
+    retryable: false
   },
   OPERATION_NOT_ALLOWED: {
     code: `${ErrorCodePrefix.BIZ}_003`,
@@ -145,7 +144,7 @@ export const BUSINESS_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '当前状态下不允许执行此操作',
     solution: '请检查资源状态是否满足操作条件',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
+    retryable: false
   },
   INDICATOR_ALREADY_DISTRIBUTED: {
     code: `${ErrorCodePrefix.BIZ}_004`,
@@ -153,7 +152,7 @@ export const BUSINESS_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '该指标已经下发给目标部门',
     solution: '请勿重复下发指标',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
+    retryable: false
   },
   APPROVAL_PENDING: {
     code: `${ErrorCodePrefix.BIZ}_005`,
@@ -161,7 +160,7 @@ export const BUSINESS_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '当前有待审批的进度报告',
     solution: '请等待审批完成后再提交新的报告',
     severity: ErrorSeverity.WARNING,
-    retryable: false,
+    retryable: false
   },
   MILESTONE_NOT_REACHED: {
     code: `${ErrorCodePrefix.BIZ}_006`,
@@ -169,8 +168,8 @@ export const BUSINESS_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '当前进度未达到里程碑要求',
     solution: '请继续推进工作直到达成里程碑',
     severity: ErrorSeverity.INFO,
-    retryable: false,
-  },
+    retryable: false
+  }
 }
 
 /**
@@ -183,7 +182,7 @@ export const SYSTEM_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '服务器发生未知错误',
     solution: '请稍后重试，如问题持续请联系管理员',
     severity: ErrorSeverity.CRITICAL,
-    retryable: true,
+    retryable: true
   },
   DATABASE_ERROR: {
     code: `${ErrorCodePrefix.SYS}_002`,
@@ -191,7 +190,7 @@ export const SYSTEM_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '数据库操作失败',
     solution: '请稍后重试，如问题持续请联系管理员',
     severity: ErrorSeverity.CRITICAL,
-    retryable: true,
+    retryable: true
   },
   SERVICE_UNAVAILABLE: {
     code: `${ErrorCodePrefix.SYS}_003`,
@@ -199,7 +198,7 @@ export const SYSTEM_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '服务器正在维护或过载',
     solution: '请稍后重试',
     severity: ErrorSeverity.ERROR,
-    retryable: true,
+    retryable: true
   },
   CONFIGURATION_ERROR: {
     code: `${ErrorCodePrefix.SYS}_004`,
@@ -207,8 +206,8 @@ export const SYSTEM_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '系统配置不正确',
     solution: '请联系管理员检查系统配置',
     severity: ErrorSeverity.CRITICAL,
-    retryable: false,
-  },
+    retryable: false
+  }
 }
 
 /**
@@ -221,7 +220,7 @@ export const NETWORK_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '无法连接到服务器',
     solution: '请检查网络连接后重试',
     severity: ErrorSeverity.ERROR,
-    retryable: true,
+    retryable: true
   },
   TIMEOUT: {
     code: `${ErrorCodePrefix.NET}_002`,
@@ -229,7 +228,7 @@ export const NETWORK_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '服务器响应超时',
     solution: '请稍后重试',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   REQUEST_CANCELLED: {
     code: `${ErrorCodePrefix.NET}_003`,
@@ -237,8 +236,8 @@ export const NETWORK_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '请求被用户或系统取消',
     solution: '如需继续操作请重新发起请求',
     severity: ErrorSeverity.INFO,
-    retryable: true,
-  },
+    retryable: true
+  }
 }
 
 /**
@@ -251,7 +250,7 @@ export const RATE_LIMIT_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '超出 API 调用频率限制',
     solution: '请稍后再试',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
+    retryable: true
   },
   LOGIN_RATE_LIMITED: {
     code: `${ErrorCodePrefix.RATE}_002`,
@@ -259,8 +258,8 @@ export const RATE_LIMIT_ERRORS: Record<string, ErrorCodeDefinition> = {
     description: '登录失败次数过多',
     solution: '请等待一分钟后再试',
     severity: ErrorSeverity.WARNING,
-    retryable: true,
-  },
+    retryable: true
+  }
 }
 
 /**
@@ -272,7 +271,7 @@ export const ALL_ERROR_CODES: Record<string, ErrorCodeDefinition> = {
   ...BUSINESS_ERRORS,
   ...SYSTEM_ERRORS,
   ...NETWORK_ERRORS,
-  ...RATE_LIMIT_ERRORS,
+  ...RATE_LIMIT_ERRORS
 }
 
 /**
@@ -287,7 +286,7 @@ export function getErrorDefinition(code: string): ErrorCodeDefinition {
       return ALL_ERROR_CODES[key]
     }
   }
-  
+
   // 返回默认错误
   return {
     code,
@@ -295,7 +294,7 @@ export function getErrorDefinition(code: string): ErrorCodeDefinition {
     description: '发生了未知错误',
     solution: '请稍后重试，如问题持续请联系管理员',
     severity: ErrorSeverity.ERROR,
-    retryable: true,
+    retryable: true
   }
 }
 

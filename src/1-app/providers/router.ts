@@ -11,15 +11,23 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/features/auth/model/store'
 import { tokenManager } from '@/shared/lib/utils/tokenManager'
+import { logger } from '@/shared/lib/utils/logger'
+import { hasAdminConsoleAccess } from '@/shared/lib/permissions/adminConsoleAccess'
 import { startProgress, doneProgress } from './router-progress'
+import { resolveProtectedRouteRedirect } from './lib/routeAccess'
 import './router-progress.css'
 
+const resolveAuthenticatedHome = (authStore: ReturnType<typeof useAuthStore>) => {
+  return authStore.userRole === 'strategic_dept' ? '/strategic-tasks' : '/dashboard'
+}
+
 // 确保从 localStorage 恢复认证状态
-const ensureAuthRestored = () => {
+const ensureAuthRestored = async () => {
   const authStore = useAuthStore()
+  await authStore.initializeAuth()
 
   if (authStore.token && !tokenManager.hasValidToken()) {
-    authStore.logout()
+    authStore.logout({ redirect: false })
     return
   }
 
@@ -31,7 +39,7 @@ const ensureAuthRestored = () => {
         authStore.user = JSON.parse(savedUser)
       } catch (e) {
         // Failed to restore user from localStorage
-        authStore.logout()
+        authStore.logout({ redirect: false })
       }
     }
   }
@@ -43,6 +51,12 @@ const routes: RouteRecordRaw[] = [
     name: 'Login',
     component: () => import('@/features/auth/ui/LoginView.vue'),
     meta: { requiresAuth: false, title: '登录 - 战略指标管理系统' }
+  },
+  {
+    path: '/forgot-password',
+    name: 'ForgotPassword',
+    component: () => import('@/features/auth/ui/ForgotPassword.vue'),
+    meta: { requiresAuth: false, title: '找回密码 - 战略指标管理系统' }
   },
   {
     path: '/403',
@@ -88,6 +102,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Messages',
         component: () => import('@/features/messages/ui/MessageCenterView.vue'),
         meta: { title: '消息中心 - 战略指标管理系统' }
+      },
+      {
+        path: 'workflow-tasks',
+        name: 'WorkflowTaskCenter',
+        component: () => import('@/features/workflow/ui/WorkflowTaskCenterView.vue'),
+        meta: { title: '待办中心 - 战略指标管理系统' }
       },
       {
         path: 'profile',
@@ -196,7 +216,7 @@ const router = createRouter({
 })
 
 // Navigation guards
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 开始进度进度条（如果是页面导航）
   if (_from.name !== undefined) {
     startProgress()
@@ -210,45 +230,52 @@ router.beforeEach((to, _from, next) => {
   }
 
   // 确保认证状态已从 localStorage 恢复
-  ensureAuthRestored()
+  await ensureAuthRestored()
 
   const authStore = useAuthStore()
+  const currentOrgId = Number(authStore.user?.orgId ?? NaN)
+  const canAccessAdminConsole = hasAdminConsoleAccess(authStore.user)
+  logger.debug('[Router] auth restored', {
+    path: to.path,
+    authenticated: authStore.isAuthenticated,
+    role: authStore.userRole,
+    effectiveRole: authStore.effectiveRole,
+    orgId: currentOrgId,
+    orgType: authStore.user?.orgType,
+    canAccessAdminConsole
+  })
 
-  // Check if route requires authentication
-  if (to.meta['requiresAuth'] && !authStore.isAuthenticated) {
-    next('/login')
+  const protectedRouteRedirect = resolveProtectedRouteRedirect({
+    requiresAuth: Boolean(to.meta['requiresAuth']),
+    isAuthenticated: authStore.isAuthenticated,
+    hasAdminConsoleAccess: canAccessAdminConsole,
+    userRole: authStore.userRole,
+    effectiveRole: authStore.effectiveRole,
+    allowedRoles: Array.isArray(to.meta['roles']) ? (to.meta['roles'] as string[]) : undefined,
+    path: to.path
+  })
+
+  if (protectedRouteRedirect) {
+    if (protectedRouteRedirect === '/login' && authStore.isAuthenticated) {
+      logger.warn('[Router] authenticated session missing valid role, clearing auth state', {
+        path: to.path,
+        role: authStore.userRole,
+        effectiveRole: authStore.effectiveRole
+      })
+      authStore.logout({ redirect: false })
+    }
+    next(protectedRouteRedirect)
     return
-  }
-
-  // Check if route requires specific roles
-  // 使用 effectiveRole 来支持战略发展部的视角切换功能
-  if (to.meta['roles'] && Array.isArray(to.meta['roles']) && authStore.isAuthenticated) {
-    const currentRole = authStore.effectiveRole
-    const userRole = authStore.userRole
-
-    // 战略发展部用户可以访问所有页面（通过视角切换）
-    if (userRole === 'strategic_dept') {
-      // 战略发展部用户始终允许访问，不做角色限制
-      next()
-      return
-    }
-
-    // 如果当前有效角色不在允许的角色列表中，才重定向
-    if (currentRole && !(to.meta['roles'] as string[]).includes(currentRole)) {
-      // 对于管理员页面，显示403
-      if (to.path.startsWith('/admin')) {
-        next('/403')
-        return
-      }
-      next('/dashboard')
-      return
-    }
-    // 如果角色为空但已认证，允许访问（可能是数据恢复问题）
   }
 
   // Redirect authenticated users away from login page
   if (to.path === '/login' && authStore.isAuthenticated) {
-    next('/dashboard')
+    if (!authStore.userRole) {
+      authStore.logout({ redirect: false })
+      next('/login')
+      return
+    }
+    next(resolveAuthenticatedHome(authStore))
     return
   }
 

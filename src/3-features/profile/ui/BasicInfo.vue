@@ -3,9 +3,12 @@
     <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="basic-info-form">
       <div class="avatar-section">
         <div class="avatar-upload">
-          <el-avatar :size="100" :src="form.avatar" class="user-avatar">
-            {{ form.username?.charAt(0)?.toUpperCase() || 'U' }}
-          </el-avatar>
+          <AppAvatar
+            :size="100"
+            :src="form.avatar"
+            :name="form.name || form.username || '用户'"
+            class="user-avatar"
+          />
           <el-upload
             class="avatar-uploader"
             :show-file-list="false"
@@ -13,7 +16,9 @@
             :http-request="uploadAvatar"
             accept="image/jpeg,image/png,image/gif,image/webp"
           >
-            <el-button size="small" type="primary"> 更换头像 </el-button>
+            <el-button size="small" type="primary" :loading="uploading">
+              {{ uploading ? '上传中...' : '更换头像' }}
+            </el-button>
           </el-upload>
         </div>
       </div>
@@ -54,7 +59,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import { validateEmail, validatePhone, getRoleLabel } from '@/shared/lib/utils'
+import { profileApi } from '@/features/profile/api'
 import type { User as _User, UserRole } from '@/shared/types'
 
 const formRef = ref<FormInstance>()
@@ -70,13 +77,14 @@ const form = reactive({
   avatar: ''
 })
 
+const uploading = ref(false)
+
 const rules = {
   name: [
     { required: true, message: '请输入姓名', trigger: 'blur' },
     { min: 2, max: 20, message: '姓名长度应在2-20个字符之间', trigger: 'blur' }
   ],
   email: [
-    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     {
       validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
         if (value && !validateEmail(value)) {
@@ -120,13 +128,34 @@ const beforeAvatarUpload = (file: File) => {
 
 const uploadAvatar = async (options: UploadRequestOptions) => {
   const { file } = options
-  // TODO: Implement actual file upload
+  const selectedFile = file as File
+  const previousAvatar = form.avatar
+
+  // 本地预览
   const reader = new FileReader()
   reader.onload = e => {
     form.avatar = e.target?.result as string
-    ElMessage.success('头像上传成功')
   }
-  reader.readAsDataURL(file as File)
+  reader.readAsDataURL(selectedFile)
+
+  // 上传到服务器
+  try {
+    uploading.value = true
+    const response = await profileApi.uploadAvatar(selectedFile)
+
+    // 更新本地状态
+    form.avatar = response.avatarUrl
+    authStore.updateUserAvatar(response.avatarUrl)
+    options.onSuccess?.(response)
+
+    ElMessage.success('头像上传成功')
+  } catch (error) {
+    form.avatar = previousAvatar
+    options.onError?.(error as Error)
+    ElMessage.error('头像上传失败，请重试')
+  } finally {
+    uploading.value = false
+  }
 }
 
 const handleSubmit = async () => {
@@ -136,11 +165,22 @@ const handleSubmit = async () => {
 
   try {
     await formRef.value.validate()
-
-    // TODO: Call API to update user info
+    await profileApi.updateProfile({
+      realName: form.name
+    })
+    await profileApi.updateContact({
+      email: form.email || null,
+      phone: form.phone || null
+    })
+    authStore.updateCurrentUser({
+      realName: form.name,
+      name: form.name,
+      email: form.email || null,
+      phone: form.phone || null
+    })
     ElMessage.success('个人信息更新成功')
   } catch (error) {
-    // Form validation failed
+    ElMessage.error('个人信息更新失败')
   }
 }
 
@@ -155,6 +195,10 @@ const handleReset = () => {
 const loadUserInfo = () => {
   if (authStore.user) {
     Object.assign(form, authStore.user)
+    form.avatar =
+      (authStore.user as { avatar?: string; avatarUrl?: string }).avatar ||
+      (authStore.user as { avatar?: string; avatarUrl?: string }).avatarUrl ||
+      ''
   }
 }
 

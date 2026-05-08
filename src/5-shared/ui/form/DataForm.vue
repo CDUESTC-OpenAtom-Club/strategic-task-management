@@ -8,7 +8,6 @@
   - 支持字段联动
 -->
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch, nextTick as _nextTick } from 'vue'
 import type { FormInstance, FormRules, FormItemProp } from 'element-plus'
 import { logger } from '@/shared/lib/utils/logger'

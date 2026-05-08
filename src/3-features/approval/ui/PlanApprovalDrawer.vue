@@ -8,6 +8,7 @@ import { Check, Close, Document, User, Timer, Right } from '@element-plus/icons-
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { useAuthStore } from '@/features/auth/model/store'
+import { notifyApprovalStateRefresh } from '@/features/approval/lib'
 import { usePermission } from '@/5-shared/lib/permissions'
 import { PermissionCode } from '@/shared/types'
 import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
@@ -123,6 +124,7 @@ const handleApprove = async (instance: PendingPlanApproval) => {
       if (response.success) {
         ElMessage.success('审批通过成功')
         await loadPendingApprovals()
+        notifyApprovalStateRefresh({ source: 'plan-approval-drawer' })
         emit('refresh')
       } else {
         ElMessage.error(response.message || '审批失败')
@@ -173,6 +175,7 @@ const handleReject = async (instance: PendingPlanApproval) => {
       if (response.success) {
         ElMessage.success('已拒绝该计划')
         await loadPendingApprovals()
+        notifyApprovalStateRefresh({ source: 'plan-approval-drawer' })
         emit('refresh')
       } else {
         ElMessage.error(response.message || '拒绝失败')
@@ -235,11 +238,11 @@ watch(
   <BaseApprovalDrawer
     v-model="drawerVisible"
     title="计划审批"
-    :subtitle="`待审批 ${pendingApprovals.length} 个计划`"
+    :subtitle="`审批中 ${pendingApprovals.length} 个计划`"
     size="600px"
     :loading="loading"
     :show-empty="pendingApprovals.length === 0"
-    empty-description="暂无待审批的计划"
+    empty-description="暂无审批中的计划"
     custom-class="plan-approval-drawer"
     content-padding="20px"
     min-content-height="400px"
@@ -250,7 +253,7 @@ watch(
           <el-icon><Check /></el-icon>
           <span>计划审批</span>
         </div>
-        <div class="header-subtitle">待审批 {{ pendingApprovals.length }} 个计划</div>
+        <div class="header-subtitle">审批中 {{ pendingApprovals.length }} 个计划</div>
       </div>
     </template>
 
@@ -272,7 +275,7 @@ watch(
               <div class="plan-year">{{ instance.year || '2025' }}年度</div>
             </div>
           </div>
-          <el-tag type="warning" size="small">待审批</el-tag>
+          <el-tag type="warning" size="small">审批中</el-tag>
         </div>
 
         <div class="submit-info">
@@ -284,7 +287,9 @@ watch(
           <div class="info-row">
             <el-icon><Timer /></el-icon>
             <span class="label">提交时间：</span>
-            <span class="value">{{ instance.createdAt ? formatTime(instance.createdAt) : '--' }}</span>
+            <span class="value">{{
+              instance.createdAt ? formatTime(instance.createdAt) : '--'
+            }}</span>
           </div>
           <div class="info-row">
             <el-icon><Right /></el-icon>
@@ -306,7 +311,7 @@ watch(
 
     <template #footer>
       <div class="drawer-footer">
-        <span class="footer-info">待审批 {{ pendingApprovals.length }} 个计划</span>
+        <span class="footer-info">审批中 {{ pendingApprovals.length }} 个计划</span>
         <el-button @click="handleClose">关闭</el-button>
       </div>
     </template>

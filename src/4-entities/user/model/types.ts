@@ -1,6 +1,6 @@
 /**
  * User Entity Types
- * 
+ *
  * Domain model types for users based on backend entity structure.
  * These types represent the core user domain and are shared across features.
  */
@@ -9,10 +9,10 @@
  * User Role
  * Three-tier organizational hierarchy roles
  */
-export type UserRole = 
-  | 'strategic_dept'      // Strategic Development Department (战略发展部)
-  | 'functional_dept'     // Functional Department (职能部门)
-  | 'secondary_college'   // Secondary College (二级学院)
+export type UserRole =
+  | 'strategic_dept' // Strategic Development Department (战略发展部)
+  | 'functional_dept' // Functional Department (职能部门)
+  | 'secondary_college' // Secondary College (二级学院)
 
 export const UserRole = {
   STRATEGIC_DEPT: 'strategic_dept' as const,
@@ -24,10 +24,10 @@ export const UserRole = {
  * User Status
  * Account status for user management
  */
-export type UserStatus = 
-  | 'active'      // Active user account
-  | 'disabled'    // Disabled/inactive account
-  | 'locked'      // Locked account (e.g., too many failed login attempts)
+export type UserStatus =
+  | 'active' // Active user account
+  | 'disabled' // Disabled/inactive account
+  | 'locked' // Locked account (e.g., too many failed login attempts)
 
 export const UserStatus = {
   ACTIVE: 'active' as const,
@@ -67,7 +67,6 @@ export interface User {
   // Timestamps
   createdAt: string
   updatedAt: string
-  lastLoginAt?: string
 
   // UI helper fields
   avatar?: string
@@ -133,7 +132,7 @@ export interface UserProfile extends User {
  * Data for user authentication
  */
 export interface LoginCredentials {
-  username: string
+  account: string
   password: string
 }
 

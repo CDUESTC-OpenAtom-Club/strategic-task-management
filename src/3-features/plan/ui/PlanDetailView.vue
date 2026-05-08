@@ -64,6 +64,12 @@ const getProgress = () => {
   if (!plan.value) {
     return 0
   }
+  if (
+    typeof plan.value.completionPercentage === 'number' &&
+    Number.isFinite(plan.value.completionPercentage)
+  ) {
+    return Math.max(0, Math.min(100, Math.round(plan.value.completionPercentage)))
+  }
   const totalIndicators =
     plan.value.tasks?.reduce((sum, task) => {
       return sum + (task.indicators?.length || 0)

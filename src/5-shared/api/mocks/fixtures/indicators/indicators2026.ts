@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 2026年指标数据
  * 当前工作年份数据，状态为 active（进行中）
@@ -1096,7 +1095,7 @@ export const indicators2026: StrategicIndicator[] = [
     ownerDept: '教务处',
     parentIndicatorId: '2026-401',
     year: 2026,
-    statusAudit: []  // 草稿状态，待下发
+    statusAudit: [] // 草稿状态，待下发
   },
   // 教务处下发给航空学院的指标
   {
@@ -1785,5 +1784,5 @@ export const indicators2026: StrategicIndicator[] = [
     ownerDept: '战略发展部',
     year: 2026,
     statusAudit: []
-  },
+  }
 ]

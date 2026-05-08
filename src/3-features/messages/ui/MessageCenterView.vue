@@ -1,19 +1,45 @@
 <template>
   <div class="message-center">
-    <!-- 页面头部 - Requirements: 5.1, 5.2, 5.3, 5.4 -->
     <div class="page-header">
       <div class="header-content">
         <h1 class="page-title">消息中心</h1>
-        <p class="page-desc">查看和管理您的所有通知消息</p>
+        <p class="page-desc">查看和管理与您相关的待处理事项和通知消息</p>
       </div>
       <div class="page-actions">
-        <el-button type="primary" @click="markAllAsRead"> 全部标为已读 </el-button>
-        <el-button @click="clearReadMessages"> 清除已读 </el-button>
+        <el-button :loading="messageStore.loading" @click="refreshData"> 刷新 </el-button>
+        <el-button
+          type="primary"
+          plain
+          :disabled="!messageStore.hasUnreadMarkableMessages"
+          @click="markAllAsRead"
+        >
+          全部标为已读
+        </el-button>
+        <el-button :disabled="!messageStore.hasReadMarkableMessages" @click="clearReadMessages">
+          清除已读
+        </el-button>
       </div>
     </div>
 
-    <!-- 消息内容卡片 - Requirements: 2.1, 2.2 -->
-    <el-card class="message-card card-animate" shadow="never">
+    <el-alert
+      v-if="messageStore.error"
+      type="error"
+      show-icon
+      :closable="false"
+      class="message-error"
+      :title="messageStore.error"
+      description="消息中心未再使用 mock 数据兜底，你可以点击刷新重新加载真实数据。"
+    />
+
+    <div class="summary-grid">
+      <el-card v-for="card in summaryCards" :key="card.key" shadow="never" class="summary-card">
+        <div class="summary-label">{{ card.label }}</div>
+        <div class="summary-value">{{ card.value }}</div>
+        <div class="summary-hint">{{ card.hint }}</div>
+      </el-card>
+    </div>
+
+    <el-card class="message-card" shadow="never">
       <el-tabs v-model="activeTab" class="message-tabs">
         <el-tab-pane name="all">
           <template #label>
@@ -27,194 +53,728 @@
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
+          <div v-if="activeTab === 'all'" class="message-panel">
+            <div class="message-subfilters">
+              <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
+            </div>
             <MessageList
-              v-if="activeTab === 'all'"
-              :messages="allMessages"
+              :messages="filteredMessages"
+              :empty-description="getEmptyDescription()"
               @read="handleMessageRead"
               @view="handleMessageView"
             />
-          </transition>
+          </div>
         </el-tab-pane>
-        <el-tab-pane name="reminders">
+
+        <el-tab-pane name="todo">
           <template #label>
             <span class="tab-label">
-              催办通知
+              待处理
               <el-badge
-                v-if="unreadCount.reminders > 0"
-                :value="unreadCount.reminders"
-                :max="99"
-                class="tab-badge"
-                type="primary"
-              />
-            </span>
-          </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'reminders'"
-              :messages="reminderMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
-        </el-tab-pane>
-        <el-tab-pane name="alerts">
-          <template #label>
-            <span class="tab-label">
-              预警通知
-              <el-badge
-                v-if="unreadCount.alerts > 0"
-                :value="unreadCount.alerts"
-                :max="99"
-                class="tab-badge"
-                type="danger"
-              />
-            </span>
-          </template>
-          <transition name="tab-fade" mode="out-in">
-            <MessageList
-              v-if="activeTab === 'alerts'"
-              :messages="alertMessages"
-              @read="handleMessageRead"
-              @view="handleMessageView"
-            />
-          </transition>
-        </el-tab-pane>
-        <el-tab-pane name="approvals">
-          <template #label>
-            <span class="tab-label">
-              审批通知
-              <el-badge
-                v-if="unreadCount.approvals > 0"
-                :value="unreadCount.approvals"
+                v-if="unreadCount.todo > 0"
+                :value="unreadCount.todo"
                 :max="99"
                 class="tab-badge"
                 type="warning"
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
+          <div v-if="activeTab === 'todo'" class="message-panel">
+            <div class="message-subfilters">
+              <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
+            </div>
             <MessageList
-              v-if="activeTab === 'approvals'"
-              :messages="approvalMessages"
+              :messages="filteredMessages"
+              :empty-description="getEmptyDescription()"
               @read="handleMessageRead"
               @view="handleMessageView"
             />
-          </transition>
+          </div>
         </el-tab-pane>
-        <el-tab-pane name="system">
+
+        <el-tab-pane name="processed">
           <template #label>
             <span class="tab-label">
-              系统通知
+              已处理
               <el-badge
-                v-if="unreadCount.system > 0"
-                :value="unreadCount.system"
+                v-if="unreadProcessedCount > 0"
+                :value="unreadProcessedCount"
                 :max="99"
                 class="tab-badge"
-                type="info"
+                type="success"
               />
             </span>
           </template>
-          <transition name="tab-fade" mode="out-in">
+          <div v-if="activeTab === 'processed'" class="message-panel">
+            <div class="message-subfilters">
+              <el-segmented v-model="activeTypeFilter" :options="typeFilterOptions" />
+            </div>
+            <div class="message-subfilters">
+              <el-segmented v-model="processedFilter" :options="processedFilterOptions" />
+            </div>
             <MessageList
-              v-if="activeTab === 'system'"
-              :messages="systemMessages"
+              :messages="filteredMessages"
+              :empty-description="getEmptyDescription()"
               @read="handleMessageRead"
               @view="handleMessageView"
             />
-          </transition>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <el-drawer v-model="detailVisible" title="消息详情" size="480px" destroy-on-close>
+      <div v-if="detailMessage" class="detail-content">
+        <div class="detail-tags">
+          <el-tag size="small">{{ detailMessage.title }}</el-tag>
+          <el-tag v-if="detailMessage.senderDisplay" type="info" size="small">
+            {{ detailMessage.senderDisplay }}
+          </el-tag>
+          <el-tag
+            v-if="
+              detailMessage.bizType === 'APPROVAL_TODO' && resolveApprovalDepartment(detailMessage)
+            "
+            type="success"
+            size="small"
+          >
+            审批中部门：{{ resolveApprovalDepartment(detailMessage) }}
+          </el-tag>
+          <el-tag
+            v-if="
+              detailMessage.bizType === 'APPROVAL_TODO' &&
+              resolveApprovalRouteDisplay(detailMessage)
+            "
+            type="primary"
+            size="small"
+          >
+            {{ resolveApprovalRouteDisplay(detailMessage) }}
+          </el-tag>
+          <el-tag v-if="detailMessage.currentStepName" type="warning" size="small">
+            {{ detailMessage.currentStepName }}
+          </el-tag>
+        </div>
+        <div class="detail-time">{{ formatDateTime(detailMessage.createdAt) }}</div>
+        <div class="detail-body">{{ detailMessage.detailContent || detailMessage.content }}</div>
+
+        <div v-if="shouldShowDetailActionSelector(detailMessage)" class="detail-action-selector">
+          <span class="detail-action-selector__label">处理方式</span>
+          <el-segmented v-model="detailActionMode" :options="detailActionOptions(detailMessage)" />
+        </div>
+
+        <div class="detail-actions">
+          <el-button
+            v-if="shouldShowOpenApprovalCenterAction(detailMessage)"
+            type="primary"
+            @click="openMessageApprovalCenter(detailMessage)"
+          >
+            右侧打开审批中心
+          </el-button>
+          <el-button
+            v-if="shouldShowRouteAction(detailMessage)"
+            :type="shouldShowOpenApprovalCenterAction(detailMessage) ? 'default' : 'primary'"
+            @click="navigateMessageRoute(detailMessage)"
+          >
+            {{ getMessageRouteActionLabel(detailMessage) }}
+          </el-button>
+          <el-button
+            v-else-if="canHandleMessageAction(detailMessage)"
+            type="primary"
+            @click="navigateByMessage(detailMessage)"
+          >
+            {{ getMessagePrimaryActionLabel(detailMessage) }}
+          </el-button>
+          <el-button
+            v-if="detailMessage.canMarkAsRead && !detailMessage.isRead"
+            @click="handleMessageRead(detailMessage.id)"
+          >
+            标为已读
+          </el-button>
+        </div>
+      </div>
+      <el-skeleton v-else-if="messageStore.detailLoading" :rows="6" animated />
+      <el-empty v-else description="暂无可展示的详情内容" />
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import MessageList from '@/shared/ui/message/MessageList.vue'
-import { useApprovalCenter } from '@/features/approval'
 import { useMessageStore } from '@/features/messages/model/message'
+import {
+  requiresApprovalCenterFallback,
+  resolveApprovalRoute
+} from '@/features/approval/lib/approvalNotifications'
+import { useApprovalCenter } from '@/features/approval'
+import { useAuthStore } from '@/features/auth/model/store'
 import type { Message } from '@/shared/types'
+import { formatDateTime } from '@/shared/lib/utils'
 
-// 使用消息 Store
+const router = useRouter()
+const authStore = useAuthStore()
 const messageStore = useMessageStore()
 const { openApprovalCenter } = useApprovalCenter()
 
 const activeTab = ref('all')
+const activeTypeFilter = ref<'all' | 'approval' | 'reminder' | 'system'>('all')
+const processedFilter = ref<'all' | 'approved' | 'rejected'>('all')
+const detailVisible = ref(false)
+const detailMessage = ref<Message | null>(null)
+const detailActionMode = ref<'approval-center' | 'route'>('approval-center')
 
-// 从 store 获取消息数据
 const allMessages = computed(() => messageStore.visibleMessages)
+const todoMessages = computed(() => messageStore.todoMessages)
 const reminderMessages = computed(() => messageStore.reminderMessages)
-const alertMessages = computed(() => messageStore.alertMessages)
 const approvalMessages = computed(() => messageStore.approvalMessages)
 const systemMessages = computed(() => messageStore.systemMessages)
-
-// 未读消息计数
 const unreadCount = computed(() => messageStore.unreadCount)
+const processedMessages = computed(() =>
+  allMessages.value.filter(
+    message => !messageStore.todoMessages.some(item => item.id === message.id)
+  )
+)
+const processedCount = computed(() => processedMessages.value.length)
+const unreadProcessedCount = computed(
+  () => processedMessages.value.filter(message => !message.isRead).length
+)
 
-const handleMessageRead = (messageId: string) => {
-  messageStore.markAsRead(messageId)
+const typeFilterOptions = [
+  { label: '全部类型', value: 'all' },
+  { label: '审批通知', value: 'approval' },
+  { label: '催办通知', value: 'reminder' },
+  { label: '系统通知', value: 'system' }
+] as const
+
+const processedFilterOptions = [
+  { label: '全部结果', value: 'all' },
+  { label: '已通过', value: 'approved' },
+  { label: '已驳回', value: 'rejected' }
+] as const
+
+const currentPrimaryMessages = computed(() => {
+  if (activeTab.value === 'todo') {
+    return todoMessages.value
+  }
+  if (activeTab.value === 'processed') {
+    return processedMessages.value.filter(message =>
+      matchesProcessedResultFilter(message, processedFilter.value)
+    )
+  }
+  return allMessages.value
+})
+
+const filteredMessages = computed(() => {
+  const base = currentPrimaryMessages.value
+  switch (activeTypeFilter.value) {
+    case 'approval':
+      return base.filter(message => message.type === 'approval')
+    case 'reminder':
+      return base.filter(message => message.type === 'reminder')
+    case 'system':
+      return base.filter(message => message.type === 'system')
+    default:
+      return base
+  }
+})
+
+const summaryCards = computed(() => {
+  const cards = [
+    {
+      key: 'todo',
+      label: '待处理',
+      value: messageStore.summary.todoCount,
+      hint: '当前仍需你处理的审批事项'
+    },
+    {
+      key: 'approval',
+      label: '审批通知',
+      value: messageStore.summary.approvalCount,
+      hint: '待处理和审批结果统一归口'
+    },
+    {
+      key: 'reminder',
+      label: '催办通知',
+      value: messageStore.summary.reminderCount,
+      hint: '仅统计未读催办消息'
+    },
+    {
+      key: 'system',
+      label: '系统通知',
+      value: messageStore.summary.systemCount,
+      hint: '仅统计未读系统与业务通知'
+    }
+  ]
+
+  return cards
+})
+
+function getEmptyDescription(): string {
+  const scopeLabel =
+    activeTab.value === 'todo' ? '待处理' : activeTab.value === 'processed' ? '已处理' : '消息'
+  const resultLabel =
+    activeTab.value === 'processed'
+      ? processedFilter.value === 'approved'
+        ? '中的已通过审批'
+        : processedFilter.value === 'rejected'
+          ? '中的已驳回审批'
+          : ''
+      : ''
+  const typeLabel =
+    activeTypeFilter.value === 'approval'
+      ? '审批通知'
+      : activeTypeFilter.value === 'reminder'
+        ? '催办通知'
+        : activeTypeFilter.value === 'system'
+          ? '系统通知'
+          : ''
+
+  if (typeLabel) {
+    return `当前没有${scopeLabel}中的${typeLabel}`
+  }
+
+  if (resultLabel) {
+    return `当前没有${scopeLabel}${resultLabel}`
+  }
+
+  return `当前没有${scopeLabel}`
 }
 
-const handleMessageView = (message: Message) => {
-  if (message.type === 'approval') {
-    openApprovalCenter()
+async function refreshData() {
+  try {
+    await messageStore.refreshMessageCenter()
+  } catch {
+    ElMessage.error(messageStore.error || '刷新失败，请稍后重试')
   }
 }
 
-const markAllAsRead = () => {
-  messageStore.markAllAsRead()
-  ElMessage.success('已将所有消息标为已读')
+async function handleMessageRead(messageId: string) {
+  try {
+    await messageStore.markAsRead(messageId)
+    ElMessage.success('已标记为已读')
+  } catch {
+    ElMessage.error('标记已读失败，请稍后重试')
+  }
 }
 
-const clearReadMessages = () => {
-  const unread = messageStore.unreadCount.all
-  const total = messageStore.visibleMessages.length
+function buildApprovalCenterContext(message: Message) {
+  const routeTarget = resolveMessageRouteTarget(message)
+  const workflowEntityType =
+    message.entityType === 'PLAN_REPORT' || message.entityType === 'PLAN'
+      ? message.entityType
+      : undefined
+  const workflowEntityId =
+    message.entityId !== undefined && message.entityId !== null && String(message.entityId).trim()
+      ? message.entityId
+      : undefined
 
-  if (unread === total) {
-    ElMessage.warning('没有已读消息可清理')
+  return {
+    workflowEntityType,
+    workflowEntityId,
+    approvalInstanceId: message.approvalInstanceId,
+    departmentName: resolveApprovalDepartment(message),
+    planName: message.title,
+    routeTarget: routeTarget || undefined
+  }
+}
+
+function isApprovalMessage(message?: Message | null): boolean {
+  return message?.type === 'approval'
+}
+
+function normalizeResultKeywordTarget(message: Message): string {
+  return [
+    message.title,
+    message.content,
+    message.detailContent,
+    message.status,
+    message.readState,
+    message.actionState
+  ]
+    .filter(value => typeof value === 'string' && value.trim())
+    .join(' ')
+    .toUpperCase()
+}
+
+function isApprovedMessage(message: Message): boolean {
+  const normalized = normalizeResultKeywordTarget(message)
+  return (
+    message.bizType === 'APPROVAL_RESULT' &&
+    (normalized.includes('通过') ||
+      normalized.includes('已通过') ||
+      normalized.includes('APPROVED') ||
+      normalized.includes('SUCCESS'))
+  )
+}
+
+function isRejectedMessage(message: Message): boolean {
+  const normalized = normalizeResultKeywordTarget(message)
+  return (
+    message.bizType === 'APPROVAL_RESULT' &&
+    (normalized.includes('驳回') ||
+      normalized.includes('已驳回') ||
+      normalized.includes('REJECTED') ||
+      normalized.includes('REJECT'))
+  )
+}
+
+function matchesProcessedResultFilter(
+  message: Message,
+  filter: 'all' | 'approved' | 'rejected'
+): boolean {
+  if (filter === 'approved') {
+    return isApprovedMessage(message)
+  }
+
+  if (filter === 'rejected') {
+    return isRejectedMessage(message)
+  }
+
+  return true
+}
+
+function getMessageMetadataValue(message: Message, key: string): string {
+  const value = message.metadata?.[key]
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+
+  const metadataJsonRaw = message.metadata?.metadataJson
+  if (typeof metadataJsonRaw === 'string' && metadataJsonRaw.trim()) {
+    try {
+      const parsed = JSON.parse(metadataJsonRaw) as Record<string, unknown>
+      const nestedValue = parsed[key]
+      return typeof nestedValue === 'string' ? nestedValue.trim() : ''
+    } catch {
+      return ''
+    }
+  }
+
+  return ''
+}
+
+function resolvePlanReportCollegeFromBusinessName(message: Message): string {
+  const businessName = getMessageMetadataValue(message, 'businessName')
+  if (!businessName) {
+    return ''
+  }
+
+  const normalized = businessName.replace(/\s+/g, ' ').trim()
+  const reportMatch = normalized.match(/([\u4e00-\u9fa5A-Za-z0-9()（）·\-_]+)月报/)
+  if (reportMatch?.[1]) {
+    return reportMatch[1].replace(/^\d+/, '').trim()
+  }
+
+  return ''
+}
+
+function resolveApprovalDepartment(message: Message): string {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
+  return targetOrgName || sourceOrgName || message.senderDisplay || ''
+}
+
+function resolveApprovalRouteDepartment(message: Message): string {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
+  const entityType = String(message.entityType || '')
+    .trim()
+    .toUpperCase()
+
+  if (entityType === 'PLAN_REPORT') {
+    return sourceOrgName || targetOrgName || resolvePlanReportCollegeFromBusinessName(message) || ''
+  }
+
+  if (entityType === 'PLAN') {
+    return targetOrgName || sourceOrgName || ''
+  }
+
+  return targetOrgName || sourceOrgName || ''
+}
+
+function resolveApprovalRouteDisplay(message: Message): string {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
+
+  if (sourceOrgName && targetOrgName) {
+    return `${sourceOrgName} -> ${targetOrgName}`
+  }
+
+  return sourceOrgName || targetOrgName || ''
+}
+
+function buildApprovalPayload(message: Message) {
+  return {
+    approvalInstanceId: message.approvalInstanceId,
+    entityType: message.entityType,
+    entityId: message.entityId,
+    actionUrl: message.actionUrl,
+    viewerRole: authStore.effectiveRole || authStore.userRole,
+    departmentName: resolveApprovalRouteDepartment(message)
+  }
+}
+
+function resolveMessageRouteTarget(message?: Message | null): string | null {
+  if (!message) {
+    return null
+  }
+
+  const approvalPayload = buildApprovalPayload(message)
+  if (message.type === 'approval') {
+    const approvalRoute = resolveApprovalRoute(approvalPayload)
+
+    if (approvalRoute) {
+      return approvalRoute
+    }
+  }
+
+  if (message.actionUrl) {
+    return message.actionUrl
+  }
+
+  return null
+}
+
+function canOpenApprovalCenter(message?: Message | null): boolean {
+  if (!message || !isApprovalMessage(message)) {
+    return false
+  }
+
+  const context = buildApprovalCenterContext(message)
+  return Boolean(
+    (context.workflowEntityType === 'PLAN' || context.workflowEntityType === 'PLAN_REPORT') &&
+    context.workflowEntityId !== undefined
+  )
+}
+
+function resolveMessageAction(
+  message?: Message | null
+): { mode: 'approval-center' } | { mode: 'route'; target: string } | { mode: 'none' } {
+  if (!message) {
+    return { mode: 'none' }
+  }
+
+  const routeTarget = resolveMessageRouteTarget(message)
+
+  if (isApprovalMessage(message) && detailActionMode.value === 'approval-center') {
+    if (canOpenApprovalCenter(message)) {
+      return { mode: 'approval-center' }
+    }
+
+    const approvalPayload = buildApprovalPayload(message)
+    if (requiresApprovalCenterFallback(approvalPayload) && canOpenApprovalCenter(message)) {
+      return { mode: 'approval-center' }
+    }
+  }
+
+  if (routeTarget) {
+    return { mode: 'route', target: routeTarget }
+  }
+
+  if (canOpenApprovalCenter(message)) {
+    return { mode: 'approval-center' }
+  }
+
+  return { mode: 'none' }
+}
+
+function canHandleMessageAction(message?: Message | null): boolean {
+  return resolveMessageAction(message).mode !== 'none'
+}
+
+function detailActionOptions(message?: Message | null) {
+  const options: Array<{ label: string; value: 'approval-center' | 'route' }> = []
+
+  if (canOpenApprovalCenter(message)) {
+    options.push({ label: '右侧打开审批中心', value: 'approval-center' })
+  }
+
+  if (resolveMessageRouteTarget(message)) {
+    options.push({ label: '跳转到对应页面', value: 'route' })
+  }
+
+  return options
+}
+
+function shouldShowDetailActionSelector(message?: Message | null): boolean {
+  return (
+    Boolean(message && !shouldShowOpenApprovalCenterAction(message)) &&
+    detailActionOptions(message).length > 1
+  )
+}
+
+function syncDetailActionMode(message?: Message | null) {
+  const options = detailActionOptions(message)
+  if (!options.length) {
+    return
+  }
+
+  const currentModeSupported = options.some(option => option.value === detailActionMode.value)
+  if (!currentModeSupported) {
+    detailActionMode.value = options[0].value
+    return
+  }
+
+  if (isApprovalMessage(message) && canOpenApprovalCenter(message)) {
+    detailActionMode.value = 'approval-center'
+  }
+}
+
+function getMessagePrimaryActionLabel(message?: Message | null): string {
+  if (!message) {
+    return '查看关联内容'
+  }
+
+  const action = resolveMessageAction(message)
+  if (action.mode === 'approval-center') {
+    return message.canProcess || message.bizType === 'APPROVAL_TODO'
+      ? '右侧打开审批中心'
+      : '右侧查看关联审批'
+  }
+
+  if (action.mode === 'route') {
+    return message.canProcess || message.bizType === 'APPROVAL_TODO'
+      ? '跳转到对应页面'
+      : '查看关联内容'
+  }
+
+  return '查看详情'
+}
+
+async function handleMessageView(message: Message) {
+  if (shouldAutoOpenApprovalCenter(message)) {
+    openApprovalCenter(buildApprovalCenterContext(message))
+    return
+  }
+
+  if (
+    !isApprovalMessage(message) &&
+    (!messageStore.capabilities.detailDrawerEnabled || message.canViewDetail === false) &&
+    canHandleMessageAction(message)
+  ) {
+    navigateByMessage(message)
+    return
+  }
+
+  detailVisible.value = true
+  detailMessage.value = message
+  syncDetailActionMode(message)
+  try {
+    detailMessage.value = await messageStore.fetchMessageDetail(message.id)
+    syncDetailActionMode(detailMessage.value)
+  } catch {
+    ElMessage.warning('详情加载失败，已展示列表中的摘要内容')
+  }
+}
+
+function navigateByMessage(message: Message) {
+  syncDetailActionMode(message)
+  const action = resolveMessageAction(message)
+
+  if (action.mode === 'approval-center') {
+    openApprovalCenter(buildApprovalCenterContext(message))
+    return
+  }
+
+  if (action.mode === 'route') {
+    void router.push(action.target)
+    return
+  }
+}
+
+function shouldAutoOpenApprovalCenter(message?: Message | null): boolean {
+  return Boolean(message && isApprovalMessage(message) && canOpenApprovalCenter(message))
+}
+
+function shouldShowOpenApprovalCenterAction(message?: Message | null): boolean {
+  return canOpenApprovalCenter(message)
+}
+
+function shouldShowRouteAction(message?: Message | null): boolean {
+  return resolveMessageRouteTarget(message) !== null
+}
+
+function openMessageApprovalCenter(message?: Message | null) {
+  if (!message || !canOpenApprovalCenter(message)) {
+    return
+  }
+
+  openApprovalCenter(buildApprovalCenterContext(message))
+  detailVisible.value = false
+}
+
+function navigateMessageRoute(message?: Message | null) {
+  if (!message) {
+    return
+  }
+
+  const routeTarget = resolveMessageRouteTarget(message)
+  if (!routeTarget) {
+    return
+  }
+
+  detailVisible.value = false
+  void router.push(routeTarget)
+}
+
+function getMessageRouteActionLabel(message?: Message | null): string {
+  if (!message) {
+    return '查看关联内容'
+  }
+
+  return message.canProcess || message.bizType === 'APPROVAL_TODO'
+    ? '跳转到对应页面'
+    : '查看关联内容'
+}
+
+async function markAllAsRead() {
+  if (!messageStore.hasUnreadMarkableMessages) {
+    ElMessage.warning('暂无可标记为已读的消息')
+    return
+  }
+
+  try {
+    await messageStore.markAllAsRead()
+    ElMessage.success('已将普通通知全部标为已读')
+  } catch {
+    ElMessage.error('全部标记已读失败，请稍后重试')
+  }
+}
+
+function clearReadMessages() {
+  if (!messageStore.hasReadMarkableMessages) {
+    ElMessage.warning('暂无已读消息可清理')
     return
   }
 
   messageStore.clearReadMessages()
-  ElMessage.success('已清除所有已读消息')
+  ElMessage.success('已清除当前视图中的已读消息')
 }
 
 onMounted(() => {
-  void messageStore.fetchMessages()
+  void refreshData()
 })
 </script>
 
 <style scoped>
-/* ========================================
-   MessageCenterView 统一样式
-   使用 colors.css 中定义的 CSS 变量
-   Requirements: 2.1, 5.1, 9.1
-   ======================================== */
-
-/* 页面主容器 - 使用统一的页面容器样式 */
 .message-center {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2xl);
+  gap: 20px;
 }
 
-/* ========================================
-   页面头部样式 - 统一页面头部规范
-   Requirements: 5.1, 5.2, 5.3, 5.4
-   ======================================== */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: var(--spacing-md);
+  gap: 16px;
 }
 
 .header-content {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .page-title {
@@ -233,130 +793,124 @@ onMounted(() => {
 .page-actions {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 12px;
 }
 
-/* ========================================
-   消息卡片样式 - 统一卡片规范
-   Requirements: 2.1, 2.2, 2.4
-   ======================================== */
-.message-card {
-  background: var(--bg-white);
-  border-radius: var(--radius-lg);
+.message-error {
+  margin-bottom: -4px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
   border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-card);
-  transition: box-shadow var(--transition-normal);
-  min-height: 500px;
 }
 
-.message-card:hover {
-  box-shadow: var(--shadow-hover);
+.summary-label {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
-/* ========================================
-   Tab 样式定制 - 统一 Tab 规范
-   Requirements: 5.1, 9.1
-   ======================================== */
+.summary-value {
+  margin: 8px 0 6px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.summary-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.message-card {
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
 .message-tabs :deep(.el-tabs__header) {
-  margin-bottom: var(--spacing-xl);
-  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 20px;
 }
 
-.message-tabs :deep(.el-tabs__nav-wrap::after) {
-  display: none;
-}
-
-.message-tabs :deep(.el-tabs__item) {
-  font-size: 15px;
-  padding: 0 var(--spacing-xl);
-  height: 48px;
-  line-height: 48px;
-  color: var(--text-regular);
-  transition: all var(--transition-fast);
-}
-
-.message-tabs :deep(.el-tabs__item:hover) {
-  color: var(--color-primary);
-}
-
-.message-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--color-primary);
-  font-weight: 600;
-}
-
-.message-tabs :deep(.el-tabs__active-bar) {
-  height: 3px;
-  border-radius: 2px;
-  background-color: var(--color-primary);
-  transition: transform var(--transition-normal);
-}
-
-/* Tab 标签样式 - Requirements: 9.1, 9.3 */
 .tab-label {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  gap: 8px;
 }
 
 .tab-badge {
-  margin-left: var(--spacing-xs);
+  margin-left: 2px;
 }
 
-.tab-badge :deep(.el-badge__content) {
-  font-size: 10px;
-  height: 16px;
-  line-height: 16px;
-  padding: 0 5px;
-  border-radius: var(--radius-sm);
+.message-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* ========================================
-   Tab 切换过渡动画 - 统一过渡动画规范
-   Requirements: 6.1
-   ======================================== */
-.tab-fade-enter-active,
-.tab-fade-leave-active {
-  transition: all var(--transition-normal);
+.message-subfilters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
 }
 
-.tab-fade-enter-from {
-  opacity: 0;
-  transform: translateX(20px);
+.message-subfilters :deep(.el-segmented) {
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
-.tab-fade-leave-to {
-  opacity: 0;
-  transform: translateX(-20px);
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-/* ========================================
-   卡片入场动画 - 统一动画规范
-   Requirements: 6.1
-   ======================================== */
-.card-animate {
-  animation: fadeInUp 0.4s ease-out;
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
+.detail-time {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.detail-body {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--text-main);
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.detail-action-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-action-selector__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  .page-actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
-}
-
-/* ========================================
-   按钮过渡效果 - 统一过渡动画规范
-   Requirements: 6.1
-   ======================================== */
-:deep(.el-button) {
-  transition: all var(--transition-fast);
-}
-
-:deep(.el-button:active) {
-  transform: scale(0.96);
 }
 </style>

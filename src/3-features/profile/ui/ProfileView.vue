@@ -23,12 +23,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import BasicInfo from './BasicInfo.vue'
 import ChangePassword from './ChangePassword.vue'
 import NotificationSettings from './NotificationSettings.vue'
 
-const activeTab = ref('basic')
+const route = useRoute()
+const router = useRouter()
+const validTabs = ['basic', 'password', 'notification'] as const
+type ProfileTab = (typeof validTabs)[number]
+
+const normalizeTab = (tab: unknown): ProfileTab => {
+  if (typeof tab === 'string' && validTabs.includes(tab as ProfileTab)) {
+    return tab as ProfileTab
+  }
+  return 'basic'
+}
+
+const activeTab = ref<ProfileTab>(normalizeTab(route.query.tab))
+
+watch(
+  () => route.query.tab,
+  tab => {
+    const normalizedTab = normalizeTab(tab)
+    if (activeTab.value !== normalizedTab) {
+      activeTab.value = normalizedTab
+    }
+  },
+  { immediate: true }
+)
+
+watch(activeTab, tab => {
+  if (route.query.tab === tab) {
+    return
+  }
+
+  void router.replace({
+    query: {
+      ...route.query,
+      tab
+    }
+  })
+})
 </script>
 
 <style scoped>

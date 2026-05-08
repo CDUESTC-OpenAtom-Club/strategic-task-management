@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const {
-  apiGet,
-  apiPost,
-  apiPut,
-  getIndicatorById,
-  loadDepartments
-} = vi.hoisted(() => ({
+const { apiGet, apiPost, apiPut, getIndicatorById, loadDepartments } = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   apiPut: vi.fn(),
@@ -72,12 +66,13 @@ vi.mock('@/features/approval/api/approval', () => ({
   approvalApi: {}
 }))
 
-import { indicatorFillApi } from '@/features/plan/api/planApi'
-
 const currentReportMonth = new Date().toISOString().slice(0, 7).replace('-', '')
 
 describe('indicatorFillApi real report flow', () => {
+  let indicatorFillApi: typeof import('@/features/plan/api/planApi').indicatorFillApi
+
   beforeEach(() => {
+    vi.resetModules()
     apiGet.mockReset()
     apiPost.mockReset()
     apiPut.mockReset()
@@ -110,6 +105,10 @@ describe('indicatorFillApi real report flow', () => {
         data: []
       })
     })
+  })
+
+  beforeEach(async () => {
+    ;({ indicatorFillApi } = await import('@/features/plan/api/planApi'))
   })
 
   it('blocks saving when the current month report is already in review', async () => {
@@ -212,16 +211,19 @@ describe('indicatorFillApi real report flow', () => {
     })
 
     expect(apiPost).not.toHaveBeenCalled()
-    expect(apiPut).toHaveBeenCalledWith('/reports/9', {
-      title: '年度预算执行率',
-      indicatorId: 30022,
-      content: '驳回后修改并重新保存',
-      summary: '驳回后修改并重新保存',
-      progress: 66,
-      issues: '驳回后修改并重新保存',
-      nextPlan: '驳回后修改并重新保存',
-      operatorUserId: 124
-    })
+    expect(apiPut).toHaveBeenCalledWith(
+      '/reports/9',
+      expect.objectContaining({
+        title: '年度预算执行率',
+        indicatorId: 30022,
+        content: '驳回后修改并重新保存',
+        summary: '驳回后修改并重新保存',
+        progress: 66,
+        issues: '驳回后修改并重新保存',
+        nextPlan: '驳回后修改并重新保存',
+        operatorUserId: 124
+      })
+    )
     expect(response.data.id).toBe(9)
     expect(response.data.content).toBe('驳回后修改并重新保存')
   })

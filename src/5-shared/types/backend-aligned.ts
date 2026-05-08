@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Backend-Aligned Type Definitions
  *
@@ -27,10 +26,6 @@ export enum OrgType {
 
 export enum TaskType {
   BASIC = 'BASIC',
-  REGULAR = 'REGULAR',
-  KEY = 'KEY',
-  SPECIAL = 'SPECIAL',
-  QUANTITATIVE = 'QUANTITATIVE',
   DEVELOPMENT = 'DEVELOPMENT'
 }
 
@@ -539,7 +534,7 @@ export interface IndicatorVO {
   status: 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
   createdAt: string
   updatedAt: string
-  taskType?: 'BASIC' | 'DEVELOPMENT' | 'QUANTITATIVE' | 'QUALITATIVE' | string
+  taskType?: 'BASIC' | 'DEVELOPMENT' | string
   // Extended fields for frontend alignment
   milestones?: MilestoneVO[]
   canDistribute?: boolean

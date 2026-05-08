@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * User Feature - Query API
  *
@@ -56,6 +55,37 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
 export async function getUserById(userId: string | number): Promise<User> {
   const response = await api.get(`/auth/users/${userId}`)
   return response.data
+}
+
+/**
+ * Best-effort user lookup for non-critical UI enhancement paths.
+ *
+ * This method intentionally suppresses 403/404 transport errors so components
+ * can degrade gracefully when the current viewer does not have permission to
+ * read the user directory.
+ */
+export async function tryGetUserById(userId: string | number): Promise<User | null> {
+  const response = await api
+    .getAxiosInstance()
+    .get<{ success?: boolean; data?: User; message?: string } | User>(`/auth/users/${userId}`, {
+      validateStatus: () => true,
+      _skipBusinessErrorThrow: true
+    })
+
+  if (response.status === 403 || response.status === 404) {
+    return null
+  }
+
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(`Failed to fetch user ${userId}: HTTP ${response.status}`)
+  }
+
+  const payload = response.data
+  if (payload && typeof payload === 'object' && 'data' in payload) {
+    return (payload.data as User | undefined) || null
+  }
+
+  return (payload as User | undefined) || null
 }
 
 /**

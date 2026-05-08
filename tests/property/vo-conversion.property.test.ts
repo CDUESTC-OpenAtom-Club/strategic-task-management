@@ -1,15 +1,15 @@
 /**
  * VO 转换属性测试
- * 
+ *
  * **Feature: page-data-verification**
  * - **Property 8: VO to Frontend Type Conversion**
- * 
+ *
  * **Validates: Requirements 7.3**
  */
 import { describe, it, expect, beforeEach, vi, beforeAll } from 'vitest'
 import * as fc from 'fast-check'
 import { setActivePinia, createPinia } from 'pinia'
-import type { IndicatorVO } from '@/api/types/backend-aligned'
+import type { IndicatorVO } from '@/shared/types/backend-aligned'
 
 // ============================================================================
 // Mock localStorage
@@ -18,10 +18,18 @@ const createLocalStorageMock = () => {
   let store: Record<string, string> = {}
   return {
     getItem: vi.fn((key: string) => store[key] || null),
-    setItem: vi.fn((key: string, value: string) => { store[key] = value }),
-    removeItem: vi.fn((key: string) => { delete store[key] }),
-    clear: vi.fn(() => { store = {} }),
-    get length() { return Object.keys(store).length },
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = value
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key]
+    }),
+    clear: vi.fn(() => {
+      store = {}
+    }),
+    get length() {
+      return Object.keys(store).length
+    },
     key: vi.fn((index: number) => Object.keys(store)[index] || null)
   }
 }
@@ -36,7 +44,6 @@ beforeAll(() => {
   })
 })
 
-
 // ============================================================================
 // 类型定义（使用统一的 backend-aligned 类型）
 // ============================================================================
@@ -50,7 +57,6 @@ interface StrategicIndicator {
   year: number
   taskContent: string
 }
-
 
 // ============================================================================
 // 转换函数（从 api/strategic.ts 提取的简化版本）
@@ -82,7 +88,6 @@ function convertStrategicIndicatorToVO(indicator: StrategicIndicator): Indicator
   }
 }
 
-
 // ============================================================================
 // 数据生成器
 // ============================================================================
@@ -107,7 +112,7 @@ const indicatorVOArbitrary: fc.Arbitrary<IndicatorVO> = fc.record({
 describe('Property 8: VO to Frontend Type Conversion', () => {
   /**
    * **Validates: Requirement 7.3**
-   * 
+   *
    * *For any* IndicatorVO returned by the API, converting it to StrategicIndicator
    * and back (round-trip) SHALL preserve all essential field values
    * (id, name, progress, weight, responsibleDept, year).
@@ -121,7 +126,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
   describe('Essential Field Preservation', () => {
     it('should preserve id after conversion', () => {
       fc.assert(
-        fc.property(indicatorVOArbitrary, (vo) => {
+        fc.property(indicatorVOArbitrary, vo => {
           const converted = convertIndicatorVOToStrategicIndicator(vo)
           expect(converted.id).toBe(String(vo.indicatorId))
           return true
@@ -132,7 +137,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
 
     it('should preserve name after conversion', () => {
       fc.assert(
-        fc.property(indicatorVOArbitrary, (vo) => {
+        fc.property(indicatorVOArbitrary, vo => {
           const converted = convertIndicatorVOToStrategicIndicator(vo)
           expect(converted.name).toBe(vo.indicatorDesc)
           return true
@@ -143,7 +148,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
 
     it('should preserve weight after conversion', () => {
       fc.assert(
-        fc.property(indicatorVOArbitrary, (vo) => {
+        fc.property(indicatorVOArbitrary, vo => {
           const converted = convertIndicatorVOToStrategicIndicator(vo)
           expect(converted.weight).toBe(vo.weightPercent)
           return true
@@ -154,7 +159,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
 
     it('should preserve year after conversion', () => {
       fc.assert(
-        fc.property(indicatorVOArbitrary, (vo) => {
+        fc.property(indicatorVOArbitrary, vo => {
           const converted = convertIndicatorVOToStrategicIndicator(vo)
           expect(converted.year).toBe(vo.year)
           return true
@@ -165,7 +170,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
 
     it('should preserve taskContent after conversion', () => {
       fc.assert(
-        fc.property(indicatorVOArbitrary, (vo) => {
+        fc.property(indicatorVOArbitrary, vo => {
           const converted = convertIndicatorVOToStrategicIndicator(vo)
           expect(converted.taskContent).toBe(vo.taskName)
           return true
@@ -174,7 +179,6 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
       )
     })
   })
-
 
   describe('Default Value Handling', () => {
     it('should use default value 0 when progress is undefined', () => {
@@ -186,7 +190,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
         year: 2025,
         taskName: 'Task'
       }
-      
+
       const converted = convertIndicatorVOToStrategicIndicator(vo)
       expect(converted.progress).toBe(0)
     })
@@ -200,7 +204,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
         year: 2025,
         taskName: 'Task'
       }
-      
+
       const converted = convertIndicatorVOToStrategicIndicator(vo)
       expect(converted.responsibleDept).toBe('教务处')
     })
@@ -214,7 +218,7 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
         year: 2025,
         taskName: 'Task'
       }
-      
+
       const converted = convertIndicatorVOToStrategicIndicator(vo)
       expect(converted.ownerDept).toBe('战略发展部')
     })
@@ -223,17 +227,17 @@ describe('Property 8: VO to Frontend Type Conversion', () => {
   describe('Round-Trip Conversion', () => {
     it('should preserve essential fields in round-trip conversion', () => {
       fc.assert(
-        fc.property(indicatorVOArbitrary, (vo) => {
+        fc.property(indicatorVOArbitrary, vo => {
           const converted = convertIndicatorVOToStrategicIndicator(vo)
           const backToVO = convertStrategicIndicatorToVO(converted)
-          
+
           // 验证关键字段保持一致
           expect(backToVO.indicatorId).toBe(vo.indicatorId)
           expect(backToVO.indicatorDesc).toBe(vo.indicatorDesc)
           expect(backToVO.weightPercent).toBe(vo.weightPercent)
           expect(backToVO.year).toBe(vo.year)
           expect(backToVO.taskName).toBe(vo.taskName)
-          
+
           return true
         }),
         { numRuns: 100 }

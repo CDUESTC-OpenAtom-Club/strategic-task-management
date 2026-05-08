@@ -1,23 +1,9 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed } from 'vue'
-import {
-  ElCard,
-  ElSelect,
-  ElOption,
-  ElAvatar,
-  ElIcon,
-  ElEmpty,
-  ElMessage
-} from 'element-plus'
-import {
-  Check,
-  Close,
-  Loading,
-  Clock,
-  Edit
-} from '@element-plus/icons-vue'
+import { ElCard, ElSelect, ElOption, ElIcon, ElEmpty, ElMessage } from 'element-plus'
+import { Check, Close, Loading, Clock, Edit } from '@element-plus/icons-vue'
 import type { WorkflowNode } from '@/shared/types'
+import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 
 /**
  * 自定义审批流程组件
@@ -30,26 +16,29 @@ import type { WorkflowNode } from '@/shared/types'
  * - 当前节点呼吸灯效果
  */
 
-const props = withDefaults(defineProps<{
-  // 审批节点列表
-  nodes: WorkflowNode[]
-  // 当前节点ID
-  currentNodeId?: string
-  // 驳回原因
-  rejectionReason?: string
-  // 是否允许自定义审批人
-  allowCustomApprover?: boolean
-  // 是否只读
-  readonly?: boolean
-  // 审批类型：'distribution' = 下发审批(我们审批下级), 'submission' = 上报审批(下级提交给我们审批)
-  approvalType?: 'distribution' | 'submission'
-}>(), {
-  currentNodeId: '',
-  rejectionReason: '',
-  allowCustomApprover: false,
-  readonly: false,
-  approvalType: 'submission'
-})
+const props = withDefaults(
+  defineProps<{
+    // 审批节点列表
+    nodes: WorkflowNode[]
+    // 当前节点ID
+    currentNodeId?: string
+    // 驳回原因
+    rejectionReason?: string
+    // 是否允许自定义审批人
+    allowCustomApprover?: boolean
+    // 是否只读
+    readonly?: boolean
+    // 审批类型：'distribution' = 下发审批(我们审批下级), 'submission' = 上报审批(下级提交给我们审批)
+    approvalType?: 'distribution' | 'submission'
+  }>(),
+  {
+    currentNodeId: '',
+    rejectionReason: '',
+    allowCustomApprover: false,
+    readonly: false,
+    approvalType: 'submission'
+  }
+)
 
 const emit = defineEmits<{
   // 添加节点
@@ -83,12 +72,18 @@ const hasRejection = computed(() => {
 // 获取节点图标
 const getNodeIcon = (status: WorkflowNode['status']) => {
   switch (status) {
-    case 'completed': return Check
-    case 'current': return Loading
-    case 'rejected': return Close
-    case 'withdrawn': return Close
-    case 'waiting': return Clock
-    default: return Clock
+    case 'completed':
+      return Check
+    case 'current':
+      return Loading
+    case 'rejected':
+      return Close
+    case 'withdrawn':
+      return Close
+    case 'waiting':
+      return Clock
+    default:
+      return Clock
   }
 }
 
@@ -99,14 +94,18 @@ const getNodeClass = (status: WorkflowNode['status']) => {
 
 // 格式化时间
 const formatTime = (date?: Date) => {
-  if (!date) {return ''}
+  if (!date) {
+    return ''
+  }
   const d = new Date(date)
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 // 检查节点是否可编辑
 const canEditNode = (node: WorkflowNode) => {
-  if (!props.allowCustomApprover || props.readonly) {return false}
+  if (!props.allowCustomApprover || props.readonly) {
+    return false
+  }
   // 只能编辑当前或待处理的节点
   return node.status === 'current' || node.status === 'pending'
 }
@@ -132,6 +131,28 @@ const cancelEdit = (nodeId: string) => {
   editingNode.value = null
 }
 
+const getCandidateAvatarText = (displayName?: string) => {
+  if (!displayName) {
+    return '无'
+  }
+  return displayName.slice(0, 1)
+}
+
+const shouldShowCandidateList = (node: WorkflowNode) => {
+  return Array.isArray(node.approverCandidates) && node.approverCandidates.length > 0
+}
+
+const getOrSignLabel = (node: WorkflowNode) => {
+  return shouldShowCandidateList(node) ? '或签' : ''
+}
+
+const getCandidateSummary = (node: WorkflowNode) => {
+  const total = node.approverCandidates?.length || 0
+  if (total <= 0) {
+    return ''
+  }
+  return `${total}人审批中，1人同意即可通过，预计3小时完成`
+}
 </script>
 
 <template>
@@ -170,44 +191,83 @@ const cancelEdit = (nodeId: string) => {
                 <div class="node-title-row">
                   <span class="node-step">步骤 {{ index + 1 }}</span>
                   <span class="node-name">{{ node.name }}</span>
+                  <span v-if="getOrSignLabel(node)" class="node-sign-mode">
+                    {{ getOrSignLabel(node) }}
+                  </span>
                 </div>
 
                 <!-- 当前节点标识 -->
-                <ElTag v-if="node.status === 'current'" class="node-status-tag" type="warning" effect="light" size="small">
+                <ElTag
+                  v-if="node.status === 'current'"
+                  class="node-status-tag"
+                  type="warning"
+                  effect="light"
+                  size="small"
+                >
                   <el-icon class="pulse-icon"><Loading /></el-icon>
-                  待审批
+                  审批中
                 </ElTag>
-                <ElTag v-else-if="node.status === 'completed'" class="node-status-tag" type="success" effect="light" size="small">
+                <ElTag
+                  v-else-if="node.status === 'completed'"
+                  class="node-status-tag"
+                  type="success"
+                  effect="light"
+                  size="small"
+                >
                   <el-icon><Check /></el-icon>
                   已通过
                 </ElTag>
-                <ElTag v-else-if="node.status === 'rejected'" class="node-status-tag" type="danger" effect="light" size="small">
+                <ElTag
+                  v-else-if="node.status === 'rejected'"
+                  class="node-status-tag"
+                  type="danger"
+                  effect="light"
+                  size="small"
+                >
                   <el-icon><Close /></el-icon>
                   已驳回
                 </ElTag>
-                <ElTag v-else-if="node.status === 'withdrawn'" class="node-status-tag" type="info" effect="light" size="small">
+                <ElTag
+                  v-else-if="node.status === 'withdrawn'"
+                  class="node-status-tag"
+                  type="info"
+                  effect="light"
+                  size="small"
+                >
                   <el-icon><Close /></el-icon>
                   已撤回
                 </ElTag>
-                <ElTag v-else-if="node.status === 'waiting'" class="node-status-tag" type="info" effect="light" size="small">
+                <ElTag
+                  v-else-if="node.status === 'waiting'"
+                  class="node-status-tag"
+                  type="info"
+                  effect="light"
+                  size="small"
+                >
                   <el-icon><Clock /></el-icon>
                   等待中
                 </ElTag>
                 <ElTag v-else class="node-status-tag" type="warning" effect="light" size="small">
                   <el-icon><Clock /></el-icon>
-                  待审批
+                  审批中
                 </ElTag>
               </div>
 
               <!-- 审批人信息 -->
-              <div v-if="node.operatorName || node.operateTime || canEditNode(node)" class="node-approver">
+              <div
+                v-if="
+                  (!shouldShowCandidateList(node) && (node.operatorName || node.operateTime)) ||
+                  canEditNode(node)
+                "
+                class="node-approver"
+              >
                 <div v-if="node.operatorName || node.operateTime" class="approver-info">
-                  <el-avatar
+                  <AppAvatar
+                    :src="node.operatorAvatar"
                     :size="32"
                     :class="['approver-avatar', { 'is-placeholder': !node.operatorName }]"
-                  >
-                    {{ node.operatorName ? node.operatorName[0] : '无' }}
-                  </el-avatar>
+                    :name="node.operatorName || '无'"
+                  />
                   <div class="approver-details">
                     <span v-if="node.operatorName" class="approver-name">
                       {{ node.operatorName }}
@@ -225,10 +285,42 @@ const cancelEdit = (nodeId: string) => {
                   size="small"
                   :type="editingNode === node.id ? 'success' : 'primary'"
                   link
-                  @click="editingNode === node.id ? confirmApproverChange(node.id) : startEditApprover(node.id)"
+                  @click="
+                    editingNode === node.id
+                      ? confirmApproverChange(node.id)
+                      : startEditApprover(node.id)
+                  "
                 >
                   {{ editingNode === node.id ? '确认' : '修改审批人' }}
                 </ElButton>
+              </div>
+
+              <div v-if="shouldShowCandidateList(node)" class="candidate-panel">
+                <div class="candidate-panel-label">可审批成员</div>
+                <div class="candidate-panel-summary">
+                  {{ getCandidateSummary(node) }}
+                </div>
+                <div class="candidate-list">
+                  <div
+                    v-for="candidate in node.approverCandidates"
+                    :key="`${node.id}-${candidate.userId || candidate.displayName}`"
+                    :class="['candidate-item', { 'is-approved': candidate.approved }]"
+                  >
+                    <div class="candidate-avatar-wrap">
+                      <AppAvatar
+                        :src="candidate.avatar"
+                        :size="42"
+                        class="candidate-avatar"
+                        :name="candidate.displayName"
+                      />
+                      <span v-if="candidate.approved" class="candidate-approved-badge">
+                        <el-icon><Check /></el-icon>
+                      </span>
+                    </div>
+                    <div class="candidate-name">{{ candidate.displayName }}</div>
+                    <div v-if="candidate.approved" class="candidate-state">已审批通过</div>
+                  </div>
+                </div>
               </div>
 
               <!-- 审批意见 -->
@@ -252,9 +344,7 @@ const cancelEdit = (nodeId: string) => {
                     :value="user.id"
                   >
                     <div class="user-option">
-                      <ElAvatar :size="24" class="user-option-avatar">
-                        {{ user.name[0] }}
-                      </ElAvatar>
+                      <AppAvatar :size="24" class="user-option-avatar" :name="user.name" />
                       <div class="user-option-info">
                         <span class="user-option-name">{{ user.name }}</span>
                         <span class="user-option-org">{{ user.org }}</span>
@@ -262,12 +352,7 @@ const cancelEdit = (nodeId: string) => {
                     </div>
                   </ElOption>
                 </ElSelect>
-                <ElButton
-                  size="small"
-                  link
-                  type="info"
-                  @click="cancelEdit(node.id)"
-                >
+                <ElButton size="small" link type="info" @click="cancelEdit(node.id)">
                   取消
                 </ElButton>
               </div>
@@ -275,16 +360,6 @@ const cancelEdit = (nodeId: string) => {
           </div>
         </div>
       </div>
-
-      <!-- 驳回原因提示 -->
-      <ElAlert
-        v-if="hasRejection && rejectionReason"
-        type="error"
-        :title="'驳回原因：' + rejectionReason"
-        show-icon
-        :closable="false"
-        class="rejection-alert"
-      />
     </div>
   </div>
 </template>
@@ -357,7 +432,8 @@ const cancelEdit = (nodeId: string) => {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 rgba(230, 162, 60, 0.4);
   }
   50% {
@@ -437,6 +513,18 @@ const cancelEdit = (nodeId: string) => {
   color: var(--el-text-color-primary);
 }
 
+.node-sign-mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .node-status-tag {
   flex-shrink: 0;
   margin-top: 2px;
@@ -464,8 +552,12 @@ const cancelEdit = (nodeId: string) => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 审批人信息 */
@@ -505,6 +597,85 @@ const cancelEdit = (nodeId: string) => {
 .approve-time {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.candidate-panel {
+  padding: 14px 16px;
+  background: var(--el-fill-color-lighter);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+.candidate-panel-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.candidate-panel-summary {
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+
+.candidate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.candidate-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 60px;
+}
+
+.candidate-avatar-wrap {
+  position: relative;
+}
+
+.candidate-avatar {
+  background: linear-gradient(135deg, #5ba7ff, #3b82f6);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.2);
+}
+
+.candidate-approved-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--el-color-success);
+  color: #fff;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+
+.candidate-name {
+  max-width: 74px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--el-text-color-primary);
+  text-align: center;
+  word-break: break-word;
+}
+
+.candidate-state {
+  font-size: 12px;
+  color: var(--el-color-success);
+}
+
+.candidate-item.is-approved .candidate-avatar {
+  background: linear-gradient(135deg, #34c759, #22c55e);
+  box-shadow: 0 8px 18px rgba(34, 197, 94, 0.22);
 }
 
 /* 审批意见 */

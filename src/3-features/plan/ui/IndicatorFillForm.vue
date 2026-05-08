@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch } from 'vue'
 import {
   ElForm,
@@ -17,7 +16,12 @@ import {
   type UploadProps
 } from 'element-plus'
 import { Delete as _Delete, UploadFilled } from '@element-plus/icons-vue'
-import type { Indicator, IndicatorFill, IndicatorFillForm, Milestone as _Milestone } from '@/shared/types'
+import type {
+  Indicator,
+  IndicatorFill,
+  IndicatorFillForm,
+  Milestone as _Milestone
+} from '@/shared/types'
 import { usePlanStore } from '@/features/plan/model/store'
 import { logger } from '@/shared/lib/utils/logger'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'

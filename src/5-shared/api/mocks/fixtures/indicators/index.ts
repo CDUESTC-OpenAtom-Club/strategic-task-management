@@ -19,16 +19,12 @@ import { indicators2025 } from './indicators2025'
 import { indicators2026 } from './indicators2026'
 
 // 合并所有历史数据（不含当前工作年份2026）
-export const allHistoricalIndicators = [
-  ...indicators2023,
-  ...indicators2024,
-  ...indicators2025,
-]
+export const allHistoricalIndicators = [...indicators2023, ...indicators2024, ...indicators2025]
 
 // 合并所有数据
 export const allIndicators = [
   ...indicators2023,
   ...indicators2024,
   ...indicators2025,
-  ...indicators2026,
+  ...indicators2026
 ]

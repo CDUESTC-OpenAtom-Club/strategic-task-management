@@ -11,7 +11,7 @@ import type { Plan, PlanStatus, PlanFill, IndicatorFill, IndicatorFillForm } fro
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
-import { withExponentialRetry } from '@/shared/lib/api/wrappers'
+import { withExponentialRetry } from '@/shared/api/wrappers'
 import { ElMessage } from 'element-plus'
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
@@ -55,10 +55,20 @@ export const usePlanStore = defineStore('plan', () => {
 
   const visiblePlans = computed(() => {
     const authStore = useAuthStore()
-    const userOrgId = authStore.user?.orgId || authStore.user?.department
+    const rawUserOrgId = authStore.user?.orgId
+    const userOrgId =
+      typeof rawUserOrgId === 'number'
+        ? rawUserOrgId
+        : typeof rawUserOrgId === 'string'
+          ? Number(rawUserOrgId)
+          : NaN
 
     if (authStore.user?.role === 'strategic_dept') {
       return filteredPlans.value
+    }
+
+    if (!Number.isFinite(userOrgId)) {
+      return []
     }
 
     return filteredPlans.value.filter(p => p.org_id === userOrgId)
@@ -66,6 +76,10 @@ export const usePlanStore = defineStore('plan', () => {
 
   const getPlanById = (id: number | string) => {
     return plans.value.find(p => p.id === id)
+  }
+
+  const getPlanFillsByPlanId = (planId: number | string) => {
+    return planFills.value.filter(fill => String(fill.planId) === String(planId))
   }
 
   const pendingPlanFills = computed(() => {
@@ -221,9 +235,32 @@ export const usePlanStore = defineStore('plan', () => {
 
       if (hasApiData(response) && response.data) {
         const existingPlan = plans.value.find(p => p.id === planId)
+        const existingStatus = String(
+          (existingPlan as (Plan & { status?: unknown }) | undefined)?.status || ''
+        )
+          .trim()
+          .toUpperCase()
+        const incomingStatus = String((response.data as Plan & { status?: unknown }).status || '')
+          .trim()
+          .toUpperCase()
+        const shouldPreserveOptimisticApprovalState =
+          existingStatus === 'PENDING' && (incomingStatus === '' || incomingStatus === 'DRAFT')
+
         const mergedPlan = {
           ...(existingPlan || {}),
           ...response.data,
+          ...(shouldPreserveOptimisticApprovalState
+            ? {
+                status: (existingPlan as Plan & { status?: unknown }).status,
+                workflowStatus:
+                  (existingPlan as (Plan & { workflowStatus?: unknown }) | undefined)
+                    ?.workflowStatus ??
+                  (response.data as Plan & { workflowStatus?: unknown }).workflowStatus,
+                canWithdraw:
+                  (existingPlan as (Plan & { canWithdraw?: boolean }) | undefined)?.canWithdraw ??
+                  (response.data as Plan & { canWithdraw?: boolean }).canWithdraw
+              }
+            : {}),
           targetOrgName:
             response.data.targetOrgName ||
             (existingPlan as (Plan & { targetOrgName?: string }) | undefined)?.targetOrgName,
@@ -442,8 +479,8 @@ export const usePlanStore = defineStore('plan', () => {
           canWithdraw: true
         }
         const mergedPlan = {
-          ...optimisticPatch,
-          ...response.data
+          ...response.data,
+          ...optimisticPatch
         }
 
         // 更新本地 Plan 状态
@@ -864,6 +901,7 @@ export const usePlanStore = defineStore('plan', () => {
     filteredPlans,
     visiblePlans,
     getPlanById,
+    getPlanFillsByPlanId,
     getPlanByTargetOrgAndYear,
     pendingPlanFills,
     visiblePendingFills,

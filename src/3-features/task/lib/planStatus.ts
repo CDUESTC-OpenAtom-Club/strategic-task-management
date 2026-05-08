@@ -1,9 +1,6 @@
 import type { StatusTagType } from '@/shared/lib/utils/formatters'
 
-export type CanonicalPlanStatus =
-  | 'DRAFT'
-  | 'PENDING'
-  | 'DISTRIBUTED'
+export type CanonicalPlanStatus = 'DRAFT' | 'PENDING' | 'DISTRIBUTED'
 
 const PLAN_STATUS_NORMALIZATION_MAP: Record<string, CanonicalPlanStatus> = {
   DRAFT: 'DRAFT',
@@ -24,11 +21,12 @@ const PLAN_STATUS_NORMALIZATION_MAP: Record<string, CanonicalPlanStatus> = {
   ARCHIVED: 'DRAFT'
 }
 
-const PLAN_STATUS_DISPLAY_MAP: Record<CanonicalPlanStatus, { label: string; type: StatusTagType }> = {
-  DRAFT: { label: '草稿', type: 'info' },
-  PENDING: { label: '待审批', type: 'warning' },
-  DISTRIBUTED: { label: '已下发', type: 'success' }
-}
+const PLAN_STATUS_DISPLAY_MAP: Record<CanonicalPlanStatus, { label: string; type: StatusTagType }> =
+  {
+    DRAFT: { label: '草稿', type: 'info' },
+    PENDING: { label: '审批中', type: 'warning' },
+    DISTRIBUTED: { label: '已下发', type: 'success' }
+  }
 
 export function normalizePlanStatus(status: unknown): CanonicalPlanStatus | null {
   const raw = String(status ?? '').trim()

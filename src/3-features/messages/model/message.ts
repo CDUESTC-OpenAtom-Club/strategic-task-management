@@ -1,180 +1,394 @@
-/**
- * Message Store
- *
- * Manages system messages and notifications for the message center and header badge.
- */
-
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import type { Message } from '@/shared/types'
-import { messagesApi, type MessageItem } from '@/features/messages/api/messagesApi'
+import type { Message, MessageBizType } from '@/shared/types'
+import {
+  messagesApi,
+  type MessageCenterSummary,
+  type MessageItem
+} from '@/features/messages/api/messagesApi'
 
-const mockMessages: Message[] = [
-  {
-    id: 'msg-1',
-    type: 'alert',
-    title: '科研指标存在严重预警',
-    content: '科研处“高水平论文产出”进度低于预期，请尽快核查并更新说明。',
-    severity: 'severe',
-    isRead: false,
-    createdAt: new Date('2026-03-16T09:20:00')
-  },
-  {
-    id: 'msg-2',
-    type: 'approval',
-    title: '有新的计划待审核',
-    content: '计算机学院提交了 2026 年度计划，请前往审批中心处理。',
-    severity: 'moderate',
-    isRead: false,
-    createdAt: new Date('2026-03-15T15:10:00'),
-    relatedId: 'plan-fill-1',
-    actionUrl: '/messages'
-  },
-  {
-    id: 'msg-3',
-    type: 'system',
-    title: '系统维护提醒',
-    content: '本周日 02:00-06:00 将进行系统维护，期间部分功能可能不可用。',
-    isRead: true,
-    createdAt: new Date('2026-03-14T08:00:00')
+function createEmptySummary(): MessageCenterSummary {
+  return {
+    totalCount: 0,
+    todoCount: 0,
+    approvalCount: 0,
+    reminderCount: 0,
+    systemCount: 0,
+    riskCount: 0,
+    capabilities: {
+      riskEnabled: false,
+      approvalAggregationEnabled: true,
+      detailDrawerEnabled: true
+    },
+    partialSuccess: false,
+    unavailableSources: []
   }
-]
+}
 
-export const useMessageStore = defineStore('message', () => {
-  const messages = ref<Message[]>([])
-  const loading = ref(false)
+function isApprovalBizType(bizType?: MessageBizType): boolean {
+  return bizType === 'APPROVAL_TODO' || bizType === 'APPROVAL_RESULT'
+}
 
+export const useMessageStore = defineStore('message-center', () => {
+  const rawMessages = ref<Message[]>([])
+  const hiddenReadMessageIds = ref<Set<string>>(new Set())
+  const summary = ref<MessageCenterSummary>(createEmptySummary())
+  const listLoading = ref(false)
+  const summaryLoading = ref(false)
+  const detailLoading = ref(false)
+  const error = ref<string | null>(null)
+
+  const loading = computed(() => listLoading.value || summaryLoading.value)
+  const capabilities = computed(() => summary.value.capabilities)
+  const messages = computed(() =>
+    rawMessages.value.filter(message => !hiddenReadMessageIds.value.has(message.id))
+  )
   const visibleMessages = computed(() => messages.value)
+  const todoMessages = computed(() => messages.value.filter(message => isActionRequired(message)))
   const reminderMessages = computed(() =>
-    messages.value.filter(message => message.type === 'reminder')
+    messages.value.filter(message => message.bizType === 'REMINDER_NOTICE')
   )
-  const alertMessages = computed(() => messages.value.filter(message => message.type === 'alert'))
+  const alertMessages = computed(() =>
+    messages.value.filter(message => message.category === 'RISK')
+  )
   const approvalMessages = computed(() =>
-    messages.value.filter(message => message.type === 'approval')
+    messages.value.filter(message => isApprovalBizType(message.bizType))
   )
-  const systemMessages = computed(() => messages.value.filter(message => message.type === 'system'))
+  const systemMessages = computed(() =>
+    messages.value.filter(
+      message => message.bizType === 'SYSTEM_NOTICE' || message.bizType === 'BUSINESS_NOTICE'
+    )
+  )
+  const hasUnreadMarkableMessages = computed(() =>
+    rawMessages.value.some(message => canMarkMessageAsRead(message) && !message.isRead)
+  )
+  const hasReadMarkableMessages = computed(() =>
+    rawMessages.value.some(message => canMarkMessageAsRead(message) && message.isRead)
+  )
+  const totalCount = computed(() => summary.value.totalCount)
 
-  const unreadCount = computed(() => ({
-    all: messages.value.filter(message => !message.isRead).length,
-    reminders: reminderMessages.value.filter(message => !message.isRead).length,
-    alerts: alertMessages.value.filter(message => !message.isRead).length,
-    approvals: approvalMessages.value.filter(message => !message.isRead).length,
-    system: systemMessages.value.filter(message => !message.isRead).length
-  }))
-
-  function toStoreMessage(message: MessageItem): Message {
-    const normalizedType =
-      message.type === 'ALERT'
-        ? 'alert'
-        : message.type === 'WARNING'
-          ? 'alert'
-          : message.type === 'REMINDER'
-            ? 'reminder'
-            : message.type === 'SYSTEM'
-              ? 'system'
-              : message.type === 'NOTIFICATION' &&
-                  String(message.status || '')
-                    .toUpperCase()
-                    .includes('APPRO')
-                ? 'approval'
-                : message.type === 'NOTIFICATION'
-                  ? 'system'
-                  : String(message.type || 'system').toLowerCase()
+  const unreadCount = computed(() => {
+    const reminderCount = rawMessages.value.filter(
+      message => message.bizType === 'REMINDER_NOTICE' && !message.isRead
+    ).length
+    const alertCount = rawMessages.value.filter(
+      message => message.category === 'RISK' && !message.isRead
+    ).length
+    const systemCount = rawMessages.value.filter(
+      message =>
+        (message.bizType === 'SYSTEM_NOTICE' || message.bizType === 'BUSINESS_NOTICE') &&
+        !message.isRead
+    ).length
+    const todoCount = rawMessages.value.filter(message => isActionRequired(message)).length
+    const approvalCount = rawMessages.value.filter(message =>
+      message.bizType === 'APPROVAL_RESULT' ? !message.isRead : message.bizType === 'APPROVAL_TODO'
+    ).length
 
     return {
-      id: String(message.id),
-      type: normalizedType,
+      all:
+        todoCount +
+        reminderCount +
+        alertCount +
+        systemCount +
+        rawMessages.value.filter(
+          message => message.bizType === 'APPROVAL_RESULT' && !message.isRead
+        ).length,
+      todo: todoCount,
+      reminders: reminderCount,
+      alerts: alertCount,
+      approvals: approvalCount,
+      system: systemCount
+    }
+  })
+
+  function isActionRequired(message?: Pick<Message, 'bizType' | 'actionState'> | null): boolean {
+    return message?.bizType === 'APPROVAL_TODO' || message?.actionState === 'ACTION_REQUIRED'
+  }
+
+  function canMarkMessageAsRead(message?: Message | null): boolean {
+    return Boolean(message?.canMarkAsRead) && !isActionRequired(message)
+  }
+
+  function normalizeSeverity(severity?: string | null): Message['severity'] {
+    const normalized = String(severity || '')
+      .trim()
+      .toUpperCase()
+    switch (normalized) {
+      case 'P1':
+      case 'HIGH':
+      case 'CRITICAL':
+      case 'MAJOR':
+        return 'severe'
+      case 'P2':
+      case 'MEDIUM':
+      case 'MODERATE':
+      case 'MINOR':
+        return 'moderate'
+      case 'P3':
+      case 'LOW':
+      default:
+        return normalized ? 'normal' : undefined
+    }
+  }
+
+  function mapMessageType(message: MessageItem): Message['type'] {
+    if (message.category === 'RISK') {
+      return 'alert'
+    }
+    if (message.bizType === 'REMINDER_NOTICE') {
+      return 'reminder'
+    }
+    if (isApprovalBizType(message.bizType)) {
+      return 'approval'
+    }
+    return 'system'
+  }
+
+  function toStoreMessage(message: MessageItem): Message {
+    const isRead = message.bizType === 'APPROVAL_TODO' ? false : message.readState === 'READ'
+    return {
+      id: message.messageId,
+      messageId: message.messageId,
+      type: mapMessageType(message),
       title: message.title,
-      content: message.content,
-      severity: message.severity?.toLowerCase(),
-      isRead: message.isRead,
+      content: message.summary || message.content,
+      detailContent: message.content,
+      severity: normalizeSeverity(message.severity || message.priority),
+      isRead,
       createdAt: new Date(message.createdAt),
-      relatedId: message.entityId != null ? String(message.entityId) : undefined,
-      actionUrl: message.link
+      actionUrl: message.actionUrl || undefined,
+      entityType: message.entityType || undefined,
+      entityId:
+        message.entityId !== null && message.entityId !== undefined
+          ? String(message.entityId)
+          : undefined,
+      approvalInstanceId: message.approvalInstanceId ?? undefined,
+      status: message.actionState || message.readState || undefined,
+      category: message.category,
+      bizType: message.bizType,
+      readState: message.readState || undefined,
+      actionState: message.actionState || undefined,
+      canMarkAsRead: message.canMarkAsRead,
+      canViewDetail: message.canViewDetail,
+      canProcess: message.canProcess,
+      senderDisplay: message.senderDisplay || undefined,
+      currentStepName: message.currentStepName || undefined,
+      currentAssigneeDisplay: message.currentAssigneeDisplay || undefined,
+      metadata: message.metadata ?? undefined,
+      syntheticSource: message.sourceType === 'workflow' ? 'pending_approval' : 'notification'
+    }
+  }
+
+  function recomputeSummaryFromMessages(): void {
+    const todoCount = rawMessages.value.filter(message => isActionRequired(message)).length
+    const approvalResultUnread = rawMessages.value.filter(
+      message => message.bizType === 'APPROVAL_RESULT' && !message.isRead
+    ).length
+    const reminderCount = rawMessages.value.filter(
+      message => message.bizType === 'REMINDER_NOTICE' && !message.isRead
+    ).length
+    const systemCount = rawMessages.value.filter(
+      message =>
+        (message.bizType === 'SYSTEM_NOTICE' || message.bizType === 'BUSINESS_NOTICE') &&
+        !message.isRead
+    ).length
+    const riskCount = rawMessages.value.filter(
+      message => message.category === 'RISK' && !message.isRead
+    ).length
+
+    summary.value = {
+      ...summary.value,
+      totalCount: todoCount + approvalResultUnread + reminderCount + systemCount + riskCount,
+      todoCount,
+      approvalCount: todoCount + approvalResultUnread,
+      reminderCount,
+      systemCount,
+      riskCount
+    }
+  }
+
+  function cleanupHiddenReadMessages(): void {
+    hiddenReadMessageIds.value = new Set(
+      [...hiddenReadMessageIds.value].filter(messageId => {
+        const message = rawMessages.value.find(item => item.id === messageId)
+        return Boolean(message && canMarkMessageAsRead(message) && message.isRead)
+      })
+    )
+  }
+
+  function applyMessageDetail(message: MessageItem): Message {
+    const nextMessage = toStoreMessage(message)
+    const targetIndex = rawMessages.value.findIndex(item => item.id === nextMessage.id)
+    if (targetIndex === -1) {
+      rawMessages.value = [nextMessage, ...rawMessages.value]
+    } else {
+      rawMessages.value.splice(targetIndex, 1, nextMessage)
+    }
+    cleanupHiddenReadMessages()
+    return nextMessage
+  }
+
+  async function fetchSummary() {
+    summaryLoading.value = true
+    try {
+      summary.value = await messagesApi.getSummary()
+      error.value = null
+      return summary.value
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '消息摘要加载失败'
+      summary.value = createEmptySummary()
+      throw err
+    } finally {
+      summaryLoading.value = false
     }
   }
 
   async function fetchMessages() {
-    loading.value = true
+    listLoading.value = true
     try {
       const remoteMessages = await messagesApi.getAllMessages()
-      if (remoteMessages.length > 0) {
-        messages.value = remoteMessages.map(toStoreMessage)
-        return
-      }
-
-      messages.value = mockMessages.map(message => ({ ...message }))
+      rawMessages.value = remoteMessages.map(toStoreMessage)
+      cleanupHiddenReadMessages()
+      recomputeSummaryFromMessages()
+      error.value = null
+      return rawMessages.value
+    } catch (err) {
+      rawMessages.value = []
+      cleanupHiddenReadMessages()
+      error.value = err instanceof Error ? err.message : '消息列表加载失败'
+      throw err
     } finally {
-      loading.value = false
+      listLoading.value = false
+    }
+  }
+
+  async function refreshMessageCenter() {
+    const results = await Promise.allSettled([fetchSummary(), fetchMessages()])
+    const rejected = results.filter(result => result.status === 'rejected')
+    if (rejected.length === results.length) {
+      throw new Error(error.value || '消息中心加载失败')
     }
   }
 
   function initializeMessages() {
-    if (messages.value.length === 0) {
-      messages.value = mockMessages.map(message => ({ ...message }))
+    if (!rawMessages.value.length) {
+      void refreshMessageCenter()
     }
   }
 
-  function isRemoteNotificationId(messageId: string): boolean {
-    return /^\d+$/.test(String(messageId).trim())
+  async function fetchMessageDetail(messageId: string) {
+    detailLoading.value = true
+    try {
+      const detail = await messagesApi.getMessageDetail(messageId)
+      return applyMessageDetail(detail)
+    } finally {
+      detailLoading.value = false
+    }
   }
 
   async function markAsRead(messageId: string) {
-    const message = messages.value.find(item => item.id === messageId)
-    if (message) {
-      message.isRead = true
-    }
-    if (!isRemoteNotificationId(messageId)) {
+    const message = rawMessages.value.find(item => item.id === messageId)
+    if (!message || !canMarkMessageAsRead(message) || message.isRead) {
       return
     }
+
+    const previousReadState = message.isRead
+    message.isRead = true
+    message.readState = 'READ'
+    recomputeSummaryFromMessages()
+    cleanupHiddenReadMessages()
+
     try {
       await messagesApi.markAsRead(messageId)
-    } catch {
-      // Keep optimistic local state when remote read sync is unavailable.
+    } catch (err) {
+      message.isRead = previousReadState
+      message.readState = previousReadState ? 'READ' : 'UNREAD'
+      recomputeSummaryFromMessages()
+      cleanupHiddenReadMessages()
+      throw err
     }
   }
 
   async function markAllAsRead() {
-    messages.value.forEach(message => {
+    const targets = rawMessages.value.filter(
+      message => canMarkMessageAsRead(message) && !message.isRead
+    )
+    if (!targets.length) {
+      return
+    }
+
+    const previousStates = targets.map(message => ({
+      id: message.id,
+      isRead: message.isRead,
+      readState: message.readState
+    }))
+
+    targets.forEach(message => {
       message.isRead = true
+      message.readState = 'READ'
     })
+    recomputeSummaryFromMessages()
+    cleanupHiddenReadMessages()
+
     try {
-      const remoteMessageIds = messages.value
-        .map(message => String(message.id))
-        .filter(isRemoteNotificationId)
-
-      if (remoteMessageIds.length === 0) {
-        return
-      }
-
-      await messagesApi.markMultipleAsRead(remoteMessageIds)
-    } catch {
-      // Keep optimistic local state when remote batch sync is unavailable.
+      await messagesApi.markAllAsRead()
+    } catch (err) {
+      previousStates.forEach(previous => {
+        const target = rawMessages.value.find(message => message.id === previous.id)
+        if (target) {
+          target.isRead = previous.isRead
+          target.readState = previous.readState
+        }
+      })
+      recomputeSummaryFromMessages()
+      cleanupHiddenReadMessages()
+      throw err
     }
   }
 
   function clearReadMessages() {
-    messages.value = messages.value.filter(message => !message.isRead)
+    const nextHiddenIds = new Set(hiddenReadMessageIds.value)
+    rawMessages.value.forEach(message => {
+      if (canMarkMessageAsRead(message) && message.isRead) {
+        nextHiddenIds.add(message.id)
+      }
+    })
+    hiddenReadMessageIds.value = nextHiddenIds
   }
 
   function deleteMessage(messageId: string) {
-    const index = messages.value.findIndex(message => message.id === messageId)
-    if (index !== -1) {
-      messages.value.splice(index, 1)
+    rawMessages.value = rawMessages.value.filter(message => message.id !== messageId)
+    if (hiddenReadMessageIds.value.has(messageId)) {
+      const nextHiddenIds = new Set(hiddenReadMessageIds.value)
+      nextHiddenIds.delete(messageId)
+      hiddenReadMessageIds.value = nextHiddenIds
     }
+    recomputeSummaryFromMessages()
   }
 
   return {
-    messages,
+    summary,
+    capabilities,
+    error,
     loading,
+    summaryLoading,
+    detailLoading,
+    totalCount,
+    messages,
     visibleMessages,
+    todoMessages,
     reminderMessages,
     alertMessages,
     approvalMessages,
     systemMessages,
     unreadCount,
+    hasUnreadMarkableMessages,
+    hasReadMarkableMessages,
+    fetchSummary,
     fetchMessages,
+    refreshMessageCenter,
     initializeMessages,
+    fetchMessageDetail,
     markAsRead,
     markAllAsRead,
     clearReadMessages,

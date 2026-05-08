@@ -170,7 +170,7 @@ describe('Date Formatting', () => {
       const start = '2026-03-12'
       const end = '2026-03-14'
       const range = getDateRange(start, end)
-      
+
       expect(range).toHaveLength(3)
       expect(formatDate(range[0])).toBe('2026-03-12')
       expect(formatDate(range[1])).toBe('2026-03-13')
@@ -180,7 +180,7 @@ describe('Date Formatting', () => {
     it('should return single date when start equals end', () => {
       const date = '2026-03-12'
       const range = getDateRange(date, date)
-      
+
       expect(range).toHaveLength(1)
       expect(formatDate(range[0])).toBe('2026-03-12')
     })
@@ -189,7 +189,7 @@ describe('Date Formatting', () => {
       const start = new Date('2026-03-12')
       const end = new Date('2026-03-13')
       const range = getDateRange(start, end)
-      
+
       expect(range).toHaveLength(2)
     })
   })

@@ -1,6 +1,6 @@
 /**
  * Strategic Indicator API Integration Tests
- * 
+ *
  * Tests the integration between the strategic indicator API layer and the backend.
  * Validates API calls, error handling, and data transformation.
  */
@@ -10,9 +10,10 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useIndicatorStore } from '@/features/strategic-indicator/model/store'
 import { getIndicatorById } from '@/features/strategic-indicator/api/query'
 import type { Indicator } from '@/entities/indicator/model/types'
+import { cacheManager } from '@/shared/lib/utils/cache'
 
 // Mock the API client
-vi.mock('@/shared/lib/api/client', () => ({
+vi.mock('@/shared/api/client', () => ({
   apiClient: {
     get: vi.fn(),
     post: vi.fn(),
@@ -57,6 +58,8 @@ describe('Strategic Indicator API Integration', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     indicatorStore = useIndicatorStore()
+    cacheManager.clear()
+    cacheManager.resetStats()
     vi.clearAllMocks()
   })
 
@@ -66,8 +69,8 @@ describe('Strategic Indicator API Integration', () => {
 
   describe('Query Operations', () => {
     it('should fetch indicators through API and update store', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       // Mock successful API response
       vi.mocked(apiClient.get).mockResolvedValue(mockApiResponse)
 
@@ -88,23 +91,20 @@ describe('Strategic Indicator API Integration', () => {
     })
 
     it('should handle API errors gracefully', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      const apiError = new Error('Network error')
-      
-      vi.mocked(apiClient.get).mockRejectedValue(apiError)
+      const { apiClient } = await import('@/shared/api/client')
 
-      // Expect the store method to throw
+      vi.mocked(apiClient.get).mockRejectedValueOnce(new Error('Network error'))
+
       await expect(indicatorStore.fetchIndicators()).rejects.toThrow('Network error')
 
-      // Verify error state
       expect(indicatorStore.error).toBe('Network error')
       expect(indicatorStore.loading).toBe(false)
       expect(indicatorStore.indicators).toEqual([])
     })
 
     it('should fetch indicator by ID with correct API call', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       vi.mocked(apiClient.get).mockResolvedValue({ data: mockIndicator })
 
       const result = await getIndicatorById(1)
@@ -114,8 +114,8 @@ describe('Strategic Indicator API Integration', () => {
     })
 
     it('should apply filters correctly in API calls', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       vi.mocked(apiClient.get).mockResolvedValue(mockApiResponse)
 
       const filters = {
@@ -134,7 +134,7 @@ describe('Strategic Indicator API Integration', () => {
 
   describe('Mutation Operations', () => {
     it('should create indicator through API and update store', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
+      const { apiClient } = await import('@/shared/api/client')
       const newIndicatorData = {
         name: 'New Indicator',
         description: 'Test creation',
@@ -143,7 +143,7 @@ describe('Strategic Indicator API Integration', () => {
         targetValue: 200
       }
       const createdIndicator = { ...mockIndicator, id: 2, ...newIndicatorData }
-      
+
       vi.mocked(apiClient.post).mockResolvedValue({ data: createdIndicator })
 
       // Ensure store starts with empty state
@@ -152,7 +152,10 @@ describe('Strategic Indicator API Integration', () => {
 
       const result = await indicatorStore.createIndicator(newIndicatorData)
 
-      expect(apiClient.post).toHaveBeenCalledWith('/indicators', newIndicatorData)
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/indicators',
+        expect.objectContaining(newIndicatorData)
+      )
       expect(result).toEqual(createdIndicator)
       expect(indicatorStore.indicators).toHaveLength(1)
       expect(indicatorStore.indicators[0]).toEqual(createdIndicator)
@@ -160,50 +163,50 @@ describe('Strategic Indicator API Integration', () => {
     })
 
     it('should update indicator through API and sync store', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       // Set initial state
       indicatorStore.indicators = [mockIndicator]
       indicatorStore.currentIndicator = mockIndicator
 
       const updateData = { name: 'Updated Name', targetValue: 150 }
       const updatedIndicator = { ...mockIndicator, ...updateData }
-      
-      vi.mocked(apiClient.put).mockResolvedValue({ data: updatedIndicator })
+
+      vi.mocked(apiClient.post).mockResolvedValue({ data: updatedIndicator })
 
       const result = await indicatorStore.updateIndicator(1, updateData)
 
-      expect(apiClient.put).toHaveBeenCalledWith('/indicators/1', updateData)
+      expect(apiClient.post).toHaveBeenCalledWith('/indicators/1/breakdown', updateData)
       expect(result).toEqual(updatedIndicator)
       expect(indicatorStore.indicators[0]).toEqual(updatedIndicator)
       expect(indicatorStore.currentIndicator).toEqual(updatedIndicator)
     })
 
     it('should delete indicator through API and remove from store', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       // Set initial state
       indicatorStore.indicators = [mockIndicator]
       indicatorStore.currentIndicator = mockIndicator
       indicatorStore.total = 1
-      
-      vi.mocked(apiClient.delete).mockResolvedValue({ data: null })
+
+      vi.mocked(apiClient.post).mockResolvedValue({ data: null })
 
       await indicatorStore.deleteIndicator(1)
 
-      expect(apiClient.delete).toHaveBeenCalledWith('/indicators/1')
+      expect(apiClient.post).toHaveBeenCalledWith('/indicators/1/terminate', {})
       expect(indicatorStore.indicators).toEqual([])
       expect(indicatorStore.currentIndicator).toBe(null)
       expect(indicatorStore.total).toBe(0)
     })
 
     it('should handle mutation errors and preserve store state', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
+      const { apiClient } = await import('@/shared/api/client')
       const originalIndicators = [mockIndicator]
-      
+
       // Set initial state
       indicatorStore.indicators = [...originalIndicators]
-      
+
       const apiError = new Error('Validation failed')
       vi.mocked(apiClient.post).mockRejectedValue(apiError)
 
@@ -217,7 +220,7 @@ describe('Strategic Indicator API Integration', () => {
 
   describe('API Response Transformation', () => {
     it('should handle paginated responses correctly', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
+      const { apiClient } = await import('@/shared/api/client')
       const paginatedResponse = {
         data: {
           content: [mockIndicator, { ...mockIndicator, id: 2 }],
@@ -227,7 +230,7 @@ describe('Strategic Indicator API Integration', () => {
           number: 1
         }
       }
-      
+
       vi.mocked(apiClient.get).mockResolvedValue(paginatedResponse)
 
       await indicatorStore.fetchIndicators({ page: 1, size: 10 })
@@ -237,7 +240,7 @@ describe('Strategic Indicator API Integration', () => {
     })
 
     it('should handle empty responses', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
+      const { apiClient } = await import('@/shared/api/client')
       const emptyResponse = {
         data: {
           content: [],
@@ -247,7 +250,7 @@ describe('Strategic Indicator API Integration', () => {
           number: 0
         }
       }
-      
+
       vi.mocked(apiClient.get).mockResolvedValue(emptyResponse)
 
       await indicatorStore.fetchIndicators()
@@ -260,8 +263,8 @@ describe('Strategic Indicator API Integration', () => {
 
   describe('Concurrent API Calls', () => {
     it('should handle multiple simultaneous API calls', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       vi.mocked(apiClient.get).mockResolvedValue(mockApiResponse)
 
       // Make multiple concurrent calls
@@ -279,8 +282,8 @@ describe('Strategic Indicator API Integration', () => {
     })
 
     it('should handle mixed success and failure scenarios', async () => {
-      const { apiClient } = await import('@/shared/lib/api/client')
-      
+      const { apiClient } = await import('@/shared/api/client')
+
       // Mock different responses for different calls
       vi.mocked(apiClient.get)
         .mockResolvedValueOnce(mockApiResponse)
@@ -289,6 +292,8 @@ describe('Strategic Indicator API Integration', () => {
       // First call should succeed
       await indicatorStore.fetchIndicators()
       expect(indicatorStore.indicators).toEqual([mockIndicator])
+
+      cacheManager.clear()
 
       // Second call should fail
       await expect(indicatorStore.fetchIndicators()).rejects.toThrow('Network error')

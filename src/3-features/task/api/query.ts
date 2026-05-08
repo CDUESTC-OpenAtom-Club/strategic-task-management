@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Task Feature - Query API
  *
@@ -7,10 +6,7 @@
 
 import { apiClient as api } from '@/shared/api/client'
 import { buildQueryKey, fetchWithCache } from '@/shared/lib/utils/cache'
-import {
-  createMemoryDetailPolicy,
-  createSessionListPolicy
-} from '@/shared/lib/utils/cache-config'
+import { createMemoryDetailPolicy, createSessionListPolicy } from '@/shared/lib/utils/cache-config'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import type { ApiResponse, StrategicTask } from '@/shared/types'
 import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
@@ -199,7 +195,10 @@ export async function getTaskMilestones(taskId: number): Promise<ApiResponse<any
       }
 
       const indicatorIds = indicatorsResponse.data
-        .map((indicator: { indicatorId?: number; id?: number }) => indicator.indicatorId ?? indicator.id)
+        .map(
+          (indicator: { indicatorId?: number; id?: number }) =>
+            indicator.indicatorId ?? indicator.id
+        )
         .filter((id: number | undefined): id is number => typeof id === 'number')
 
       if (indicatorIds.length === 0) {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 2024年指标数据
  * 历史数据，状态为 archived（已归档）
@@ -646,5 +645,5 @@ export const indicators2024: StrategicIndicator[] = [
     ownerDept: '就业创业指导中心',
     year: 2024,
     statusAudit: []
-  },
+  }
 ]

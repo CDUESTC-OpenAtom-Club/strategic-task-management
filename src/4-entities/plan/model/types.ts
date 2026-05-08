@@ -1,6 +1,6 @@
 /**
  * Strategic Plan Entity Types
- * 
+ *
  * Domain model types for strategic plans based on backend entity structure.
  * Plans represent performance planning cycles and indicator collections.
  */
@@ -11,9 +11,9 @@ import type { Indicator } from '../../indicator'
  * Plan Level
  * Hierarchical levels for plan distribution
  */
-export type PlanLevel = 
-  | 'STRAT_TO_FUNC'    // Strategic to Functional level
-  | 'FUNC_TO_COLLEGE'  // Functional to College level
+export type PlanLevel =
+  | 'STRAT_TO_FUNC' // Strategic to Functional level
+  | 'FUNC_TO_COLLEGE' // Functional to College level
 
 export const PlanLevel = {
   STRAT_TO_FUNC: 'STRAT_TO_FUNC' as const,
@@ -25,9 +25,9 @@ export const PlanLevel = {
  * 战略计划的三种状态：草稿、待审批、已下发
  */
 export type PlanStatus =
-  | 'DRAFT'             // Draft plan (草稿 - 可编辑)
-  | 'PENDING'           // Pending approval (待审批)
-  | 'DISTRIBUTED'       // Distributed to departments (已下发)
+  | 'DRAFT' // Draft plan (草稿 - 可编辑)
+  | 'PENDING' // Pending approval (审批中)
+  | 'DISTRIBUTED' // Distributed to departments (已下发)
 
 export const PlanStatus = {
   DRAFT: 'DRAFT' as const,

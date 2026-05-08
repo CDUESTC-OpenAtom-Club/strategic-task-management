@@ -45,6 +45,7 @@ export const API_CONFIG = {
  */
 export const BUILD_INFO = {
   version: APP_VERSION,
+  commitHash: import.meta.env['VITE_APP_COMMIT_HASH'] || 'unknown',
   time: new Date().toISOString(),
   mode: ENV.mode
 }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 简化的 API Client
  *
@@ -16,12 +15,20 @@
  */
 
 import axios, { AxiosError } from 'axios'
-import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import type {
+  AxiosInstance,
+  InternalAxiosRequestConfig,
+  AxiosRequestConfig,
+  AxiosResponse
+} from 'axios'
 import { tokenManager } from '@/shared/lib/utils/tokenManager'
 import { logger } from '@/shared/lib/utils/logger'
 import type { ApiErrorResponse } from '@/shared/types/error'
 import { createRequestInterceptor } from '@/shared/api/interceptors/requestInterceptors'
-import { createResponseInterceptor, createResponseErrorInterceptor } from '@/shared/api/interceptors/responseInterceptors'
+import {
+  createResponseInterceptor,
+  createResponseErrorInterceptor
+} from '@/shared/api/interceptors/responseInterceptors'
 import { API_BASE_URL, API_TIMEOUT, USE_MOCK } from '@/shared/config/api'
 
 /**
@@ -45,6 +52,8 @@ export interface ApiClientConfig {
   /** 请求超时时间（毫秒） */
   timeout?: number
 }
+
+export type RequestOptions = AxiosRequestConfig
 
 /**
  * 简化的 API Client 类
@@ -158,9 +167,16 @@ export class ApiClient {
 
     // 确保 message 始终为 string 类型，避免 [object Object]
     const rawMessage = responseData?.message || error.message || '请求失败'
-    const message = typeof rawMessage === 'string'
-      ? rawMessage
-      : (() => { try { return JSON.stringify(rawMessage) } catch { return String(rawMessage) } })()
+    const message =
+      typeof rawMessage === 'string'
+        ? rawMessage
+        : (() => {
+            try {
+              return JSON.stringify(rawMessage)
+            } catch {
+              return String(rawMessage)
+            }
+          })()
 
     return {
       code: errorCode,
@@ -175,10 +191,7 @@ export class ApiClient {
   async get<T>(url: string, params?: Record<string, unknown>): Promise<T> {
     // Backward compatibility: some legacy callers still pass Axios-style { params }.
     const normalizedParams =
-      params &&
-      typeof params === 'object' &&
-      'params' in params &&
-      Object.keys(params).length === 1
+      params && typeof params === 'object' && 'params' in params && Object.keys(params).length === 1
         ? (params as { params?: Record<string, unknown> }).params
         : params
 
@@ -196,10 +209,8 @@ export class ApiClient {
    * PUT 请求
    */
   async put<T>(url: string, data?: unknown): Promise<T> {
-    console.log('[API Client] PUT request:', url, data)
-    const result = await this.client.put(url, data)
-    console.log('[API Client] PUT response:', result)
-    return result
+    logger.debug('[API Client] PUT request', { url, data })
+    return this.client.put(url, data)
   }
 
   /**
@@ -271,3 +282,7 @@ export const apiClient = new ApiClient({
   baseURL: API_BASE_URL,
   timeout: API_TIMEOUT
 })
+
+export function createApiClient(config: ApiClientConfig): ApiClient {
+  return new ApiClient(config)
+}

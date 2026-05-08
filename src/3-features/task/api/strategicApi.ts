@@ -6,7 +6,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/lib/api/wrappers'
+import { withRetry } from '@/shared/api/wrappers'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
 import { logger } from '@/shared/lib/utils/logger'
@@ -77,6 +77,54 @@ function isForbiddenError(error: unknown): boolean {
       : Number((error as { status?: number }).status ?? NaN)
 
   return status === 403
+}
+
+function getErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+
+  const responseStatus =
+    'response' in error
+      ? Number((error as { response?: { status?: number } }).response?.status ?? NaN)
+      : NaN
+  if (Number.isFinite(responseStatus)) {
+    return responseStatus
+  }
+
+  const topLevelStatus = Number((error as { status?: number }).status ?? NaN)
+  return Number.isFinite(topLevelStatus) ? topLevelStatus : null
+}
+
+function getErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return ''
+  }
+
+  const responseMessage =
+    'response' in error
+      ? String(
+          (error as { response?: { data?: { message?: string } } }).response?.data?.message || ''
+        )
+      : ''
+  if (responseMessage) {
+    return responseMessage
+  }
+
+  return String((error as { message?: string }).message || '')
+}
+
+function shouldFallbackToWorkflowInstanceResolution(error: unknown): boolean {
+  const status = getErrorStatus(error)
+  const message = getErrorMessage(error)
+
+  if (status === 400 || status === 403) {
+    return /task not found|workflow task not found|pending task not found|invalid task/i.test(
+      message
+    )
+  }
+
+  return status === 404
 }
 
 function withTaskCacheContext(params?: Record<string, unknown>): Record<string, unknown> {
@@ -646,6 +694,10 @@ async function approvePlan(
     logger.info('[API] Successfully approved plan', { instanceId })
     return { success: true, message: '审批通过', data: String(instanceId) }
   } catch (error) {
+    if (!shouldFallbackToWorkflowInstanceResolution(error)) {
+      throw error
+    }
+
     logger.warn('[API] Direct task approval failed, trying workflow instance resolution', {
       instanceId,
       approverId,
@@ -704,6 +756,10 @@ async function rejectPlan(
     logger.info('[API] Successfully rejected plan', { instanceId })
     return { success: true, message: '审批拒绝', data: String(instanceId) }
   } catch (error) {
+    if (!shouldFallbackToWorkflowInstanceResolution(error)) {
+      throw error
+    }
+
     logger.warn('[API] Direct task rejection failed, trying workflow instance resolution', {
       instanceId,
       approverId,

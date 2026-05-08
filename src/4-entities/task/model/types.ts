@@ -1,9 +1,9 @@
 /**
  * Task Entity Types
- * 
+ *
  * Domain model types for strategic tasks based on backend entity structure.
  * These types represent the core task domain and are shared across features.
- * 
+ *
  * Backend table: strategic_task
  * Backend VO: TaskVO
  */
@@ -12,33 +12,25 @@
  * Task Type
  * Classification of strategic tasks
  */
-export type TaskType = 
-  | 'BASIC'          // 基础性任务
-  | 'DEVELOPMENT'    // 发展性任务
-  | 'KEY'            // 重点任务
-  | 'SPECIAL'        // 专项任务
-  | 'QUANTITATIVE'   // 定量任务
-  | 'REGULAR'        // 常规任务
+export type TaskType =
+  | 'BASIC' // 基础性任务
+  | 'DEVELOPMENT' // 发展性任务
 
 export const TaskType = {
   BASIC: 'BASIC' as const,
-  DEVELOPMENT: 'DEVELOPMENT' as const,
-  KEY: 'KEY' as const,
-  SPECIAL: 'SPECIAL' as const,
-  QUANTITATIVE: 'QUANTITATIVE' as const,
-  REGULAR: 'REGULAR' as const
+  DEVELOPMENT: 'DEVELOPMENT' as const
 } as const
 
 /**
  * Task Status
  * Lifecycle status of a task
  */
-export type TaskStatus = 
-  | 'DRAFT'       // 草稿
-  | 'ACTIVE'      // 活跃/进行中
-  | 'COMPLETED'   // 已完成
-  | 'ARCHIVED'    // 已归档
-  | 'CANCELLED'   // 已取消
+export type TaskStatus =
+  | 'DRAFT' // 草稿
+  | 'ACTIVE' // 活跃/进行中
+  | 'COMPLETED' // 已完成
+  | 'ARCHIVED' // 已归档
+  | 'CANCELLED' // 已取消
 
 export const TaskStatus = {
   DRAFT: 'DRAFT' as const,
@@ -52,12 +44,12 @@ export const TaskStatus = {
  * Approval Status
  * Status of task approval workflow
  */
-export type ApprovalStatus = 
-  | 'NONE'      // 无需审批
-  | 'DRAFT'     // 草稿
-  | 'PENDING'   // 待审批
-  | 'APPROVED'  // 已批准
-  | 'REJECTED'  // 已拒绝
+export type ApprovalStatus =
+  | 'NONE' // 无需审批
+  | 'DRAFT' // 草稿
+  | 'PENDING' // 审批中
+  | 'APPROVED' // 已批准
+  | 'REJECTED' // 已拒绝
 
 export const ApprovalStatus = {
   NONE: 'NONE' as const,
@@ -150,7 +142,7 @@ export interface TaskFilters {
   size?: number
   sort?: string
   order?: 'asc' | 'desc'
-  
+
   // Filter criteria
   taskName?: string
   taskType?: TaskType
@@ -159,7 +151,7 @@ export interface TaskFilters {
   orgId?: number
   createdByOrgId?: number
   approvalStatus?: ApprovalStatus
-  
+
   // Search
   searchTerm?: string
 }
@@ -194,7 +186,7 @@ export interface TaskDetail extends Task {
     responsibleDept?: string
     milestoneCount?: number
   }>
-  
+
   // Statistics
   totalWeight?: number
   averageProgress?: number

@@ -1,7 +1,6 @@
-// @ts-nocheck
 /**
  * API Error Handler
- * 
+ *
  * Centralized error handling with:
  * - Error type detection
  * - Error message formatting
@@ -11,14 +10,21 @@
 
 import type { AxiosError } from 'axios'
 
+interface ApiErrorPayload {
+  message?: string
+  code?: string | number
+}
+
+type ApiErrorCode = string | number
+
 /**
  * API Error interface
  */
 export interface ApiError {
   /** Error message */
   message: string
-  /** Error code (numeric, from backend) */
-  code?: number
+  /** Error code (backend code or fallback network code) */
+  code?: ApiErrorCode
   /** HTTP status code */
   status?: number
   /** Additional error details */
@@ -35,17 +41,19 @@ export interface ApiError {
  * Handle API errors and transform to unified format
  */
 export function handleApiError(error: AxiosError): ApiError {
-  const requestId = error.config?.headers?.['X-Request-ID'] as string | undefined
+  const requestIdHeader = error.config?.headers?.['X-Request-ID']
+  const requestId = typeof requestIdHeader === 'string' ? requestIdHeader : undefined
 
   // Server responded with error status
   if (error.response) {
     const status = error.response.status
-    const serverMessage = (error.response.data as any)?.message
-    const serverCode = (error.response.data as any)?.code
+    const responseData = error.response.data as ApiErrorPayload | undefined
+    const serverMessage = responseData?.message
+    const serverCode = responseData?.code
 
     return {
-      message: serverMessage || getDefaultErrorMessage(status),
-      code: serverCode || error.code,
+      message: typeof serverMessage === 'string' ? serverMessage : getDefaultErrorMessage(status),
+      code: serverCode ?? error.code,
       status,
       details: error.response.data,
       severity: getErrorSeverity(error),

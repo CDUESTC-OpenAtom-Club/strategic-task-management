@@ -1,6 +1,6 @@
 /**
  * LocalStorage Tests
- * 
+ *
  * Unit tests for localStorage utilities
  */
 
@@ -102,9 +102,9 @@ describe('LocalStorage Utilities', () => {
       localStorage.setItem('key1', 'value1')
       localStorage.setItem('key2', 'value2')
       localStorage.setItem('key3', 'value3')
-      
+
       clear()
-      
+
       expect(localStorage.length).toBe(0)
       expect(localStorage.getItem('key1')).toBe(null)
       expect(localStorage.getItem('key2')).toBe(null)
@@ -122,17 +122,20 @@ describe('LocalStorage Utilities', () => {
       setItem('user', { id: 1, name: 'John' })
       setItem('token', 'abc123')
       setItem('settings', { theme: 'dark', lang: 'zh' })
-      
+
       // Retrieve items
       expect(getItem<{ id: number; name: string }>('user')).toEqual({ id: 1, name: 'John' })
       expect(getItem<string>('token')).toBe('abc123')
-      expect(getItem<{ theme: string; lang: string }>('settings')).toEqual({ theme: 'dark', lang: 'zh' })
-      
+      expect(getItem<{ theme: string; lang: string }>('settings')).toEqual({
+        theme: 'dark',
+        lang: 'zh'
+      })
+
       // Remove one item
       removeItem('token')
       expect(getItem('token')).toBe(null)
       expect(getItem('user')).not.toBe(null)
-      
+
       // Clear all
       clear()
       expect(getItem('user')).toBe(null)
@@ -156,7 +159,7 @@ describe('LocalStorage Utilities', () => {
           }
         }
       }
-      
+
       setItem('data', complexObj)
       expect(getItem('data')).toEqual(complexObj)
     })

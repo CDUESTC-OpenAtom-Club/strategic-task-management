@@ -1,6 +1,6 @@
 /**
  * Error Handler Tests
- * 
+ *
  * Unit tests for API error handling
  */
 

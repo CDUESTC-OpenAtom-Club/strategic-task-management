@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Task Feature - Mutation API
  *
@@ -6,13 +5,14 @@
  */
 
 import { apiClient as api } from '@/shared/api/client'
-import { startWorkflow, approveTask as workflowApproveTask, rejectTask as workflowRejectTask } from '@/features/workflow/api'
+import {
+  startWorkflow,
+  approveTask as workflowApproveTask,
+  rejectTask as workflowRejectTask
+} from '@/features/workflow/api'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
 import type { ApiResponse, StrategicTask } from '@/shared/types'
-import type {
-  TaskCreateRequest,
-  TaskUpdateRequest
-} from '@/shared/types'
+import type { TaskCreateRequest, TaskUpdateRequest } from '@/shared/types'
 
 function invalidateTaskCaches(taskId?: number): void {
   const targets: Array<string | ReturnType<typeof buildQueryKey>> = [

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch } from 'vue'
 import { Folder, Document, Warning, Connection } from '@element-plus/icons-vue'
 // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types use strategic_task terminology

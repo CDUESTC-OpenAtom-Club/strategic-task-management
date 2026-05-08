@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Canonical permissions entry for permission-aware composables.
  *
@@ -26,13 +25,16 @@ export interface PermissionCheckResult {
 
 export interface UsePermissionReturn {
   userRole: ComputedRef<string | undefined>
-  userOrgId: ComputedRef<number | string | undefined>
+  userOrgId: ComputedRef<number | undefined>
   isStrategicDept: ComputedRef<boolean>
   isFunctionalDept: ComputedRef<boolean>
   isSecondaryCollege: ComputedRef<boolean>
   hasPermission: (permission: PermissionCode | PermissionCode[]) => boolean
-  canAccessOrg: (orgId: number | string) => boolean
-  canOperate: (resourceOrgId: number | string, permission: PermissionCode) => boolean
+  canAccessOrg: (orgId: number | string | null | undefined) => boolean
+  canOperate: (
+    resourceOrgId: number | string | null | undefined,
+    permission: PermissionCode
+  ) => boolean
   canViewPlan: (plan: Plan) => boolean
   canEditPlan: (plan: Plan) => boolean
   canDeletePlan: (plan: Plan) => boolean
@@ -65,7 +67,17 @@ export function usePermission(): UsePermissionReturn {
   const authStore = useAuthStore()
 
   const userRole = computed(() => authStore.user?.role)
-  const userOrgId = computed(() => authStore.user?.orgId || authStore.user?.department)
+  const userOrgId = computed(() => {
+    const value = authStore.user?.orgId
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : undefined
+    }
+    return undefined
+  })
   const isStrategicDept = computed(() => userRole.value === 'strategic_dept')
   const isFunctionalDept = computed(() => userRole.value === 'functional_dept')
   const isSecondaryCollege = computed(() => userRole.value === 'secondary_college')
@@ -87,28 +99,46 @@ export function usePermission(): UsePermissionReturn {
     })
   }
 
-  const canAccessOrg = (orgId: number | string): boolean => {
+  const canAccessOrg = (orgId: number | string | null | undefined): boolean => {
     if (isStrategicDept.value) {
       return true
     }
 
-    return userOrgId.value === orgId
+    if (userOrgId.value == null) {
+      return false
+    }
+
+    const targetOrgId =
+      typeof orgId === 'number' ? orgId : typeof orgId === 'string' ? Number(orgId) : NaN
+
+    if (!Number.isFinite(targetOrgId)) {
+      return false
+    }
+
+    return userOrgId.value === targetOrgId
   }
 
-  const canOperate = (resourceOrgId: number | string, permission: PermissionCode): boolean => {
+  const canOperate = (
+    resourceOrgId: number | string | null | undefined,
+    permission: PermissionCode
+  ): boolean => {
     return hasPermission(permission) && canAccessOrg(resourceOrgId)
   }
 
-  const canViewPlan = (plan: Plan): boolean => {
+  const canAccessPlanOrg = (plan: Plan, permission: PermissionCode): boolean => {
+    if (!hasPermission(permission)) {
+      return false
+    }
+
     if (isStrategicDept.value) {
       return true
     }
 
-    if (isFunctionalDept.value && plan.org_id === userOrgId.value) {
-      return true
-    }
+    return plan.org_id === userOrgId.value
+  }
 
-    return false
+  const canViewPlan = (plan: Plan): boolean => {
+    return canAccessPlanOrg(plan, PermissionCode.PLAN_VIEW)
   }
 
   const canEditPlan = (plan: Plan): boolean => {
@@ -144,11 +174,7 @@ export function usePermission(): UsePermissionReturn {
       return false
     }
 
-    if (isStrategicDept.value) {
-      return true
-    }
-
-    return plan.org_id === userOrgId.value
+    return canAccessPlanOrg(plan, PermissionCode.PLAN_SUBMIT)
   }
 
   const getAccessiblePlans = (plans: Plan[]): Plan[] => {

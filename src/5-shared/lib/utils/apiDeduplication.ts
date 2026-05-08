@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * API 请求去重与缓存工具
  *
@@ -9,6 +8,16 @@
  */
 
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios'
+
+interface DeduplicatedRequestError {
+  __deduplicated: true
+  promise: Promise<AxiosResponse>
+  config: InternalAxiosRequestConfig
+}
+
+interface AxiosLikeError {
+  config?: InternalAxiosRequestConfig
+}
 
 interface PendingRequest {
   promise: Promise<AxiosResponse>
@@ -32,7 +41,7 @@ function generateRequestKey(config: InternalAxiosRequestConfig): string {
 /**
  * 清理过期的pending请求
  */
-function cleanupExpiredRequests() {
+function cleanupExpiredRequests(): void {
   const now = Date.now()
   for (const [key, request] of pendingRequests.entries()) {
     if (now - request.timestamp > CACHE_TTL) {
@@ -45,7 +54,6 @@ function cleanupExpiredRequests() {
  * 创建去重拦截器
  */
 export function createDeduplicationInterceptor() {
-  // 定期清理过期请求
   setInterval(cleanupExpiredRequests, 60000) // 每分钟清理一次
 
   return {
@@ -95,15 +103,21 @@ export function createDeduplicationInterceptor() {
      * 响应错误拦截器 - 失败时也清理pending请求
      */
     responseRejected: (error: unknown) => {
-      // 处理去重请求的特殊标记
-      if (error.__deduplicated) {
-        return error.promise
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        '__deduplicated' in error &&
+        (error as DeduplicatedRequestError).__deduplicated
+      ) {
+        return (error as DeduplicatedRequestError).promise
       }
 
-      // 清理失败的请求
-      if (error.config) {
-        const key = generateRequestKey(error.config as InternalAxiosRequestConfig)
-        pendingRequests.delete(key)
+      if (typeof error === 'object' && error !== null && 'config' in error) {
+        const config = (error as AxiosLikeError).config
+        if (config) {
+          const key = generateRequestKey(config)
+          pendingRequests.delete(key)
+        }
       }
 
       return Promise.reject(error)
@@ -114,7 +128,7 @@ export function createDeduplicationInterceptor() {
 /**
  * 存储正在进行的请求（供外部调用）
  */
-export function storePendingRequest(key: string, promise: Promise<unknown>) {
+export function storePendingRequest(key: string, promise: Promise<AxiosResponse>): void {
   pendingRequests.set(key, {
     promise,
     timestamp: Date.now()
@@ -124,7 +138,7 @@ export function storePendingRequest(key: string, promise: Promise<unknown>) {
 /**
  * 清除指定请求的缓存
  */
-export function clearRequestCache(config: InternalAxiosRequestConfig) {
+export function clearRequestCache(config: InternalAxiosRequestConfig): void {
   const key = generateRequestKey(config)
   pendingRequests.delete(key)
 }
@@ -132,7 +146,7 @@ export function clearRequestCache(config: InternalAxiosRequestConfig) {
 /**
  * 清除所有请求缓存
  */
-export function clearAllRequestCache() {
+export function clearAllRequestCache(): void {
   pendingRequests.clear()
 }
 

@@ -1,6 +1,6 @@
 /**
  * Permission Checking Utilities
- * 
+ *
  * Functions for checking user permissions and roles
  */
 
@@ -10,22 +10,31 @@ export type Role = string
 /**
  * Check if user has specific permission
  */
-export function hasPermission(userPermissions: Permission[], requiredPermission: Permission): boolean {
+export function hasPermission(
+  userPermissions: Permission[],
+  requiredPermission: Permission
+): boolean {
   return userPermissions.includes(requiredPermission)
 }
 
 /**
  * Check if user has any of the specified permissions
  */
-export function hasAnyPermission(userPermissions: Permission[], requiredPermissions: Permission[]): boolean {
-  return requiredPermissions.some((permission) => userPermissions.includes(permission))
+export function hasAnyPermission(
+  userPermissions: Permission[],
+  requiredPermissions: Permission[]
+): boolean {
+  return requiredPermissions.some(permission => userPermissions.includes(permission))
 }
 
 /**
  * Check if user has all of the specified permissions
  */
-export function hasAllPermissions(userPermissions: Permission[], requiredPermissions: Permission[]): boolean {
-  return requiredPermissions.every((permission) => userPermissions.includes(permission))
+export function hasAllPermissions(
+  userPermissions: Permission[],
+  requiredPermissions: Permission[]
+): boolean {
+  return requiredPermissions.every(permission => userPermissions.includes(permission))
 }
 
 /**
@@ -39,14 +48,14 @@ export function hasRole(userRoles: Role[], requiredRole: Role): boolean {
  * Check if user has any of the specified roles
  */
 export function hasAnyRole(userRoles: Role[], requiredRoles: Role[]): boolean {
-  return requiredRoles.some((role) => userRoles.includes(role))
+  return requiredRoles.some(role => userRoles.includes(role))
 }
 
 /**
  * Check if user has all of the specified roles
  */
 export function hasAllRoles(userRoles: Role[], requiredRoles: Role[]): boolean {
-  return requiredRoles.every((role) => userRoles.includes(role))
+  return requiredRoles.every(role => userRoles.includes(role))
 }
 
 /**
@@ -66,16 +75,22 @@ export function canAccess(
   requiredRoles?: Role[]
 ): boolean {
   // Admin has access to everything
-  if (isAdmin(userRoles)) {return true}
+  if (isAdmin(userRoles)) {
+    return true
+  }
 
   // Check permissions if specified
   if (requiredPermissions && requiredPermissions.length > 0) {
-    if (!hasAnyPermission(userPermissions, requiredPermissions)) {return false}
+    if (!hasAnyPermission(userPermissions, requiredPermissions)) {
+      return false
+    }
   }
 
   // Check roles if specified
   if (requiredRoles && requiredRoles.length > 0) {
-    if (!hasAnyRole(userRoles, requiredRoles)) {return false}
+    if (!hasAnyRole(userRoles, requiredRoles)) {
+      return false
+    }
   }
 
   return true

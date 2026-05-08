@@ -1,6 +1,6 @@
 /**
  * Indicator Entity Types
- * 
+ *
  * Domain model types for strategic indicators based on backend entity structure.
  * These types represent the core business domain and are shared across features.
  */
@@ -9,13 +9,13 @@
  * Indicator Status
  * Lifecycle states: DRAFT -> PENDING_REVIEW -> DISTRIBUTED -> ARCHIVED
  */
-export type IndicatorStatus = 
-  | 'DRAFT'           // Draft indicator (草稿 - not yet submitted for review)
-  | 'PENDING_REVIEW'  // Pending review (待审核 - submitted and awaiting approval)
-  | 'DISTRIBUTED'     // Distributed (已下发 - approved and distributed to departments)
-  | 'ARCHIVED'        // Archived/soft-deleted indicator (已归档)
-  | 'PENDING'         // @deprecated Use PENDING_REVIEW instead
-  | 'ACTIVE'          // @deprecated Use DISTRIBUTED instead
+export type IndicatorStatus =
+  | 'DRAFT' // Draft indicator (草稿 - not yet submitted for review)
+  | 'PENDING_REVIEW' // Pending review (待审核 - submitted and awaiting approval)
+  | 'DISTRIBUTED' // Distributed (已下发 - approved and distributed to departments)
+  | 'ARCHIVED' // Archived/soft-deleted indicator (已归档)
+  | 'PENDING' // @deprecated Use PENDING_REVIEW instead
+  | 'ACTIVE' // @deprecated Use DISTRIBUTED instead
 
 export const IndicatorStatus = {
   DRAFT: 'DRAFT' as const,
@@ -30,11 +30,11 @@ export const IndicatorStatus = {
  * Indicator Level
  * Hierarchical levels in the two-tier workflow system
  */
-export type IndicatorLevel = 
-  | 'FIRST'      // First-level indicator (一级指标) - Strategic to Functional
-  | 'SECOND'     // Second-level indicator (二级指标) - Functional to College
-  | 'PRIMARY'    // @deprecated Use FIRST instead
-  | 'SECONDARY'  // @deprecated Use SECOND instead
+export type IndicatorLevel =
+  | 'FIRST' // First-level indicator (一级指标) - Strategic to Functional
+  | 'SECOND' // Second-level indicator (二级指标) - Functional to College
+  | 'PRIMARY' // @deprecated Use FIRST instead
+  | 'SECONDARY' // @deprecated Use SECOND instead
 
 export const IndicatorLevel = {
   FIRST: 'FIRST' as const,
@@ -47,13 +47,13 @@ export const IndicatorLevel = {
  * Workflow Status
  * Six-state workflow lifecycle for filling distribution workflow
  */
-export type WorkflowStatus = 
-  | 'DRAFT'                  // Draft state (草稿状态)
-  | 'PENDING_DISTRIBUTION'   // Pending distribution confirmation (待确认接收)
-  | 'DISTRIBUTED'            // Distributed and active (已下发)
-  | 'PENDING_APPROVAL'       // Pending approval (待审批)
-  | 'REJECTED'               // Rejected (已驳回)
-  | 'COMPLETED'              // Completed (已完成)
+export type WorkflowStatus =
+  | 'DRAFT' // Draft state (草稿状态)
+  | 'PENDING_DISTRIBUTION' // Pending distribution confirmation (待确认接收)
+  | 'DISTRIBUTED' // Distributed and active (已下发)
+  | 'PENDING_APPROVAL' // Pending approval (审批中)
+  | 'REJECTED' // Rejected (已驳回)
+  | 'COMPLETED' // Completed (已完成)
 
 export const WorkflowStatus = {
   DRAFT: 'DRAFT' as const,
@@ -68,12 +68,12 @@ export const WorkflowStatus = {
  * Progress Approval Status
  * Status for progress report approval workflow
  */
-export type ProgressApprovalStatus = 
-  | 'NONE'      // No pending approval (无待审批)
-  | 'DRAFT'     // Draft (草稿)
-  | 'PENDING'   // Pending approval (待审批)
-  | 'APPROVED'  // Approved (已通过)
-  | 'REJECTED'  // Rejected (已驳回)
+export type ProgressApprovalStatus =
+  | 'NONE' // No pending approval (无待审批)
+  | 'DRAFT' // Draft (草稿)
+  | 'PENDING' // Pending approval (审批中)
+  | 'APPROVED' // Approved (已通过)
+  | 'REJECTED' // Rejected (已驳回)
 
 export const ProgressApprovalStatus = {
   NONE: 'NONE' as const,

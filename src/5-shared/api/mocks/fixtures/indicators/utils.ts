@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 指标数据工具函数
  */
@@ -10,7 +9,8 @@ export const generateQuarterlyMilestones = (year: number, progress: number): Mil
   for (let q = 1; q <= 4; q++) {
     const targetProgress = q * 25
     const deadline = `${year}-${String(q * 3).padStart(2, '0')}-${q === 1 ? '31' : q === 2 ? '30' : q === 3 ? '30' : '31'}`
-    const status: 'completed' | 'pending' | 'overdue' = progress >= targetProgress ? 'completed' : 'pending'
+    const status: 'completed' | 'pending' | 'overdue' =
+      progress >= targetProgress ? 'completed' : 'pending'
     milestones.push({
       id: `hist-${year}-${q}`,
       name: `Q${q}: 阶段目标`,
@@ -32,7 +32,8 @@ export const generateMonthlyMilestones = (year: number, progress: number): Miles
     const lastDay = new Date(year, month, 0).getDate()
     const targetProgress = Math.round((month / 12) * 100)
     const deadline = `${year}-${String(month).padStart(2, '0')}-${lastDay}`
-    const status: 'completed' | 'pending' | 'overdue' = progress >= targetProgress ? 'completed' : 'pending'
+    const status: 'completed' | 'pending' | 'overdue' =
+      progress >= targetProgress ? 'completed' : 'pending'
     milestones.push({
       id: `hist-${year}-m${month}`,
       name: `${month}月: 阶段目标`,

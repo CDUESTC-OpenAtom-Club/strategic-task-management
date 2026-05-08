@@ -1,16 +1,13 @@
 /**
  * Multi-Level Approval API Service
- * 
+ *
  * This service handles the multi-level approval workflow:
  * 1. Direct supervisor approval (Step 1)
  * 2. Level-2 supervisor approval (Step 2)
  * 3. Superior department joint approval (Step 3)
  */
 
-import axios from 'axios'
 import { apiClient } from '@/shared/api/client'
-import { API_BASE_URL } from '@/shared/config/api'
-import { tokenManager } from '@/shared/lib/utils/tokenManager'
 import type { ApiResponse } from '@/shared/types'
 
 // ============================================================
@@ -25,18 +22,18 @@ export interface ApprovalDetail {
   currentStepOrder: number
   currentStepName: string
   currentStepDescription: string
-  
+
   // Approval context
   submitterDeptId: number
   directSupervisorId: number
   level2SupervisorId: number
   superiorDeptId: number
-  
+
   // Approval tracking
   pendingApprovers: number[]
   approvedApprovers: number[]
   rejectedApprovers: number[]
-  
+
   // Timestamps
   initiatedBy: number
   initiatedAt: string
@@ -115,10 +112,9 @@ export const approvalApi = {
     if (!request.requesterOrgId) {
       throw new Error('Missing requesterOrgId for approval instance start')
     }
-    const token = tokenManager.getAccessToken()
 
-    const response = await axios.post<ApiResponse<ApprovalDetail>>(
-      `${API_BASE_URL}/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
+    const response = await apiClient.getAxiosInstance().post<ApiResponse<ApprovalDetail>>(
+      `/approval/instances?requesterId=${request.submitterId}&requesterOrgId=${request.requesterOrgId}`,
       {
         entityType: request.entityType,
         entityId: request.entityId,
@@ -126,7 +122,6 @@ export const approvalApi = {
       },
       {
         headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(request.traceId ? { 'X-Request-ID': request.traceId } : {})
         },
         withCredentials: true
@@ -144,7 +139,9 @@ export const approvalApi = {
    * FIXED: Backend path is /approval/instances/my-pending
    */
   async getPendingApprovals(userId: number): Promise<ApiResponse<ApprovalDetail[]>> {
-    return apiClient.get<ApiResponse<ApprovalDetail[]>>('/approval/instances/my-pending', { userId })
+    return apiClient.get<ApiResponse<ApprovalDetail[]>>('/approval/instances/my-pending', {
+      userId
+    })
   },
 
   /**
@@ -159,7 +156,10 @@ export const approvalApi = {
    * Approve an approval instance
    * FIXED: Backend uses instanceId parameter
    */
-  async approve(instanceId: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
+  async approve(
+    instanceId: number,
+    request: ApprovalActionRequest
+  ): Promise<ApiResponse<ApprovalDetail>> {
     const instanceResponse = await approvalApi.getApprovalInstance(instanceId)
     const instanceBody = instanceResponse?.data || { id: instanceId }
 
@@ -175,7 +175,10 @@ export const approvalApi = {
    * Reject an approval instance
    * FIXED: Backend uses instanceId parameter
    */
-  async reject(instanceId: number, request: ApprovalActionRequest): Promise<ApiResponse<ApprovalDetail>> {
+  async reject(
+    instanceId: number,
+    request: ApprovalActionRequest
+  ): Promise<ApiResponse<ApprovalDetail>> {
     const instanceResponse = await approvalApi.getApprovalInstance(instanceId)
     const instanceBody = instanceResponse?.data || { id: instanceId }
 
@@ -214,7 +217,11 @@ export const approvalApi = {
   /**
    * Get approval flow templates by entity type
    */
-  async getFlowTemplatesByEntityType(entityType: string): Promise<ApiResponse<ApprovalFlowTemplate[]>> {
-    return apiClient.get<ApiResponse<ApprovalFlowTemplate[]>>(`/approval/flows/entity-type/${entityType}`)
+  async getFlowTemplatesByEntityType(
+    entityType: string
+  ): Promise<ApiResponse<ApprovalFlowTemplate[]>> {
+    return apiClient.get<ApiResponse<ApprovalFlowTemplate[]>>(
+      `/approval/flows/entity-type/${entityType}`
+    )
   }
 }

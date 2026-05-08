@@ -1,16 +1,16 @@
 /**
  * Unit tests for Indicator API retry logic
- * 
+ *
  * Tests the explicit retry mechanism with exponential backoff
  * for critical indicator operations.
- * 
+ *
  * **Validates: Requirements 2.4**
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { indicatorApi } from '@/api'
+import { indicatorApi } from '@/features/indicator/api'
 import { apiClient } from '@/shared/api/client'
-import type { IndicatorCreateRequest } from '@/api/types/backend-aligned'
+import type { IndicatorCreateRequest } from '@/shared/types/backend-aligned'
 
 // Mock the apiClient
 vi.mock('@/shared/api/client', () => ({
@@ -23,7 +23,7 @@ vi.mock('@/shared/api/client', () => ({
 }))
 
 // Mock the logger
-vi.mock('@/utils/logger', () => ({
+vi.mock('@/shared/lib/utils/logger', () => ({
   logger: {
     warn: vi.fn(),
     debug: vi.fn(),
@@ -74,14 +74,16 @@ describe('Indicator API - Retry Logic', () => {
         indicatorDesc: 'Test Indicator'
       }
 
-      const promise = indicatorApi.createIndicator(request)
+      const assertion = expect(indicatorApi.createIndicator(request)).rejects.toThrow(
+        'Network error'
+      )
 
       // Fast-forward through retry delays
       await vi.advanceTimersByTimeAsync(1000) // First retry after 1s
       await vi.advanceTimersByTimeAsync(2000) // Second retry after 2s
       await vi.advanceTimersByTimeAsync(3000) // Third retry after 3s
 
-      await expect(promise).rejects.toThrow('Network error')
+      await assertion
       expect(apiClient.post).toHaveBeenCalledTimes(3)
     })
 
@@ -93,9 +95,7 @@ describe('Indicator API - Retry Logic', () => {
         data: { indicatorId: 1, indicatorDesc: 'Test Indicator' }
       }
 
-      vi.mocked(apiClient.post)
-        .mockRejectedValueOnce(error)
-        .mockResolvedValueOnce(mockResponse)
+      vi.mocked(apiClient.post).mockRejectedValueOnce(error).mockResolvedValueOnce(mockResponse)
 
       const request: IndicatorCreateRequest = {
         taskId: 1,
@@ -150,9 +150,7 @@ describe('Indicator API - Retry Logic', () => {
         data: undefined
       }
 
-      vi.mocked(apiClient.delete)
-        .mockRejectedValueOnce(error)
-        .mockResolvedValueOnce(mockResponse)
+      vi.mocked(apiClient.delete).mockRejectedValueOnce(error).mockResolvedValueOnce(mockResponse)
 
       const promise = indicatorApi.deleteIndicator('1')
 
@@ -174,9 +172,7 @@ describe('Indicator API - Retry Logic', () => {
         data: { indicatorId: 2, parentIndicatorId: 1 }
       }
 
-      vi.mocked(apiClient.post)
-        .mockRejectedValueOnce(error)
-        .mockResolvedValueOnce(mockResponse)
+      vi.mocked(apiClient.post).mockRejectedValueOnce(error).mockResolvedValueOnce(mockResponse)
 
       const request = {
         parentIndicatorId: '1',
@@ -206,9 +202,7 @@ describe('Indicator API - Retry Logic', () => {
         ]
       }
 
-      vi.mocked(apiClient.post)
-        .mockRejectedValueOnce(error)
-        .mockResolvedValueOnce(mockResponse)
+      vi.mocked(apiClient.post).mockRejectedValueOnce(error).mockResolvedValueOnce(mockResponse)
 
       const request = {
         parentIndicatorId: '1',
@@ -232,7 +226,7 @@ describe('Indicator API - Retry Logic', () => {
       vi.mocked(apiClient.get).mockRejectedValueOnce(error)
 
       await expect(indicatorApi.getAllIndicators()).rejects.toThrow('Network error')
-      
+
       // Should only be called once (no retry)
       expect(apiClient.get).toHaveBeenCalledTimes(1)
     })
@@ -242,7 +236,7 @@ describe('Indicator API - Retry Logic', () => {
       vi.mocked(apiClient.get).mockRejectedValueOnce(error)
 
       await expect(indicatorApi.getIndicatorById('1')).rejects.toThrow('Not found')
-      
+
       // Should only be called once (no retry)
       expect(apiClient.get).toHaveBeenCalledTimes(1)
     })

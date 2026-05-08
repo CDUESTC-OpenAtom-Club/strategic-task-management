@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * 前端安全工具函数
  * 提供请求签名、数据加密等功能
@@ -12,7 +11,6 @@
 function getApiSecret(): string {
   const secret = import.meta.env.VITE_API_SECRET
   if (!secret) {
-    console.error('[Security] VITE_API_SECRET 环境变量未配置，请在 .env 文件中设置')
     throw new Error('VITE_API_SECRET 环境变量未配置')
   }
   return secret
@@ -26,7 +24,6 @@ function getApiSecret(): string {
 function getStorageKey(): string {
   const key = import.meta.env.VITE_STORAGE_KEY
   if (!key) {
-    console.error('[Security] VITE_STORAGE_KEY 环境变量未配置，请在 .env 文件中设置')
     throw new Error('VITE_STORAGE_KEY 环境变量未配置')
   }
   return key
@@ -38,14 +35,14 @@ function getStorageKey(): string {
  */
 export function validateSecurityConfig(): { valid: boolean; missing: string[] } {
   const missing: string[] = []
-  
+
   if (!import.meta.env.VITE_API_SECRET) {
     missing.push('VITE_API_SECRET')
   }
   if (!import.meta.env.VITE_STORAGE_KEY) {
     missing.push('VITE_STORAGE_KEY')
   }
-  
+
   return {
     valid: missing.length === 0,
     missing
@@ -60,12 +57,11 @@ export function validateSecurityConfig(): { valid: boolean; missing: string[] } 
 export async function generateSignature(data: unknown, timestamp: number): Promise<string> {
   const payload = JSON.stringify(data || {})
   const message = `${timestamp}:${payload}`
-  
-  // 使用 Web Crypto API 生成 HMAC-SHA256 签名
+
   const encoder = new TextEncoder()
   const keyData = encoder.encode(getApiSecret())
   const messageData = encoder.encode(message)
-  
+
   const key = await crypto.subtle.importKey(
     'raw',
     keyData,
@@ -73,7 +69,7 @@ export async function generateSignature(data: unknown, timestamp: number): Promi
     false,
     ['sign']
   )
-  
+
   const signature = await crypto.subtle.sign('HMAC', key, messageData)
   return Array.from(new Uint8Array(signature))
     .map(b => b.toString(16).padStart(2, '0'))
@@ -86,11 +82,9 @@ export async function generateSignature(data: unknown, timestamp: number): Promi
 export async function encryptData(data: string, key: string): Promise<string> {
   const encoder = new TextEncoder()
   const dataBuffer = encoder.encode(data)
-  
-  // 生成随机 IV
+
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  
-  // 导入密钥
+
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
     encoder.encode(key.padEnd(32, '0').slice(0, 32)),
@@ -98,19 +92,13 @@ export async function encryptData(data: string, key: string): Promise<string> {
     false,
     ['encrypt']
   )
-  
-  // 加密
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    dataBuffer
-  )
-  
-  // 合并 IV 和密文
+
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, dataBuffer)
+
   const combined = new Uint8Array(iv.length + encrypted.byteLength)
   combined.set(iv)
   combined.set(new Uint8Array(encrypted), iv.length)
-  
+
   return btoa(String.fromCharCode(...combined))
 }
 
@@ -120,17 +108,16 @@ export async function encryptData(data: string, key: string): Promise<string> {
 export async function decryptData(encryptedData: string, key: string): Promise<string> {
   const encoder = new TextEncoder()
   const decoder = new TextDecoder()
-  
-  // 解码 Base64
+
   const combined = new Uint8Array(
-    atob(encryptedData).split('').map(c => c.charCodeAt(0))
+    atob(encryptedData)
+      .split('')
+      .map(c => c.charCodeAt(0))
   )
-  
-  // 分离 IV 和密文
+
   const iv = combined.slice(0, 12)
   const ciphertext = combined.slice(12)
-  
-  // 导入密钥
+
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
     encoder.encode(key.padEnd(32, '0').slice(0, 32)),
@@ -138,14 +125,9 @@ export async function decryptData(encryptedData: string, key: string): Promise<s
     false,
     ['decrypt']
   )
-  
-  // 解密
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    ciphertext
-  )
-  
+
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, ciphertext)
+
   return decoder.decode(decrypted)
 }
 
@@ -163,22 +145,24 @@ export const secureStorage = {
       localStorage.setItem(key, data)
     }
   },
-  
+
   async getItem<T>(key: string, decrypt = false): Promise<T | null> {
     const data = localStorage.getItem(key)
-    if (!data) {return null}
-    
+    if (!data) {
+      return null
+    }
+
     try {
       if (decrypt) {
         const decrypted = await decryptData(data, getStorageKey())
-        return JSON.parse(decrypted)
+        return JSON.parse(decrypted) as T
       }
-      return JSON.parse(data)
+      return JSON.parse(data) as T
     } catch {
       return null
     }
   },
-  
+
   removeItem(key: string): void {
     localStorage.removeItem(key)
   }
@@ -220,12 +204,12 @@ export const validators = {
     ]
     return !dangerousPatterns.some(pattern => pattern.test(str))
   },
-  
+
   // 验证邮箱
   isEmail(str: string): boolean {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str)
   },
-  
+
   // 验证手机号
   isPhone(str: string): boolean {
     return /^1[3-9]\d{9}$/.test(str)

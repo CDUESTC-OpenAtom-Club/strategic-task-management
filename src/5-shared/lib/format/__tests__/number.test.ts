@@ -1,6 +1,6 @@
 /**
  * Number Formatting Tests
- * 
+ *
  * Unit tests for number formatting utilities
  */
 

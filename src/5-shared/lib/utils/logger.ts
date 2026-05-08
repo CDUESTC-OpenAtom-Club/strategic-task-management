@@ -1,13 +1,12 @@
-// @ts-nocheck
 /**
  * 统一日志工具
- * 
+ *
  * 功能:
  * - 支持日志级别控制 (debug, info, warn, error)
  * - 生产环境自动禁用 debug 和 info 级别日志
  * - 敏感数据过滤 (token, password, secret, key)
  * - 日志级别可通过环境变量动态配置
- * 
+ *
  * **Validates: Requirements 1.3.1, 1.3.2, 1.3.3, 1.3.4, 1.3.5**
  */
 
@@ -19,7 +18,7 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
   warn: 2,
-  error: 3,
+  error: 3
 }
 
 // 敏感数据字段模式
@@ -29,7 +28,7 @@ const SENSITIVE_PATTERNS: RegExp[] = [
   /secret/i,
   /key/i,
   /authorization/i,
-  /credential/i,
+  /credential/i
 ]
 
 // 敏感数据替换标记
@@ -43,7 +42,7 @@ export interface Logger {
   info(message: string, ...args: unknown[]): void
   warn(message: string, ...args: unknown[]): void
   error(message: string, ...args: unknown[]): void
-  
+
   // 配置方法
   setLevel(level: LogLevel): void
   getLevel(): LogLevel
@@ -64,7 +63,10 @@ export function isSensitiveField(fieldName: string): boolean {
  * @param visited 已访问对象集合 (用于处理循环引用)
  * @returns 过滤后的对象
  */
-export function filterSensitiveData(obj: unknown, visited: WeakSet<object> = new WeakSet()): unknown {
+export function filterSensitiveData(
+  obj: unknown,
+  visited: WeakSet<object> = new WeakSet()
+): unknown {
   // 处理 null 和 undefined
   if (obj === null || obj === undefined) {
     return obj
@@ -142,9 +144,8 @@ function getDefaultLogLevel(): LogLevel {
   }
 
   // 根据 NODE_ENV 设置默认级别
-  const isProduction = import.meta.env?.PROD === true || 
-                       import.meta.env?.MODE === 'production'
-  
+  const isProduction = import.meta.env?.PROD === true || import.meta.env?.MODE === 'production'
+
   return isProduction ? 'warn' : 'debug'
 }
 
@@ -170,7 +171,9 @@ export function shouldLog(logLevel: LogLevel, configLevel: LogLevel): boolean {
  */
 export interface ExtendedLogger extends Logger {
   /** 内部方法: 用于测试时捕获输出 */
-  _setOutputCapture: (capture: ((level: LogLevel, message: string, args: unknown[]) => void) | null) => void
+  _setOutputCapture: (
+    capture: ((level: LogLevel, message: string, args: unknown[]) => void) | null
+  ) => void
   /** 内部方法: 重置日志级别为默认值 */
   _resetLevel: () => void
 }
@@ -205,11 +208,20 @@ function createLogger(): ExtendedLogger {
 
     // 将非原始类型参数序列化为 JSON 字符串，
     // 避免 webview/error-capture 将对象渲染为 [object Object]
-    const safeArgs = filteredArgs.map((arg) =>
-      arg === null ? 'null'
-        : arg === undefined ? 'undefined'
-        : typeof arg === 'object' ? (() => { try { return JSON.stringify(arg) } catch { return String(arg) } })()
-        : arg
+    const safeArgs = filteredArgs.map(arg =>
+      arg === null
+        ? 'null'
+        : arg === undefined
+          ? 'undefined'
+          : typeof arg === 'object'
+            ? (() => {
+                try {
+                  return JSON.stringify(arg)
+                } catch {
+                  return String(arg)
+                }
+              })()
+            : arg
     )
 
     // 根据级别调用对应的 console 方法
@@ -257,14 +269,16 @@ function createLogger(): ExtendedLogger {
     },
 
     // 内部方法: 用于测试时捕获输出
-    _setOutputCapture(capture: ((level: LogLevel, message: string, args: unknown[]) => void) | null): void {
+    _setOutputCapture(
+      capture: ((level: LogLevel, message: string, args: unknown[]) => void) | null
+    ): void {
       outputCapture = capture
     },
 
     // 内部方法: 重置日志级别为默认值
     _resetLevel(): void {
       currentLevel = getDefaultLogLevel()
-    },
+    }
   }
 }
 

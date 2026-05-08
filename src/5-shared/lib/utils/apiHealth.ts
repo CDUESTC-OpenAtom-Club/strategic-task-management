@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * API健康检查工具
  * 用于诊断后端服务连接问题
@@ -13,6 +12,25 @@ import { tokenManager } from '@/shared/lib/utils/tokenManager'
 
 const backendDisplayTarget = API_TARGET || API_BASE_URL
 
+type UnknownRecord = Record<string, unknown>
+
+interface HealthErrorPayload extends UnknownRecord {
+  message?: unknown
+  code?: unknown
+}
+
+interface HealthCheckErrorLike extends UnknownRecord {
+  message?: unknown
+  response?: {
+    status?: unknown
+  }
+  originalError?: {
+    response?: {
+      status?: unknown
+    }
+  }
+}
+
 // 创建一个不使用认证的axios实例，专门用于健康检查
 const healthApi = axios.create({
   baseURL: API_BASE_URL,
@@ -22,11 +40,38 @@ const healthApi = axios.create({
   }
 })
 
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null
+}
+
+function normalizeDetails(value: unknown): Record<string, unknown> | undefined {
+  if (isRecord(value)) {
+    return value
+  }
+  if (value === undefined) {
+    return undefined
+  }
+  return { value }
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (!isRecord(error)) {
+    return undefined
+  }
+
+  const wrapped = error as HealthCheckErrorLike
+  const statusCandidate = wrapped.response?.status ?? wrapped.originalError?.response?.status
+  return typeof statusCandidate === 'number' ? statusCandidate : undefined
+}
+
 async function probeEndpoint(url: string, timeout: number) {
   const token = tokenManager.getAccessToken()
   return healthApi.get(url, {
     timeout,
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    headers: {
+      'X-Health-Check': 'true',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
     // 健康检查只需要确认服务可达，2xx-4xx都认为服务正常
     validateStatus: status => status >= 200 && status < 500
   })
@@ -51,29 +96,37 @@ export interface HealthCheckResult {
 export async function checkBackendHealth(): Promise<HealthCheckResult> {
   logger.debug('🏥 [Health Check] 检查后端服务健康状态...')
 
-  // 优先尝试公开的健康检查端点，避免403错误
-  for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
-    try {
-      logger.debug(`🔍 [Health Check] 尝试公开端点: ${endpoint}`)
-      const response = await probeEndpoint(endpoint, 5000)
+  try {
+    const token = tokenManager.getAccessToken()
+    const hasValidToken = Boolean(token && tokenManager.hasValidToken())
 
-      if (response.status >= 200 && response.status < 300) {
-        logger.debug(`✅ [Health Check] 后端服务正常 (${endpoint})`)
-        return {
-          service: 'Backend API',
-          status: 'success',
-          message: '后端服务运行正常',
-          details: response.data,
-          timestamp: new Date()
+    if (!hasValidToken) {
+      for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
+        try {
+          logger.debug(`🔍 [Health Check] 未登录状态，优先探测公开端点: ${endpoint}`)
+          const publicResponse = await probeEndpoint(endpoint, 5000)
+          if (publicResponse.status >= 200 && publicResponse.status < 500) {
+            return {
+              service: 'Backend API',
+              status: 'success',
+              message: '后端服务运行正常',
+              details: normalizeDetails(publicResponse.data),
+              timestamp: new Date()
+            }
+          }
+        } catch {
+          // try next endpoint
         }
       }
-    } catch (error) {
-      logger.debug(`⚠️ [Health Check] 端点 ${endpoint} 不可用，尝试下一个`)
-    }
-  }
 
-  // 如果公开端点都失败，尝试业务端点
-  try {
+      return {
+        service: 'Backend API',
+        status: 'warning',
+        message: '未登录状态下无法完成受保护接口探测，但公开健康端点可用性未明确',
+        timestamp: new Date()
+      }
+    }
+
     const response = await probeEndpoint('/organizations', 10000)
 
     if (response.status >= 200 && response.status < 300) {
@@ -82,7 +135,7 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
         service: 'Backend API',
         status: 'success',
         message: '后端服务运行正常',
-        details: response.data,
+        details: normalizeDetails(response.data),
         timestamp: new Date()
       }
     }
@@ -145,6 +198,31 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       }
     }
 
+    // 如果业务端点未直接给出明确结果，再尝试公开健康检查端点
+    for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
+      try {
+        logger.debug(`🔍 [Health Check] 尝试公开端点: ${endpoint}`)
+        const fallbackResponse = await probeEndpoint(endpoint, 5000)
+
+        if (
+          (fallbackResponse.status >= 200 && fallbackResponse.status < 300) ||
+          fallbackResponse.status === 401 ||
+          fallbackResponse.status === 403
+        ) {
+          logger.debug(`✅ [Health Check] 后端服务正常 (${endpoint})`)
+          return {
+            service: 'Backend API',
+            status: 'success',
+            message: '后端服务运行正常',
+            details: normalizeDetails(fallbackResponse.data),
+            timestamp: new Date()
+          }
+        }
+      } catch (endpointError) {
+        logger.debug(`⚠️ [Health Check] 端点 ${endpoint} 不可用，尝试下一个`)
+      }
+    }
+
     return {
       service: 'Backend API',
       status: 'warning',
@@ -158,21 +236,31 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
   } catch (error: unknown) {
     const axiosError = axios.isAxiosError(error) ? error : null
     const errorCode = axiosError?.code
-    const errorMessage = axiosError?.message || (error instanceof Error ? error.message : String(error))
+    const errorMessage =
+      axiosError?.message || (error instanceof Error ? error.message : String(error))
     const responseStatus = axiosError?.response?.status
     const responseContentType = String(axiosError?.response?.headers?.['content-type'] || '')
     const responseData = axiosError?.response?.data as
       | { message?: string; code?: string }
       | string
       | undefined
+    const responseText =
+      typeof responseData === 'string'
+        ? responseData
+        : typeof responseData === 'object' && responseData !== null && 'message' in responseData
+          ? String((responseData as HealthErrorPayload).message || '')
+          : ''
 
     // Vite dev proxy may convert upstream ECONNREFUSED into an HTTP 500 with
-    // empty/plain-text body. Treat it as backend unreachable instead of a
+    // empty/plain-text body or proxy error text. Treat it as backend unreachable instead of a
     // misleading server-side 500.
     const looksLikeProxyConnectionFailure =
       responseStatus === 500 &&
-      responseContentType.includes('text/plain') &&
-      (responseData === '' || responseData == null)
+      ((responseContentType.includes('text/plain') &&
+        (responseData === '' || responseData == null)) ||
+        /Error occurred while trying to proxy|ECONNREFUSED|ERR_CONNECTION_REFUSED|socket hang up|connect ECONNREFUSED/i.test(
+          `${errorMessage}\n${responseText}`
+        ))
 
     // 处理超时错误
     if (errorCode === 'ECONNABORTED' && errorMessage.includes('timeout')) {
@@ -203,7 +291,9 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
 
     // 提取后端返回的详细错误信息
     const detailedMessage =
-      (typeof responseData === 'object' && responseData?.message) || errorMessage
+      (typeof responseData === 'object' && responseData !== null && 'message' in responseData
+        ? String((responseData as HealthErrorPayload).message || '')
+        : '') || errorMessage
     logger.error('❌ [Health Check] 后端服务异常:', error)
 
     return {
@@ -213,7 +303,10 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
       details: {
         error: errorMessage,
         response: responseData,
-        code: responseData?.code
+        code:
+          typeof responseData === 'object' && responseData !== null && 'code' in responseData
+            ? (responseData as { code?: string }).code
+            : undefined
       },
       timestamp: new Date()
     }
@@ -225,6 +318,23 @@ export async function checkBackendHealth(): Promise<HealthCheckResult> {
  */
 export async function quickBackendCheck(): Promise<boolean> {
   try {
+    const token = tokenManager.getAccessToken()
+    const hasValidToken = Boolean(token && tokenManager.hasValidToken())
+
+    if (!hasValidToken) {
+      for (const endpoint of PREFERRED_HEALTH_ENDPOINTS) {
+        try {
+          const response = await probeEndpoint(endpoint, 3000)
+          if (response.status >= 200 && response.status < 500) {
+            return true
+          }
+        } catch {
+          // try next endpoint
+        }
+      }
+      return false
+    }
+
     const response = await probeEndpoint('/organizations', 3000)
 
     if (response.status >= 200 && response.status < 300) {
@@ -349,7 +459,7 @@ export async function checkAuthFlow(credentials?: {
 
     // Check both error.response.status and error.originalError.response.status
     // (error might be wrapped by interceptor)
-    const status = error.response?.status || error.originalError?.response?.status
+    const status = getErrorStatus(error)
     logger.debug('🔍 [Health Check] Error response status:', status)
 
     if (status === 401) {
@@ -375,8 +485,10 @@ export async function checkAuthFlow(credentials?: {
     return {
       service: 'Authentication',
       status: 'error',
-      message: `认证流程异常: ${error.message}`,
-      details: { error: error.message },
+      message: `认证流程异常: ${error instanceof Error ? error.message : String(error)}`,
+      details: {
+        error: error instanceof Error ? error.message : String(error)
+      },
       timestamp: new Date()
     }
   }

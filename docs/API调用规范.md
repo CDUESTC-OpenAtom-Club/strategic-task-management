@@ -130,7 +130,7 @@ export function setupInterceptors(client: AxiosInstance, config: InterceptorConf
 ```typescript
 import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/features/auth/model/store'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 设置认证拦截器
@@ -194,7 +194,7 @@ export function setupAuthInterceptor(client: AxiosInstance) {
 ```typescript
 import type { AxiosInstance, AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 
 /**
  * 设置错误处理拦截器
@@ -456,7 +456,7 @@ const loadData = async () => {
 
 ```typescript
 import { ElMessage } from 'element-plus'
-import { logger } from '@/utils/logger'
+import { logger } from '@/shared/lib/utils/logger'
 import type { ApiError } from './types/errors'
 
 /**

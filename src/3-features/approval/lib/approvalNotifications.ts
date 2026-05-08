@@ -6,15 +6,200 @@
  */
 
 import { computed } from 'vue'
+import { getActivePinia } from 'pinia'
 import { ElNotification } from 'element-plus'
 import { useWebSocketNotifications, NotificationType } from '@/shared/api/websocket'
 import type { NotificationMessage } from '@/shared/api/websocket'
+import { useAuthStore } from '@/features/auth/model/store'
 import { ENABLE_WEBSOCKET_NOTIFICATIONS } from '@/shared/config/api'
+import type { UserRole } from '@/shared/types'
+
+export const APPROVAL_STATE_REFRESH_EVENT = 'approval-state-refresh'
+
+export interface ApprovalStateRefreshDetail {
+  source?: string
+}
+
+export interface ApprovalRoutePayload {
+  approvalInstanceId?: number | string | null
+  entityType?: string | null
+  entityId?: number | string | null
+  actionUrl?: string | null
+  viewerRole?: UserRole | null
+  departmentName?: string | null
+}
+
+let approvalNotificationListener: EventListener | null = null
+
+export function requiresApprovalCenterFallback(payload: ApprovalRoutePayload): boolean {
+  const entityType = String(payload.entityType || '')
+    .trim()
+    .toUpperCase()
+
+  return entityType === 'PLAN' || entityType === 'PLAN_REPORT'
+}
+
+function normalizeApprovalQueryValue(value?: number | string | null): string | null {
+  const normalized = String(value ?? '').trim()
+  return normalized ? normalized : null
+}
+
+function normalizeApprovalRoute(path?: string | null): string | null {
+  const normalized = String(path || '').trim()
+  if (!normalized || normalized === '/messages' || normalized === '/workflow-tasks') {
+    return null
+  }
+  return normalized
+}
+
+function normalizeViewerRole(role?: UserRole | string | null): UserRole | null {
+  const normalized = String(role || '').trim()
+  if (
+    normalized === 'strategic_dept' ||
+    normalized === 'functional_dept' ||
+    normalized === 'secondary_college'
+  ) {
+    return normalized as UserRole
+  }
+
+  return null
+}
+
+function resolveCurrentViewerRole(): UserRole | null {
+  try {
+    if (getActivePinia()) {
+      const authStore = useAuthStore()
+      return normalizeViewerRole(authStore.effectiveRole || authStore.userRole)
+    }
+  } catch {
+    // ignore store lookup failures and fall back to persisted user data
+  }
+
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const savedUser = localStorage.getItem('currentUser')
+    if (!savedUser) {
+      return null
+    }
+
+    const parsedUser = JSON.parse(savedUser) as { role?: string | null }
+    return normalizeViewerRole(parsedUser.role)
+  } catch {
+    return null
+  }
+}
+
+function replaceRoutePath(path: string, nextPathname: string): string {
+  const [, search = ''] = path.split('?')
+  return search ? `${nextPathname}?${search}` : nextPathname
+}
+
+function resolveApprovalWorkbenchRoute(payload: ApprovalRoutePayload): string | null {
+  const entityType = String(payload.entityType || '')
+    .trim()
+    .toUpperCase()
+  const viewerRole = normalizeViewerRole(payload.viewerRole) || resolveCurrentViewerRole()
+
+  switch (entityType) {
+    case 'PLAN':
+    case 'PLAN_REPORT':
+      if (viewerRole === 'functional_dept') {
+        return '/distribution'
+      }
+
+      if (viewerRole === 'secondary_college') {
+        return '/indicators'
+      }
+
+      return '/strategic-tasks'
+    case 'TASK':
+      return '/strategic-tasks'
+    case 'INDICATOR':
+      return '/indicators'
+    case 'INDICATOR_DISTRIBUTION':
+      return '/distribution'
+    default:
+      return null
+  }
+}
+
+function appendApprovalContext(path: string, payload: ApprovalRoutePayload): string {
+  const [pathname, search = ''] = path.split('?')
+  const params = new URLSearchParams(search)
+
+  params.set('openApproval', '1')
+
+  const entityType = normalizeApprovalQueryValue(payload.entityType)?.toUpperCase()
+  const entityId = normalizeApprovalQueryValue(payload.entityId)
+  const approvalInstanceId = normalizeApprovalQueryValue(payload.approvalInstanceId)
+  const departmentName = normalizeApprovalQueryValue(payload.departmentName)
+
+  if (entityType) {
+    params.set('approvalEntityType', entityType)
+  }
+
+  if (entityId) {
+    params.set('approvalEntityId', entityId)
+  }
+
+  if (approvalInstanceId) {
+    params.set('approvalInstanceId', approvalInstanceId)
+  }
+
+  if (departmentName) {
+    params.set('approvalDepartment', departmentName)
+  }
+
+  const query = params.toString()
+  return query ? `${pathname}?${query}` : pathname
+}
+
+export function resolveApprovalRoute(payload: ApprovalRoutePayload): string | null {
+  const explicitRoute = normalizeApprovalRoute(payload.actionUrl)
+  const preferredWorkbenchRoute = resolveApprovalWorkbenchRoute(payload)
+  const entityType = String(payload.entityType || '')
+    .trim()
+    .toUpperCase()
+
+  if (entityType === 'PLAN' || entityType === 'PLAN_REPORT') {
+    const baseRoute = preferredWorkbenchRoute
+      ? explicitRoute
+        ? replaceRoutePath(explicitRoute, preferredWorkbenchRoute)
+        : preferredWorkbenchRoute
+      : explicitRoute
+
+    return baseRoute ? appendApprovalContext(baseRoute, payload) : null
+  }
+
+  if (explicitRoute) {
+    return appendApprovalContext(explicitRoute, payload)
+  }
+
+  return preferredWorkbenchRoute ? appendApprovalContext(preferredWorkbenchRoute, payload) : null
+}
+
+export function notifyApprovalStateRefresh(detail: ApprovalStateRefreshDetail = {}): void {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.dispatchEvent(
+    new CustomEvent<ApprovalStateRefreshDetail>(APPROVAL_STATE_REFRESH_EVENT, {
+      detail
+    })
+  )
+}
 
 /**
  * Get icon and notification type based on notification type
  */
-function getNotificationConfig(type: NotificationType): { icon: string; type: 'success' | 'warning' | 'info' | 'error' } {
+function getNotificationConfig(type: NotificationType): {
+  icon: string
+  type: 'success' | 'warning' | 'info' | 'error'
+} {
   switch (type) {
     case NotificationType.APPROVAL_APPROVED:
       return { icon: '✅', type: 'success' }
@@ -34,7 +219,7 @@ function getNotificationConfig(type: NotificationType): { icon: string; type: 's
  */
 function showElNotification(message: NotificationMessage): void {
   const config = getNotificationConfig(message.type)
-  
+
   ElNotification({
     title: `${config.icon} ${message.title}`,
     message: message.content,
@@ -42,9 +227,9 @@ function showElNotification(message: NotificationMessage): void {
     duration: 5000,
     position: 'top-right',
     onClick: () => {
-      // Navigate to approval page if it's an approval notification
-      if (message.approvalInstanceId) {
-        window.location.hash = `/pending-approval/${message.approvalInstanceId}`
+      const route = navigateToApproval(message)
+      if (route) {
+        window.location.hash = route
       }
     }
   })
@@ -59,31 +244,47 @@ export function initApprovalNotifications(): void {
   }
 
   const { connect, requestNotificationPermission } = useWebSocketNotifications()
-  
+
   // Request browser notification permission
   requestNotificationPermission()
-  
+
   // Connect to WebSocket
   connect()
-  
-  // Listen for approval notifications
-  window.addEventListener('approval-notification', ((event: CustomEvent<NotificationMessage>) => {
+
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (approvalNotificationListener) {
+    window.removeEventListener('approval-notification', approvalNotificationListener)
+  }
+
+  approvalNotificationListener = ((event: CustomEvent<NotificationMessage>) => {
     const message = event.detail
     showElNotification(message)
-  }) as EventListener)
+  }) as EventListener
+
+  window.addEventListener('approval-notification', approvalNotificationListener)
+}
+
+export function destroyApprovalNotifications(): void {
+  if (typeof window === 'undefined' || !approvalNotificationListener) {
+    return
+  }
+
+  window.removeEventListener('approval-notification', approvalNotificationListener)
+  approvalNotificationListener = null
 }
 
 /**
  * Handle notification click - navigate to approval page
  */
 export function navigateToApproval(message: NotificationMessage): string | null {
-  if (message.approvalInstanceId) {
-    return `/pending-approval/${message.approvalInstanceId}`
-  }
-  if (message.entityType === 'INDICATOR_DISTRIBUTION' && message.entityId) {
-    return `/strategic-task?indicatorId=${message.entityId}`
-  }
-  return null
+  return resolveApprovalRoute({
+    approvalInstanceId: message.approvalInstanceId,
+    entityType: message.entityType,
+    entityId: message.entityId
+  })
 }
 
 /**
@@ -102,7 +303,7 @@ export function formatNotification(message: NotificationMessage): {
     hour: '2-digit',
     minute: '2-digit'
   })
-  
+
   return {
     title: message.title,
     content: message.content,
@@ -116,24 +317,23 @@ export function formatNotification(message: NotificationMessage): {
  */
 export function useApprovalNotifications() {
   const wsNotifications = useWebSocketNotifications()
-  
+
   // Filter notifications for approval-related only
   const approvalNotifications = computed(() => {
-    return wsNotifications.notifications.value.filter(
-      n => n.type !== NotificationType.SYSTEM
-    )
+    return wsNotifications.notifications.value.filter(n => n.type !== NotificationType.SYSTEM)
   })
-  
+
   // Approval unread count
   const approvalUnreadCount = computed(() => {
     return approvalNotifications.value.length
   })
-  
+
   return {
     ...wsNotifications,
     approvalNotifications,
     approvalUnreadCount,
     initApprovalNotifications,
+    destroyApprovalNotifications,
     navigateToApproval,
     formatNotification
   }
@@ -141,6 +341,7 @@ export function useApprovalNotifications() {
 
 export default {
   initApprovalNotifications,
+  destroyApprovalNotifications,
   navigateToApproval,
   formatNotification,
   useApprovalNotifications

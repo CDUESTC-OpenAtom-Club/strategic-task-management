@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { StrategicIndicator } from '@/shared/types'
 import { canViewReceivedPlanContent, isVisibleReceivedStrategicIndicator } from './visibility'
 
-const createIndicator = (
-  overrides: Partial<StrategicIndicator> = {}
-): StrategicIndicator =>
+const createIndicator = (overrides: Partial<StrategicIndicator> = {}): StrategicIndicator =>
   ({
     id: '1001',
     name: '测试战略指标',
@@ -33,6 +31,8 @@ describe('indicator visibility rules', () => {
     it('only allows receiving departments after the plan enters a visible state', () => {
       expect(canViewReceivedPlanContent('DRAFT', false)).toBe(false)
       expect(canViewReceivedPlanContent('DISTRIBUTED', false)).toBe(true)
+      expect(canViewReceivedPlanContent('APPROVED', false)).toBe(true)
+      expect(canViewReceivedPlanContent('ACTIVE', false)).toBe(true)
       expect(canViewReceivedPlanContent('pending', false)).toBe(false)
       expect(canViewReceivedPlanContent('RETURNED', false)).toBe(false)
     })

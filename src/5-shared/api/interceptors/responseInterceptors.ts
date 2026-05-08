@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Response Interceptors - 响应拦截器模块
  *
@@ -153,7 +152,12 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
         return response
       }
 
-      logger.error('❌ [API Business Error] success=false code:', data.code, 'message:', stringifyMessage(data.message))
+      logger.error(
+        '❌ [API Business Error] success=false code:',
+        data.code,
+        'message:',
+        stringifyMessage(data.message)
+      )
       throw new Error(stringifyMessage(data.message) || 'Request failed')
     }
 
@@ -188,7 +192,12 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
         return response
       }
 
-      logger.error('❌ [API Business Error] code:', data.code, 'message:', stringifyMessage(data.message))
+      logger.error(
+        '❌ [API Business Error] code:',
+        data.code,
+        'message:',
+        stringifyMessage(data.message)
+      )
       throw new Error(stringifyMessage(data.message) || 'Request failed')
     }
 

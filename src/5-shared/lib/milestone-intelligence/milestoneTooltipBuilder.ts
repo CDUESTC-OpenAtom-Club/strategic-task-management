@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Milestone Intelligence - Tooltip Builder
  *
@@ -34,25 +33,29 @@ export function getMilestonesTooltip(indicator: StrategicIndicator): MilestoneTo
     const status = safeGet(m, 'status', 'pending')
 
     const statusValue = status as unknown as MilestoneStatusValue
-    const validStatus: MilestoneStatusValue = (MILESTONE_STATUS_VALUES as readonly MilestoneStatusValue[]).includes(
-      statusValue
-    )
+    const validStatus: MilestoneStatusValue = (
+      MILESTONE_STATUS_VALUES as readonly MilestoneStatusValue[]
+    ).includes(statusValue)
       ? statusValue
       : 'pending'
 
     let expectedDate = ''
     if (deadline) {
-      try {
-        const date = new Date(deadline)
-        if (!isNaN(date.getTime())) {
-          expectedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-            date.getDate()
-          ).padStart(2, '0')}`
-        } else {
+      if (typeof deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+        expectedDate = deadline
+      } else {
+        try {
+          const date = new Date(deadline)
+          if (!isNaN(date.getTime())) {
+            expectedDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+              date.getDate()
+            ).padStart(2, '0')}`
+          } else {
+            expectedDate = '日期格式错误'
+          }
+        } catch {
           expectedDate = '日期格式错误'
         }
-      } catch {
-        expectedDate = '日期格式错误'
       }
     } else {
       expectedDate = '未设置'

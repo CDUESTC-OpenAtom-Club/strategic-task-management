@@ -1,18 +1,18 @@
 /**
  * 错误处理单元测试
- * 
+ *
  * 测试 useErrorHandler composable 的各项功能：
  * - 友好消息生成
  * - 重试逻辑判断
  * - 错误类型检测
- * 
+ *
  * @requirements 10.2 - 超时提示和重试选项
  * @requirements 10.3 - 网络错误提示
  * @requirements 10.4 - 错误详情和建议操作
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useErrorHandler } from '@/shared/lib/error-handling/useErrorHandler'
 
 // Mock Element Plus ElMessage
 vi.mock('element-plus', () => ({
@@ -33,7 +33,7 @@ describe('ErrorHandler Composable', () => {
 
   /**
    * 友好消息生成测试
-   * 
+   *
    * @requirement 10.3 - 网络错误提示
    * @requirement 10.4 - 错误详情和建议操作
    */
@@ -48,7 +48,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(networkError)
-      expect(message).toBe('网络连接失败，正在使用离线数据')
+      expect(message).toBe('网络连接失败，请检查网络设置或稍后重试')
     })
 
     it('should return timeout message for timeout errors', () => {
@@ -62,7 +62,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(timeoutError)
-      expect(message).toBe('请求超时，请稍后重试')
+      expect(message).toBe('请求超时，请检查网络连接或稍后重试')
     })
 
     it('should return timeout message for ETIMEDOUT errors', () => {
@@ -74,7 +74,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(timeoutError)
-      expect(message).toBe('请求超时，请稍后重试')
+      expect(message).toBe('请求超时，请检查网络连接或稍后重试')
     })
 
     it('should return auth error message for 401 status', () => {
@@ -110,7 +110,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(serverError)
-      expect(message).toBe('服务器繁忙，正在使用缓存数据')
+      expect(message).toBe('服务器繁忙，请稍后重试')
     })
 
     it('should return server error message for 502 status', () => {
@@ -122,7 +122,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(gatewayError)
-      expect(message).toBe('服务器繁忙，正在使用缓存数据')
+      expect(message).toBe('服务器繁忙，请稍后重试')
     })
 
     it('should return server error message for 503 status', () => {
@@ -134,7 +134,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(unavailableError)
-      expect(message).toBe('服务器繁忙，正在使用缓存数据')
+      expect(message).toBe('服务器繁忙，请稍后重试')
     })
 
     it('should return validation error message for 400 status', () => {
@@ -146,9 +146,7 @@ describe('ErrorHandler Composable', () => {
       }
 
       const message = errorHandler.getFriendlyMessage(validationError)
-      // 实现会尝试提取服务器返回的消息，如果没有则返回原始消息
-      // 由于 data 为空对象，会返回原始 message
-      expect(message).toBe('Request failed with status code 400')
+      expect(message).toBe('请求参数有误，请检查输入内容')
     })
 
     it('should return server message for 400 status when provided', () => {
@@ -156,9 +154,9 @@ describe('ErrorHandler Composable', () => {
       const validationError = {
         isAxiosError: true,
         message: 'Request failed with status code 400',
-        response: { 
-          status: 400, 
-          data: { message: '参数格式错误' } 
+        response: {
+          status: 400,
+          data: { message: '参数格式错误' }
         }
       }
 
@@ -197,7 +195,7 @@ describe('ErrorHandler Composable', () => {
 
   /**
    * 重试逻辑测试
-   * 
+   *
    * @requirement 10.2 - 超时提示和重试选项
    */
   describe('Retry Logic (isRetryable)', () => {
@@ -321,7 +319,7 @@ describe('ErrorHandler Composable', () => {
 
   /**
    * 错误类型检测测试
-   * 
+   *
    * @requirement 10.3 - 网络错误提示
    * @requirement 10.4 - 错误详情和建议操作
    */

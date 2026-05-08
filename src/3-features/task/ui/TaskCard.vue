@@ -14,7 +14,7 @@
 
     <div class="task-card__content">
       <p class="task-card__description">{{ task.description }}</p>
-      
+
       <div class="task-card__meta">
         <div class="task-card__meta-item">
           <span class="label">编码:</span>
@@ -50,8 +50,8 @@
           <span>进度</span>
           <span>{{ Math.round(taskProgress) }}%</span>
         </div>
-        <el-progress 
-          :percentage="taskProgress" 
+        <el-progress
+          :percentage="taskProgress"
           :status="isTaskOverdue(task) ? 'exception' : undefined"
           :stroke-width="6"
         />
@@ -60,15 +60,11 @@
 
     <template #footer>
       <div class="task-card__actions">
-        <el-button size="small" @click="$emit('view', task)">
-          查看详情
-        </el-button>
-        <el-button size="small" type="primary" @click="$emit('edit', task)">
-          编辑
-        </el-button>
-        <el-button 
-          size="small" 
-          type="danger" 
+        <el-button size="small" @click="$emit('view', task)"> 查看详情 </el-button>
+        <el-button size="small" type="primary" @click="$emit('edit', task)"> 编辑 </el-button>
+        <el-button
+          size="small"
+          type="danger"
           :disabled="task.status === 'ACTIVE'"
           @click="$emit('delete', task)"
         >
@@ -80,11 +76,15 @@
 </template>
 
 <script setup lang="ts">
-// @ts-nocheck
 import { computed } from 'vue'
 import type { StrategicTask } from '../model/types'
 import { TASK_STATUS_LABELS } from '../model/constants'
-import { calculateTaskProgress, isTaskOverdue, getTaskStatusColor, formatTaskWeight } from '../lib/utils'
+import {
+  calculateTaskProgress,
+  isTaskOverdue,
+  getTaskStatusColor,
+  formatTaskWeight
+} from '../lib/utils'
 
 interface Props {
   task: StrategicTask

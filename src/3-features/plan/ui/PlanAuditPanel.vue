@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, watch, onMounted } from 'vue'
 import {
   ElCard,

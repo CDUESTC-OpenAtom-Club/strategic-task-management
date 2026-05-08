@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// @ts-nocheck
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -58,13 +57,18 @@ type MessageCategory = 'all' | 'unread' | 'approval' | 'system' | 'task' | 'aler
 import type { Component } from 'vue'
 
 // 分类配置
-const categories: Array<{ key: MessageCategory; label: string; icon: Component; filter?: (m: Message) => boolean }> = [
+const categories: Array<{
+  key: MessageCategory
+  label: string
+  icon: Component
+  filter?: (m: Message) => boolean
+}> = [
   { key: 'all', label: '全部消息', icon: Bell },
-  { key: 'unread', label: '待处理', icon: Select, filter: (m) => !m.isRead },
-  { key: 'approval', label: '审批消息', icon: Check, filter: (m) => m.type === 'approval' },
-  { key: 'system', label: '系统通知', icon: InfoFilled, filter: (m) => m.type === 'system' },
-  { key: 'task', label: '任务消息', icon: Select, filter: (m) => m.type === 'task' },
-  { key: 'alert', label: '预警消息', icon: Warning, filter: (m) => m.type === 'alert' }
+  { key: 'unread', label: '待处理', icon: Select, filter: m => !m.isRead },
+  { key: 'approval', label: '审批消息', icon: Check, filter: m => m.type === 'approval' },
+  { key: 'system', label: '系统通知', icon: InfoFilled, filter: m => m.type === 'system' },
+  { key: 'task', label: '任务消息', icon: Select, filter: m => m.type === 'task' },
+  { key: 'alert', label: '预警消息', icon: Warning, filter: m => m.type === 'alert' }
 ]
 
 // ============ 计算属性 ============
@@ -82,9 +86,8 @@ const filteredMessages = computed(() => {
   // 关键词搜索
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
-    result = result.filter(m =>
-      m.title.toLowerCase().includes(keyword) ||
-      m.content.toLowerCase().includes(keyword)
+    result = result.filter(
+      m => m.title.toLowerCase().includes(keyword) || m.content.toLowerCase().includes(keyword)
     )
   }
 
@@ -112,10 +115,14 @@ const categoryUnreadCount = computed(() => {
 // 获取消息类型图标
 const getMessageIcon = (type: MessageType) => {
   switch (type) {
-    case 'approval': return Check
-    case 'alert': return WarnTriangleFilled
-    case 'task': return Select
-    default: return InfoFilled
+    case 'approval':
+      return Check
+    case 'alert':
+      return WarnTriangleFilled
+    case 'task':
+      return Select
+    default:
+      return InfoFilled
   }
 }
 
@@ -148,17 +155,29 @@ const getRelativeTime = (date: Date) => {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) {return '刚刚'}
-  if (minutes < 60) {return `${minutes}分钟前`}
-  if (hours < 24) {return `${hours}小时前`}
-  if (days < 7) {return `${days}天前`}
-  if (days < 30) {return `${Math.floor(days / 7)}周前`}
+  if (minutes < 1) {
+    return '刚刚'
+  }
+  if (minutes < 60) {
+    return `${minutes}分钟前`
+  }
+  if (hours < 24) {
+    return `${hours}小时前`
+  }
+  if (days < 7) {
+    return `${days}天前`
+  }
+  if (days < 30) {
+    return `${Math.floor(days / 7)}周前`
+  }
   return `${new Date(date).toLocaleDateString()}`
 }
 
 // 获取消息图标样式
 const getIconClass = (message: Message) => {
-  if (message.isRead) {return 'icon-read'}
+  if (message.isRead) {
+    return 'icon-read'
+  }
 
   const classes: Record<MessageType, string> = {
     approval: 'icon-approval',
@@ -259,7 +278,7 @@ const markAsRead = async (messageId: string) => {
 const markAllAsRead = async () => {
   try {
     // TODO: 调用API批量标记已读
-    messages.value.forEach(m => m.isRead = true)
+    messages.value.forEach(m => (m.isRead = true))
     ElMessage.success('已全部标记为已读')
   } catch (error) {
     ElMessage.error('操作失败')
@@ -338,12 +357,7 @@ onMounted(() => {
               <el-icon><Bell /></el-icon>
               消息中心
             </span>
-            <ElButton
-              :icon="Refresh"
-              size="small"
-              circle
-              @click="refreshMessages"
-            />
+            <ElButton :icon="Refresh" size="small" circle @click="refreshMessages" />
           </div>
         </template>
 
@@ -381,13 +395,7 @@ onMounted(() => {
           >
             全部已读
           </ElButton>
-          <ElButton
-            size="small"
-            :icon="Close"
-            @click="clearReadMessages"
-          >
-            清除已读
-          </ElButton>
+          <ElButton size="small" :icon="Close" @click="clearReadMessages"> 清除已读 </ElButton>
         </div>
       </ElCard>
     </div>
@@ -405,12 +413,8 @@ onMounted(() => {
             class="search-input"
           />
           <div class="header-info">
-            <span class="message-count">
-              共 {{ filteredMessages.length }} 条消息
-            </span>
-            <span v-if="unreadCount > 0" class="unread-hint">
-              {{ unreadCount }} 条未读
-            </span>
+            <span class="message-count"> 共 {{ filteredMessages.length }} 条消息 </span>
+            <span v-if="unreadCount > 0" class="unread-hint"> {{ unreadCount }} 条未读 </span>
           </div>
         </div>
 
@@ -458,7 +462,13 @@ onMounted(() => {
                     <h4 class="message-title">{{ message.title }}</h4>
                     <div class="message-tags">
                       <ElTag
-                        :type="message.type === 'approval' ? 'warning' : message.type === 'alert' ? 'danger' : 'info'"
+                        :type="
+                          message.type === 'approval'
+                            ? 'warning'
+                            : message.type === 'alert'
+                              ? 'danger'
+                              : 'info'
+                        "
                         size="small"
                         effect="light"
                       >
@@ -708,7 +718,11 @@ onMounted(() => {
   top: 0;
   bottom: 0;
   width: 4px;
-  background: linear-gradient(180deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--el-color-primary) 0%,
+    var(--el-color-primary-light-3) 100%
+  );
 }
 
 /* 消息图标 */
@@ -832,7 +846,12 @@ onMounted(() => {
 .skeleton-header {
   width: 60%;
   height: 20px;
-  background: linear-gradient(90deg, var(--el-fill-color-light) 25%, var(--el-fill-color) 50%, var(--el-fill-color-light) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--el-fill-color-light) 25%,
+    var(--el-fill-color) 50%,
+    var(--el-fill-color-light) 75%
+  );
   background-size: 200% 100%;
   animation: skeleton-loading 1.5s infinite;
   border-radius: 4px;
@@ -842,15 +861,24 @@ onMounted(() => {
 .skeleton-content {
   width: 100%;
   height: 14px;
-  background: linear-gradient(90deg, var(--el-fill-color-light) 25%, var(--el-fill-color) 50%, var(--el-fill-color-light) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--el-fill-color-light) 25%,
+    var(--el-fill-color) 50%,
+    var(--el-fill-color-light) 75%
+  );
   background-size: 200% 100%;
   animation: skeleton-loading 1.5s infinite;
   border-radius: 4px;
 }
 
 @keyframes skeleton-loading {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 /* 空状态 */

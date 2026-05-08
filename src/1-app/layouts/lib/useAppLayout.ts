@@ -1,8 +1,10 @@
-import { computed, watch, onMounted } from 'vue'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useOrgStore } from '@/features/organization/model/store'
 import { useMessageStore } from '@/features/messages/model/message'
 import { useApprovalStore } from '@/features/approval/model/store'
+import { APPROVAL_STATE_REFRESH_EVENT } from '@/features/approval/lib'
+import { hasAdminConsoleAccess } from '@/shared/lib/permissions/adminConsoleAccess'
 
 export function useAppLayout() {
   const authStore = useAuthStore()
@@ -14,10 +16,39 @@ export function useAppLayout() {
   const currentUser = computed(() => authStore.user)
   const isStrategicDept = computed(() => authStore.userRole === 'strategic_dept')
   const strategicDeptName = computed(() => orgStore.getStrategicDeptName())
+  const canAccessAdminConsole = computed(() => hasAdminConsoleAccess(authStore.user))
+
+  const refreshNotificationState = async () => {
+    await Promise.all([messageStore.refreshMessageCenter(), approvalStore.loadPendingApprovals()])
+  }
+
+  const refreshPendingApprovalState = async () => {
+    await Promise.all([messageStore.refreshMessageCenter(), approvalStore.loadPendingApprovals()])
+  }
+
+  const handleApprovalStateRefresh = () => {
+    void refreshPendingApprovalState()
+  }
 
   onMounted(async () => {
+    if (typeof window !== 'undefined') {
+      window.addEventListener(
+        APPROVAL_STATE_REFRESH_EVENT,
+        handleApprovalStateRefresh as EventListener
+      )
+    }
+
     if (authStore.isAuthenticated) {
       await orgStore.loadDepartments()
+    }
+  })
+
+  onUnmounted(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(
+        APPROVAL_STATE_REFRESH_EVENT,
+        handleApprovalStateRefresh as EventListener
+      )
     }
   })
 
@@ -26,13 +57,11 @@ export function useAppLayout() {
     async isAuth => {
       if (isAuth && !orgStore.loaded) {
         await orgStore.loadDepartments()
-        void messageStore.fetchMessages()
-        void approvalStore.loadPendingApprovals()
+        void refreshNotificationState()
       } else if (isAuth && orgStore.loaded && messageStore.messages.length === 0) {
-        void messageStore.fetchMessages()
-        void approvalStore.loadPendingApprovals()
+        void refreshNotificationState()
       } else if (isAuth) {
-        void approvalStore.loadPendingApprovals()
+        void refreshPendingApprovalState()
       }
     },
     { immediate: true }
@@ -47,6 +76,7 @@ export function useAppLayout() {
     currentUser,
     isStrategicDept,
     strategicDeptName,
+    canAccessAdminConsole,
     handleLogout
   }
 }

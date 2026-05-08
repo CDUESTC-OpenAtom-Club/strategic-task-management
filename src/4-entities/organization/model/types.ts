@@ -1,6 +1,6 @@
 /**
  * Organization Entity Types
- * 
+ *
  * Domain model types for organizations based on backend sys_org table.
  * These types represent the core organization domain and are shared across features.
  */
@@ -9,15 +9,15 @@
  * Organization Type (Backend Enum)
  * Maps to backend OrgType enum values
  */
-export type OrgType = 
-  | 'STRATEGY_DEPT'      // Strategic Development Department
-  | 'FUNCTIONAL_DEPT'    // Functional Department
-  | 'FUNCTION_DEPT'      // Functional Department (alternative)
-  | 'COLLEGE'            // College
-  | 'SECONDARY_COLLEGE'  // Secondary College
-  | 'DIVISION'           // Division
-  | 'SCHOOL'             // School
-  | 'OTHER'              // Other
+export type OrgType =
+  | 'STRATEGY_DEPT' // Strategic Development Department
+  | 'FUNCTIONAL_DEPT' // Functional Department
+  | 'FUNCTION_DEPT' // Functional Department (alternative)
+  | 'COLLEGE' // College
+  | 'SECONDARY_COLLEGE' // Secondary College
+  | 'DIVISION' // Division
+  | 'SCHOOL' // School
+  | 'OTHER' // Other
 
 export const OrgType = {
   STRATEGY_DEPT: 'STRATEGY_DEPT' as const,
@@ -34,11 +34,11 @@ export const OrgType = {
  * Organization Level
  * Hierarchical level in the organization structure
  */
-export type OrgLevel = 
-  | 'university'         // University level (top)
-  | 'department'         // Department level
-  | 'college'            // College level
-  | 'division'           // Division level
+export type OrgLevel =
+  | 'university' // University level (top)
+  | 'department' // Department level
+  | 'college' // College level
+  | 'division' // Division level
 
 export const OrgLevel = {
   UNIVERSITY: 'university' as const,
@@ -51,10 +51,10 @@ export const OrgLevel = {
  * Frontend Department Type
  * Simplified organization type for frontend use
  */
-export type DepartmentType = 
-  | 'strategic_dept'      // Strategic Development Department (战略发展部)
-  | 'functional_dept'     // Functional Department (职能部门)
-  | 'secondary_college'   // Secondary College (二级学院)
+export type DepartmentType =
+  | 'strategic_dept' // Strategic Development Department (战略发展部)
+  | 'functional_dept' // Functional Department (职能部门)
+  | 'secondary_college' // Secondary College (二级学院)
 
 export const DepartmentType = {
   STRATEGIC_DEPT: 'strategic_dept' as const,

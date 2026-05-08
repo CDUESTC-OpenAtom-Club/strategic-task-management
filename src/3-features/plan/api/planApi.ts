@@ -8,7 +8,7 @@
  * **Validates: Requirements 2.4, 2.6**
  */
 import { apiClient } from '@/shared/api/client'
-import { withRetry } from '@/shared/lib/api/wrappers'
+import { withRetry } from '@/shared/api/wrappers'
 import { USE_MOCK } from '@/shared/config/api'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 import { getCachedUserContext } from '@/shared/lib/utils/cacheContext'
@@ -43,6 +43,11 @@ export interface SubmitPlanApprovalPayload {
 }
 
 const PLAN_WITHDRAW_TIMEOUT_MS = 90000
+const PLAN_REPORTS_CACHE_TTL_MS = 15 * 1000
+const PLAN_REPORTS_CACHE_MAX_ENTRIES = 100
+const planReportsByPlanIdCache = new Map<string, PlanReportSimpleResponse[]>()
+const planReportsByPlanIdCacheTime = new Map<string, number>()
+const planReportsByPlanIdInFlight = new Map<string, Promise<PlanReportSimpleResponse[]>>()
 
 // ============================================================
 // 后端 VO 类型定义 (与后端约定)
@@ -116,7 +121,7 @@ export interface PlanFillVO {
 }
 
 function hasApiData<T>(response: { success?: boolean; code?: number; data?: T | null }) {
-  return response.success === true || response.code === 200
+  return Boolean(response) && (response.success === true || response.code === 200)
 }
 
 type SilentApiResult<T> = {
@@ -240,6 +245,9 @@ function convertBackendPlanToPlan(
   // workflowStatus is retained separately for approval detail rendering,
   // but it must not override DRAFT after a withdraw.
   const effectiveStatus = raw.status
+  const normalizedCompletionPercentage = Number(raw.completionPercentage)
+  const normalizedCompletedIndicators = Number(raw.completedIndicators)
+  const normalizedTotalIndicators = Number(raw.indicatorCount ?? raw.totalIndicators)
 
   return {
     id: raw.id ?? raw.planId,
@@ -255,8 +263,15 @@ function convertBackendPlanToPlan(
     ...('createdByOrgName' in raw ? { createdByOrgName: raw.createdByOrgName } : {}),
     ...('createdByName' in raw ? { createdByName: raw.createdByName } : {}),
     description: raw.description,
-    totalIndicators: raw.indicatorCount,
-    completedIndicators: raw.completionPercentage,
+    ...(Number.isFinite(normalizedTotalIndicators)
+      ? { totalIndicators: normalizedTotalIndicators }
+      : {}),
+    ...(Number.isFinite(normalizedCompletedIndicators)
+      ? { completedIndicators: normalizedCompletedIndicators }
+      : {}),
+    ...(Number.isFinite(normalizedCompletionPercentage)
+      ? { completionPercentage: normalizedCompletionPercentage }
+      : {}),
     // Preserve backend fields used by existing views during the migration period.
     ...('targetOrgId' in raw || 'orgId' in raw
       ? { targetOrgId: raw.targetOrgId ?? raw.orgId }
@@ -353,6 +368,45 @@ const mockPlans: PlanVO[] = [
     updatedAt: '2025-02-01T00:00:00',
     createdBy: 'dept_admin',
     description: '第一季度教学相关指标填报'
+  },
+  {
+    planId: 100,
+    planName: '2026 教务处年度计划',
+    cycle: '2026',
+    year: '2026',
+    orgId: 3,
+    orgName: '教务处',
+    status: 'DRAFT',
+    createdAt: '2026-01-05T00:00:00',
+    updatedAt: '2026-03-15T10:00:00',
+    createdBy: 'jiaowuchu',
+    description: '2026年度教务处下发计划',
+    targetOrgId: 3,
+    targetOrgName: '教务处',
+    createdByOrgId: 3
+  },
+  {
+    planId: 101,
+    planName: '2026 计算机学院计划',
+    cycle: '2026',
+    year: '2026',
+    orgId: 5,
+    orgName: '计算机学院',
+    status: 'PENDING',
+    createdAt: '2026-03-15T10:00:00',
+    updatedAt: '2026-03-15T10:00:00',
+    createdBy: 'jiaowuchu',
+    description: '教务处下发给计算机学院的年度计划',
+    targetOrgId: 5,
+    targetOrgName: '计算机学院',
+    createdByOrgId: 3,
+    workflowStatus: 'PENDING',
+    workflowInstanceId: 9001,
+    currentTaskId: 9001,
+    currentStepName: '职能部门审批',
+    currentApproverId: 4,
+    currentApproverName: '王五',
+    canWithdraw: false
   }
 ]
 
@@ -379,6 +433,14 @@ const mockTasks: TaskVO[] = [
     taskName: '学生满意度',
     taskType: 'QUANTITATIVE',
     description: '学生满意度调查统计',
+    sortOrder: 1
+  },
+  {
+    taskId: 10101,
+    planId: 101,
+    taskName: '教学质量提升',
+    taskType: 'QUANTITATIVE',
+    description: '计算机学院年度教学质量指标',
     sortOrder: 1
   }
 ]
@@ -835,7 +897,7 @@ async function resolveIndicatorFillSaveContext(indicatorId: number | string): Pr
   const latestCurrentMonthReport = currentMonthReports[0]
   const editableExistingReport = currentMonthReports.find(report => {
     const normalizedStatus = getNormalizedReportStatus(report.status)
-    return normalizedStatus === 'DRAFT'
+    return normalizedStatus === 'DRAFT' || normalizedStatus === 'REJECTED'
   })
 
   if (latestCurrentMonthReport && !editableExistingReport) {
@@ -868,24 +930,6 @@ async function resolveIndicatorReportContext(
   const indicatorData = indicatorResponse.data as Record<string, unknown>
   const numericIndicatorId = Number(indicatorData.id ?? indicatorData.indicatorId ?? indicatorId)
   const taskId = Number(indicatorData.taskId ?? indicatorData.task_id)
-
-  if (!Number.isFinite(taskId)) {
-    throw new Error('指标缺少 taskId，无法保存填报')
-  }
-
-  const taskResponse = await apiClient.get<ApiResponse<Record<string, unknown>>>(`/tasks/${taskId}`)
-  if (!hasApiData(taskResponse) || !taskResponse.data) {
-    throw new Error('加载任务详情失败，无法定位关联计划')
-  }
-
-  const planId = Number(
-    (taskResponse.data as Record<string, unknown>).planId ??
-      (taskResponse.data as Record<string, unknown>).plan_id
-  )
-
-  if (!Number.isFinite(planId)) {
-    throw new Error('任务缺少 planId，无法保存填报')
-  }
 
   const authStore = useAuthStore()
   const orgStore = useOrgStore()
@@ -921,19 +965,23 @@ async function resolveIndicatorReportContext(
       Number(indicatorData.ownerOrgId ?? NaN) > 0 &&
       Number(indicatorData.ownerOrgId ?? NaN) !== reportOrgId)
 
-  let resolvedPlanId = planId
-  if (isCollegeReportContext) {
-    const sourceOrgId = Number(indicatorData.ownerOrgId ?? NaN)
-    const currentYear = Number(timeContext.currentYear ?? NaN)
+  const sourceOrgId = Number(indicatorData.ownerOrgId ?? NaN)
+  const currentYear = Number(timeContext.currentYear ?? NaN)
 
+  const resolvePlanIdFromVisiblePlans = async (): Promise<number | null> => {
     if (
-      Number.isFinite(sourceOrgId) &&
-      sourceOrgId > 0 &&
-      Number.isFinite(currentYear) &&
-      currentYear > 0
+      !Number.isFinite(reportOrgId) ||
+      reportOrgId <= 0 ||
+      !Number.isFinite(currentYear) ||
+      currentYear <= 0
     ) {
-      const resolveCycleYear = await getCycleYearResolver()
-      const allPlans = await fetchAllPlansFromPages(resolveCycleYear)
+      return null
+    }
+
+    const resolveCycleYear = await getCycleYearResolver()
+    const allPlans = await fetchAllPlansFromPages(resolveCycleYear)
+
+    if (isCollegeReportContext) {
       const matchedCollegeReceivingPlan = allPlans.find(plan => {
         const candidateTargetOrgId = Number(plan.targetOrgId ?? plan.orgId ?? NaN)
         const candidateCreatedByOrgId = Number(
@@ -956,9 +1004,73 @@ async function resolveIndicatorReportContext(
       })
 
       if (matchedCollegeReceivingPlan?.id) {
-        resolvedPlanId = Number(matchedCollegeReceivingPlan.id)
+        return Number(matchedCollegeReceivingPlan.id)
       }
     }
+
+    const matchedPlan = allPlans.find(plan => {
+      const candidateTargetOrgId = Number(plan.targetOrgId ?? plan.orgId ?? NaN)
+      const candidateYear = Number(plan.year ?? resolveCycleYear(plan.cycleId) ?? NaN)
+      return (
+        Number.isFinite(candidateTargetOrgId) &&
+        candidateTargetOrgId === reportOrgId &&
+        Number.isFinite(candidateYear) &&
+        candidateYear === currentYear
+      )
+    })
+
+    return matchedPlan?.id ? Number(matchedPlan.id) : null
+  }
+
+  let resolvedPlanId = Number(indicatorData.planId ?? indicatorData.plan_id ?? NaN)
+
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0) {
+    if (Number.isFinite(taskId) && taskId > 0) {
+      try {
+        const taskResponse = await apiClient
+          .getAxiosInstance()
+          .get<ApiResponse<Record<string, unknown>> | Record<string, unknown>>(`/tasks/${taskId}`, {
+            validateStatus: () => true,
+            _skipBusinessErrorThrow: true
+          })
+
+        if (taskResponse.status >= 200 && taskResponse.status < 300) {
+          const taskPayload =
+            taskResponse.data &&
+            typeof taskResponse.data === 'object' &&
+            'data' in taskResponse.data
+              ? ((taskResponse.data as { data?: Record<string, unknown> }).data ?? null)
+              : (taskResponse.data as Record<string, unknown> | null)
+
+          if (taskPayload) {
+            const taskPlanId = Number(taskPayload.planId ?? taskPayload.plan_id)
+            if (Number.isFinite(taskPlanId) && taskPlanId > 0) {
+              resolvedPlanId = taskPlanId
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn(
+          '[indicatorFillApi] Failed to load task detail for report context, fallback to visible plan lookup',
+          {
+            indicatorId,
+            taskId,
+            error
+          }
+        )
+      }
+    }
+  }
+
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0) {
+    const fallbackPlanId = await resolvePlanIdFromVisiblePlans()
+    if (Number.isFinite(fallbackPlanId) && (fallbackPlanId as number) > 0) {
+      resolvedPlanId = fallbackPlanId as number
+    }
+  }
+
+  if (!Number.isFinite(resolvedPlanId) || resolvedPlanId <= 0) {
+    throw new Error('无法定位关联计划，无法保存填报')
   }
 
   return {
@@ -975,26 +1087,137 @@ async function resolveIndicatorReportContext(
 }
 
 async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimpleResponse[]> {
-  const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(
-    `/reports/plan/${planId}`,
-    { _t: Date.now() }
-  )
-  if (!hasApiData(response)) {
-    throw new Error(
-      typeof response.message === 'string'
-        ? response.message || '加载计划报告失败'
-        : '加载计划报告失败'
-    )
+  const normalizedPlanId = Number(planId)
+  if (!Number.isFinite(normalizedPlanId) || normalizedPlanId <= 0) {
+    return []
   }
 
-  const reports = Array.isArray(response.data) ? response.data : []
-  return Promise.all(reports.map(report => enrichPlanReportWorkflow(report)))
+  cleanupExpiredPlanReportCacheEntries()
+
+  const cacheKey = String(normalizedPlanId)
+  const cachedAt = planReportsByPlanIdCacheTime.get(cacheKey) ?? 0
+  const cachedReports = planReportsByPlanIdCache.get(cacheKey)
+  const now = Date.now()
+
+  if (cachedReports && now - cachedAt < PLAN_REPORTS_CACHE_TTL_MS) {
+    return cachedReports
+  }
+
+  const inFlightRequest = planReportsByPlanIdInFlight.get(cacheKey)
+  if (inFlightRequest) {
+    return inFlightRequest
+  }
+
+  const requestPromise = (async () => {
+    const response = await apiClient.get<ApiResponse<PlanReportSimpleResponse[]>>(
+      `/reports/plan/${normalizedPlanId}`
+    )
+    if (!hasApiData(response)) {
+      throw new Error(
+        typeof response.message === 'string'
+          ? response.message || '加载计划报告失败'
+          : '加载计划报告失败'
+      )
+    }
+
+    const reports = Array.isArray(response.data) ? response.data : []
+    const enrichedReports = await Promise.all(
+      reports.map(report => enrichPlanReportWorkflow(report))
+    )
+    planReportsByPlanIdCache.set(cacheKey, enrichedReports)
+    planReportsByPlanIdCacheTime.set(cacheKey, Date.now())
+    evictOldestPlanReportCacheEntryIfNeeded()
+    return enrichedReports
+  })()
+
+  planReportsByPlanIdInFlight.set(cacheKey, requestPromise)
+
+  try {
+    return await requestPromise
+  } finally {
+    planReportsByPlanIdInFlight.delete(cacheKey)
+  }
+}
+
+function cleanupExpiredPlanReportCacheEntries(now = Date.now()): void {
+  for (const [key, cachedAt] of planReportsByPlanIdCacheTime.entries()) {
+    if (now - cachedAt < PLAN_REPORTS_CACHE_TTL_MS) {
+      continue
+    }
+
+    planReportsByPlanIdCache.delete(key)
+    planReportsByPlanIdCacheTime.delete(key)
+  }
+}
+
+function evictOldestPlanReportCacheEntryIfNeeded(): void {
+  if (planReportsByPlanIdCache.size <= PLAN_REPORTS_CACHE_MAX_ENTRIES) {
+    return
+  }
+
+  let oldestKey: string | null = null
+  let oldestTimestamp = Number.POSITIVE_INFINITY
+
+  for (const [key, timestamp] of planReportsByPlanIdCacheTime.entries()) {
+    if (timestamp >= oldestTimestamp) {
+      continue
+    }
+
+    oldestKey = key
+    oldestTimestamp = timestamp
+  }
+
+  if (!oldestKey) {
+    return
+  }
+
+  planReportsByPlanIdCache.delete(oldestKey)
+  planReportsByPlanIdCacheTime.delete(oldestKey)
+}
+
+function resolveCurrentMonthPlanReportSummaries(
+  reports: PlanReportSimpleResponse[],
+  reportOrgId: number,
+  reportMonth: string
+): {
+  currentReport: PlanReportSimpleResponse | null
+  latestReport: PlanReportSimpleResponse | null
+} {
+  const currentMonthReports = reports
+    .filter(
+      report =>
+        Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.updatedAt || b.createdAt || 0).getTime() -
+        new Date(a.updatedAt || a.createdAt || 0).getTime()
+    )
+
+  return {
+    currentReport:
+      currentMonthReports.find(report =>
+        ['DRAFT', 'REJECTED'].includes(getNormalizedReportStatus(report.status))
+      ) ||
+      currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) ||
+      null,
+    latestReport:
+      currentMonthReports.find(report => {
+        const normalizedStatus = getNormalizedReportStatus(report.status)
+        return (
+          Boolean(report.workflowInstanceId ?? report.auditInstanceId) ||
+          ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(
+            normalizedStatus
+          )
+        )
+      }) ||
+      currentMonthReports[0] ||
+      null
+  }
 }
 
 async function loadPlanReportById(reportId: number | string): Promise<PlanReportSimpleResponse> {
-  const result = await silentApiGet<PlanReportSimpleResponse>(
-    `/reports/${reportId}?_t=${Date.now()}`
-  )
+  const result = await silentApiGet<PlanReportSimpleResponse>(`/reports/${reportId}`)
   const response = result.data as ApiResponse<PlanReportSimpleResponse> | undefined
   if (result.status >= 500 || !response || !hasApiData(response) || !response.data) {
     throw new Error(
@@ -2199,27 +2422,7 @@ export const indicatorFillApi = {
     reportMonth: string = getCurrentReportMonth()
   ): Promise<PlanReportSimpleResponse | null> {
     const reports = await loadPlanReportsByPlanId(Number(planId))
-    const currentMonthReports = reports
-      .filter(
-        report =>
-          Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt || 0).getTime() -
-          new Date(a.updatedAt || a.createdAt || 0).getTime()
-      )
-
-    const latestEditableDraft =
-      currentMonthReports.find(
-        report => getNormalizedReportStatus(report.status) === 'DRAFT'
-      ) || null
-
-    if (latestEditableDraft) {
-      return latestEditableDraft
-    }
-
-    return currentMonthReports.find(report => isActiveCurrentReportStatus(report.status)) || null
+    return resolveCurrentMonthPlanReportSummaries(reports, reportOrgId, reportMonth).currentReport
   },
 
   async getLatestCurrentMonthPlanReport(
@@ -2228,29 +2431,19 @@ export const indicatorFillApi = {
     reportMonth: string = getCurrentReportMonth()
   ): Promise<PlanReportSimpleResponse | null> {
     const reports = await loadPlanReportsByPlanId(Number(planId))
-    const currentMonthReports = reports
-      .filter(
-        report =>
-          Number(report.reportOrgId) === Number(reportOrgId) && report.reportMonth === reportMonth
-      )
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt || b.createdAt || 0).getTime() -
-          new Date(a.updatedAt || a.createdAt || 0).getTime()
-      )
+    return resolveCurrentMonthPlanReportSummaries(reports, reportOrgId, reportMonth).latestReport
+  },
 
-    const latestWorkflowBackedReport =
-      currentMonthReports.find(report => {
-        const normalizedStatus = getNormalizedReportStatus(report.status)
-        return (
-          Boolean(report.workflowInstanceId ?? report.auditInstanceId) ||
-          ['PENDING', 'IN_REVIEW', 'SUBMITTED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(
-            normalizedStatus
-          )
-        )
-      }) || null
-
-    return latestWorkflowBackedReport || currentMonthReports[0] || null
+  async getCurrentMonthPlanReportSummaries(
+    planId: number | string,
+    reportOrgId: number,
+    reportMonth: string = getCurrentReportMonth()
+  ): Promise<{
+    currentReport: PlanReportSimpleResponse | null
+    latestReport: PlanReportSimpleResponse | null
+  }> {
+    const reports = await loadPlanReportsByPlanId(Number(planId))
+    return resolveCurrentMonthPlanReportSummaries(reports, reportOrgId, reportMonth)
   },
 
   async submitCurrentMonthPlanReport(

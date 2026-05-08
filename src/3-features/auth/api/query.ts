@@ -5,6 +5,7 @@
  */
 
 import { apiClient as api } from '@/shared/api/client'
+import type { User } from '@/shared/types'
 import type { ApiResponse } from './types'
 
 /**
@@ -14,7 +15,7 @@ import type { ApiResponse } from './types'
  *
  * @returns Current user information
  */
-export async function getCurrentUser(): Promise<ApiResponse<any>> {
+export async function getCurrentUser(): Promise<ApiResponse<User>> {
   return api.get('/auth/me')
 }
 

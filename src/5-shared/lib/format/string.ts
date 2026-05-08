@@ -1,7 +1,6 @@
-// @ts-nocheck
 /**
  * String Formatting Utilities
- * 
+ *
  * String manipulation and formatting functions
  */
 
@@ -19,7 +18,7 @@ export function toTitleCase(str: string): string {
   return str
     .toLowerCase()
     .split(' ')
-    .map((word) => capitalize(word))
+    .map(word => capitalize(word))
     .join(' ')
 }
 
@@ -27,7 +26,9 @@ export function toTitleCase(str: string): string {
  * Truncate string with ellipsis
  */
 export function truncate(str: string, maxLength: number, suffix = '...'): string {
-  if (str.length <= maxLength) {return str}
+  if (str.length <= maxLength) {
+    return str
+  }
   return str.slice(0, maxLength - suffix.length) + suffix
 }
 
@@ -35,7 +36,9 @@ export function truncate(str: string, maxLength: number, suffix = '...'): string
  * Highlight text by wrapping matches in <mark> tags
  */
 export function highlightText(text: string, highlight: string): string {
-  if (!highlight) {return text}
+  if (!highlight) {
+    return text
+  }
   const regex = new RegExp(`(${highlight})`, 'gi')
   return text.replace(regex, '<mark>$1</mark>')
 }
@@ -63,7 +66,7 @@ export function toKebabCase(str: string): string {
 export function toCamelCase(str: string): string {
   return str
     .replace(/[-_\s]+(.)?/g, (_, char) => (char ? char.toUpperCase() : ''))
-    .replace(/^[A-Z]/, (char) => char.toLowerCase())
+    .replace(/^[A-Z]/, char => char.toLowerCase())
 }
 
 /**
@@ -87,7 +90,7 @@ export function escapeHtml(str: string): string {
     '"': '&quot;',
     "'": '&#39;'
   }
-  return str.replace(/[&<>"']/g, (char) => htmlEscapes[char])
+  return str.replace(/[&<>"']/g, char => htmlEscapes[char])
 }
 
 /**
