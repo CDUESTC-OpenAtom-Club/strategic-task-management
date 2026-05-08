@@ -2,7 +2,7 @@ name: Build and Push Frontend Image
 
 on:
   push:
-    branches: [main, baseline/frontend-verified-20260426]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -104,7 +104,7 @@ jobs:
             VITE_APP_COMMIT_HASH=${{ github.sha }}
 
       - name: Trigger backend system deployment
-        if: github.ref_name == 'baseline/frontend-verified-20260426'
+        if: github.ref_name == 'main'
         env:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
         run: |
@@ -116,7 +116,7 @@ jobs:
             https://api.github.com/repos/CDUESTC-OpenAtom-Club/sism-backend/actions/workflows/build-and-push-image.yml/dispatches \
             -d @- <<EOF
           {
-            "ref": "baseline/backend-verified-20260426",
+            "ref": "main",
             "inputs": {
               "deploy_mode": "frontend-only",
               "frontend_tag": "${GITHUB_SHA}",
