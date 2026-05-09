@@ -1,31 +1,17 @@
 # Strategic Task Management 文档目录
 
-本目录只保留当前前端架构重构仍在使用的计划、映射、实施与接口文档。历史方案、阶段报告和协作文档已归档。
+本目录只保留当前前端治理和仍可作为实现基线的专题文档。过时接口说明、阶段性验收报告、旧迁移计划和零引用设计稿已删除。
 
 ## 当前主文档
 
-- `architecture-refactor-plan.md`
-  - 当前前端架构重构总方案
-- `migration-mapping.md`
-  - 迁移映射与落位关系
-- `backup-migration-strategy.md`
-  - 备份、迁移与回滚策略
-- `testing-strategy.md`
-  - 测试策略与验证口径
-- `implementation-guide.md`
-  - 实施步骤与执行说明
 - `cache-design.md`
-  - 前端缓存设计、分层、key 与失效策略
-- `api-reference.md`
-  - API 参考说明
-- `API调用规范.md`
-  - 接口调用规范
-- `frontend-api-guide.md`
-  - 前端接口接入说明
+  - 当前前端缓存设计与实现口径
+- `plan-withdraw-redesign.md`
+  - Plan 发起后可撤回的现行前端设计口径
+- `architecture/`
+  - 当前仍有效的架构治理专题文档
 - `../sism-backend/docs/architecture/main-branch-release-and-deploy-runbook.md`
   - 系统级主线发布与自动部署手册，前端发版后派发后端部署时应以该文档为准
-- `architecture/`
-  - 当前 ADR 与架构专题文档
 
 ## 架构专题文档
 
@@ -35,24 +21,13 @@
   - 目录治理执行 TODO 与 canonical path 决策
 - `architecture/frontend-architecture-remediation-backlog.md`
   - 前端架构审查整改执行清单，包含优先级、负责人、工时、验收标准
-- `architecture/milestone-intelligence-adr.md`
-  - 里程碑智能能力相关 ADR
+- `architecture/legacy-indicator-retirement.md`
+  - `legacy-indicator` 退场与归档口径
 
 ## 归档目录
 
-- `archive/2026-03-delivery-history/`
-  - 阶段报告
-  - 验收结果
-  - 协作文档
-  - 一次性交付记录
-- `archive/2026-03-legacy-plans/`
-  - 已被当前方案替代的旧版计划和旧版设计稿
-- `archive/ui-soft-delete-backup-20260319-004611*`
-  - UI 软删除相关备份
-- `archive/corrupted-files-backup/`
-  - 异常文件备份
-- `archive/duplicate-components-backup/`
-  - 重复组件备份
+- `archive/legacy-indicator-retired/`
+  - 已退场指标旧实现的只读归档
 
 ## 清理原则
 
@@ -63,11 +38,8 @@
 
 ## 阅读顺序
 
-1. `architecture-refactor-plan.md`
-2. `migration-mapping.md`
-3. `backup-migration-strategy.md`
-4. `testing-strategy.md`
-5. `implementation-guide.md`
-6. `architecture/src-directory-governance-plan.md`
-7. `architecture/src-directory-governance-todo.md`
-8. `architecture/frontend-architecture-remediation-backlog.md`
+1. `architecture/frontend-architecture-remediation-backlog.md`
+2. `architecture/src-directory-governance-plan.md`
+3. `architecture/src-directory-governance-todo.md`
+4. `cache-design.md`
+5. `plan-withdraw-redesign.md`
