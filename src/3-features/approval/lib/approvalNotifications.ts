@@ -46,7 +46,7 @@ function normalizeApprovalQueryValue(value?: number | string | null): string | n
 
 function normalizeApprovalRoute(path?: string | null): string | null {
   const normalized = String(path || '').trim()
-  if (!normalized || normalized === '/messages' || normalized === '/workflow-tasks') {
+  if (!normalized || normalized === '/messages') {
     return null
   }
   return normalized

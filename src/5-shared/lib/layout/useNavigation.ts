@@ -61,7 +61,6 @@ export function useNavigation(viewingRole: ComputedRef<UserRole | null>) {
     // 路径到标签ID的映射（不依赖 viewingRole 状态）
     const pathToTabId: Record<string, string> = {
       '/dashboard': 'dashboard',
-      '/workflow-tasks': 'workflowTasks',
       '/strategic-tasks': 'strategic',
       '/indicators': 'indicators',
       '/distribution': 'distribution',

@@ -139,11 +139,9 @@ tests/                      # 测试文件
 
 docs/                       # 项目文档
 ├── archive/                # 归档文档
-├── user-manual/            # 用户操作手册
-├── api-reference.md        # API 接口文档
-├── common-components-guide.md  # 通用组件指南
-├── frontend-api-guide.md   # 前端 API 使用指南
-├── optimization-progress.md    # 优化实施进度
+├── architecture/           # 当前架构治理文档
+├── cache-design.md         # 缓存设计口径
+├── plan-withdraw-redesign.md  # Plan 撤回交互设计
 └── ...
 ```
 
@@ -171,26 +169,13 @@ docs/                       # 项目文档
 3. 遵循 **ESLint** 和 **Prettier** 代码规范
 4. 组件命名使用 **PascalCase**
 5. 使用 **Pinia** 进行状态管理
-6. API 调用统一通过 `src/api/` 目录
+6. API 调用统一通过 `src/5-shared/api/` 与 feature 自身 `api/` 目录
 7. 为新功能编写单元测试
 
 ### 使用通用组件
 
 ```typescript
 import { DataTable, DataForm, EmptyState, SkeletonLoader } from '@/components/common'
-```
-
-详见 [通用组件指南](docs/common-components-guide.md)。
-
-### 使用 Zod 数据验证
-
-```typescript
-import { validateIndicator, validateUser } from '@/types'
-
-const result = validateIndicator(newData)
-if (!result.success) {
-  console.error('验证失败:', result.errors)
-}
 ```
 
 ---
@@ -232,12 +217,9 @@ if (!result.success) {
 | 文档                                            | 说明                               |
 | ----------------------------------------------- | ---------------------------------- |
 | [CLAUDE.md](CLAUDE.md)                          | 项目开发指南 (供 Claude Code 使用) |
-| [API 接口文档](docs/api-reference.md)           | 后端 API 接口规范                  |
-| [前端 API 指南](docs/frontend-api-guide.md)     | 前端 API 调用指南                  |
-| [通用组件指南](docs/common-components-guide.md) | 组件使用文档                       |
-| [优化实施进度](docs/optimization-progress.md)   | 前端优化总结                       |
-| [数据库架构](docs/database-schema.md)           | 后端数据库结构                     |
-| [用户操作手册](docs/user-manual/)               | 各角色操作指南                     |
+| [文档目录](docs/README.md)                      | 当前保留文档索引与阅读顺序         |
+| [缓存设计](docs/cache-design.md)                | 前端缓存设计与实现口径             |
+| [Plan 撤回设计](docs/plan-withdraw-redesign.md) | Plan 发起后可撤回交互设计          |
 
 ---
 

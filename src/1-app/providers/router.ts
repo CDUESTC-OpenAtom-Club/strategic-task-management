@@ -104,12 +104,6 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '消息中心 - 战略指标管理系统' }
       },
       {
-        path: 'workflow-tasks',
-        name: 'WorkflowTaskCenter',
-        component: () => import('@/features/workflow/ui/WorkflowTaskCenterView.vue'),
-        meta: { title: '待办中心 - 战略指标管理系统' }
-      },
-      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/features/profile/ui/ProfileView.vue'),

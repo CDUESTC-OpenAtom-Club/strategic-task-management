@@ -1,73 +1,14 @@
 # Strategic Task Management 文档目录
 
-本目录只保留当前前端架构重构仍在使用的计划、映射、实施与接口文档。历史方案、阶段报告和协作文档已归档。
+本目录已经按“只保留仍有持续维护价值”的原则清理完成。
 
-## 当前主文档
+当前状态：
 
-- `architecture-refactor-plan.md`
-  - 当前前端架构重构总方案
-- `migration-mapping.md`
-  - 迁移映射与落位关系
-- `backup-migration-strategy.md`
-  - 备份、迁移与回滚策略
-- `testing-strategy.md`
-  - 测试策略与验证口径
-- `implementation-guide.md`
-  - 实施步骤与执行说明
-- `cache-design.md`
-  - 前端缓存设计、分层、key 与失效策略
-- `api-reference.md`
-  - API 参考说明
-- `API调用规范.md`
-  - 接口调用规范
-- `frontend-api-guide.md`
-  - 前端接口接入说明
-- `../sism-backend/docs/architecture/main-branch-release-and-deploy-runbook.md`
-  - 系统级主线发布与自动部署手册，前端发版后派发后端部署时应以该文档为准
-- `architecture/`
-  - 当前 ADR 与架构专题文档
+- 过时接口说明、阶段性验收报告、旧迁移计划、零引用设计稿已删除
+- `legacy-indicator` 的历史归档代码也已删除，不再在仓库内保留只读副本
 
-## 架构专题文档
+后续约定：
 
-- `architecture/src-directory-governance-plan.md`
-  - `src` 目录治理方案与边界定义
-- `architecture/src-directory-governance-todo.md`
-  - 目录治理执行 TODO 与 canonical path 决策
-- `architecture/frontend-architecture-remediation-backlog.md`
-  - 前端架构审查整改执行清单，包含优先级、负责人、工时、验收标准
-- `architecture/milestone-intelligence-adr.md`
-  - 里程碑智能能力相关 ADR
-
-## 归档目录
-
-- `archive/2026-03-delivery-history/`
-  - 阶段报告
-  - 验收结果
-  - 协作文档
-  - 一次性交付记录
-- `archive/2026-03-legacy-plans/`
-  - 已被当前方案替代的旧版计划和旧版设计稿
-- `archive/ui-soft-delete-backup-20260319-004611*`
-  - UI 软删除相关备份
-- `archive/corrupted-files-backup/`
-  - 异常文件备份
-- `archive/duplicate-components-backup/`
-  - 重复组件备份
-
-## 清理原则
-
-1. 根目录只保留当前仍作为执行基线的方案文档。
-2. 旧版设计稿、旧路线图、阶段报告和协作文档统一归档。
-3. 备份文件始终保留在 `archive/`，不与当前方案文档混放。
-4. 新文档如果不再参与当前实施，应直接归档而不是继续堆在根目录。
-
-## 阅读顺序
-
-1. `architecture-refactor-plan.md`
-2. `migration-mapping.md`
-3. `backup-migration-strategy.md`
-4. `testing-strategy.md`
-5. `implementation-guide.md`
-6. `architecture/src-directory-governance-plan.md`
-7. `architecture/src-directory-governance-todo.md`
-8. `architecture/frontend-architecture-remediation-backlog.md`
+1. 仅在文档仍能直接约束当前代码或发布流程时才继续保留。
+2. 阶段性报告、一次性设计稿和历史归档代码默认删除，不再堆积在 `docs/`。
+3. 需要联调、发布或账号口径时，优先查仓库根 `README.md` 与后端仓库对应文档。
