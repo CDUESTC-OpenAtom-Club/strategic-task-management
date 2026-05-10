@@ -214,7 +214,6 @@ const {
   removeFormMilestone,
   removeMilestone,
   removeNewChildRow,
-  requiredApprovalPermissionCodes,
   resetApprovalSetupDialog,
   resolveCurrentStepExpectedRoleCodes,
   resolveIndicatorTaskType,

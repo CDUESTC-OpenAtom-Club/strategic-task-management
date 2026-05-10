@@ -1,6 +1,6 @@
 /**
  * Auth Feature - Business Types
- * 
+ *
  * Business-specific types for the authentication feature.
  * These extend the entity types with feature-specific concerns.
  */
@@ -35,6 +35,8 @@ export interface LoginFormState {
 export interface LoginResult {
   success: boolean
   error?: string
+  shouldCountAttempt?: boolean
+  isLocked?: boolean
   user?: User
   token?: string
 }

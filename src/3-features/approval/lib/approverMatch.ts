@@ -30,7 +30,8 @@ function normalizeRoleCodes(roleCodes?: string[]): string[] {
 export function canCurrentUserHandleWorkflowApproval(
   context: WorkflowApprovalActorContext
 ): boolean {
-  if (!context.hasApprovalPermission || !context.isPendingApproval) {
+  // `hasApprovalPermission` is retained only for legacy signature compatibility.
+  if (!context.isPendingApproval) {
     return false
   }
 

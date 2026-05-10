@@ -9,8 +9,6 @@ import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { useAuthStore } from '@/features/auth/model/store'
 import { notifyApprovalStateRefresh } from '@/features/approval/lib'
-import { usePermission } from '@/5-shared/lib/permissions'
-import { PermissionCode } from '@/shared/types'
 import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import type { PendingApproval } from '@/shared/types'
@@ -35,10 +33,8 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
-const permissionUtil = usePermission()
-const PLAN_DISPATCH_APPROVE_PERMISSION = PermissionCode.BTN_STRATEGY_TASK_DISPATCH_APPROVE
 const canApprovePlan = computed(() => {
-  return permissionUtil.hasPermission(PLAN_DISPATCH_APPROVE_PERMISSION)
+  return authStore.user?.role === 'strategic_dept'
 })
 
 // 计算 drawer 可见性
@@ -93,7 +89,7 @@ const loadPendingApprovals = async () => {
 // 审批通过
 const handleApprove = async (instance: PendingPlanApproval) => {
   if (!canApprovePlan.value) {
-    ElMessage.warning(`当前账号缺少审批权限：${PLAN_DISPATCH_APPROVE_PERMISSION}`)
+    ElMessage.warning('当前角色不匹配该审批节点，无法执行审批通过')
     return
   }
 
@@ -140,7 +136,7 @@ const handleApprove = async (instance: PendingPlanApproval) => {
 // 审批拒绝
 const handleReject = async (instance: PendingPlanApproval) => {
   if (!canApprovePlan.value) {
-    ElMessage.warning(`当前账号缺少审批权限：${PLAN_DISPATCH_APPROVE_PERMISSION}`)
+    ElMessage.warning('当前角色不匹配该审批节点，无法执行审批驳回')
     return
   }
 

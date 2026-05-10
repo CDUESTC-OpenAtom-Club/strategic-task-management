@@ -337,7 +337,7 @@ const {
             <el-alert
               v-if="hasPlanWorkflowData && isPlanPendingApproval && !hasPlanApprovalPermission"
               type="warning"
-              :title="`当前账号缺少权限码 ${requiredPlanApprovalPermissionCode}，仅可查看审批进度和历史。`"
+              title="当前角色或组织范围不匹配该审批节点，仅可查看审批进度和历史。"
               show-icon
               :closable="false"
               style="margin-bottom: 16px"

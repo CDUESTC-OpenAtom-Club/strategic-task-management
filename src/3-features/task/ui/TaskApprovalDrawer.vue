@@ -26,15 +26,7 @@
         </div>
 
         <el-alert
-          v-if="instance.missingPermissionCode"
-          type="warning"
-          :closable="false"
-          :title="`当前账号缺少权限码 ${instance.missingPermissionCode}，仅可查看待办。`"
-          style="margin-bottom: 12px"
-        />
-
-        <el-alert
-          v-else-if="!instance.canHandle && instance.currentApproverName"
+          v-if="!instance.canHandle && instance.currentApproverName"
           type="warning"
           :closable="false"
           :title="`当前节点审批人为 ${instance.currentApproverName}，你当前仅可查看。`"
@@ -66,11 +58,6 @@ import BaseApprovalDrawer from '@/shared/ui/layout/BaseApprovalDrawer.vue'
 import { logger } from '@/shared/lib/utils/logger'
 import type { WorkflowTaskResponse, WorkflowInstanceDetailResponse } from '@/features/workflow/api'
 
-import { usePermission } from '@/5-shared/lib/permissions'
-import type { PermissionCode } from '@/shared/types'
-
-const permissionUtil = usePermission()
-
 interface PendingApprovalInstance {
   id: number
   taskId: number
@@ -84,8 +71,6 @@ interface PendingApprovalInstance {
   createdAt?: string | null
   currentApproverId?: number | null
   currentApproverName?: string | null
-  requiredPermissionCode?: string | null
-  missingPermissionCode?: string | null
   canHandle: boolean
 }
 
@@ -105,15 +90,6 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const pendingApprovals = ref<PendingApprovalInstance[]>([])
 const currentUserId = computed(() => Number(authStore.user?.userId ?? 0))
-const currentUserPermissionCodes = computed(() => {
-  const permissions = (authStore.user as { permissions?: unknown[] } | null)?.permissions
-  if (!Array.isArray(permissions)) {
-    return []
-  }
-  return permissions
-    .map(permission => (typeof permission === 'string' ? permission.trim() : ''))
-    .filter(Boolean)
-})
 
 const visible = computed({
   get: () => props.modelValue,
@@ -129,19 +105,6 @@ const formatTime = (raw?: string | null) => {
     return raw
   }
   return date.toLocaleString('zh-CN')
-}
-
-const resolveRequiredPermissionCode = (entityType?: string | null): string | null => {
-  const normalizedEntityType = String(entityType || '')
-    .trim()
-    .toUpperCase()
-  if (normalizedEntityType === 'PLAN') {
-    return 'BTN_STRATEGY_TASK_DISPATCH_APPROVE'
-  }
-  if (normalizedEntityType === 'PLAN_REPORT') {
-    return 'BTN_STRATEGY_TASK_REPORT_APPROVE'
-  }
-  return null
 }
 
 const loadPendingApprovals = async () => {
@@ -174,13 +137,8 @@ const loadPendingApprovals = async () => {
 
       pendingApprovals.value = pageResult.items.map((task, index) => {
         const detail = details[index]
-        const requiredPermissionCode = resolveRequiredPermissionCode(detail?.businessEntityType)
-        const hasPermission =
-          !requiredPermissionCode ||
-          currentUserPermissionCodes.value.includes(requiredPermissionCode)
         const currentApproverId = Number(detail?.currentApproverId ?? task.assigneeId ?? 0)
         const canHandle = Boolean(
-          hasPermission &&
           currentUserId.value > 0 &&
           currentApproverId > 0 &&
           currentApproverId === currentUserId.value
@@ -199,8 +157,6 @@ const loadPendingApprovals = async () => {
           createdAt: detail?.startTime ?? task.createdTime,
           currentApproverId,
           currentApproverName: detail?.currentApproverName ?? task.assigneeName,
-          requiredPermissionCode,
-          missingPermissionCode: hasPermission ? null : requiredPermissionCode,
           canHandle
         }
       })
@@ -221,10 +177,7 @@ const loadPendingApprovals = async () => {
 
 const handleApprove = async (instance: PendingApprovalInstance) => {
   if (!instance.canHandle) {
-    const message = instance.missingPermissionCode
-      ? `当前账号缺少审批权限：${instance.missingPermissionCode}`
-      : '当前审批节点不是你，无法执行审批通过'
-    ElMessage.warning(message)
+    ElMessage.warning('当前审批节点不是你，无法执行审批通过')
     return
   }
 
@@ -253,10 +206,7 @@ const handleApprove = async (instance: PendingApprovalInstance) => {
 
 const handleReject = async (instance: PendingApprovalInstance) => {
   if (!instance.canHandle) {
-    const message = instance.missingPermissionCode
-      ? `当前账号缺少审批权限：${instance.missingPermissionCode}`
-      : '当前审批节点不是你，无法执行审批驳回'
-    ElMessage.warning(message)
+    ElMessage.warning('当前审批节点不是你，无法执行审批驳回')
     return
   }
 

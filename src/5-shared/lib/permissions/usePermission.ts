@@ -49,6 +49,8 @@ export interface UsePermissionReturn {
   canDeleteIndicatorFill: (fill: IndicatorFill) => boolean
 }
 
+// Legacy compatibility shim:
+// permission codes are no longer the source of truth for core business actions.
 const PERMISSION_ROLE_MAP: Record<PermissionCode, string[]> = {
   [PermissionCode.PLAN_CREATE]: ['strategic_dept', 'functional_dept'],
   [PermissionCode.PLAN_VIEW]: ['strategic_dept', 'functional_dept', 'secondary_college'],
@@ -122,14 +124,11 @@ export function usePermission(): UsePermissionReturn {
     resourceOrgId: number | string | null | undefined,
     permission: PermissionCode
   ): boolean => {
-    return hasPermission(permission) && canAccessOrg(resourceOrgId)
+    void permission
+    return canAccessOrg(resourceOrgId)
   }
 
-  const canAccessPlanOrg = (plan: Plan, permission: PermissionCode): boolean => {
-    if (!hasPermission(permission)) {
-      return false
-    }
-
+  const canAccessPlanOrg = (plan: Plan): boolean => {
     if (isStrategicDept.value) {
       return true
     }
@@ -138,7 +137,7 @@ export function usePermission(): UsePermissionReturn {
   }
 
   const canViewPlan = (plan: Plan): boolean => {
-    return canAccessPlanOrg(plan, PermissionCode.PLAN_VIEW)
+    return canAccessPlanOrg(plan)
   }
 
   const canEditPlan = (plan: Plan): boolean => {
@@ -170,11 +169,11 @@ export function usePermission(): UsePermissionReturn {
       return false
     }
 
-    if (!hasPermission(PermissionCode.PLAN_SUBMIT)) {
+    if (!userRole.value) {
       return false
     }
 
-    return canAccessPlanOrg(plan, PermissionCode.PLAN_SUBMIT)
+    return canAccessPlanOrg(plan)
   }
 
   const getAccessiblePlans = (plans: Plan[]): Plan[] => {
@@ -183,7 +182,7 @@ export function usePermission(): UsePermissionReturn {
 
   const canAuditPlanFill = (planFill: PlanFill): boolean => {
     void planFill
-    // 审批按钮现已由工作流待办 + 后端权限码统一控制，不再从前端角色兜底推导。
+    // 核心审批改由工作流待办、角色、组织范围和业务状态联合决定。
     return false
   }
 
@@ -200,7 +199,7 @@ export function usePermission(): UsePermissionReturn {
   }
 
   const canFillIndicator = (indicator: Indicator): boolean => {
-    if (!hasPermission(PermissionCode.INDICATOR_FILL)) {
+    if (!userRole.value) {
       return false
     }
 
@@ -216,7 +215,7 @@ export function usePermission(): UsePermissionReturn {
   }
 
   const canEditIndicatorFill = (fill: IndicatorFill): boolean => {
-    if (!hasPermission(PermissionCode.INDICATOR_FILL)) {
+    if (!userRole.value) {
       return false
     }
 

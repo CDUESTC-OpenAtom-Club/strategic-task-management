@@ -66,30 +66,20 @@
       </el-button>
     </el-form-item>
 
-    <!-- Error display -->
-    <div v-if="errorMessage" class="error-message">
-      <el-alert :title="errorMessage" type="error" :closable="false" show-icon />
-    </div>
-
-    <!-- Lock warning -->
-    <div v-if="isLocked" class="lock-warning">
-      <el-alert title="账户已被临时锁定" type="warning" :closable="false" show-icon>
-        <template #default>
-          <p>由于多次登录失败，账户已被临时锁定。</p>
-          <p>请5分钟后重试或联系管理员。</p>
-        </template>
-      </el-alert>
-    </div>
-
-    <!-- Remaining attempts -->
-    <div v-else-if="errorCount > 0" class="attempts-warning">
-      <el-alert
-        :title="`登录失败，剩余尝试次数：${remainingAttempts}`"
-        type="warning"
-        :closable="false"
-        show-icon
-      />
-    </div>
+    <transition name="login-feedback">
+      <div v-if="feedbackState.visible" class="feedback-panel">
+        <el-alert
+          :title="feedbackState.title"
+          :type="feedbackState.type"
+          :closable="false"
+          show-icon
+        >
+          <template v-if="feedbackState.detail" #default>
+            <p>{{ feedbackState.detail }}</p>
+          </template>
+        </el-alert>
+      </div>
+    </transition>
   </el-form>
 </template>
 
@@ -138,6 +128,42 @@ let lockTimer: ReturnType<typeof setTimeout> | null = null
 // Computed
 const remainingAttempts = computed(() => SESSION_CONFIG.MAX_LOGIN_ATTEMPTS - errorCount.value)
 
+const feedbackState = computed(() => {
+  if (isLocked.value) {
+    return {
+      visible: true,
+      type: 'warning' as const,
+      title: '登录失败次数过多，请5分钟后再试。',
+      detail: '如仍无法登录，请联系管理员处理。'
+    }
+  }
+
+  if (props.errorMessage && errorCount.value > 0) {
+    return {
+      visible: true,
+      type: 'error' as const,
+      title: `${props.errorMessage} 还可再试 ${remainingAttempts.value} 次。`,
+      detail: ''
+    }
+  }
+
+  if (props.errorMessage) {
+    return {
+      visible: true,
+      type: 'error' as const,
+      title: props.errorMessage,
+      detail: ''
+    }
+  }
+
+  return {
+    visible: false,
+    type: 'info' as const,
+    title: '',
+    detail: ''
+  }
+})
+
 const buttonText = computed(() => {
   if (props.loading) {
     return '登录中...'
@@ -172,7 +198,7 @@ const resetError = () => {
 
 const handleSubmit = async () => {
   if (isLocked.value) {
-    ElMessage.error('账户已锁定，请稍后再试')
+    ElMessage.error('登录失败次数过多，请稍后再试')
     return
   }
 
@@ -329,20 +355,35 @@ initRememberedUsername()
   cursor: not-allowed;
 }
 
-.error-message,
-.lock-warning,
-.attempts-warning {
+.feedback-panel {
   margin-top: var(--spacing-lg);
 }
 
-.error-message :deep(.el-alert),
-.lock-warning :deep(.el-alert),
-.attempts-warning :deep(.el-alert) {
+.feedback-panel :deep(.el-alert) {
   border-radius: var(--radius-md);
 }
 
-.lock-warning :deep(.el-alert p) {
+.feedback-panel :deep(.el-alert p) {
   margin: var(--spacing-xs) 0;
   font-size: 12px;
+}
+
+.login-feedback-enter-active,
+.login-feedback-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 260ms ease;
+}
+
+.login-feedback-enter-from,
+.login-feedback-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.login-feedback-enter-to,
+.login-feedback-leave-from {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>

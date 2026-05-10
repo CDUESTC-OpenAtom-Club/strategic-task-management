@@ -661,6 +661,14 @@ export function useApprovalProgressState(
       return null
     }
 
+    if (isPlanPendingApproval.value) {
+      return activePlanWorkflow.value?.canWithdraw ? '提交方仍可撤回' : '审批流已锁定'
+    }
+
+    if (isPlanCompletedApproval.value) {
+      return '审批已完成'
+    }
+
     if (normalizedPlanBusinessStatus.value === 'DRAFT') {
       if (planWorkflowStatusTag.value.label === '已撤回') {
         return '已撤回，可重新发起审批'
@@ -679,14 +687,6 @@ export function useApprovalProgressState(
       return '已退回，可修改后重新发起审批'
     }
 
-    if (isPlanCompletedApproval.value) {
-      return '审批已完成'
-    }
-
-    if (isPlanPendingApproval.value) {
-      return activePlanWorkflow.value?.canWithdraw ? '提交方仍可撤回' : '审批流已锁定'
-    }
-
     return null
   })
 
@@ -701,9 +701,31 @@ export function useApprovalProgressState(
   })
 
   const hasPlanApprovalPermission = computed(() => {
-    return requiredPlanApprovalPermissionCodes.value.some(code =>
-      currentUserPermissionCodes.value.includes(code)
-    )
+    if (!hasPlanWorkflowData.value || !isPlanPendingApproval.value) {
+      return false
+    }
+
+    const expectedApproverRoleCodes = resolveExpectedApproverRoleCodes()
+    if (expectedApproverRoleCodes.length > 0) {
+      const hasExpectedRole = expectedApproverRoleCodes.some(roleCode =>
+        currentUserRoleCodes.value.includes(roleCode)
+      )
+      if (!hasExpectedRole) {
+        return false
+      }
+    }
+
+    const expectedApproverOrgId = resolveExpectedApproverOrgId()
+    if (
+      Number.isFinite(currentUserOrgId.value) &&
+      currentUserOrgId.value > 0 &&
+      Number.isFinite(expectedApproverOrgId) &&
+      (expectedApproverOrgId as number) > 0
+    ) {
+      return currentUserOrgId.value === expectedApproverOrgId
+    }
+
+    return true
   })
 
   function resolveExpectedApproverRoleCodes(): string[] {
@@ -1787,7 +1809,7 @@ export function useApprovalProgressState(
 
   async function handleApprovePlanBatch() {
     if (!hasPlanApprovalPermission.value) {
-      ElMessage.warning(`当前账号缺少审批权限：${requiredPlanApprovalPermissionCode.value}`)
+      ElMessage.warning('当前角色或组织范围不匹配该审批节点，无法执行审批通过')
       return
     }
 
@@ -1925,7 +1947,7 @@ export function useApprovalProgressState(
 
   async function handleRejectPlanBatch() {
     if (!hasPlanApprovalPermission.value) {
-      ElMessage.warning(`当前账号缺少审批权限：${requiredPlanApprovalPermissionCode.value}`)
+      ElMessage.warning('当前角色或组织范围不匹配该审批节点，无法执行审批驳回')
       return
     }
 

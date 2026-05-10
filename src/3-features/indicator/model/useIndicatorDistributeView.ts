@@ -1133,12 +1133,6 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     return currentUserOrgId.value === currentOrgId
   })
 
-  const requiredApprovalPermissionCodes = computed(() => {
-    return currentApprovalType.value === 'distribution'
-      ? ['BTN_STRATEGY_TASK_DISPATCH_APPROVE', 'BTN_INDICATOR_DISPATCH_APPROVE']
-      : ['BTN_DATA_REPORT_APPROVE', 'BTN_INDICATOR_REPORT_APPROVE']
-  })
-
   const resolveCurrentStepExpectedRoleCodes = () => {
     const stepName = String(currentActiveCollegePlan.value?.currentStepName || '').trim()
     if (!stepName) {
@@ -1166,13 +1160,6 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
 
   const canCurrentUserApproveCurrentPlan = computed(() => {
     if (!['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(selectedCollegePlanUiStatus.value)) {
-      return false
-    }
-
-    const hasPermission = requiredApprovalPermissionCodes.value.some(code =>
-      currentUserPermissionCodes.value.includes(code)
-    )
-    if (!hasPermission) {
       return false
     }
 
@@ -4611,7 +4598,6 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     removeFormMilestone,
     removeMilestone,
     removeNewChildRow,
-    requiredApprovalPermissionCodes,
     resetApprovalSetupDialog,
     resolveCurrentStepExpectedRoleCodes,
     resolveIndicatorTaskType,

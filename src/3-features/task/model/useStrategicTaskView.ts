@@ -21,7 +21,6 @@ import type { ElTable } from 'element-plus'
 // eslint-disable-next-line no-restricted-syntax -- Backend-aligned types
 import type { StrategicTask as _StrategicTask, StrategicIndicator } from '@/shared/types'
 import { IndicatorStatus } from '@/shared/types/entities'
-import { PermissionCode } from '@/shared/types'
 import { useStrategicStore } from '@/features/task/model/strategic'
 import { useAuthStore } from '@/features/auth/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
@@ -134,6 +133,8 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   const taskTypeMapLoading = ref(false)
   const currentPlanScopeLoading = ref(false)
   const pageTransitionLoading = ref(false)
+  const isDepartmentSwitching = ref(false)
+  let departmentSwitchingTimer: ReturnType<typeof setTimeout> | null = null
 
   const isInitialDataLoading = computed(() => {
     return isBootstrappingPage.value || pageTransitionLoading.value
@@ -1313,7 +1314,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   }
 
   const refreshCurrentDepartmentView = async (
-    options: { showLoading?: boolean; force?: boolean } = {}
+    options: { showLoading?: boolean; force?: boolean; reloadIndicators?: boolean } = {}
   ) => {
     const requestId = departmentViewRequestId.value + 1
     departmentViewRequestId.value = requestId
@@ -1332,7 +1333,11 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
     try {
       await hydrateCurrentPlanWorkflowState()
-      await strategicStore.loadIndicatorsByYear(timeContext.currentYear, { force: options.force })
+      if (options.reloadIndicators === true || strategicStore.indicators.length === 0) {
+        await strategicStore.loadIndicatorsByYear(timeContext.currentYear, {
+          force: options.force
+        })
+      }
       await loadCurrentPlanTaskScope({ force: options.force })
       await syncCurrentPlanReportSummaries({ force: options.force })
       if (hasApprovalWorkflowReportBinding.value) {
@@ -1653,9 +1658,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       currentUserId: currentUserId.value,
       currentUserOrgId: currentUserOrgId.value,
       currentUserRoleCodes: currentUserRoleCodes.value,
-      hasApprovalPermission: permissionUtil.hasPermission(
-        PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE
-      ),
+      hasApprovalPermission: true,
       isPendingApproval: ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(
         currentApprovalWorkflowStatus.value
       ),
@@ -3147,6 +3150,10 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
   onUnmounted(() => {
     document.removeEventListener('click', handleGlobalClick, true)
+    if (departmentSwitchingTimer) {
+      clearTimeout(departmentSwitchingTimer)
+      departmentSwitchingTimer = null
+    }
   })
 
   watch(
@@ -3157,7 +3164,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       }
       resetApprovalWorkflowStateCache()
       await loadBackendTaskTypeMap({ force: true })
-      await refreshCurrentDepartmentView({ showLoading: true, force: true })
+      await refreshCurrentDepartmentView({ showLoading: true, force: true, reloadIndicators: true })
     }
   )
 
@@ -3166,7 +3173,11 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       return
     }
     resetApprovalWorkflowStateCache()
-    await refreshCurrentDepartmentView({ showLoading: true, force: true })
+    await refreshCurrentDepartmentView({
+      showLoading: false,
+      force: false,
+      reloadIndicators: false
+    })
   })
 
   watch(
@@ -3506,7 +3517,16 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     if (selectedDepartment.value === dept) {
       return
     }
-    pageTransitionLoading.value = true
+
+    isDepartmentSwitching.value = true
+    if (departmentSwitchingTimer) {
+      clearTimeout(departmentSwitchingTimer)
+    }
+    departmentSwitchingTimer = setTimeout(() => {
+      isDepartmentSwitching.value = false
+      departmentSwitchingTimer = null
+    }, 280)
+
     selectedDepartment.value = dept
   }
 
@@ -4587,6 +4607,30 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     return 'exception'
   }
 
+  const hasPendingProgressValue = (indicator: StrategicIndicator): boolean => {
+    const pendingProgress = Number(indicator.pendingProgress)
+    if (!Number.isFinite(pendingProgress)) {
+      return false
+    }
+
+    const currentProgress = Number(indicator.progress || 0)
+    return pendingProgress !== currentProgress
+  }
+
+  const getPendingProgressDelta = (indicator: StrategicIndicator): number => {
+    const pendingProgress = Number(indicator.pendingProgress)
+    if (!Number.isFinite(pendingProgress)) {
+      return 0
+    }
+
+    return pendingProgress - Number(indicator.progress || 0)
+  }
+
+  const hasPendingProgressContent = (indicator: StrategicIndicator): boolean => {
+    const pendingRemark = String(indicator.pendingRemark || '').trim()
+    return hasPendingProgressValue(indicator) || Boolean(pendingRemark)
+  }
+
   return {
     PLAN_APPROVAL_HISTORY_WORKFLOW_CODES,
     PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE,
@@ -4725,6 +4769,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     getPersistedWithdrawableRows,
     getProgressColor,
     getProgressStatus,
+    getPendingProgressDelta,
     getRouteQueryText,
     getSortedMilestones,
     getSpanMethod,
@@ -4732,6 +4777,8 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     getTaskGroup,
     getTaskStatus,
     getTaskTypeForPersistence,
+    hasPendingProgressContent,
+    hasPendingProgressValue,
     goToNextIndicator,
     goToPrevIndicator,
     groupIndicatorsByTask,
@@ -4766,6 +4813,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     indicatorByIdMap,
     indicatorWorkflowCache,
     indicators,
+    isDepartmentSwitching,
     isAddingOrEditing,
     isBasicIndicatorForCurrentRules,
     isBasicTaskType,

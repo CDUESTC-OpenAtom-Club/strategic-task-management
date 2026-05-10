@@ -33,6 +33,21 @@ describe('canCurrentUserHandleWorkflowApproval', () => {
     ).toBe(false)
   })
 
+  it('ignores legacy permission-code flag when explicit approver matches', () => {
+    expect(
+      canCurrentUserHandleWorkflowApproval({
+        currentUserId: 101,
+        currentUserOrgId: 35,
+        currentUserRoleCodes: [],
+        hasApprovalPermission: false,
+        isPendingApproval: true,
+        explicitApproverId: 101,
+        expectedApproverRoleCodes: ['ROLE_APPROVER'],
+        expectedApproverOrgId: 35
+      })
+    ).toBe(true)
+  })
+
   it('falls back to role and org matching when explicit approver id is absent', () => {
     expect(
       canCurrentUserHandleWorkflowApproval({

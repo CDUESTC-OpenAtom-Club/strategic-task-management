@@ -3,6 +3,7 @@ import { Plus, View, Download, Delete, ArrowDown, Check, Loading } from '@elemen
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import IndicatorMilestoneTimeline from '@/features/indicator/ui/IndicatorMilestoneTimeline.vue'
 import { DistributionApprovalProgressDrawer } from '@/features/approval'
+import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import {
   useStrategicTaskView,
   type StrategicTaskViewProps
@@ -148,6 +149,7 @@ const {
   getPersistedWithdrawableRows,
   getProgressColor,
   getProgressStatus,
+  getPendingProgressDelta,
   getRouteQueryText,
   getSortedMilestones,
   getSpanMethod,
@@ -155,6 +157,8 @@ const {
   getTaskGroup,
   getTaskStatus,
   getTaskTypeForPersistence,
+  hasPendingProgressContent,
+  hasPendingProgressValue,
   goToNextIndicator,
   goToPrevIndicator,
   groupIndicatorsByTask,
@@ -189,6 +193,7 @@ const {
   indicatorByIdMap,
   indicatorWorkflowCache,
   indicators,
+  isDepartmentSwitching,
   isAddingOrEditing,
   isBasicIndicatorForCurrentRules,
   isBasicTaskType,
@@ -332,7 +337,15 @@ const {
     </div>
 
     <!-- 右侧详情区域 - Excel风格 -->
-    <section class="task-detail excel-style card-animate" style="animation-delay: 0.1s">
+    <section
+      :class="[
+        'task-detail',
+        'excel-style',
+        'card-animate',
+        { 'department-switching': isDepartmentSwitching }
+      ]"
+      style="animation-delay: 0.1s"
+    >
       <!-- Excel标题头 -->
       <div class="excel-header">
         <h2 class="excel-title">战略任务指标总表</h2>
@@ -479,7 +492,6 @@ const {
           <el-tag v-if="isReadOnly" type="warning" size="small" style="margin-right: 12px">
             历史快照 (只读)
           </el-tag>
-          <span class="update-time">更新时间: {{ new Date().toLocaleString() }}</span>
         </div>
       </div>
 
@@ -897,20 +909,15 @@ const {
                     </div>
                     <!-- 待审批进度显示 -->
                     <div
-                      v-if="currentIndicator.pendingProgress !== undefined"
+                      v-if="hasPendingProgressContent(currentIndicator)"
                       class="pending-progress"
                     >
-                      <div class="pending-info">
+                      <div v-if="hasPendingProgressValue(currentIndicator)" class="pending-info">
                         <span class="pending-label">申请进度：</span>
                         <span class="pending-value">{{ currentIndicator.pendingProgress }}%</span>
                         <span class="progress-change">
-                          ({{
-                            currentIndicator.pendingProgress - (currentIndicator.progress || 0) > 0
-                              ? '+'
-                              : ''
-                          }}{{
-                            currentIndicator.pendingProgress - (currentIndicator.progress || 0)
-                          }}%)
+                          ({{ getPendingProgressDelta(currentIndicator) > 0 ? '+' : ''
+                          }}{{ getPendingProgressDelta(currentIndicator) }}%)
                         </span>
                       </div>
                       <div v-if="currentIndicator.pendingRemark" class="pending-remark">

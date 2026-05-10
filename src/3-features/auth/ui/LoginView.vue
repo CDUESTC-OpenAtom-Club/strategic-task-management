@@ -237,6 +237,72 @@ const loading = ref(false)
 const errorMessage = ref('')
 const loginFormRef = ref<InstanceType<typeof LoginForm> | null>(null)
 
+interface LoginResultLike {
+  success?: boolean
+  error?: string
+  shouldCountAttempt?: boolean
+  isLocked?: boolean
+  code?: number
+}
+
+function normalizeLoginError(
+  payload: LoginResultLike | null | undefined,
+  credentials: { account: string; password: string }
+): { message: string; shouldCountAttempt: boolean } {
+  const account = String(credentials.account || '').trim()
+  const password = String(credentials.password || '')
+  const rawMessage = String(payload?.error || '').trim()
+  const code = Number(payload?.code ?? NaN)
+
+  if (!account) {
+    return { message: '请输入账号', shouldCountAttempt: false }
+  }
+
+  if (!password) {
+    return { message: '请输入密码', shouldCountAttempt: false }
+  }
+
+  if (rawMessage.includes('账号已被禁用')) {
+    return { message: '当前账号已被禁用，请联系管理员处理。', shouldCountAttempt: false }
+  }
+
+  if (
+    rawMessage.includes('登录失败次数过多') ||
+    rawMessage.includes('账户已被临时锁定') ||
+    rawMessage.includes('账户已锁定') ||
+    payload?.isLocked
+  ) {
+    return { message: '登录失败次数过多，请稍后再试或联系管理员。', shouldCountAttempt: false }
+  }
+
+  if (
+    rawMessage.includes('用户名或密码错误') ||
+    rawMessage.includes('账号或密码错误') ||
+    rawMessage.includes('请求参数不合法') ||
+    code === 1001
+  ) {
+    return { message: '账号或密码不正确，请重新输入。', shouldCountAttempt: true }
+  }
+
+  if (rawMessage.includes('参数验证失败')) {
+    return { message: '请输入正确的账号和密码后再登录。', shouldCountAttempt: false }
+  }
+
+  if (
+    rawMessage.includes('网络') ||
+    rawMessage.includes('超时') ||
+    rawMessage.includes('服务器') ||
+    rawMessage.includes('请求失败')
+  ) {
+    return { message: '登录失败，请检查网络或稍后重试。', shouldCountAttempt: false }
+  }
+
+  return {
+    message: rawMessage || '登录失败，请检查账号和密码后重试。',
+    shouldCountAttempt: Boolean(payload?.shouldCountAttempt)
+  }
+}
+
 // Handle login submit
 const handleSubmit = async (credentials: { account: string; password: string }) => {
   loading.value = true
@@ -255,13 +321,23 @@ const handleSubmit = async (credentials: { account: string; password: string }) 
         authStore.userRole === 'strategic_dept' ? '/strategic-tasks' : '/dashboard'
       router.push(defaultRoute)
     } else {
-      loginFormRef.value?.incrementErrorCount()
-      errorMessage.value = result.error || '用户名或密码错误'
+      const normalizedError = normalizeLoginError(result, credentials)
+      if (normalizedError.shouldCountAttempt) {
+        loginFormRef.value?.incrementErrorCount()
+      }
+      errorMessage.value = normalizedError.message
     }
   } catch (error: unknown) {
-    loginFormRef.value?.incrementErrorCount()
-    const errorMsg = (error as { message?: string }).message || '登录失败，请检查网络连接'
-    errorMessage.value = errorMsg
+    const normalizedError = normalizeLoginError(
+      {
+        error: (error as { message?: string }).message || '登录失败，请检查网络连接'
+      },
+      credentials
+    )
+    if (normalizedError.shouldCountAttempt) {
+      loginFormRef.value?.incrementErrorCount()
+    }
+    errorMessage.value = normalizedError.message
   } finally {
     loading.value = false
   }

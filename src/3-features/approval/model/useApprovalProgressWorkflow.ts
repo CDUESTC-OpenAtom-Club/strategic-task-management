@@ -381,7 +381,7 @@ export function useApprovalProgressWorkflow({
 
   async function handleApprovePlanBatch() {
     if (!state.hasPlanApprovalPermission.value) {
-      ElMessage.warning(`当前账号缺少审批权限：${state.requiredPlanApprovalPermissionCode.value}`)
+      ElMessage.warning('当前角色或组织范围不匹配该审批节点，无法执行审批通过')
       return
     }
 
@@ -519,7 +519,7 @@ export function useApprovalProgressWorkflow({
 
   async function handleRejectPlanBatch() {
     if (!state.hasPlanApprovalPermission.value) {
-      ElMessage.warning(`当前账号缺少审批权限：${state.requiredPlanApprovalPermissionCode.value}`)
+      ElMessage.warning('当前角色或组织范围不匹配该审批节点，无法执行审批驳回')
       return
     }
 

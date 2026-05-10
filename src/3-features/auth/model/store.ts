@@ -12,7 +12,6 @@ import type { User, UserRole } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 import { tokenManager, TokenRefreshError } from '@/shared/lib/utils/tokenManager'
 import { parseLoginResponse, mapBackendUser, isKnownUserRole } from '@/shared/lib/utils/authHelpers'
-import { getUserPermissions } from '@/features/auth/api/query'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { buildQueryKey, fetchWithCache, invalidateQueries } from '@/shared/lib/utils/cache'
 
@@ -57,26 +56,10 @@ export const useAuthStore = defineStore('auth', () => {
     ]
   }
 
-  const fetchPermissionCodes = async (fallbackPermissions?: unknown): Promise<string[]> => {
-    try {
-      const response = await getUserPermissions()
-      if (response.success && Array.isArray(response.data)) {
-        return normalizePermissionCodes(response.data)
-      }
-    } catch (error) {
-      logger.warn('[Auth] 获取当前用户权限列表失败，回退到已有权限数据:', error)
-    }
-
-    return normalizePermissionCodes(fallbackPermissions)
-  }
-
-  const attachPermissionCodes = async (
-    userData: Record<string, unknown>
-  ): Promise<Record<string, unknown>> => {
-    const permissions = await fetchPermissionCodes(userData.permissions)
+  const normalizeLegacyUserData = (userData: Record<string, unknown>): Record<string, unknown> => {
     return {
       ...userData,
-      permissions
+      permissions: normalizePermissionCodes(userData.permissions)
     }
   }
 
@@ -101,19 +84,6 @@ export const useAuthStore = defineStore('auth', () => {
       logger.error('[Auth] 解析用户信息失败:', error)
       return null
     }
-  }
-
-  const refreshCurrentUserPermissions = async () => {
-    if (!user.value || !token.value || !tokenManager.hasValidToken()) {
-      return
-    }
-
-    const permissions = await fetchPermissionCodes(user.value.permissions)
-    user.value = {
-      ...user.value,
-      permissions
-    }
-    persistUser(user.value)
   }
 
   // ============ Getters ============
@@ -256,8 +226,8 @@ export const useAuthStore = defineStore('auth', () => {
         }
 
         const enrichedUserData = await enrichUserWithOrganization(userData)
-        const userWithPermissions = await attachPermissionCodes(enrichedUserData)
-        const mappedUser = mapBackendUser(userWithPermissions)
+        const normalizedUserData = normalizeLegacyUserData(enrichedUserData)
+        const mappedUser = mapBackendUser(normalizedUserData)
         if (!mappedUser) {
           logger.warn('[Auth] 登录响应未能解析出有效前端角色，终止登录流程')
           tokenManager.clearAccessToken()
@@ -307,10 +277,23 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (error: unknown) {
       logger.error('❌[Auth] 登录异常:', error)
+      const code = Number(
+        (error as { code?: number }).code ??
+          (error as { response?: { data?: { code?: number } } }).response?.data?.code ??
+          NaN
+      )
+      const message =
+        (error as { response?: { data?: { message?: string } } }).response?.data?.message ||
+        (error as { message?: string }).message ||
+        '登录失败：网络错误'
+      const shouldCountAttempt =
+        code === 2001 || message.includes('用户名或密码错误') || message.includes('账号或密码错误')
+      const isLocked = code === 2003 || message.includes('登录失败次数过多')
       return {
         success: false,
-        error:
-          (error as any).response?.data?.message || (error as any).message || '登录失败：网络错误'
+        error: message,
+        shouldCountAttempt,
+        isLocked
       }
     } finally {
       loading.value = false
@@ -362,8 +345,8 @@ export const useAuthStore = defineStore('auth', () => {
 
       if (authResponse.success && authResponse.data) {
         const enrichedUserData = await enrichUserWithOrganization(authResponse.data)
-        const userWithPermissions = await attachPermissionCodes(enrichedUserData)
-        const mappedUser = mapBackendUser(userWithPermissions)
+        const normalizedUserData = normalizeLegacyUserData(enrichedUserData)
+        const mappedUser = mapBackendUser(normalizedUserData)
         if (!mappedUser) {
           logger.warn('[Auth] 当前会话用户缺少有效角色，清除登录状态')
           logout({ redirect: false })
@@ -386,13 +369,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     const explicitPermissionCode = `${resource}:${action}`
-    const userPermissionCodes = normalizePermissionCodes(
-      (user.value as User & { permissions?: unknown }).permissions
-    )
-    if (userPermissionCodes.includes(explicitPermissionCode)) {
-      return true
-    }
-
+    // Legacy compatibility shim:
+    // runtime authorization now follows role/org/business rules, not backend permission codes.
     const permissions = {
       strategic_dept: [
         'strategic_tasks:create',
@@ -444,7 +422,6 @@ export const useAuthStore = defineStore('auth', () => {
             logger.debug('[Auth] 本地缓存缺少 orgType，主动刷新当前用户')
             await fetchUser()
           }
-          void refreshCurrentUserPermissions()
           authInitialized.value = true
           return
         }
@@ -479,7 +456,6 @@ export const useAuthStore = defineStore('auth', () => {
               logger.debug('[Auth] 恢复会话后缺少 orgType，主动刷新当前用户')
               await fetchUser()
             }
-            void refreshCurrentUserPermissions()
           } else {
             logger.warn('[Auth] 用户信息缺少 role，清除登录状态')
             logout({ redirect: false })

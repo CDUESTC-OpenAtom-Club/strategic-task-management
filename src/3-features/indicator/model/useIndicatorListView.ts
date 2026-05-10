@@ -1767,9 +1767,31 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
   })
 
   const hasPagePlanApprovalPermission = computed(() => {
-    return ['BTN_STRATEGY_TASK_REPORT_APPROVE', 'BTN_INDICATOR_REPORT_APPROVE'].some(code =>
-      currentUserPermissionCodes.value.includes(code)
-    )
+    if (!isPagePlanPendingApproval.value) {
+      return false
+    }
+
+    const expectedApproverRoleCodes = resolveExpectedApproverRoleCodesForPage()
+    if (expectedApproverRoleCodes.length > 0) {
+      const hasExpectedRole = expectedApproverRoleCodes.some(roleCode =>
+        currentUserRoleCodes.value.includes(roleCode)
+      )
+      if (!hasExpectedRole) {
+        return false
+      }
+    }
+
+    const expectedApproverOrgId = resolveExpectedApproverOrgIdForPage()
+    if (
+      Number.isFinite(currentUserOrgId.value) &&
+      currentUserOrgId.value > 0 &&
+      Number.isFinite(expectedApproverOrgId) &&
+      (expectedApproverOrgId as number) > 0
+    ) {
+      return currentUserOrgId.value === expectedApproverOrgId
+    }
+
+    return true
   })
 
   const pagePlanWorkflowTasks = computed<WorkflowTaskResponse[]>(() => {

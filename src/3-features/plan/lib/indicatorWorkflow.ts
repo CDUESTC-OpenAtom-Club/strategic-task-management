@@ -1,5 +1,4 @@
 import type { IndicatorFill } from '@/shared/types'
-import { PermissionCode } from '@/shared/types'
 
 export interface IndicatorWorkflowSnapshot {
   fillId: string | number
@@ -29,12 +28,12 @@ function toTimestamp(value?: string): number {
 function hasWorkflowSignal(fill: IndicatorFill): boolean {
   return Boolean(
     fill.report_id ||
-      fill.workflowInstanceId ||
-      fill.currentTaskId ||
-      fill.workflowStatus ||
-      fill.currentStepName ||
-      fill.currentApproverId ||
-      fill.currentApproverName
+    fill.workflowInstanceId ||
+    fill.currentTaskId ||
+    fill.workflowStatus ||
+    fill.currentStepName ||
+    fill.currentApproverId ||
+    fill.currentApproverName
   )
 }
 
@@ -47,7 +46,8 @@ export function resolveLatestIndicatorWorkflowSnapshot(
 
   const sortedFills = [...fills].sort(
     (left, right) =>
-      toTimestamp(right.updated_at || right.created_at) - toTimestamp(left.updated_at || left.created_at)
+      toTimestamp(right.updated_at || right.created_at) -
+      toTimestamp(left.updated_at || left.created_at)
   )
 
   const latestFill = sortedFills.find(hasWorkflowSignal) || sortedFills[0]
@@ -75,12 +75,20 @@ export function resolveLatestIndicatorWorkflowSnapshot(
 }
 
 export function normalizeIndicatorWorkflowStatus(status?: string): string {
-  return String(status || '').trim().toUpperCase()
+  return String(status || '')
+    .trim()
+    .toUpperCase()
 }
 
-export function getIndicatorWorkflowStatusLabel(snapshot?: IndicatorWorkflowSnapshot | null): string {
+export function getIndicatorWorkflowStatusLabel(
+  snapshot?: IndicatorWorkflowSnapshot | null
+): string {
   const workflowStatus = normalizeIndicatorWorkflowStatus(snapshot?.workflowStatus)
-  if (workflowStatus === 'PENDING' || workflowStatus === 'IN_REVIEW' || workflowStatus === 'SUBMITTED') {
+  if (
+    workflowStatus === 'PENDING' ||
+    workflowStatus === 'IN_REVIEW' ||
+    workflowStatus === 'SUBMITTED'
+  ) {
     return '待审批'
   }
   if (workflowStatus === 'WITHDRAWN') {
@@ -93,7 +101,9 @@ export function getIndicatorWorkflowStatusLabel(snapshot?: IndicatorWorkflowSnap
     return '已驳回'
   }
 
-  const fillStatus = String(snapshot?.status || '').trim().toLowerCase()
+  const fillStatus = String(snapshot?.status || '')
+    .trim()
+    .toLowerCase()
   if (fillStatus === 'submitted') {
     return '待审批'
   }
@@ -127,12 +137,10 @@ export function canCurrentUserHandleIndicatorWorkflow(
   userId: number,
   permissionCodes: string[]
 ): boolean {
+  void permissionCodes
   if (!snapshot?.currentTaskId || !snapshot.currentApproverId || userId <= 0) {
     return false
   }
 
-  return (
-    snapshot.currentApproverId === userId &&
-    permissionCodes.includes(PermissionCode.BTN_STRATEGY_TASK_REPORT_APPROVE)
-  )
+  return snapshot.currentApproverId === userId
 }

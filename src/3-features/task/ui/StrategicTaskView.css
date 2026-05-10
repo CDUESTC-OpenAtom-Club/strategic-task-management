@@ -273,7 +273,18 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: box-shadow var(--transition-normal);
+  transition:
+    box-shadow var(--transition-normal),
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease,
+    filter 220ms ease;
+  will-change: transform, opacity, filter;
+}
+
+.task-detail.department-switching {
+  opacity: 0.9;
+  transform: translateY(6px);
+  filter: saturate(0.96);
 }
 
 /* 表格行 hover 效果 - 使用实色背景 */
