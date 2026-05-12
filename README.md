@@ -73,8 +73,9 @@ npm install
 ### 2. 配置环境变量
 
 ```bash
+# 复制 3-in-1 配置文件模板
 cp .env.example .env
-# 编辑 .env 文件，配置后端 API 地址
+# 根据 .env 中的 [DEV]/[PROD] 标注修改配置（如后端 API 地址）
 ```
 
 ### 3. 启动开发服务器

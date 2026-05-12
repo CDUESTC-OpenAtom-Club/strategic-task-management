@@ -13,13 +13,17 @@ dist-ssr
 *.local
 
 # Environment files (保护敏感信息)
-# 主环境文件包含数据库密码等敏感信息
+# 主环境文件可能包含敏感信息
 .env
 server/.env
 .env.local
 .env.*.local
-# 保留 .env.example 作为模板
+# 保留模板（不含真实密钥）
 !.env.example
+
+# Playwright
+playwright-report/
+test-results/
 
 # Editor directories and files
 .vscode/

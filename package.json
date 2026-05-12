@@ -23,6 +23,10 @@
     "type-check": "vue-tsc --noEmit",
     "test": "vitest --run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
     "prepare": "husky"
   },
   "dependencies": {
@@ -47,6 +51,7 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@commitlint/cli": "^19.6.1",
     "@commitlint/config-conventional": "^19.6.0",
     "@rushstack/eslint-patch": "^1.10.4",

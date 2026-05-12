@@ -270,7 +270,7 @@ const {
             </template>
             完成率达 <span class="highlight-success">{{ dashboardData.completionRate }}%</span>，
             {{ dashboardData.completionRate >= 80 ? '进度符合预期' : '建议加快推进滞后任务' }}。
-            <button class="drill-btn">立即下钻诊断 →</button>
+            <button type="button" class="drill-btn">立即下钻诊断 →</button>
           </p>
         </div>
         <div class="summary-stats">

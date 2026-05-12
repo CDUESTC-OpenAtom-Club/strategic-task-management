@@ -1,6 +1,6 @@
 /**
  * Shared UI Components Module
- * 
+ *
  * Exports all shared UI components
  */
 
@@ -24,3 +24,9 @@ export * from './charts'
 
 // Message components
 export * from './message'
+
+// Dialog components (shared dialogs extracted from feature views)
+export * from './dialog'
+
+// Error components
+export * from './error'
