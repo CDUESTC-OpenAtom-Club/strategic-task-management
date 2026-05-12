@@ -19,21 +19,27 @@ interface WrappedAvatarUploadResponse {
 export interface ProfileResponse {
   id: number
   username: string
+  orgName?: string | null
+  orgType?: string | null
+  email?: string | null
+  phone?: string | null
   realName: string
   orgId: number
   isActive: boolean
   roles: string[]
+  avatar?: string | null
   avatarUrl: string | null
   createdAt: string
+  lastLoginTime?: string | null
 }
 
 export const profileApi = {
   /**
    * Get user profile
-   * 使用正确的后端API路径：/api/v1/auth/me
+   * 使用后端个人资料接口，返回真实业务角色列表
    */
-  async getProfile() {
-    return await apiClient.get('/auth/me')
+  async getProfile(): Promise<ProfileResponse> {
+    return await apiClient.get('/profile')
   },
 
   /**

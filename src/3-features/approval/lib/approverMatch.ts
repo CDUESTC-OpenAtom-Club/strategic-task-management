@@ -37,7 +37,7 @@ export function canCurrentUserHandleWorkflowApproval(
 
   const explicitApproverId = normalizePositiveNumber(context.explicitApproverId)
   const currentUserId = normalizePositiveNumber(context.currentUserId)
-  if (explicitApproverId && currentUserId) {
+  if (explicitApproverId) {
     return explicitApproverId === currentUserId
   }
 

@@ -35,8 +35,18 @@
         <el-input v-model="form.department" disabled placeholder="部门信息不可修改" />
       </el-form-item>
 
-      <el-form-item label="角色" prop="role">
-        <el-input :value="getRoleLabel(form.role)" disabled placeholder="角色信息不可修改" />
+      <el-form-item label="角色" prop="roleDisplay">
+        <div class="role-tag-list">
+          <el-tag
+            v-for="role in roleDisplayList"
+            :key="role"
+            type="info"
+            effect="plain"
+            class="role-tag-item"
+          >
+            {{ role }}
+          </el-tag>
+        </div>
       </el-form-item>
 
       <el-form-item label="邮箱" prop="email">
@@ -56,12 +66,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, type FormInstance, type UploadRequestOptions } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 import { validateEmail, validatePhone, getRoleLabel } from '@/shared/lib/utils'
-import { profileApi } from '@/features/profile/api'
+import { profileApi, type ProfileResponse } from '@/features/profile/api'
 import type { User as _User, UserRole } from '@/shared/types'
 
 const formRef = ref<FormInstance>()
@@ -72,12 +82,27 @@ const form = reactive({
   name: '',
   department: '',
   role: 'strategic_dept' as UserRole,
+  roleDisplay: '',
   email: '',
   phone: '',
   avatar: ''
 })
 
 const uploading = ref(false)
+
+const roleDisplayList = computed(() =>
+  form.roleDisplay
+    .split('\n')
+    .map(role => role.trim())
+    .filter(Boolean)
+)
+
+const BUSINESS_ROLE_LABELS: Record<string, string> = {
+  ROLE_REPORTER: '填报人',
+  ROLE_APPROVER: '部门负责人',
+  ROLE_STRATEGY_DEPT_HEAD: '战略发展部负责人',
+  ROLE_VICE_PRESIDENT: '分管校领导'
+}
 
 const rules = {
   name: [
@@ -189,12 +214,37 @@ const handleReset = () => {
     return
   }
   formRef.value.resetFields()
-  loadUserInfo()
+  void loadUserInfo()
 }
 
-const loadUserInfo = () => {
+const normalizeBusinessRoleLabel = (role: unknown): string => {
+  const raw = typeof role === 'string' ? role.trim() : ''
+  if (!raw) {
+    return ''
+  }
+  return BUSINESS_ROLE_LABELS[raw] || raw
+}
+
+const buildRoleDisplayText = (roles: unknown[]): string => {
+  return roles.map(normalizeBusinessRoleLabel).filter(Boolean).join('\n')
+}
+
+const buildFallbackRoleDisplay = (): string => {
+  const backendRoles = Array.isArray(authStore.user?.roles)
+    ? authStore.user.roles.map(normalizeBusinessRoleLabel).filter(Boolean)
+    : []
+
+  if (backendRoles.length > 0) {
+    return backendRoles.join('\n')
+  }
+
+  return authStore.user?.role ? getRoleLabel(authStore.user.role) : ''
+}
+
+const applyAuthStoreFallback = () => {
   if (authStore.user) {
     Object.assign(form, authStore.user)
+    form.roleDisplay = buildFallbackRoleDisplay()
     form.avatar =
       (authStore.user as { avatar?: string; avatarUrl?: string }).avatar ||
       (authStore.user as { avatar?: string; avatarUrl?: string }).avatarUrl ||
@@ -202,8 +252,37 @@ const loadUserInfo = () => {
   }
 }
 
+const applyProfileResponse = (profile: ProfileResponse) => {
+  form.username = profile.username || authStore.user?.username || ''
+  form.name = profile.realName || authStore.user?.name || ''
+  form.department = profile.orgName || authStore.user?.department || authStore.user?.orgName || ''
+  form.email = profile.email || ''
+  form.phone = profile.phone || ''
+  form.roleDisplay =
+    Array.isArray(profile.roles) && profile.roles.length > 0
+      ? buildRoleDisplayText(profile.roles)
+      : buildFallbackRoleDisplay()
+  form.avatar =
+    profile.avatarUrl ||
+    profile.avatar ||
+    (authStore.user as { avatar?: string; avatarUrl?: string } | null)?.avatar ||
+    (authStore.user as { avatar?: string; avatarUrl?: string } | null)?.avatarUrl ||
+    ''
+}
+
+const loadUserInfo = async () => {
+  applyAuthStoreFallback()
+
+  try {
+    const profile = await profileApi.getProfile()
+    applyProfileResponse(profile)
+  } catch (error) {
+    console.warn('[BasicInfo] Failed to load profile details, falling back to auth store', error)
+  }
+}
+
 onMounted(() => {
-  loadUserInfo()
+  void loadUserInfo()
 })
 </script>
 
@@ -240,5 +319,18 @@ onMounted(() => {
   padding: 24px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
+}
+
+.role-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding-top: 4px;
+}
+
+.role-tag-item {
+  margin: 0;
 }
 </style>

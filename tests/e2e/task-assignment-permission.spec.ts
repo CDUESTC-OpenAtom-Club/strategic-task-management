@@ -14,23 +14,25 @@
 
 import { test, expect, type Page } from '@playwright/test'
 
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? ''
+
 // Test account credentials from CLAUDE.md
 const TEST_ACCOUNTS = {
   strategic: {
     username: 'admin',
-    password: 'admin123',
+    password: TEST_PASSWORD,
     role: 'strategic_dept',
     displayName: '战略发展部'
   },
   functional: {
     username: 'jiaowu_report',
-    password: 'admin123',
+    password: TEST_PASSWORD,
     role: 'functional_dept',
     displayName: '职能部门'
   },
   college: {
     username: 'jisuanji_report',
-    password: 'admin123',
+    password: TEST_PASSWORD,
     role: 'secondary_college',
     displayName: '二级学院'
   }
@@ -40,6 +42,10 @@ const TEST_ACCOUNTS = {
  * Helper function to login with given credentials
  */
 async function loginAs(page: Page, account: { username: string; password: string }) {
+  if (!account.password) {
+    throw new Error('E2E_TEST_PASSWORD is required for task assignment permission tests')
+  }
+
   await page.goto('/login')
   await page.waitForLoadState('networkidle')
 
@@ -50,8 +56,10 @@ async function loginAs(page: Page, account: { username: string; password: string
   await accountInput.fill(account.username)
   await passwordInput.fill(account.password)
 
-  // Submit form
-  const submitButton = page.locator('button[type="submit"], .login-form button.el-button--primary')
+  // Submit form (target the primary 登录 button specifically — avoid the 忘记密码 link button)
+  const submitButton = page
+    .locator('.login-form .login-btn, button.login-btn, button[type="submit"]')
+    .first()
   await submitButton.click()
 
   // Wait for navigation to complete
@@ -62,9 +70,18 @@ async function loginAs(page: Page, account: { username: string; password: string
  * Helper function to clear auth state
  */
 async function clearAuth(page: Page) {
+  // Navigate to app origin first so localStorage/sessionStorage are accessible.
+  // Calling page.evaluate on the initial about:blank page throws SecurityError.
+  if (page.url() === 'about:blank' || !page.url().startsWith('http')) {
+    await page.goto('/login')
+  }
   await page.evaluate(() => {
-    localStorage.clear()
-    sessionStorage.clear()
+    try {
+      localStorage.clear()
+      sessionStorage.clear()
+    } catch (e) {
+      // ignore — storage may not be available in some contexts
+    }
   })
 }
 
@@ -146,8 +163,8 @@ test.describe('Task Assignment Permission Control', () => {
 
       // If on 403 page, verify content
       if (page.url().includes('/403')) {
-        await expect(page.locator('.error-code, .error-title')).toContainText('403')
-        await expect(page.locator('.error-desc, .error-message')).toContainText(/权限/)
+        await expect(page.locator('.error-code, .error-title').first()).toContainText('403')
+        await expect(page.locator('.error-desc, .error-message').first()).toContainText(/权限/)
       }
     })
   })

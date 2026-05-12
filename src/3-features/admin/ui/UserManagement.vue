@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import {
   ElCard,
@@ -312,8 +312,38 @@ const userFormRules: FormRules = {
     { required: true, message: '请输入真实姓名', trigger: 'blur' },
     { min: 2, max: 20, message: '姓名长度为2-20个字符', trigger: 'blur' }
   ],
-  email: [{ type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }],
-  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }],
+  email: [
+    {
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback()
+        } else if (
+          !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(
+            value
+          )
+        ) {
+          callback(new Error('请输入正确的邮箱地址'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
+  phone: [
+    {
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback()
+        } else if (!/^1[3-9]\d{9}$/.test(value)) {
+          callback(new Error('请输入正确的手机号'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ],
   orgId: [{ required: true, message: '请选择所属组织', trigger: 'change' }],
   roles: [
     {
@@ -514,8 +544,8 @@ const handleSave = async () => {
     const userData: Record<string, unknown> = {
       username: userForm.value.username,
       realName: userForm.value.realName,
-      email: userForm.value.email,
-      phone: userForm.value.phone,
+      email: userForm.value.email?.trim() || null,
+      phone: userForm.value.phone?.trim() || null,
       orgId: Number(userForm.value.orgId),
       roles: userForm.value.roles
     }

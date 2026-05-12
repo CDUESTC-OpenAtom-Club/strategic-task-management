@@ -1006,7 +1006,8 @@ export function useApprovalProgressDrawer(
 
   function buildWorkflowNodeCandidates(
     candidates: ApproverCandidateResponse[] | undefined,
-    operatorName?: string
+    operatorName?: string,
+    markApproved: boolean = false
   ): WorkflowNode['approverCandidates'] {
     const resolvedOperatorName = normalizeDisplayName(operatorName)
     const candidateList = Array.isArray(candidates)
@@ -1021,13 +1022,15 @@ export function useApprovalProgressDrawer(
               avatar: candidate.userId
                 ? workflowUserAvatarCache.value[String(candidate.userId)] || undefined
                 : undefined,
-              approved: resolvedOperatorName ? displayName === resolvedOperatorName : false
+              approved:
+                markApproved && resolvedOperatorName ? displayName === resolvedOperatorName : false
             }
           })
           .filter(candidate => candidate.displayName)
       : []
 
     if (
+      markApproved &&
       resolvedOperatorName &&
       candidateList.length > 0 &&
       !candidateList.some(candidate => candidate.displayName === resolvedOperatorName)
@@ -1077,10 +1080,12 @@ export function useApprovalProgressDrawer(
       })()
 
     const resolvedOperatorName = resolveWorkflowTaskOperatorName(task)
+    const shouldMarkApprovedCandidate = isWorkflowTaskApproved(task)
     if (matchedStep?.candidateApprovers?.length) {
       return buildWorkflowNodeCandidates(
         matchedStep.candidateApprovers,
-        resolvedOperatorName || runtimeAssigneeName
+        resolvedOperatorName || runtimeAssigneeName,
+        shouldMarkApprovedCandidate
       )
     }
 
@@ -1095,7 +1100,8 @@ export function useApprovalProgressDrawer(
             orgName: task.approverOrgName
           }
         ],
-        resolvedOperatorName
+        resolvedOperatorName,
+        shouldMarkApprovedCandidate
       )
     }
 
@@ -1139,11 +1145,18 @@ export function useApprovalProgressDrawer(
       .trim()
       .toUpperCase()
 
-    if (!['COMPLETED', 'REJECTED', 'WITHDRAWN'].includes(normalizedStatus)) {
+    if (!['COMPLETED', 'APPROVED', 'REJECTED', 'WITHDRAWN'].includes(normalizedStatus)) {
       return undefined
     }
 
     return normalizeDisplayName(task.assigneeName) || normalizeDisplayName(task.approverOrgName)
+  }
+
+  function isWorkflowTaskApproved(task: WorkflowTaskResponse): boolean {
+    const normalizedStatus = String(task.status || '')
+      .trim()
+      .toUpperCase()
+    return normalizedStatus === 'COMPLETED' || normalizedStatus === 'APPROVED'
   }
 
   function resolveSourceDepartmentDisplayName(): string {

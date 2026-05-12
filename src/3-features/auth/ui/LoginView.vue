@@ -71,9 +71,9 @@
               <span class="notice-title">系统公告</span>
             </div>
             <ul class="notice-list">
-              <li>2025年度战略指标填报工作已启动</li>
-              <li>请各部门于12月15日前完成数据提交</li>
-              <li>系统维护时间：每周日 02:00-06:00</li>
+              <li v-for="announcement in loginAnnouncements" :key="announcement.id">
+                {{ announcement.title }}
+              </li>
             </ul>
           </div>
 
@@ -112,7 +112,7 @@
         </div>
 
         <div class="copyright">
-          <p>© 2024-2025 战略发展部 版权所有</p>
+          <p>© 2024-{{ new Date().getFullYear() }} 战略发展部 版权所有</p>
           <p>
             <a
               href="https://beian.miit.gov.cn/"
@@ -135,6 +135,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/features/auth/model/store'
 import LoginForm from './LoginForm.vue'
+import { announcementApi } from '@/features/admin/api/announcementApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -149,6 +150,16 @@ interface BgImage {
 const bgImages = ref<BgImage[]>([])
 const currentBgIndex = ref(0)
 let bgInterval: ReturnType<typeof setInterval> | null = null
+const loginAnnouncements = ref<
+  Array<{
+    id: number
+    title: string
+  }>
+>([
+  { id: 1, title: '2025年度战略指标填报工作已启动' },
+  { id: 2, title: '请各部门于12月15日前完成数据提交' },
+  { id: 3, title: '系统维护时间：每周日 02:00-06:00' }
+])
 
 const defaultBgImages: BgImage[] = [
   {
@@ -347,10 +358,25 @@ const handleForgotPassword = () => {
   void router.push('/forgot-password')
 }
 
+const loadLoginAnnouncements = async () => {
+  try {
+    const page = await announcementApi.listPublic(0, 3)
+    if (Array.isArray(page.content) && page.content.length > 0) {
+      loginAnnouncements.value = page.content.map(item => ({
+        id: item.id,
+        title: item.title
+      }))
+    }
+  } catch (error) {
+    // keep fallback static announcements
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   bgImages.value = defaultBgImages
   await preloadImages() // 等待所有图片加载完成后再启动轮播
+  await loadLoginAnnouncements()
   startBgRotation()
   updateTime()
   timeInterval = setInterval(updateTime, 1000)

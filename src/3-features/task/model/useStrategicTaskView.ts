@@ -1160,6 +1160,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   function resolveExpectedApproverRoleCodesForCurrentPlan(): string[] {
     const stepName = String(
       approvalWorkflowReportSummary.value?.currentStepName ||
+        preloadedPlanWorkflowDetail.value?.currentStepName ||
         (currentPlan.value as { currentStepName?: string } | null)?.currentStepName ||
         ''
     ).trim()
@@ -1197,14 +1198,19 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       | null
 
     const stepName = String(
-      approvalWorkflowReportSummary.value?.currentStepName || plan?.currentStepName || ''
+      approvalWorkflowReportSummary.value?.currentStepName ||
+        preloadedPlanWorkflowDetail.value?.currentStepName ||
+        plan?.currentStepName ||
+        ''
     ).trim()
     if (!stepName) {
       return null
     }
 
     if (stepName.includes('战略发展部')) {
-      const sourceOrgId = Number(plan?.createdByOrgId ?? NaN)
+      const sourceOrgId = Number(
+        preloadedPlanWorkflowDetail.value?.sourceOrgId ?? plan?.createdByOrgId ?? NaN
+      )
       return Number.isFinite(sourceOrgId) && sourceOrgId > 0 ? sourceOrgId : null
     }
 
@@ -1213,7 +1219,9 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       stepName.includes('职能部门终审') ||
       stepName.includes('二级学院审批')
     ) {
-      const targetOrgId = Number(plan?.targetOrgId ?? NaN)
+      const targetOrgId = Number(
+        preloadedPlanWorkflowDetail.value?.targetOrgId ?? plan?.targetOrgId ?? NaN
+      )
       return Number.isFinite(targetOrgId) && targetOrgId > 0 ? targetOrgId : null
     }
 
@@ -1645,29 +1653,90 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     return isPlanDraft
   }
 
-  // @requirement: Plan-centric status - 使用 Plan 状态判断待审批数量
-  // Plan 处于 PENDING 状态时，表示有待审批的内容
-  const pendingApprovalCount = computed(() => {
+  const currentPendingPlanWorkflowTask = computed(() => {
+    const detail = preloadedPlanWorkflowDetail.value
+    if (!detail || !Array.isArray(detail.tasks) || detail.tasks.length === 0) {
+      return null
+    }
+
+    const currentTaskId = String(detail.currentTaskId || '').trim()
+    if (currentTaskId) {
+      const matchedCurrentTask = detail.tasks.find(
+        task => String(task.taskId || '') === currentTaskId
+      )
+      if (
+        matchedCurrentTask &&
+        String(matchedCurrentTask.status || '')
+          .trim()
+          .toUpperCase() === 'PENDING'
+      ) {
+        return matchedCurrentTask
+      }
+    }
+
+    return (
+      detail.tasks.find(
+        task =>
+          String(task.status || '')
+            .trim()
+            .toUpperCase() === 'PENDING'
+      ) || null
+    )
+  })
+
+  const canHandleCurrentPlanApproval = computed(() => {
+    const workflowStatus = currentApprovalWorkflowStatus.value
+    const isPendingApproval = ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)
+    if (!isPendingApproval) {
+      return false
+    }
+
     const explicitApproverId = Number(
-      approvalWorkflowReportSummary.value?.currentApproverId ??
+      preloadedPlanWorkflowDetail.value?.currentApproverId ??
+        approvalWorkflowReportSummary.value?.currentApproverId ??
         currentPlan.value?.currentApproverId ??
         0
     )
+    const currentUserIdValue = Number(currentUserId.value ?? 0)
+    if (
+      Number.isFinite(explicitApproverId) &&
+      explicitApproverId > 0 &&
+      Number.isFinite(currentUserIdValue) &&
+      currentUserIdValue > 0
+    ) {
+      if (explicitApproverId === currentUserIdValue) {
+        return true
+      }
+    }
+
+    const pendingTaskAssigneeId = Number(currentPendingPlanWorkflowTask.value?.assigneeId ?? 0)
+    if (
+      Number.isFinite(pendingTaskAssigneeId) &&
+      pendingTaskAssigneeId > 0 &&
+      Number.isFinite(currentUserIdValue) &&
+      currentUserIdValue > 0
+    ) {
+      if (pendingTaskAssigneeId === currentUserIdValue) {
+        return true
+      }
+    }
 
     return canCurrentUserHandleWorkflowApproval({
       currentUserId: currentUserId.value,
       currentUserOrgId: currentUserOrgId.value,
       currentUserRoleCodes: currentUserRoleCodes.value,
       hasApprovalPermission: true,
-      isPendingApproval: ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(
-        currentApprovalWorkflowStatus.value
-      ),
+      isPendingApproval,
       explicitApproverId,
       expectedApproverRoleCodes: resolveExpectedApproverRoleCodesForCurrentPlan(),
       expectedApproverOrgId: resolveExpectedApproverOrgIdForCurrentPlan()
     })
-      ? 1
-      : 0
+  })
+
+  // @requirement: Plan-centric status - 使用 Plan 状态判断待审批数量
+  // Plan 处于 PENDING 状态时，表示有待审批的内容
+  const pendingApprovalCount = computed(() => {
+    return canHandleCurrentPlanApproval.value ? 1 : 0
   })
 
   const planUiPhase = computed<'draft' | 'pending_withdrawable' | 'pending_locked' | 'distributed'>(
@@ -1688,7 +1757,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   )
 
   const approvalEntryButtonText = computed(() => {
-    if (planUiPhase.value === 'pending_withdrawable' || planUiPhase.value === 'pending_locked') {
+    if (canHandleCurrentPlanApproval.value) {
       return '处理审批'
     }
     return '查看审批'
@@ -4873,6 +4942,8 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     preservePrefilledTaskBindingOnce,
     primaryApprovalWorkflowEntityId,
     primaryApprovalWorkflowEntityType,
+    secondaryApprovalWorkflowEntityId,
+    secondaryApprovalWorkflowEntityType,
     refreshApprovalWorkflowSummaries,
     refreshCurrentDepartmentView,
     refreshIndicatorWorkflowContext,
