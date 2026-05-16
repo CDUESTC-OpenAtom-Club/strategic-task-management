@@ -98,52 +98,18 @@ npm run dev
 
 ```
 src/
-├── api/                    # API 请求层
-│   └── interceptors/       # 请求/响应拦截器
-├── components/             # Vue 组件
-│   ├── admin/              # 管理员组件
-│   ├── approval/           # 审批流程组件
-│   ├── charts/             # ECharts 图表组件
-│   ├── common/             # 通用组件 (表格、表单、骨架屏等)
-│   ├── indicator/          # 指标管理组件
-│   ├── message/            # 消息中心组件
-│   ├── milestone/          # 里程碑组件
-│   ├── plan/               # 计划管理组件
-│   ├── profile/            # 个人中心组件
-│   └── task/               # 任务组件
-├── composables/            # Composition API 组合函数
-│   ├── dashboard/          # 看板相关
-│   └── layout/             # 布局相关
-├── config/                 # 配置文件
-├── constants/              # 常量定义
-├── mock/                   # Mock 数据
-├── router/                 # 路由配置
-├── stores/                 # Pinia 状态管理
-│   ├── auth.ts             # 认证状态
-│   ├── strategic.ts        # 战略指标状态
-│   ├── dashboard.ts        # 看板状态
-│   └── ...
-├── types/                  # TypeScript 类型定义
-│   └── schemas.ts          # Zod 运行时验证
-├── utils/                  # 工具函数
-│   ├── authHelpers/        # 认证辅助
-│   ├── dataMappers/        # 数据映射
-│   ├── formatters.ts       # 格式化函数
-│   └── ...
-├── views/                  # 页面视图
-├── App.vue                 # 根组件
-└── main.ts                 # 应用入口
+├── 1-app/                  # 应用入口、全局布局、路由和启动配置
+├── 2-pages/                # 页面级容器（保留层）
+├── 3-features/             # 功能模块（公告、消息中心、审批、计划、任务等）
+├── 4-entities/             # 领域实体层
+├── 5-shared/               # 共享 UI、API、工具、hooks
+├── 6-processes/            # 跨 feature 过程编排
+└── widgets/                # 页面级复合组件
 
-tests/                      # 测试文件
-├── property/               # 属性测试 (fast-check)
-└── unit/                   # 单元测试 (vitest)
-
-docs/                       # 项目文档
-├── archive/                # 归档文档
-├── architecture/           # 当前架构治理文档
-├── cache-design.md         # 缓存设计口径
-├── plan-withdraw-redesign.md  # Plan 撤回交互设计
-└── ...
+tests/                      # Vitest / Playwright 测试
+public/                     # 静态资源
+scripts/                    # 构建、检查与开发辅助脚本
+docs/                       # 文档中心（当前文档 / 生成产物 / 历史归档）
 ```
 
 ---
@@ -215,12 +181,12 @@ import { DataTable, DataForm, EmptyState, SkeletonLoader } from '@/components/co
 
 ## 文档中心
 
-| 文档                                            | 说明                               |
-| ----------------------------------------------- | ---------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                          | 项目开发指南 (供 Claude Code 使用) |
-| [文档目录](docs/README.md)                      | 当前保留文档索引与阅读顺序         |
-| [缓存设计](docs/cache-design.md)                | 前端缓存设计与实现口径             |
-| [Plan 撤回设计](docs/plan-withdraw-redesign.md) | Plan 发起后可撤回交互设计          |
+| 文档                                                   | 说明                               |
+| ------------------------------------------------------ | ---------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                                 | 项目开发指南 (供 Claude Code 使用) |
+| [文档目录](docs/README.md)                             | 当前保留文档、归档规则与阅读顺序   |
+| [项目治理手册](docs/PROJECT_HISTORY_AND_GOVERNANCE.md) | 前端目录规范、历史归档与验证门禁   |
+| [环境配置指南](docs/ENV_CONFIG_GUIDE.md)               | 当前环境变量与联调配置说明         |
 
 ---
 
