@@ -72,6 +72,21 @@ export const announcementApi = {
     return response.data as AnnouncementItem
   },
 
+  async update(
+    id: number,
+    payload: {
+      title: string
+      content: string
+      scheduledAt?: string | null
+    }
+  ): Promise<AnnouncementItem> {
+    const response = await apiClient.put<ApiEnvelope<AnnouncementItem>>(
+      `/announcements/${id}`,
+      payload
+    )
+    return response.data as AnnouncementItem
+  },
+
   async publish(id: number): Promise<AnnouncementItem> {
     const response = await apiClient.post<ApiEnvelope<AnnouncementItem>>(
       `/announcements/${id}/publish`

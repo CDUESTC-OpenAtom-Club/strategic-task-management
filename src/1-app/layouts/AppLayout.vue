@@ -10,7 +10,7 @@
 
 import { watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Aim, Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
+import { Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import { ApprovalProgressDrawer, useApprovalCenter } from '@/features/approval'
 import { usePlanStore } from '@/features/plan/model/store'
@@ -152,7 +152,7 @@ const handleDropdownCommand = async (command: string) => {
       <div class="header-content">
         <div class="header-left">
           <div class="logo-box">
-            <el-icon :size="24" color="#ffffff"><Aim /></el-icon>
+            <img class="brand-logo" src="/sism-logo-header-white.png" alt="战略指标管理系统 Logo" />
           </div>
           <div class="title-box">
             <h1 class="app-title">战略指标管理系统</h1>
@@ -374,14 +374,19 @@ const handleDropdownCommand = async (command: string) => {
 }
 
 .logo-box {
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
+  width: 68px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex: 0 0 auto;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .title-box {
