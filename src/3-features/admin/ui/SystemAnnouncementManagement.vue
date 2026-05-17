@@ -80,6 +80,31 @@ const statusLabel = (status: AnnouncementItem['status']) => {
   }
 }
 
+const formatAnnouncementTime = (value?: string | null) => {
+  if (!value) {
+    return '--'
+  }
+
+  const normalized = value.replace('T', ' ')
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/)
+
+  if (match) {
+    return `${match[1]} ${match[2]}`
+  }
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  const hours = `${date.getHours()}`.padStart(2, '0')
+  const minutes = `${date.getMinutes()}`.padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
 const resetForm = () => {
   editingAnnouncementId.value = null
   form.title = ''
@@ -318,12 +343,14 @@ onMounted(() => {
             <span v-else>{{ row.content }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="120">
+        <el-table-column label="状态" width="92" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            <el-tag class="announcement-status-tag" :type="statusTagType(row.status)">
+              {{ statusLabel(row.status) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="定时发布时间" min-width="180">
+        <el-table-column label="定时发布时间" min-width="160" class-name="announcement-time-column">
           <template #default="{ row }">
             <el-date-picker
               v-if="isInlineEditing(row)"
@@ -335,13 +362,19 @@ onMounted(() => {
               placeholder="留空表示手动发布"
               style="width: 100%"
             />
-            <span v-else>{{ row.scheduledAt || '--' }}</span>
+            <span v-else class="announcement-time-cell">
+              {{ formatAnnouncementTime(row.scheduledAt) }}
+            </span>
           </template>
         </el-table-column>
-        <el-table-column label="实际发布时间" min-width="180">
-          <template #default="{ row }">{{ row.publishedAt || '--' }}</template>
+        <el-table-column label="实际发布时间" min-width="160" class-name="announcement-time-column">
+          <template #default="{ row }">
+            <span class="announcement-time-cell">
+              {{ formatAnnouncementTime(row.publishedAt) }}
+            </span>
+          </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="!isInlineEditing(row) && row.status !== 'PUBLISHED'"
@@ -368,7 +401,14 @@ onMounted(() => {
       </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="新建系统公告" width="720px" @closed="resetForm">
+    <el-dialog
+      v-model="dialogVisible"
+      title="新建系统公告"
+      width="720px"
+      append-to-body
+      modal-class="announcement-dialog-overlay"
+      @closed="resetForm"
+    >
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="110px">
         <el-form-item label="公告标题" prop="title">
           <el-input v-model="form.title" maxlength="255" show-word-limit />
@@ -439,6 +479,23 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.announcement-time-cell {
+  display: inline-block;
+  min-width: 160px;
+  white-space: nowrap;
+}
+
+:deep(td.announcement-time-column .cell) {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+}
+
+.announcement-status-tag {
+  min-width: 54px;
+  justify-content: center;
+}
+
 :global(.announcement-date-popper) {
   z-index: 4000 !important;
   background: #ffffff !important;
@@ -454,5 +511,9 @@ onMounted(() => {
 :global(.announcement-date-popper .el-time-panel) {
   background: #ffffff !important;
   opacity: 1 !important;
+}
+
+:global(.announcement-dialog-overlay) {
+  background: rgba(15, 23, 42, 0.58) !important;
 }
 </style>

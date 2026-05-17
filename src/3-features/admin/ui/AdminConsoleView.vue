@@ -1,5 +1,12 @@
 <template>
-  <div class="admin-console-container" :class="{ 'is-collapsed': isCollapsed && !isHovered }">
+  <div
+    class="admin-console-container"
+    :class="{
+      'is-collapsed': !isSidebarExpanded,
+      'is-pinned': isPinned,
+      'is-expanded': isSidebarExpanded
+    }"
+  >
     <!-- 左侧导航栏 -->
     <aside class="admin-sidebar" @mouseenter="handleMouseEnter" @mouseleave="handleMouseLeave">
       <div class="sidebar-header">
@@ -23,7 +30,7 @@
           <el-tooltip
             :content="item.label"
             placement="right"
-            :disabled="!isCollapsed || isHovered"
+            :disabled="isSidebarExpanded"
             effect="dark"
           >
             <div class="menu-item-inner">
@@ -37,19 +44,25 @@
         </div>
       </nav>
 
-      <div class="sidebar-footer">
-        <div class="version-tag">SISM Admin v1.2.0</div>
-      </div>
-
       <!-- 锁定按钮 (固定/取消固定侧边栏) -->
       <div class="collapse-toggle-wrapper">
         <div
           class="collapse-toggle"
-          :title="isCollapsed ? '展开菜单' : '收起菜单'"
+          :class="{ pinned: isPinned }"
+          :title="isPinned ? '取消固定菜单' : '固定展开菜单'"
+          role="button"
+          tabindex="0"
           @click="toggleCollapse"
+          @keydown.enter.prevent="toggleCollapse"
+          @keydown.space.prevent="toggleCollapse"
         >
-          <el-icon>
-            <DArrowRight v-if="isCollapsed && !isHovered" />
+          <span class="collapse-toggle-rail" aria-hidden="true">
+            <span class="collapse-toggle-line" />
+            <span class="collapse-toggle-line" />
+            <span class="collapse-toggle-line" />
+          </span>
+          <el-icon class="collapse-toggle-icon">
+            <DArrowRight v-if="!isSidebarExpanded" />
             <DArrowLeft v-else />
           </el-icon>
         </div>
@@ -72,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import { Monitor, User, Bell, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import UserManagement from '@/features/admin/ui/UserManagement.vue'
 import SystemAnnouncementManagement from '@/features/admin/ui/SystemAnnouncementManagement.vue'
@@ -85,8 +98,9 @@ const menuItems = [
 
 // 状态管理
 const activeTab = ref('users')
-const isCollapsed = ref(true) // 默认收起
+const isPinned = ref(false)
 const isHovered = ref(false)
+const isSidebarExpanded = computed(() => isPinned.value || isHovered.value)
 
 const handleMouseEnter = () => {
   isHovered.value = true
@@ -97,7 +111,7 @@ const handleMouseLeave = () => {
 }
 
 const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value
+  isPinned.value = !isPinned.value
 }
 </script>
 
@@ -107,6 +121,8 @@ const toggleCollapse = () => {
   height: calc(100vh - var(--header-height, 64px));
   background-color: #f8fafc;
   overflow: hidden;
+  position: relative;
+  z-index: 0;
 }
 
 /* 侧边栏基础样式 */
@@ -117,10 +133,17 @@ const toggleCollapse = () => {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  z-index: 100;
+  z-index: 1;
   box-shadow: 4px 0 15px rgba(0, 0, 0, 0.02);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
+}
+
+.is-pinned .admin-sidebar {
+  border-right-color: #93c5fd;
+  box-shadow:
+    inset 0 0 0 2px rgba(59, 130, 246, 0.18),
+    8px 0 24px rgba(37, 99, 235, 0.12);
 }
 
 /* 收起状态样式 */
@@ -282,31 +305,78 @@ const toggleCollapse = () => {
 /* 收起切换按钮 */
 .collapse-toggle-wrapper {
   position: absolute;
-  bottom: 24px;
-  right: -14px;
+  top: 50%;
+  right: -16px;
+  transform: translateY(-50%);
   z-index: 101;
 }
 
 .collapse-toggle {
-  width: 28px;
-  height: 28px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 50%;
+  width: 34px;
+  height: 168px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #dbe5f0;
+  border-radius: 18px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 14px;
   cursor: pointer;
-  color: #64748b;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.2s ease;
+  color: #2563eb;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+  outline: none;
 }
 
 .collapse-toggle:hover {
-  background: #2563eb;
-  color: white;
-  border-color: #2563eb;
-  transform: scale(1.1);
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.18);
+  transform: translateX(2px);
+}
+
+.collapse-toggle:focus-visible,
+.collapse-toggle.pinned {
+  background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+  box-shadow:
+    0 0 0 4px rgba(59, 130, 246, 0.18),
+    0 14px 32px rgba(37, 99, 235, 0.22);
+}
+
+.collapse-toggle.pinned .collapse-toggle-line {
+  opacity: 1;
+  background: linear-gradient(180deg, #60a5fa 0%, #1d4ed8 100%);
+}
+
+.collapse-toggle.pinned .collapse-toggle-icon {
+  color: #1e40af;
+  transform: scale(1.08);
+}
+
+.collapse-toggle-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.collapse-toggle-line {
+  width: 3px;
+  height: 24px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #93c5fd 0%, #2563eb 100%);
+  opacity: 0.7;
+}
+
+.collapse-toggle-icon {
+  font-size: 20px;
+  color: #1d4ed8;
 }
 
 /* 内容区样式 */
@@ -354,9 +424,23 @@ const toggleCollapse = () => {
   .menu-label,
   .subtitle,
   .sidebar-footer,
-  .active-indicator,
-  .collapse-toggle-wrapper {
+  .active-indicator {
     display: none !important;
+  }
+
+  .collapse-toggle-wrapper {
+    display: block !important;
+    right: -14px;
+  }
+
+  .collapse-toggle {
+    width: 30px;
+    height: 120px;
+    gap: 10px;
+  }
+
+  .collapse-toggle-line {
+    height: 16px;
   }
 }
 </style>

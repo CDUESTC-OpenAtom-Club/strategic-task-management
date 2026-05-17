@@ -8,7 +8,7 @@
  * **Validates: Requirements 3.1 - Application Layout**
  */
 
-import { watch, onMounted, onUnmounted, computed } from 'vue'
+import { watch, onMounted, onUnmounted, computed, ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Switch, Monitor, Lock, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
@@ -74,11 +74,29 @@ const approvalCenterPlan = computed(() => {
   return planStore.getPlanByTargetOrgAndYear(viewingDept.value, timeContext.currentYear) || null
 })
 
+const appContainerRef = ref<HTMLElement | null>(null)
+const headerRef = ref<HTMLElement | null>(null)
+const headerOffset = ref(0)
+let headerResizeObserver: ResizeObserver | null = null
+
+const syncHeaderOffset = () => {
+  headerOffset.value = headerRef.value?.offsetHeight ?? 0
+}
+
 /**
  * Initialize approval notifications on mount
  */
 onMounted(() => {
   initApprovalNotifications()
+  void nextTick(() => {
+    syncHeaderOffset()
+    if (typeof ResizeObserver !== 'undefined' && headerRef.value) {
+      headerResizeObserver = new ResizeObserver(() => {
+        syncHeaderOffset()
+      })
+      headerResizeObserver.observe(headerRef.value)
+    }
+  })
 })
 
 /**
@@ -87,6 +105,8 @@ onMounted(() => {
 onUnmounted(() => {
   destroyApprovalNotifications()
   disconnectWebSocket()
+  headerResizeObserver?.disconnect()
+  headerResizeObserver = null
 })
 
 /**
@@ -146,9 +166,13 @@ const handleDropdownCommand = async (command: string) => {
 </script>
 
 <template>
-  <div class="app-container">
+  <div
+    ref="appContainerRef"
+    class="app-container"
+    :style="{ '--app-header-offset': `${headerOffset}px` }"
+  >
     <!-- Header navigation -->
-    <header class="app-header">
+    <header ref="headerRef" class="app-header">
       <div class="header-content">
         <div class="header-left">
           <div class="logo-box">
@@ -523,6 +547,9 @@ const handleDropdownCommand = async (command: string) => {
   gap: 4px;
   border: 1px solid var(--border);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: sticky;
+  top: calc(var(--app-header-offset, 0px) + 12px);
+  z-index: 90;
 }
 
 .tab-item {

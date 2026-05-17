@@ -23,7 +23,6 @@ import {
 import {
   Plus,
   Edit,
-  Delete,
   Search,
   Refresh,
   Lock,
@@ -91,7 +90,6 @@ const resolveUserListPageData = (response: UserListResponseShape): UserListPageD
  * - 编辑用户信息
  * - 启用/禁用用户
  * - 重置密码
- * - 删除用户
  */
 
 // ============ 状态管理 ============
@@ -102,6 +100,7 @@ const users = ref<UserManagementItem[]>([])
 const searchKeyword = ref('')
 const filterRole = ref<string | 'all'>('all')
 const filterStatus = ref<'all' | 'active' | 'disabled'>('all')
+const filterDepartment = ref<string | 'all'>('all')
 
 // 对话框状态
 const showUserDialog = ref(false)
@@ -201,6 +200,11 @@ const filteredUsers = computed(() => {
     result = result.filter(u => u.status === filterStatus.value)
   }
 
+  // 部门筛选
+  if (filterDepartment.value !== 'all') {
+    result = result.filter(u => (u.orgName || '').trim() === filterDepartment.value)
+  }
+
   return result
 })
 
@@ -255,6 +259,29 @@ const statusOptions = [
   { value: 'active', label: '启用' },
   { value: 'disabled', label: '禁用' }
 ]
+
+const departmentOptions = computed(() => {
+  const names = new Set<string>()
+
+  organizationTree.value.forEach(org => {
+    if (org.name?.trim()) {
+      names.add(org.name.trim())
+    }
+  })
+
+  users.value.forEach(user => {
+    if (user.orgName?.trim()) {
+      names.add(user.orgName.trim())
+    }
+  })
+
+  return [
+    { value: 'all', label: '全部部门' },
+    ...Array.from(names)
+      .sort((left, right) => left.localeCompare(right, 'zh-CN'))
+      .map(name => ({ value: name, label: name }))
+  ]
+})
 
 // 获取角色配置
 const getRoleConfig = (role: string) => {
@@ -665,47 +692,6 @@ const toggleUserStatus = async (user: UserManagementItem) => {
   }
 }
 
-// 删除用户
-const handleDelete = async (user: UserManagementItem) => {
-  try {
-    await ElMessageBox.confirm(
-      `确定要删除用户「${user.realName}」吗？此操作不可撤销。`,
-      '删除确认',
-      {
-        confirmButtonText: '确定删除',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
-    await api.delete(`/auth/users/${user.id}`)
-    ElMessage.success('删除成功')
-
-    // 记录审计日志
-    try {
-      auditLogStore.logAction({
-        entityType: 'user',
-        entityId: String(user.id),
-        entityName: user.realName,
-        action: 'delete_user',
-        operator: String(authStore.user?.userId ?? ''),
-        operatorName: getCurrentOperatorName(),
-        dataBefore: user as unknown as Record<string, unknown>,
-        dataAfter: { deleted: true, deletedAt: new Date().toISOString() }
-      })
-    } catch (logError) {
-      logger.warn('记录审计日志失败:', logError)
-    }
-
-    await loadUsers()
-  } catch (error: unknown) {
-    if (error !== 'cancel') {
-      logger.error('删除失败:', error)
-      ElMessage.error(getErrorMessage(error, '删除失败'))
-    }
-  }
-}
-
 // 打开重置密码对话
 const openPasswordDialog = (user: UserManagementItem) => {
   passwordForm.value = {
@@ -754,6 +740,7 @@ const resetFilter = () => {
   searchKeyword.value = ''
   filterRole.value = 'all'
   filterStatus.value = 'all'
+  filterDepartment.value = 'all'
 }
 
 // ============ 生命周期 ============
@@ -807,10 +794,23 @@ onMounted(() => {
             :value="option.value"
           />
         </ElSelect>
+        <ElSelect v-model="filterDepartment" placeholder="部门筛选" class="filter-select">
+          <ElOption
+            v-for="option in departmentOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </ElSelect>
       </div>
       <div class="filter-right">
         <ElButton
-          v-if="searchKeyword || filterRole !== 'all' || filterStatus !== 'all'"
+          v-if="
+            searchKeyword ||
+            filterRole !== 'all' ||
+            filterStatus !== 'all' ||
+            filterDepartment !== 'all'
+          "
           link
           @click="resetFilter"
         >
@@ -850,7 +850,7 @@ onMounted(() => {
     <!-- 用户列表表格 -->
     <ElCard class="table-card" shadow="never">
       <ElTable v-loading="loading" :data="filteredUsers" stripe class="user-table">
-        <ElTableColumn prop="username" label="用户名" width="140">
+        <ElTableColumn prop="username" label="用户名" width="160">
           <template #default="{ row }">
             <div class="username-cell">
               <el-icon class="user-icon"><User /></el-icon>
@@ -865,21 +865,21 @@ onMounted(() => {
           </template>
         </ElTableColumn>
 
-        <ElTableColumn prop="email" label="邮箱" min-width="180">
+        <ElTableColumn prop="email" label="邮箱" min-width="200">
           <template #default="{ row }">
             <span v-if="row.email" class="email">{{ row.email }}</span>
             <span v-else class="no-data">-</span>
           </template>
         </ElTableColumn>
 
-        <ElTableColumn prop="orgName" label="所属组织" min-width="180">
+        <ElTableColumn prop="orgName" label="所属组织" min-width="170">
           <template #default="{ row }">
             <span v-if="row.orgName" class="org-name">{{ row.orgName }}</span>
             <span v-else class="no-data">-</span>
           </template>
         </ElTableColumn>
 
-        <ElTableColumn label="角色" width="140">
+        <ElTableColumn label="角色" width="125">
           <template #default="{ row }">
             <div class="roles-tags">
               <ElTag
@@ -895,7 +895,7 @@ onMounted(() => {
           </template>
         </ElTableColumn>
 
-        <ElTableColumn label="状态" width="150" align="center">
+        <ElTableColumn label="状态" width="110" align="center">
           <template #default="{ row }">
             <ElTag :type="getStatusConfig(row.status).type as any" effect="light" size="small">
               {{ getStatusConfig(row.status).label }}
@@ -903,7 +903,7 @@ onMounted(() => {
           </template>
         </ElTableColumn>
 
-        <ElTableColumn label="操作" width="220" fixed="right">
+        <ElTableColumn label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
               <ElButton type="primary" link :icon="Edit" @click="openEditDialog(row)">
@@ -919,9 +919,6 @@ onMounted(() => {
               >
                 {{ row.status === 'active' ? '禁用' : '启用' }}
               </ElButton>
-              <ElButton type="danger" link :icon="Delete" @click="handleDelete(row)">
-                删除
-              </ElButton>
             </div>
           </template>
         </ElTableColumn>
@@ -933,14 +930,22 @@ onMounted(() => {
           <template #description>
             <p class="empty-text">
               {{
-                searchKeyword || filterRole !== 'all' || filterStatus !== 'all'
+                searchKeyword ||
+                filterRole !== 'all' ||
+                filterStatus !== 'all' ||
+                filterDepartment !== 'all'
                   ? '没有找到匹配的用户'
                   : '暂无用户数据'
               }}
             </p>
           </template>
           <ElButton
-            v-if="!searchKeyword && filterRole === 'all' && filterStatus === 'all'"
+            v-if="
+              !searchKeyword &&
+              filterRole === 'all' &&
+              filterStatus === 'all' &&
+              filterDepartment === 'all'
+            "
             type="primary"
             :icon="Plus"
             @click="openCreateDialog"
@@ -1294,6 +1299,8 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .empty-state {
