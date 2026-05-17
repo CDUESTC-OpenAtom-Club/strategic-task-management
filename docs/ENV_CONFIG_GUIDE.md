@@ -33,9 +33,9 @@ Vite 按以下优先级加载环境文件（后者覆盖前者）：
 
 ```bash
 # 1. 复制配置模板
-cp .env.example .env.development
+cp .env.example .env
 
-# 2. 根据需要修改配置
+# 2. 根据需要修改 .env
 # 默认配置即可用于本地开发
 
 # 3. 启动开发服务器
@@ -45,14 +45,26 @@ npm run dev
 ### 生产环境
 
 ```bash
-# 1. 复制配置模板
-cp .env.example .env.production
-
+# 1. 使用同一个 .env 作为前端主配置
 # 2. 修改必须修改的配置项（见下方说明）
-
 # 3. 构建生产版本
 npm run build
 ```
+
+### 推荐管理方式
+
+默认建议只维护一个前端 `.env` 文件。
+
+- 前端目录：
+  - `.env`
+- 后端目录：
+  - `../sism-backend/.env`
+
+这样用户体验最简单：
+
+- 切后端数据库时，修改后端 `.env`
+- 切前端联调目标时，修改前端 `.env` 中的 `VITE_API_TARGET`
+- 只有本机临时覆盖时，才额外创建 `.env.local`
 
 ## 配置项说明
 
@@ -153,7 +165,7 @@ openssl rand -base64 32
 
 ### Q: 如何在本地连接不同的后端服务？
 
-创建 `.env.development.local` 文件，覆盖 `VITE_API_TARGET`：
+创建 `.env.local` 文件，覆盖 `VITE_API_TARGET`：
 
 ```bash
 VITE_API_TARGET=http://192.168.1.100:8080
