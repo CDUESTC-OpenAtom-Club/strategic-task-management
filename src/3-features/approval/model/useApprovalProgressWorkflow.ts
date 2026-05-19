@@ -300,6 +300,8 @@ export function useApprovalProgressWorkflow({
   }
 
   async function ensureWorkflowRelatedAvatarsLoaded(): Promise<void> {
+    await state.ensureWorkflowTaskScopedCandidatesLoaded()
+
     const userIds = new Set<number>()
 
     state.planWorkflowTasks.value.forEach(task => {
@@ -310,6 +312,14 @@ export function useApprovalProgressWorkflow({
     })
     ;(state.workflowDefinitionPreview.value?.steps || []).forEach(step => {
       ;(step.candidateApprovers || []).forEach(candidate => {
+        const candidateUserId = state.parsePositiveUserId(candidate.userId)
+        if (candidateUserId) {
+          userIds.add(candidateUserId)
+        }
+      })
+    })
+    Object.values(state.workflowOrgRoleCandidateCache.value).forEach(candidates => {
+      candidates.forEach(candidate => {
         const candidateUserId = state.parsePositiveUserId(candidate.userId)
         if (candidateUserId) {
           userIds.add(candidateUserId)

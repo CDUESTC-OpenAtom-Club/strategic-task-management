@@ -23,6 +23,7 @@ import { useOrgStore } from '@/features/organization/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useApprovalRouteAutopen } from '@/features/approval/lib'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
+import { getUsersByOrgId } from '@/features/user/api/query'
 import { indicatorApi } from '@/features/indicator/api'
 import { milestoneApi } from '@/entities/milestone/api/milestoneApi'
 import { logger } from '@/shared/lib/utils/logger'
@@ -1023,7 +1024,100 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     )
   })
 
+  const currentApprovalRuntimeCandidateNames = ref<string[]>([])
+  const approvalCandidateCache = new Map<string, string[]>()
+
+  const normalizeOrgRoleUserDisplayName = (user: {
+    realName?: unknown
+    name?: unknown
+    username?: unknown
+  }): string => {
+    return String(user.realName || user.name || user.username || '').trim()
+  }
+
+  async function loadCurrentApprovalRuntimeCandidateNames(): Promise<void> {
+    const currentTaskId = Number(
+      currentCollegeWorkflowDetail.value?.currentTaskId ??
+        currentCollegePlanReportSummary.value?.currentTaskId ??
+        currentActiveCollegePlan.value?.currentTaskId ??
+        NaN
+    )
+    const currentTask = Array.isArray(currentCollegeWorkflowDetail.value?.tasks)
+      ? currentCollegeWorkflowDetail.value.tasks.find(
+          task => Number(task.taskId ?? NaN) === currentTaskId
+        )
+      : null
+    const orgId =
+      Number(currentTask?.approverOrgId ?? NaN) > 0 ? Number(currentTask?.approverOrgId) : null
+
+    const stepName = String(
+      currentCollegeWorkflowDetail.value?.currentStepName ||
+        currentCollegePlanReportSummary.value?.currentStepName ||
+        currentActiveCollegePlan.value?.currentStepName ||
+        ''
+    ).trim()
+
+    const roleCodes = (() => {
+      if (!stepName) {
+        return []
+      }
+      if (
+        stepName.includes('职能部门审批') ||
+        stepName.includes('职能部门终审') ||
+        stepName.includes('二级学院审批')
+      ) {
+        return ['ROLE_APPROVER']
+      }
+      if (stepName.includes('战略发展部')) {
+        return ['ROLE_STRATEGY_DEPT_HEAD']
+      }
+      if (stepName.includes('分管校领导') || stepName.includes('学院院长')) {
+        return ['ROLE_VICE_PRESIDENT']
+      }
+      return []
+    })()
+
+    if (!orgId || roleCodes.length === 0) {
+      currentApprovalRuntimeCandidateNames.value = []
+      return
+    }
+
+    const cacheKey = `${orgId}::${roleCodes.slice().sort().join(',')}`
+    const cached = approvalCandidateCache.get(cacheKey)
+    if (cached) {
+      currentApprovalRuntimeCandidateNames.value = cached
+      return
+    }
+
+    try {
+      const users = await getUsersByOrgId(orgId)
+      const names = users
+        .filter(user => user.isActive !== false)
+        .filter(user => {
+          const userRoles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : []
+          return roleCodes.some(roleCode => userRoles.includes(roleCode))
+        })
+        .map(user => normalizeOrgRoleUserDisplayName(user))
+        .filter(Boolean)
+
+      const uniqueNames = [...new Set(names)]
+      approvalCandidateCache.set(cacheKey, uniqueNames)
+      currentApprovalRuntimeCandidateNames.value = uniqueNames
+    } catch (error) {
+      currentApprovalRuntimeCandidateNames.value = []
+      logger.warn('[IndicatorDistributeView] 加载页面级审批候选人失败:', {
+        orgId,
+        roleCodes,
+        error
+      })
+    }
+  }
+
   const currentApprovalCandidateNames = computed(() => {
+    if (currentApprovalRuntimeCandidateNames.value.length > 0) {
+      return currentApprovalRuntimeCandidateNames.value
+    }
+
     const candidates = currentApprovalStepPreview.value?.candidateApprovers
     if (!Array.isArray(candidates) || candidates.length === 0) {
       return []
@@ -1033,6 +1127,18 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       .map(candidate => normalizePreviewCandidateDisplayName(candidate))
       .filter(Boolean)
   })
+
+  watch(
+    () => [
+      currentApprovalStepName.value,
+      String(currentCollegeWorkflowDetail.value?.currentTaskId || ''),
+      JSON.stringify(currentCollegeWorkflowDetail.value?.tasks || [])
+    ],
+    () => {
+      void loadCurrentApprovalRuntimeCandidateNames()
+    },
+    { immediate: true }
+  )
 
   const approvalFlowStatusMeta = computed(() => {
     const workflowStatus = currentApprovalWorkflowStatus.value
@@ -1323,10 +1429,12 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const approvalSetupDialogVisible = ref(false)
   const approvalPreviewLoading = ref(false)
   const approvalSubmitting = ref(false)
+  const approvalSubmitComment = ref('')
   const approvalWorkflowPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
 
   const resetApprovalSetupDialog = () => {
     approvalWorkflowPreview.value = null
+    approvalSubmitComment.value = ''
   }
 
   const handleCloseApprovalSetupDialog = () => {
@@ -1389,7 +1497,8 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     approvalSubmitting.value = true
     try {
       await planStore.submitPlanForApproval(planId, {
-        workflowCode: preview.workflowCode || currentDispatchWorkflowCode.value
+        workflowCode: preview.workflowCode || currentDispatchWorkflowCode.value,
+        comment: approvalSubmitComment.value.trim() || undefined
       })
       applyLocalCollegePlanPatch({
         status: 'PENDING' as Plan['status'],
@@ -4705,6 +4814,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     approvalIndicators,
     approvalPreviewLoading,
     approvalSetupDialogVisible,
+    approvalSubmitComment,
     approvalStatusPopoverLoading,
     approvalSubmitting,
     approvalWorkflowPreview,

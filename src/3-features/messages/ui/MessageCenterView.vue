@@ -548,6 +548,10 @@ function canOpenApprovalCenter(message?: Message | null): boolean {
   )
 }
 
+function canOpenMessageRoute(message?: Message | null): boolean {
+  return Boolean(message && isApprovalMessage(message) && resolveMessageRouteTarget(message))
+}
+
 function resolveMessageAction(
   message?: Message | null
 ): { mode: 'approval-center' } | { mode: 'route'; target: string } | { mode: 'none' } {
@@ -568,7 +572,7 @@ function resolveMessageAction(
     }
   }
 
-  if (routeTarget) {
+  if (routeTarget && canOpenMessageRoute(message)) {
     return { mode: 'route', target: routeTarget }
   }
 
@@ -590,7 +594,7 @@ function detailActionOptions(message?: Message | null) {
     options.push({ label: '右侧打开审批中心', value: 'approval-center' })
   }
 
-  if (resolveMessageRouteTarget(message)) {
+  if (canOpenMessageRoute(message)) {
     options.push({ label: '跳转到对应页面', value: 'route' })
   }
 
@@ -692,7 +696,7 @@ function shouldShowOpenApprovalCenterAction(message?: Message | null): boolean {
 }
 
 function shouldShowRouteAction(message?: Message | null): boolean {
-  return resolveMessageRouteTarget(message) !== null
+  return canOpenMessageRoute(message)
 }
 
 function openMessageApprovalCenter(message?: Message | null) {

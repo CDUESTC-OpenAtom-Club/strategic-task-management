@@ -17,7 +17,7 @@ import { PermissionCode, type StrategicIndicator, type Plan } from '@/shared/typ
 import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
-import { getUserById, tryGetUserById } from '@/features/user/api/query'
+import { getUserById, getUsersByOrgId, tryGetUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
 import {
   isDistributionFlow,
@@ -102,6 +102,7 @@ export function useApprovalProgressState(
   })
   const submitterNameCache = ref<Record<string, string>>({})
   const workflowUserAvatarCache = ref<Record<string, string>>({})
+  const workflowOrgRoleCandidateCache = ref<Record<string, ApproverCandidateResponse[]>>({})
   const relatedPlanReportSummary = ref<{
     id?: number | string
     workflowStatus?: string | null
@@ -1004,6 +1005,105 @@ export function useApprovalProgressState(
     )
   }
 
+  function resolveExpectedApproverRoleCodesByStepName(stepNameValue: unknown): string[] {
+    const stepName = String(stepNameValue || '').trim()
+    if (!stepName) {
+      return []
+    }
+
+    if (
+      stepName.includes('职能部门审批') ||
+      stepName.includes('职能部门终审') ||
+      stepName.includes('二级学院审批')
+    ) {
+      return ['ROLE_APPROVER']
+    }
+
+    if (stepName.includes('战略发展部')) {
+      return ['ROLE_STRATEGY_DEPT_HEAD']
+    }
+
+    if (stepName.includes('分管校领导') || stepName.includes('学院院长')) {
+      return ['ROLE_VICE_PRESIDENT']
+    }
+
+    return []
+  }
+
+  function buildWorkflowOrgRoleCandidateCacheKey(orgId: unknown, roleCodes: string[]): string {
+    const normalizedOrgId = Number(orgId ?? NaN)
+    const normalizedRoles = [...new Set(roleCodes.map(code => code.trim()).filter(Boolean))].sort()
+    return `${Number.isFinite(normalizedOrgId) && normalizedOrgId > 0 ? normalizedOrgId : 0}::${normalizedRoles.join(',')}`
+  }
+
+  async function ensureWorkflowTaskScopedCandidatesLoaded(): Promise<void> {
+    const tasks = planWorkflowTasks.value
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return
+    }
+
+    const targets = new Map<string, { orgId: number; roleCodes: string[] }>()
+
+    tasks.forEach(task => {
+      const orgId = Number(task.approverOrgId ?? NaN)
+      const roleCodes = resolveExpectedApproverRoleCodesByStepName(
+        task.currentStepName || task.taskName
+      )
+
+      if (!Number.isFinite(orgId) || orgId <= 0 || roleCodes.length === 0) {
+        return
+      }
+
+      const cacheKey = buildWorkflowOrgRoleCandidateCacheKey(orgId, roleCodes)
+      if (workflowOrgRoleCandidateCache.value[cacheKey]) {
+        return
+      }
+
+      targets.set(cacheKey, { orgId, roleCodes })
+    })
+
+    if (targets.size === 0) {
+      return
+    }
+
+    await Promise.all(
+      [...targets.entries()].map(async ([cacheKey, target]) => {
+        try {
+          const users = await getUsersByOrgId(target.orgId)
+          const candidates = users
+            .filter(user => user.isActive !== false)
+            .filter(user => {
+              const roles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : []
+              return target.roleCodes.some(roleCode => roles.includes(roleCode))
+            })
+            .map(user => ({
+              userId: Number(user.userId ?? user.id ?? 0),
+              username: user.username,
+              realName: user.realName || user.name,
+              orgId: Number(user.orgId ?? target.orgId),
+              orgName: user.orgName || user.department
+            }))
+            .filter(candidate => Number.isFinite(candidate.userId) && candidate.userId > 0)
+
+          if (candidates.length === 0) {
+            return
+          }
+
+          workflowOrgRoleCandidateCache.value = {
+            ...workflowOrgRoleCandidateCache.value,
+            [cacheKey]: candidates
+          }
+        } catch (error) {
+          logger.warn('[DistributionApprovalProgressDrawer] 加载节点组织候选审批人失败:', {
+            orgId: target.orgId,
+            roleCodes: target.roleCodes,
+            error
+          })
+        }
+      })
+    )
+  }
+
   function buildWorkflowNodeCandidates(
     candidates: ApproverCandidateResponse[] | undefined,
     operatorName?: string,
@@ -1081,9 +1181,79 @@ export function useApprovalProgressState(
 
     const resolvedOperatorName = resolveWorkflowTaskOperatorName(task)
     const shouldMarkApprovedCandidate = isWorkflowTaskApproved(task)
-    if (matchedStep?.candidateApprovers?.length) {
+    const runtimeScopedRoleCodes = resolveExpectedApproverRoleCodesByStepName(
+      task.currentStepName || task.taskName
+    )
+    const runtimeScopedOrgId = Number(task.approverOrgId ?? NaN)
+    const runtimeScopedCandidates =
+      Number.isFinite(runtimeScopedOrgId) &&
+      runtimeScopedOrgId > 0 &&
+      runtimeScopedRoleCodes.length > 0
+        ? workflowOrgRoleCandidateCache.value[
+            buildWorkflowOrgRoleCandidateCacheKey(runtimeScopedOrgId, runtimeScopedRoleCodes)
+          ]
+        : undefined
+
+    if (runtimeScopedCandidates?.length) {
       return buildWorkflowNodeCandidates(
-        matchedStep.candidateApprovers,
+        runtimeScopedCandidates,
+        resolvedOperatorName || runtimeAssigneeName,
+        shouldMarkApprovedCandidate
+      )
+    }
+
+    const hasRuntimeApprover = Boolean(runtimeAssigneeName || runtimeAssigneeId)
+    const previewCandidates = matchedStep?.candidateApprovers
+    const previewContainsRuntimeApprover =
+      hasRuntimeApprover &&
+      Array.isArray(previewCandidates) &&
+      previewCandidates.some(candidate => {
+        const candidateUserId = parsePositiveUserId(candidate.userId)
+        if (runtimeAssigneeId && candidateUserId && candidateUserId === runtimeAssigneeId) {
+          return true
+        }
+
+        const candidateDisplayName = resolveCandidateDisplayName(candidate)
+        if (runtimeAssigneeName && candidateDisplayName === runtimeAssigneeName) {
+          return true
+        }
+
+        const candidateOrgId = Number(candidate.orgId ?? NaN)
+        const taskApproverOrgId = Number(task.approverOrgId ?? NaN)
+        return (
+          Number.isFinite(candidateOrgId) &&
+          candidateOrgId > 0 &&
+          Number.isFinite(taskApproverOrgId) &&
+          taskApproverOrgId > 0 &&
+          candidateOrgId === taskApproverOrgId
+        )
+      })
+
+    const shouldPreferRuntimeApprover =
+      hasRuntimeApprover &&
+      (!Array.isArray(previewCandidates) ||
+        previewCandidates.length === 0 ||
+        !previewContainsRuntimeApprover)
+
+    if (shouldPreferRuntimeApprover) {
+      return buildWorkflowNodeCandidates(
+        [
+          {
+            userId: runtimeAssigneeId || 0,
+            username: runtimeAssigneeName,
+            realName: runtimeAssigneeName,
+            orgId: task.approverOrgId,
+            orgName: task.approverOrgName
+          }
+        ],
+        resolvedOperatorName,
+        shouldMarkApprovedCandidate
+      )
+    }
+
+    if (previewCandidates?.length) {
+      return buildWorkflowNodeCandidates(
+        previewCandidates,
         resolvedOperatorName || runtimeAssigneeName,
         shouldMarkApprovedCandidate
       )
@@ -2268,6 +2438,7 @@ export function useApprovalProgressState(
     currentUserPermissionCodes,
     currentUserRoleCodes,
     detailDialogStatusTag,
+    ensureWorkflowTaskScopedCandidatesLoaded,
     expectedWorkflowCodes,
     getFallbackSubmitterValue,
     getFunctionalStatus,
@@ -2351,6 +2522,7 @@ export function useApprovalProgressState(
     hasPlanReportWorkflowContext,
     workflowDefinitionPreview,
     workflowNodes,
+    workflowOrgRoleCandidateCache,
     workflowUserAvatarCache
   }
 }

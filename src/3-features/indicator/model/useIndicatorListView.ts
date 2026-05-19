@@ -38,6 +38,7 @@ import {
 import { useOrgStore } from '@/features/organization/model/store'
 import { usePlanStore } from '@/features/plan/model/store'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
+import { getUsersByOrgId } from '@/features/user/api/query'
 import { ApprovalProgressDrawer } from '@/features/approval'
 import { approveTask, rejectTask } from '@/features/workflow/api'
 import { getWorkflowDefinitionPreviewByCode } from '@/features/workflow/api'
@@ -2504,7 +2505,61 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
     )
   })
 
+  const currentApprovalRuntimeCandidateNames = ref<string[]>([])
+  const approvalCandidateCache = new Map<string, string[]>()
+
+  const normalizeOrgRoleUserDisplayName = (user: {
+    realName?: unknown
+    name?: unknown
+    username?: unknown
+  }): string => {
+    return String(user.realName || user.name || user.username || '').trim()
+  }
+
+  async function loadCurrentApprovalRuntimeCandidateNames(): Promise<void> {
+    const orgId = resolveExpectedApproverOrgIdForPage()
+    const roleCodes = resolveExpectedApproverRoleCodesForPage()
+    if (!orgId || roleCodes.length === 0) {
+      currentApprovalRuntimeCandidateNames.value = []
+      return
+    }
+
+    const cacheKey = `${orgId}::${roleCodes.slice().sort().join(',')}`
+    const cached = approvalCandidateCache.get(cacheKey)
+    if (cached) {
+      currentApprovalRuntimeCandidateNames.value = cached
+      return
+    }
+
+    try {
+      const users = await getUsersByOrgId(orgId)
+      const names = users
+        .filter(user => user.isActive !== false)
+        .filter(user => {
+          const userRoles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : []
+          return roleCodes.some(roleCode => userRoles.includes(roleCode))
+        })
+        .map(user => normalizeOrgRoleUserDisplayName(user))
+        .filter(Boolean)
+
+      const uniqueNames = [...new Set(names)]
+      approvalCandidateCache.set(cacheKey, uniqueNames)
+      currentApprovalRuntimeCandidateNames.value = uniqueNames
+    } catch (error) {
+      currentApprovalRuntimeCandidateNames.value = []
+      logger.warn('[IndicatorListView] 加载页面级审批候选人失败:', {
+        orgId,
+        roleCodes,
+        error
+      })
+    }
+  }
+
   const currentApprovalCandidateNames = computed(() => {
+    if (currentApprovalRuntimeCandidateNames.value.length > 0) {
+      return currentApprovalRuntimeCandidateNames.value
+    }
+
     const candidates = currentApprovalStepPreview.value?.candidateApprovers
     if (!Array.isArray(candidates) || candidates.length === 0) {
       return []
@@ -2514,6 +2569,18 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       .map(candidate => normalizePreviewCandidateDisplayName(candidate))
       .filter(Boolean)
   })
+
+  watch(
+    () => [
+      currentApprovalStepName.value,
+      resolveExpectedApproverOrgIdForPage(),
+      resolveExpectedApproverRoleCodesForPage().join('|')
+    ],
+    () => {
+      void loadCurrentApprovalRuntimeCandidateNames()
+    },
+    { immediate: true }
+  )
 
   const currentApprovalStatusMeta = computed(() => {
     const workflowStatus = currentApprovalWorkflowStatus.value

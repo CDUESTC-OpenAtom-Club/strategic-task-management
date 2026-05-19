@@ -52,6 +52,7 @@ const {
   approvalIndicators,
   approvalPreviewLoading,
   approvalSetupDialogVisible,
+  approvalSubmitComment,
   approvalStatusPopoverLoading,
   approvalSubmitting,
   approvalWorkflowPreview,
@@ -1169,6 +1170,19 @@ const {
               </div>
             </div>
           </div>
+
+          <el-form label-position="top" class="approval-setup-form">
+            <el-form-item label="提交说明">
+              <el-input
+                v-model="approvalSubmitComment"
+                type="textarea"
+                :rows="4"
+                maxlength="500"
+                show-word-limit
+                placeholder="请输入提交说明；如果留空，后端会自动生成默认提交文案并落库。"
+              />
+            </el-form-item>
+          </el-form>
         </template>
 
         <el-empty v-else description="审批流程预览加载中或暂无可用节点" />

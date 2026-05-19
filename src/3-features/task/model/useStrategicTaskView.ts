@@ -56,6 +56,7 @@ import _MilestoneList from '@/features/milestone/ui/MilestoneList.vue'
 import { indicatorApi } from '@/features/indicator/api'
 import { usePlanStore } from '@/features/plan/model/store'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
+import { getUsersByOrgId } from '@/features/user/api/query'
 import { sleep } from '@/5-shared/api/retry'
 import {
   GLOBAL_DATA_REFRESH_REQUEST_EVENT,
@@ -160,7 +161,13 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
   // 职能部门列表（从 orgStore 动态获取）
   const functionalDepartments = computed(() => orgStore.getAllFunctionalDepartmentNames())
-  const SELECTED_DEPARTMENT_STORAGE_KEY = 'strategic-task-management:selected-department'
+  const selectedDepartmentStorageKey = computed(() => {
+    const userId = String(authStore.user?.userId ?? authStore.user?.id ?? '').trim()
+    const role = String(props.selectedRole || authStore.userRole || '').trim()
+    const orgId = String(authStore.user?.orgId ?? '').trim()
+    const scope = [userId, role, orgId].filter(Boolean).join(':') || 'anonymous'
+    return `strategic-task-management:selected-department:${scope}`
+  })
 
   // 选中的部门 - 默认选中第一个
   const selectedDepartment = ref('')
@@ -170,13 +177,30 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     return String(candidate ?? '').trim()
   }
 
+  function normalizeDepartmentName(value?: string | null): string {
+    if (!value) {
+      return ''
+    }
+
+    const trimmed = String(value).trim()
+    if (!trimmed) {
+      return ''
+    }
+
+    return (
+      departmentAliasNameMap.value.get(trimmed) || departmentIdNameMap.value.get(trimmed) || trimmed
+    )
+  }
+
   const readPersistedSelectedDepartment = (): string => {
     if (typeof window === 'undefined') {
       return ''
     }
 
     try {
-      return normalizeDepartmentName(window.localStorage.getItem(SELECTED_DEPARTMENT_STORAGE_KEY))
+      return normalizeDepartmentName(
+        window.localStorage.getItem(selectedDepartmentStorageKey.value)
+      )
     } catch (error) {
       logger.warn('[StrategicTaskView] 读取持久化部门选择失败:', error)
       return ''
@@ -190,12 +214,34 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
     try {
       if (dept) {
-        window.localStorage.setItem(SELECTED_DEPARTMENT_STORAGE_KEY, dept)
+        window.localStorage.setItem(selectedDepartmentStorageKey.value, dept)
       } else {
-        window.localStorage.removeItem(SELECTED_DEPARTMENT_STORAGE_KEY)
+        window.localStorage.removeItem(selectedDepartmentStorageKey.value)
       }
     } catch (error) {
       logger.warn('[StrategicTaskView] 持久化部门选择失败:', error)
+    }
+  }
+
+  const ensureInitialSelectedDepartment = (departments: string[]): void => {
+    if (departments.length === 0 || selectedDepartment.value) {
+      return
+    }
+
+    const persistedDepartment = readPersistedSelectedDepartment()
+    const matchedPersistedDepartment = departments.find(
+      dept => normalizeDepartmentName(dept) === persistedDepartment
+    )
+
+    if (matchedPersistedDepartment) {
+      selectedDepartment.value = matchedPersistedDepartment
+      persistSelectedDepartment(matchedPersistedDepartment)
+      return
+    }
+
+    selectedDepartment.value = departments[0] ?? ''
+    if (selectedDepartment.value) {
+      persistSelectedDepartment(selectedDepartment.value)
     }
   }
 
@@ -203,21 +249,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   watch(
     functionalDepartments,
     newDeps => {
-      if (newDeps.length === 0 || selectedDepartment.value) {
-        return
-      }
-
-      const persistedDepartment = readPersistedSelectedDepartment()
-      const matchedPersistedDepartment = newDeps.find(
-        dept => normalizeDepartmentName(dept) === persistedDepartment
-      )
-
-      if (matchedPersistedDepartment) {
-        selectedDepartment.value = matchedPersistedDepartment
-        return
-      }
-
-      selectedDepartment.value = newDeps[0]
+      ensureInitialSelectedDepartment(newDeps)
     },
     { immediate: true }
   )
@@ -592,21 +624,6 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       return !hasCurrentPlan
     }
     return currentPlanTaskIdSet.value.has(indicatorTaskId)
-  }
-
-  const normalizeDepartmentName = (value?: string | null): string => {
-    if (!value) {
-      return ''
-    }
-
-    const trimmed = String(value).trim()
-    if (!trimmed) {
-      return ''
-    }
-
-    return (
-      departmentAliasNameMap.value.get(trimmed) || departmentIdNameMap.value.get(trimmed) || trimmed
-    )
   }
 
   async function syncSelectedDepartmentFromRoute(): Promise<void> {
@@ -1184,7 +1201,61 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     )
   })
 
+  const currentApprovalRuntimeCandidateNames = ref<string[]>([])
+  const approvalCandidateCache = new Map<string, string[]>()
+
+  const normalizeOrgRoleUserDisplayName = (user: {
+    realName?: unknown
+    name?: unknown
+    username?: unknown
+  }): string => {
+    return String(user.realName || user.name || user.username || '').trim()
+  }
+
+  async function loadCurrentApprovalRuntimeCandidateNames(): Promise<void> {
+    const orgId = resolveExpectedApproverOrgIdForCurrentPlan()
+    const roleCodes = resolveExpectedApproverRoleCodesForCurrentPlan()
+    if (!orgId || roleCodes.length === 0) {
+      currentApprovalRuntimeCandidateNames.value = []
+      return
+    }
+
+    const cacheKey = `${orgId}::${roleCodes.slice().sort().join(',')}`
+    const cached = approvalCandidateCache.get(cacheKey)
+    if (cached) {
+      currentApprovalRuntimeCandidateNames.value = cached
+      return
+    }
+
+    try {
+      const users = await getUsersByOrgId(orgId)
+      const names = users
+        .filter(user => user.isActive !== false)
+        .filter(user => {
+          const userRoles = Array.isArray(user.roles) ? user.roles.filter(Boolean) : []
+          return roleCodes.some(roleCode => userRoles.includes(roleCode))
+        })
+        .map(user => normalizeOrgRoleUserDisplayName(user))
+        .filter(Boolean)
+
+      const uniqueNames = [...new Set(names)]
+      approvalCandidateCache.set(cacheKey, uniqueNames)
+      currentApprovalRuntimeCandidateNames.value = uniqueNames
+    } catch (error) {
+      currentApprovalRuntimeCandidateNames.value = []
+      logger.warn('[StrategicTaskView] 加载页面级审批候选人失败:', {
+        orgId,
+        roleCodes,
+        error
+      })
+    }
+  }
+
   const currentApprovalCandidateNames = computed(() => {
+    if (currentApprovalRuntimeCandidateNames.value.length > 0) {
+      return currentApprovalRuntimeCandidateNames.value
+    }
+
     const candidates = currentApprovalStepPreview.value?.candidateApprovers
     if (!Array.isArray(candidates) || candidates.length === 0) {
       return []
@@ -1194,6 +1265,18 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       .map(candidate => normalizePreviewCandidateDisplayName(candidate))
       .filter(Boolean)
   })
+
+  watch(
+    () => [
+      currentApprovalStepName.value,
+      resolveExpectedApproverOrgIdForCurrentPlan(),
+      resolveExpectedApproverRoleCodesForCurrentPlan().join('|')
+    ],
+    () => {
+      void loadCurrentApprovalRuntimeCandidateNames()
+    },
+    { immediate: true }
+  )
 
   const approvalFlowStatusMeta = computed(() => {
     const workflowStatus = currentApprovalWorkflowStatus.value
@@ -1478,6 +1561,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   const approvalSetupDialogVisible = ref(false)
   const approvalPreviewLoading = ref(false)
   const approvalSubmitting = ref(false)
+  const approvalSubmitComment = ref('')
   const approvalWorkflowPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
 
   const hasApprovalPreview = computed(() => {
@@ -1714,6 +1798,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
   // 判断 Plan 是否可以撤回
   // 统一以后端 workflow snapshot 的 canWithdraw 为准。
+  // 业务口径：填报人提交后，只要下一个审批人仍未处理，填报人就还能撤回。
   // 撤回权限只跟当前部门填报人走，不在前端额外放宽跨部门管理权限。
   const canWithdrawPlan = computed(() => {
     const status = currentPlanStatus.value
@@ -1722,37 +1807,15 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       preloadedPlanWorkflowDetail.value?.canWithdraw ??
       (approvalWorkflowReportSummary.value as { canWithdraw?: boolean } | null)?.canWithdraw ??
       currentPlan.value?.canWithdraw
-    const detailTasks = Array.isArray(preloadedPlanWorkflowDetail.value?.tasks)
-      ? preloadedPlanWorkflowDetail.value.tasks
-      : []
-    const normalizedCurrentTaskId = String(
-      preloadedPlanWorkflowDetail.value?.currentTaskId || ''
-    ).trim()
-    const currentPendingTask =
-      (normalizedCurrentTaskId
-        ? detailTasks.find(task => {
-            const taskId = String(task.taskId || '').trim()
-            const taskStatus = String(task.status || '')
-              .trim()
-              .toUpperCase()
-            return taskId === normalizedCurrentTaskId && taskStatus === 'PENDING'
-          })
-        : undefined) ||
-      detailTasks.find(task => {
-        return (
-          String(task.status || '')
-            .trim()
-            .toUpperCase() === 'PENDING'
-        )
-      })
-    const pendingStepNo = Number(currentPendingTask?.stepNo ?? NaN)
-    const isInitialApprovalStep = !Number.isFinite(pendingStepNo) || pendingStepNo <= 1
+
+    if (status === 'DISTRIBUTED') {
+      return false
+    }
 
     return (
       (status === 'PENDING' || ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) &&
       isCurrentUserReporter.value &&
-      Boolean(canWithdrawFlag) &&
-      isInitialApprovalStep
+      Boolean(canWithdrawFlag)
     )
   })
 
@@ -1895,11 +1958,15 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       const status = currentPlanStatus.value
       const workflowStatus = currentApprovalWorkflowStatus.value
 
+      if (status === 'DISTRIBUTED') {
+        return 'distributed'
+      }
+
       if (status === 'PENDING' || ['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(workflowStatus)) {
         return canWithdrawPlan.value ? 'pending_withdrawable' : 'pending_locked'
       }
 
-      if (status === 'DISTRIBUTED' || workflowStatus === 'APPROVED') {
+      if (workflowStatus === 'APPROVED') {
         return 'distributed'
       }
 
@@ -2002,6 +2069,10 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     return undefined
   })
 
+  const currentApprovalWorkflowCode = computed(() => {
+    return String(preloadedPlanWorkflowDetail.value?.flowCode || '').trim()
+  })
+
   // ==================== 下发/撤回按钮逻辑 ====================
   // 判断是否有已下发的指标
   const hasDistributedIndicators = computed(() => {
@@ -2097,6 +2168,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
   const resetApprovalSetupDialog = () => {
     approvalWorkflowPreview.value = null
+    approvalSubmitComment.value = ''
   }
 
   const openApprovalSetupDialog = async () => {
@@ -2190,7 +2262,8 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     approvalSubmitting.value = true
     try {
       await planStore.submitPlanForApproval(planId, {
-        workflowCode: preview.workflowCode || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
+        workflowCode: preview.workflowCode || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE,
+        comment: approvalSubmitComment.value.trim() || undefined
       })
       applyLocalPlanWorkflowUiPatch('submitted')
       await waitForPlanWorkflowReady()
@@ -2555,22 +2628,19 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       i => resolveIndicatorYear(i, timeContext.currentYear) === timeContext.currentYear
     )
 
-    // 根据选中的部门筛选指标
-    if (selectedDepartment.value) {
-      list = list.filter(
-        i =>
-          i.ownerDept === '战略发展部' && // 由战略发展部创建的指标
-          i.responsibleDept === selectedDepartment.value && // 下发给选中部门的指标
-          i.isStrategic === true && // 只显示战略指标，不显示子指标
-          isIndicatorInCurrentPlanScope(i) // 严格限定当前计划任务范围
-      )
-    } else {
-      // 没有选择部门：显示所有战略发展部创建的战略指标
-      list = list.filter(
-        i =>
-          i.ownerDept === '战略发展部' && i.isStrategic === true && isIndicatorInCurrentPlanScope(i)
-      )
+    // 左侧部门未确定前不要回退成“显示全部部门”，避免切页返回时短暂展示全量任务。
+    if (!selectedDepartment.value) {
+      return []
     }
+
+    // 根据选中的部门筛选指标
+    list = list.filter(
+      i =>
+        i.ownerDept === '战略发展部' && // 由战略发展部创建的指标
+        i.responsibleDept === selectedDepartment.value && // 下发给选中部门的指标
+        i.isStrategic === true && // 只显示战略指标，不显示子指标
+        isIndicatorInCurrentPlanScope(i) // 严格限定当前计划任务范围
+    )
 
     const mappedList = list.map(i => ({
       ...i,
@@ -3429,6 +3499,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       loadBackendTaskTypeMap({ force: true })
     ])
 
+    ensureInitialSelectedDepartment(functionalDepartments.value)
     await refreshCurrentDepartmentView({ force: true })
     isBootstrappingPage.value = false
 
@@ -4080,11 +4151,14 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
         await preloadApprovalWorkflowDetail()
       }
 
-      if (!approvalWorkflowPreview.value) {
+      const previewWorkflowCode =
+        currentApprovalWorkflowCode.value || PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
+      if (
+        previewWorkflowCode &&
+        approvalWorkflowPreview.value?.workflowCode !== previewWorkflowCode
+      ) {
         try {
-          const response = await getWorkflowDefinitionPreviewByCode(
-            PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE
-          )
+          const response = await getWorkflowDefinitionPreviewByCode(previewWorkflowCode)
           if (response.success && response.data) {
             approvalWorkflowPreview.value = response.data
           }
@@ -5053,6 +5127,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     approvalIndicators,
     approvalPreviewLoading,
     approvalSetupDialogVisible,
+    approvalSubmitComment,
     approvalStatusPopoverLoading,
     approvalStore,
     approvalSubmitting,

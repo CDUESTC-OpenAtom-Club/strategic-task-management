@@ -119,3 +119,31 @@ export async function searchUsers(keyword: string): Promise<User[]> {
     )
   }
 }
+
+/**
+ * Get all users under a specific organization.
+ *
+ * API: GET /api/auth/users/org/{orgId}
+ *
+ * This endpoint returns a lightweight list rather than the paged admin payload.
+ */
+export async function getUsersByOrgId(orgId: string | number): Promise<User[]> {
+  const response = await api.get(`/auth/users/org/${orgId}`)
+  const payload = response?.data
+
+  if (Array.isArray(payload)) {
+    return payload as User[]
+  }
+
+  if (payload && typeof payload === 'object') {
+    if (Array.isArray((payload as { data?: unknown[] }).data)) {
+      return (payload as { data: User[] }).data
+    }
+
+    if (Array.isArray((payload as { list?: unknown[] }).list)) {
+      return (payload as { list: User[] }).list
+    }
+  }
+
+  return []
+}

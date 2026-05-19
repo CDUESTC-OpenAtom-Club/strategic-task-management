@@ -461,6 +461,7 @@ export const usePlanStore = defineStore('plan', () => {
     planId: number | string,
     payload: {
       workflowCode: string
+      comment?: string
     }
   ) => {
     submitting.value = true

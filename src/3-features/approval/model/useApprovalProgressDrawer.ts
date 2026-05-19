@@ -1202,27 +1202,68 @@ export function useApprovalProgressDrawer(
           preview.steps.find(step => normalizeStepMatchKey(step.stepName) === rawStepKey) ||
           null
 
+    const derivedApproverOrgDisplayName = (() => {
+      const stepName =
+        normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || ''
+
+      if (stepName.includes('职能部门审批')) {
+        return `${resolveTargetDepartmentDisplayName()}审批人`
+      }
+
+      if (stepName.includes('职能部门终审')) {
+        return `${resolveTargetDepartmentDisplayName()}终审人`
+      }
+
+      const approverOrgName = normalizeDisplayName(task.approverOrgName)
+      if (!approverOrgName) {
+        return ''
+      }
+      if (stepName.includes('分管校领导') || stepName.includes('院长')) {
+        return `${approverOrgName}分管校领导`
+      }
+      return `${approverOrgName}审批人`
+    })()
+    const taskEntityType = normalizeWorkflowEntityType(task.entityType)
+    const prefersDepartmentSeatDisplay =
+      rawStepName.includes('职能部门审批') || rawStepName.includes('职能部门终审')
     const runtimeAssigneeId =
       parsePositiveUserId(task.assigneeId) ||
-      parsePositiveUserId(activePlanWorkflow.value?.currentApproverId)
+      (taskEntityType === 'PLAN'
+        ? parsePositiveUserId(activePlanWorkflow.value?.currentApproverId)
+        : null)
     const runtimeAssigneeName =
+      (prefersDepartmentSeatDisplay ? derivedApproverOrgDisplayName : '') ||
       normalizeDisplayName(task.assigneeName) ||
-      normalizeDisplayName(activePlanWorkflow.value?.currentApproverName) ||
-      (() => {
-        const approverOrgName = normalizeDisplayName(task.approverOrgName)
-        if (!approverOrgName) {
-          return ''
-        }
-        const stepName =
-          normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || ''
-        if (stepName.includes('分管校领导') || stepName.includes('院长')) {
-          return `${approverOrgName}分管校领导`
-        }
-        return `${approverOrgName}审批人`
-      })()
+      derivedApproverOrgDisplayName ||
+      (taskEntityType === 'PLAN'
+        ? normalizeDisplayName(activePlanWorkflow.value?.currentApproverName)
+        : '')
 
     const resolvedOperatorName = resolveWorkflowTaskOperatorName(task)
     const shouldMarkApprovedCandidate = isWorkflowTaskApproved(task)
+    const normalizedStatus = String(task.status || '')
+      .trim()
+      .toUpperCase()
+
+    if (
+      ['PENDING', 'CURRENT'].includes(normalizedStatus) &&
+      (runtimeAssigneeName || runtimeAssigneeId)
+    ) {
+      return buildWorkflowNodeCandidates(
+        [
+          {
+            userId: runtimeAssigneeId || 0,
+            username: runtimeAssigneeName,
+            realName: runtimeAssigneeName,
+            orgId: task.approverOrgId,
+            orgName: task.approverOrgName
+          }
+        ],
+        resolvedOperatorName,
+        shouldMarkApprovedCandidate
+      )
+    }
+
     if (matchedStep?.candidateApprovers?.length) {
       return buildWorkflowNodeCandidates(
         matchedStep.candidateApprovers,
@@ -1331,14 +1372,54 @@ export function useApprovalProgressDrawer(
     return '来源部门'
   }
 
+  function resolveTargetDepartmentDisplayName(): string {
+    const detailTargetOrgName = normalizeDisplayName(planWorkflowDetail.value?.targetOrgName)
+    if (detailTargetOrgName) {
+      return detailTargetOrgName
+    }
+
+    const activeTargetOrgName = normalizeDisplayName(
+      (activePlanWorkflow.value as { targetOrgName?: unknown } | null)?.targetOrgName
+    )
+    if (activeTargetOrgName) {
+      return activeTargetOrgName
+    }
+
+    const planTargetOrgName = normalizeDisplayName(
+      (props.plan as { targetOrgName?: unknown } | null)?.targetOrgName
+    )
+    if (planTargetOrgName) {
+      return planTargetOrgName
+    }
+
+    if (props.departmentName) {
+      return props.departmentName
+    }
+
+    const responsibleDeptName = props.indicators
+      .map(indicator =>
+        normalizeDisplayName((indicator as { responsibleDeptName?: unknown }).responsibleDeptName)
+      )
+      .find(Boolean)
+    if (responsibleDeptName) {
+      return responsibleDeptName
+    }
+
+    return '目标部门'
+  }
+
   function resolveWorkflowTaskDisplayName(task: WorkflowTaskResponse): string {
     const rawStepName =
       normalizeDisplayName(task.currentStepName) ||
       normalizeDisplayName(task.taskName) ||
       '审批节点'
 
+    if (rawStepName.includes('职能部门审批')) {
+      return `${resolveTargetDepartmentDisplayName()}审批人审批`
+    }
+
     if (rawStepName.includes('职能部门终审')) {
-      return `${resolveSourceDepartmentDisplayName()}终审人审批`
+      return `${resolveTargetDepartmentDisplayName()}终审人审批`
     }
 
     return rawStepName
@@ -1352,6 +1433,10 @@ export function useApprovalProgressDrawer(
 
     const rawStepName =
       normalizeDisplayName(task.currentStepName) || normalizeDisplayName(task.taskName) || ''
+
+    if (rawStepName.includes('职能部门审批') || rawStepName.includes('职能部门终审')) {
+      return resolveTargetDepartmentDisplayName()
+    }
 
     if (rawStepName.includes('职能部门终审')) {
       return resolveSourceDepartmentDisplayName()
