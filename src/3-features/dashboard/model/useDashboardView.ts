@@ -14,6 +14,10 @@ import { useLoadingState } from '@/shared/lib/loading/useLoadingState'
 import { logger } from '@/shared/lib/utils/logger'
 import { buildDashboardSummary, getIndicatorStatusAtMonth } from '@/features/dashboard/lib'
 import { resolveIndicatorYear } from '@/shared/lib/utils/indicatorYear'
+import {
+  GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+  type GlobalDataRefreshDetail
+} from '@/5-shared/lib/dataFreshness'
 
 export interface DashboardViewProps {
   viewingRole?: UserRole
@@ -72,6 +76,7 @@ export function useDashboardView(props: DashboardViewProps) {
   // 分院排名图表实例
   let collegeRankingChartInstance: echarts.ECharts | null = null
   const collegeRankingChartRef = ref<HTMLElement | null>(null)
+  let globalDataRefreshPromise: Promise<void> | null = null
 
   // 选中的部门（用于右侧指标完成情况卡片）
   const selectedBenchmarkDept = ref<string | null>(null)
@@ -2287,15 +2292,37 @@ export function useDashboardView(props: DashboardViewProps) {
     await initCollegeChart()
     await initCollegeRankingChart()
     window.addEventListener('resize', handleResize)
+    window.addEventListener(
+      GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+      handleGlobalDataRefreshRequest as EventListener
+    )
   })
 
   onUnmounted(() => {
     window.removeEventListener('resize', handleResize)
+    window.removeEventListener(
+      GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+      handleGlobalDataRefreshRequest as EventListener
+    )
     radarChartInstance?.dispose()
     benchmarkChartInstance?.dispose()
     collegeChartInstance?.dispose()
     collegeRankingChartInstance?.dispose()
   })
+
+  const handleGlobalDataRefreshRequest = (event: Event) => {
+    if (globalDataRefreshPromise) {
+      return
+    }
+
+    const detail = (event as CustomEvent<GlobalDataRefreshDetail>).detail
+    globalDataRefreshPromise = (async () => {
+      logger.info('[DashboardView] handling global data refresh request', detail)
+      await reloadData()
+    })().finally(() => {
+      globalDataRefreshPromise = null
+    })
+  }
 
   return {
     _benchmarkChartHeight,

@@ -39,6 +39,10 @@ import type {
 } from '@/features/workflow/api/types'
 import { getWorkflowInstanceDetailByBusiness } from '@/features/workflow/api/queries'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
+import {
+  GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+  type GlobalDataRefreshDetail
+} from '@/5-shared/lib/dataFreshness'
 
 export interface IndicatorDistributeViewProps {
   viewingRole?: string
@@ -52,6 +56,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const timeContext = useTimeContextStore()
   const orgStore = useOrgStore()
   const planStore = usePlanStore()
+  let globalDataRefreshPromise: Promise<void> | null = null
 
   // 当前用户部门（优先使用视角切换的部门）
   const currentDept = computed(
@@ -351,6 +356,9 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
   const isBatchDistributing = ref(false)
   const pageBootstrapPromise = ref<Promise<void> | null>(null)
   const refreshDistributionPromise = ref<Promise<void> | null>(null)
+  const copyIndicatorDialogVisible = ref(false)
+  const copySourceCollege = ref('')
+  const copyClearExisting = ref(false)
 
   // 搜索关键词
   const searchKeyword = ref('')
@@ -1826,6 +1834,18 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     return colleges.value.filter(c => c.toLowerCase().includes(keyword))
   })
 
+  const copySourceCollegeOptions = computed(() => {
+    const currentCollege = normalizeDepartmentName(selectedCollege.value)
+    return colleges.value
+      .filter(college => normalizeDepartmentName(college) !== currentCollege)
+      .map(college => ({
+        value: college,
+        label: college,
+        count: getCollegeChildCount(college)
+      }))
+      .filter(option => option.count > 0)
+  })
+
   const distributionRecordCount = computed(() => {
     if (!selectedCollege.value) {
       return 0
@@ -2199,6 +2219,31 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
         block: 'start'
       })
     })
+  }
+
+  const openCopyIndicatorsDialog = () => {
+    if (!selectedCollege.value) {
+      ElMessage.warning('请先选择学院')
+      return
+    }
+    if (!canEditChild.value || currentCollegePlanActionState.value !== 'draft') {
+      ElMessage.warning('当前学院计划不处于可复制指标的草稿状态')
+      return
+    }
+    if (copySourceCollegeOptions.value.length === 0) {
+      ElMessage.warning('当前没有可复制的学院指标数据')
+      return
+    }
+
+    copySourceCollege.value = copySourceCollegeOptions.value[0]?.value || ''
+    copyClearExisting.value = false
+    copyIndicatorDialogVisible.value = true
+  }
+
+  const closeCopyIndicatorsDialog = () => {
+    copyIndicatorDialogVisible.value = false
+    copySourceCollege.value = ''
+    copyClearExisting.value = false
   }
 
   // 取消添加指标
@@ -2602,6 +2647,168 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     }
   }
 
+  const clearLocalDraftRowsForCollege = (college: string) => {
+    Object.entries(newChildIndicators).forEach(([parentId, children]) => {
+      const remainingChildren = children.filter(child => !child.college.includes(college))
+      if (remainingChildren.length === 0) {
+        delete newChildIndicators[parentId]
+        return
+      }
+      newChildIndicators[parentId] = remainingChildren
+    })
+  }
+
+  const cloneSourceMilestonesForCopy = (
+    milestones: StrategicIndicator['milestones'] | undefined,
+    fallbackName: string
+  ): FormMilestone[] => {
+    if (!Array.isArray(milestones) || milestones.length === 0) {
+      return []
+    }
+
+    return milestones.map((milestone, index) => ({
+      id: `copy-ms-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      name: String(milestone.name || fallbackName || `里程碑 ${index + 1}`),
+      targetProgress: Number(milestone.targetProgress ?? 0) || 0,
+      deadline: String(milestone.deadline || '')
+    }))
+  }
+
+  const copyIndicatorsFromCollege = async () => {
+    const targetCollege = selectedCollege.value
+    const sourceCollege = copySourceCollege.value
+
+    if (!targetCollege) {
+      ElMessage.warning('请先选择目标学院')
+      return
+    }
+    if (!sourceCollege) {
+      ElMessage.warning('请选择来源学院')
+      return
+    }
+    if (!canEditChild.value || currentCollegePlanActionState.value !== 'draft') {
+      ElMessage.warning('当前学院计划不处于可复制指标的草稿状态')
+      return
+    }
+
+    const sourceIndicators = getMyCollegeIndicators(sourceCollege)
+    if (sourceIndicators.length === 0) {
+      ElMessage.warning('来源学院当前没有可复制的子指标')
+      return
+    }
+
+    const currentIndicators = getMyCollegeIndicators(targetCollege)
+    if (copyClearExisting.value) {
+      const blockedIndicator = currentIndicators.find(indicator => !canManageChildDraft(indicator))
+      if (blockedIndicator) {
+        ElMessage.warning('当前学院存在已进入流程的指标，不能执行清空复制')
+        return
+      }
+    }
+
+    const loading = ElLoading.service({
+      lock: true,
+      text: '正在复制学院指标...',
+      background: 'rgba(0, 0, 0, 0.45)'
+    })
+
+    try {
+      if (copyClearExisting.value) {
+        cancelAddIndicator()
+        clearLocalDraftRowsForCollege(targetCollege)
+        for (const indicator of currentIndicators) {
+          await strategicStore.deleteIndicator(String(indicator.id))
+        }
+      }
+
+      let copiedCount = 0
+      for (const sourceIndicator of sourceIndicators) {
+        const parentIndicatorId = Number(sourceIndicator.parentIndicatorId ?? NaN)
+        if (!Number.isFinite(parentIndicatorId) || parentIndicatorId <= 0) {
+          logger.warn('[IndicatorDistributeView] skip copying indicator without valid parent', {
+            sourceIndicatorId: sourceIndicator.id
+          })
+          continue
+        }
+
+        const parentIndicator = availableParentIndicators.value.find(
+          indicator => Number(indicator.id) === parentIndicatorId
+        )
+        const ownerOrgId = getOrgIdByDeptName(currentDept.value)
+        const targetOrgId = getOrgIdByDeptName(targetCollege)
+        const indicatorTaskId = Number(
+          parentIndicator
+            ? getIndicatorTaskId(parentIndicator)
+            : getIndicatorTaskId(sourceIndicator)
+        )
+
+        if (
+          !ownerOrgId ||
+          !targetOrgId ||
+          !Number.isFinite(indicatorTaskId) ||
+          indicatorTaskId <= 0
+        ) {
+          logger.warn('[IndicatorDistributeView] skip copying indicator due to missing context', {
+            sourceIndicatorId: sourceIndicator.id,
+            ownerOrgId,
+            targetOrgId,
+            indicatorTaskId
+          })
+          continue
+        }
+
+        const type1 = getIndicatorTypeLabel(sourceIndicator)
+        const weight = Number(sourceIndicator.weight ?? 0)
+        const targetProgress = resolveParentTargetProgress(sourceIndicator)
+        const copiedMilestones = cloneSourceMilestonesForCopy(
+          sourceIndicator.milestones,
+          sourceIndicator.name || '复制指标'
+        )
+
+        const createResp = await indicatorApi.createIndicator({
+          taskId: indicatorTaskId,
+          indicatorDesc: sourceIndicator.name,
+          ownerOrgId,
+          targetOrgId,
+          weightPercent: Number.isFinite(weight) && weight > 0 ? weight : 10,
+          sortOrder: 0,
+          remark: sourceIndicator.remark || '',
+          progress: 0,
+          year: timeContext.currentYear,
+          canWithdraw: false,
+          parentIndicatorId,
+          type: type1
+        })
+
+        if (!createResp.success || !createResp.data?.id) {
+          throw new Error(createResp.message || `复制指标 ${sourceIndicator.name} 失败`)
+        }
+
+        if (copiedMilestones.length > 0) {
+          await persistIndicatorMilestones(Number(createResp.data.id), copiedMilestones, {
+            includeExistingIds: false
+          })
+        }
+
+        copiedCount += 1
+      }
+
+      await refreshDistributionData()
+      closeCopyIndicatorsDialog()
+      ElMessage.success(
+        copyClearExisting.value
+          ? `已清空并复制 ${copiedCount} 个子指标`
+          : `已复制追加 ${copiedCount} 个子指标`
+      )
+    } catch (error) {
+      logger.error('[IndicatorDistributeView] copyIndicatorsFromCollege failed:', error)
+      await refreshDistributionData()
+      ElMessage.error(error instanceof Error ? error.message : '复制学院指标失败')
+    } finally {
+      loading.close()
+    }
+  }
+
   // 判断当前学院是否可以新增指标（没有已下发状态的指标）
   const _canAddIndicator = computed(() => {
     if (!selectedCollege.value) {
@@ -2972,11 +3179,38 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     })().finally(() => {
       pageBootstrapPromise.value = null
     })
+    if (typeof window !== 'undefined') {
+      window.addEventListener(
+        GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+        handleGlobalDataRefreshRequest as EventListener
+      )
+    }
   })
 
   onBeforeUnmount(() => {
     document.removeEventListener('mousedown', handleGlobalMousedown, true)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(
+        GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+        handleGlobalDataRefreshRequest as EventListener
+      )
+    }
   })
+
+  const handleGlobalDataRefreshRequest = (event: Event) => {
+    if (globalDataRefreshPromise) {
+      return
+    }
+
+    const detail = (event as CustomEvent<GlobalDataRefreshDetail>).detail
+    globalDataRefreshPromise = (async () => {
+      logger.info('[IndicatorDistributeView] handling global data refresh request', detail)
+      await waitForPageBootstrap()
+      await refreshDistributionData()
+    })().finally(() => {
+      globalDataRefreshPromise = null
+    })
+  }
 
   watch(
     () => [currentDept.value, timeContext.currentYear, currentDepartmentPlan.value?.id],
@@ -4461,7 +4695,13 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     collegeTableData,
     collegeTotalWeight,
     colleges,
+    closeCopyIndicatorsDialog,
     confirmDepartmentPlanApprovalSubmission,
+    copyClearExisting,
+    copyIndicatorDialogVisible,
+    copyIndicatorsFromCollege,
+    copySourceCollege,
+    copySourceCollegeOptions,
     currentActiveCollegePlan,
     currentApprovalApproverName,
     currentApprovalCandidateNames,
@@ -4580,6 +4820,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     normalizedCurrentDepartmentPlanStatus,
     normalizedSelectedCollegePlanStatus,
     openAddIndicatorForm,
+    openCopyIndicatorsDialog,
     openDistributionApprovalSetupDialog,
     openMilestonesDialog,
     orgStore,

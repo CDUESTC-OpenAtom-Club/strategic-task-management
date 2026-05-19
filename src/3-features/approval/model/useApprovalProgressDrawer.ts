@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ElDrawer,
@@ -19,7 +19,7 @@ import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { getUserById, tryGetUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
-import { notifyApprovalStateRefresh } from '@/features/approval/lib'
+import { APPROVAL_STATE_REFRESH_EVENT, notifyApprovalStateRefresh } from '@/features/approval/lib'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
@@ -2318,11 +2318,21 @@ export function useApprovalProgressDrawer(
   watch(
     () => props.initialPlanWorkflowDetail,
     detail => {
-      if (!props.modelValue || !isRetainableWorkflowDetail(detail)) {
+      if (!props.modelValue) {
         return
       }
 
-      planWorkflowDetail.value = detail ?? null
+      if (isRetainableWorkflowDetail(detail)) {
+        planWorkflowDetail.value = detail ?? null
+        return
+      }
+
+      planWorkflowDetail.value = null
+      if (props.showPlanApprovals) {
+        void loadPlanWorkflowDetail()
+        void loadWorkflowDefinitionPreview()
+        void loadPlanWorkflowHistoryCards()
+      }
     }
   )
 
@@ -2599,3 +2609,29 @@ export function useApprovalProgressDrawer(
     workflowUserAvatarCache
   }
 }
+const handleApprovalStateRefresh = () => {
+  if (!props.modelValue || !props.showPlanApprovals) {
+    return
+  }
+
+  void loadPendingPlanApprovals()
+  void loadPlanWorkflowDetail()
+  void loadWorkflowDefinitionPreview()
+  void loadPlanWorkflowHistoryCards()
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.addEventListener(APPROVAL_STATE_REFRESH_EVENT, handleApprovalStateRefresh)
+})
+
+onUnmounted(() => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.removeEventListener(APPROVAL_STATE_REFRESH_EVENT, handleApprovalStateRefresh)
+})

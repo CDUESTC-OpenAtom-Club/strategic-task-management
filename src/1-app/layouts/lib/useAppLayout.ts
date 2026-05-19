@@ -5,6 +5,11 @@ import { useMessageStore } from '@/features/messages/model/message'
 import { useApprovalStore } from '@/features/approval/model/store'
 import { APPROVAL_STATE_REFRESH_EVENT } from '@/features/approval/lib'
 import { hasAdminConsoleAccess } from '@/shared/lib/permissions/adminConsoleAccess'
+import { requestGlobalDataRefresh } from '@/5-shared/lib/dataFreshness'
+
+const GLOBAL_DATA_REFRESH_INTERVAL_MS = 60 * 1000
+let globalDataRefreshTimer: ReturnType<typeof setInterval> | null = null
+let approvalNotificationRefreshListener: EventListener | null = null
 
 export function useAppLayout() {
   const authStore = useAuthStore()
@@ -28,6 +33,37 @@ export function useAppLayout() {
 
   const handleApprovalStateRefresh = () => {
     void refreshPendingApprovalState()
+    requestGlobalDataRefresh({ source: 'approval-state-refresh', silent: true })
+  }
+
+  const handleWindowFocus = () => {
+    requestGlobalDataRefresh({ source: 'window-focus', silent: true })
+  }
+
+  const handleVisibilityChange = () => {
+    if (typeof document !== 'undefined' && !document.hidden) {
+      requestGlobalDataRefresh({ source: 'visibility-return', silent: true })
+    }
+  }
+
+  const startGlobalDataRefreshTimer = () => {
+    if (globalDataRefreshTimer || typeof window === 'undefined') {
+      return
+    }
+
+    globalDataRefreshTimer = setInterval(() => {
+      if (!authStore.isAuthenticated || document.hidden) {
+        return
+      }
+      requestGlobalDataRefresh({ source: 'heartbeat', silent: true })
+    }, GLOBAL_DATA_REFRESH_INTERVAL_MS)
+  }
+
+  const stopGlobalDataRefreshTimer = () => {
+    if (globalDataRefreshTimer) {
+      clearInterval(globalDataRefreshTimer)
+      globalDataRefreshTimer = null
+    }
   }
 
   onMounted(async () => {
@@ -36,11 +72,20 @@ export function useAppLayout() {
         APPROVAL_STATE_REFRESH_EVENT,
         handleApprovalStateRefresh as EventListener
       )
+      window.addEventListener('focus', handleWindowFocus)
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+
+      approvalNotificationRefreshListener = (() => {
+        requestGlobalDataRefresh({ source: 'approval-notification', silent: false })
+      }) as EventListener
+      window.addEventListener('approval-notification', approvalNotificationRefreshListener)
     }
 
     if (authStore.isAuthenticated) {
       await orgStore.loadDepartments()
     }
+
+    startGlobalDataRefreshTimer()
   })
 
   onUnmounted(() => {
@@ -49,7 +94,14 @@ export function useAppLayout() {
         APPROVAL_STATE_REFRESH_EVENT,
         handleApprovalStateRefresh as EventListener
       )
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (approvalNotificationRefreshListener) {
+        window.removeEventListener('approval-notification', approvalNotificationRefreshListener)
+        approvalNotificationRefreshListener = null
+      }
     }
+    stopGlobalDataRefreshTimer()
   })
 
   watch(
@@ -58,10 +110,15 @@ export function useAppLayout() {
       if (isAuth && !orgStore.loaded) {
         await orgStore.loadDepartments()
         void refreshNotificationState()
+        startGlobalDataRefreshTimer()
       } else if (isAuth && orgStore.loaded && messageStore.messages.length === 0) {
         void refreshNotificationState()
+        startGlobalDataRefreshTimer()
       } else if (isAuth) {
         void refreshPendingApprovalState()
+        startGlobalDataRefreshTimer()
+      } else {
+        stopGlobalDataRefreshTimer()
       }
     },
     { immediate: true }

@@ -55,6 +55,10 @@ import { getPlanStatusDisplay, normalizePlanStatus } from '@/features/task/lib/p
 import { logger } from '@/shared/lib/utils/logger'
 import { apiClient, apiService } from '@/shared/api'
 import { buildQueryKey, invalidateQueries } from '@/shared/lib/utils/cache'
+import {
+  GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+  type GlobalDataRefreshDetail
+} from '@/5-shared/lib/dataFreshness'
 import { resolveMilestoneDisplayState } from '@/shared/lib/utils/milestoneDisplay'
 import { sortMilestonesByProgress } from '@/shared/lib/utils/milestoneSort'
 import {
@@ -133,6 +137,7 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
   const planStore = usePlanStore()
   const orgStore = useOrgStore()
   const indicatorRefreshTick = ref(0)
+  let globalDataRefreshPromise: Promise<void> | null = null
 
   // 内部刷新信号（可通过暴露给子组件，或在 computed 强制依赖它）
   // 注意：不要去 watch 这个值再调用 refresh()，否则会死循环！
@@ -275,6 +280,12 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
 
     await loadCollegePlanDetails()
     restartPlanApprovalPolling()
+    if (typeof window !== 'undefined') {
+      window.addEventListener(
+        GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+        handleGlobalDataRefreshRequest as EventListener
+      )
+    }
   })
 
   onUnmounted(() => {
@@ -287,7 +298,28 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       clearInterval(planApprovalPollTimer)
       planApprovalPollTimer = null
     }
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(
+        GLOBAL_DATA_REFRESH_REQUEST_EVENT,
+        handleGlobalDataRefreshRequest as EventListener
+      )
+    }
   })
+
+  const handleGlobalDataRefreshRequest = (event: Event) => {
+    if (globalDataRefreshPromise) {
+      return
+    }
+
+    const detail = (event as CustomEvent<GlobalDataRefreshDetail>).detail
+    globalDataRefreshPromise = (async () => {
+      logger.info('[IndicatorListView] handling global data refresh request', detail)
+      await refreshIndicatorListAfterMutation()
+    })().finally(() => {
+      globalDataRefreshPromise = null
+    })
+  }
 
   // 使用数据验证器 - 用于验证里程碑数据完整性
   // @requirement 2.4 - Milestone data validation with complete fields
@@ -657,12 +689,10 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       const rawWorkflowStatus = String(currentPlanReportSummary.value?.workflowStatus || '')
         .trim()
         .toUpperCase()
+      const effectiveBackendStatus = rawWorkflowStatus || rawReportStatus
       if (
         pendingPlanReportUiState.value === 'submitted' &&
-        (Boolean(currentPlanReportSummary.value?.canWithdraw) ||
-          ['APPROVED', 'WITHDRAWN', 'CANCELLED', 'REJECTED'].includes(
-            rawWorkflowStatus || rawReportStatus
-          ))
+        ['SUBMITTED', 'PENDING', 'IN_REVIEW', 'APPROVED'].includes(effectiveBackendStatus)
       ) {
         pendingPlanReportUiState.value = null
         writePlanReportUiState(null)
@@ -1040,14 +1070,13 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
   const latestPlanReportSummary = ref<{ id: number } | null>(null)
   const pendingPlanReportUiState = ref<null | 'submitted' | 'withdrawn'>(readPlanReportUiState())
 
+  const SUBMITTED_FALLBACK_STATUSES = ['DRAFT', 'WITHDRAWN', 'CANCELLED', 'REJECTED', 'RETURNED']
+  const WITHDRAWN_FALLBACK_STATUSES = ['SUBMITTED', 'IN_REVIEW', 'PENDING']
+
   const currentPlanReportUiStatus = computed(() => {
     const reportBusinessStatus = String(currentPlanReportSummary.value?.status || '')
       .trim()
       .toUpperCase()
-    if (reportBusinessStatus === 'DRAFT') {
-      return 'DRAFT'
-    }
-
     const rawStatus = String(
       currentPlanWorkflowDetail.value?.status ||
         currentPlanReportSummary.value?.workflowStatus ||
@@ -1059,15 +1088,19 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
 
     if (
       pendingPlanReportUiState.value === 'submitted' &&
-      (!rawStatus || ['DRAFT', 'WITHDRAWN', 'CANCELLED'].includes(rawStatus))
+      (!rawStatus || SUBMITTED_FALLBACK_STATUSES.includes(rawStatus))
     ) {
       return 'SUBMITTED'
     }
 
     if (
       pendingPlanReportUiState.value === 'withdrawn' &&
-      (!rawStatus || ['SUBMITTED', 'IN_REVIEW', 'PENDING'].includes(rawStatus))
+      (!rawStatus || WITHDRAWN_FALLBACK_STATUSES.includes(rawStatus))
     ) {
+      return 'DRAFT'
+    }
+
+    if (reportBusinessStatus === 'DRAFT') {
       return 'DRAFT'
     }
 
@@ -4212,17 +4245,45 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       return
     }
 
+    const isDraftLikeStatus = (value: unknown): boolean => {
+      const normalized = String(value || '')
+        .trim()
+        .toUpperCase()
+      return !normalized || normalized === 'DRAFT'
+    }
+
+    const shouldForceSubmittedFallback = (value: unknown): boolean => {
+      const normalized = String(value || '')
+        .trim()
+        .toUpperCase()
+      return !normalized || SUBMITTED_FALLBACK_STATUSES.includes(normalized)
+    }
+
+    const shouldResetDraftStepContext =
+      target === 'submitted' &&
+      (shouldForceSubmittedFallback(report.status) ||
+        shouldForceSubmittedFallback(report.workflowStatus))
+
     const nextSummary = {
       ...report,
       status:
         target === 'withdrawn'
           ? 'DRAFT'
-          : String(report.status || report.workflowStatus || 'SUBMITTED').toUpperCase(),
+          : shouldForceSubmittedFallback(report.status)
+            ? 'SUBMITTED'
+            : String(report.status || report.workflowStatus || 'SUBMITTED').toUpperCase(),
       workflowStatus:
         target === 'withdrawn'
           ? 'WITHDRAWN'
-          : String(report.workflowStatus || report.status || 'SUBMITTED').toUpperCase(),
-      canWithdraw: target === 'submitted' ? true : false
+          : shouldForceSubmittedFallback(report.workflowStatus)
+            ? 'SUBMITTED'
+            : String(report.workflowStatus || report.status || 'SUBMITTED').toUpperCase(),
+      canWithdraw: target === 'submitted' ? true : false,
+      currentTaskId: shouldResetDraftStepContext ? null : (report.currentTaskId ?? null),
+      currentStepName: shouldResetDraftStepContext ? null : (report.currentStepName ?? null),
+      currentApproverName: shouldResetDraftStepContext
+        ? null
+        : ((report as { currentApproverName?: string | null }).currentApproverName ?? null)
     }
 
     currentPlanReportSummary.value = nextSummary
@@ -4272,6 +4333,11 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
         logger.error('Background refresh failed after optimistic update', e)
       })
     }
+
+    // PlanReport 路径中，旧的 workflowDetail 会短暂保留提交前节点，
+    // 导致页面底部状态继续显示“草稿/待填报人提交审批”直到后台刷新返回。
+    // 先清掉这份旧详情，让 UI 立即回退到刚刚写入的本地摘要状态。
+    currentPlanWorkflowDetail.value = null
 
     if (target === 'withdrawn') {
       currentPlanWorkflowDetail.value = null
@@ -4553,11 +4619,8 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       return
     }
 
-    const pendingRows = indicators.value.filter(r => isApprovalStatus(r, 'PENDING'))
-    const indicatorNames = pendingRows.map(ind => ind.name).join('、')
-
     ElMessageBox.confirm(
-      `确认撤回当前上报审批吗？${indicatorNames ? `\n\n当前涉及指标：${indicatorNames}` : ''}\n\n撤回后本次上报会回到草稿状态，可继续编辑后再提交。`,
+      '确认撤回当前上报审批吗？\n\n撤回后本次上报会回到草稿状态，可继续编辑后再提交。',
       '一键撤回上报审批',
       {
         confirmButtonText: '确定撤回',

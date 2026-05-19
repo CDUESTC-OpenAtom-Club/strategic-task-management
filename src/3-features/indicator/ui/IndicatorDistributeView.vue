@@ -77,7 +77,13 @@ const {
   collegeTableData,
   collegeTotalWeight,
   colleges,
+  closeCopyIndicatorsDialog,
   confirmDepartmentPlanApprovalSubmission,
+  copyClearExisting,
+  copyIndicatorDialogVisible,
+  copyIndicatorsFromCollege,
+  copySourceCollege,
+  copySourceCollegeOptions,
   currentActiveCollegePlan,
   currentApprovalApproverName,
   currentApprovalCandidateNames,
@@ -196,6 +202,7 @@ const {
   normalizedCurrentDepartmentPlanStatus,
   normalizedSelectedCollegePlanStatus,
   openAddIndicatorForm,
+  openCopyIndicatorsDialog,
   openDistributionApprovalSetupDialog,
   openMilestonesDialog,
   orgStore,
@@ -317,12 +324,7 @@ const {
           <!-- 表头 -->
           <div class="card-header">
             <div class="header-left">
-              <span class="card-title">{{ selectedCollege }}</span>
-              <el-tag
-                :type="currentCollegePlanStatusMeta.type"
-                size="default"
-                style="margin-left: 12px"
-              >
+              <el-tag :type="currentCollegePlanStatusMeta.type" size="default">
                 计划状态: {{ currentCollegePlanStatusMeta.label }}
               </el-tag>
               <el-popover
@@ -336,7 +338,7 @@ const {
                   <el-tag
                     :type="approvalFlowStatusMeta.tagType"
                     size="default"
-                    style="margin-left: 12px; cursor: pointer"
+                    style="cursor: pointer"
                     @click.stop="handleOpenApproval"
                   >
                     审批状态: {{ approvalFlowStatusMeta.label }}
@@ -380,11 +382,7 @@ const {
                   <div class="approval-status-card__footer">点击可进入审批中心</div>
                 </div>
               </el-popover>
-              <el-tag
-                :type="collegeTotalWeight === 100 ? 'success' : 'danger'"
-                size="default"
-                style="margin-left: 12px"
-              >
+              <el-tag :type="collegeTotalWeight === 100 ? 'success' : 'danger'" size="default">
                 基础性权重合计: {{ collegeTotalWeight }} / 100
               </el-tag>
             </div>
@@ -396,6 +394,7 @@ const {
                 - 编辑/下发按钮仅在草稿态显示
               -->
               <template v-if="collegeOverallStatus.label === '暂无指标' && canEditChild">
+                <el-button @click="openCopyIndicatorsDialog">复制学院指标</el-button>
                 <el-button type="primary" @click="openAddIndicatorForm">
                   <el-icon><Plus /></el-icon>
                   新增指标
@@ -414,6 +413,7 @@ const {
                   </el-button>
                 </div>
                 <template v-if="currentCollegePlanActionState === 'draft' && canEditChild">
+                  <el-button @click="openCopyIndicatorsDialog">复制学院指标</el-button>
                   <el-button type="primary" @click="openAddIndicatorForm">
                     <el-icon><Plus /></el-icon>
                     新增指标
@@ -1186,6 +1186,44 @@ const {
         >
           确认发起
         </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="copyIndicatorDialogVisible"
+      title="复制学院指标"
+      width="520px"
+      :close-on-click-modal="true"
+      @close="closeCopyIndicatorsDialog"
+    >
+      <div class="copy-indicator-dialog">
+        <p class="copy-indicator-dialog__hint">
+          选择一个已有指标的学院，将其当前填报的子指标复制到
+          <strong>{{ selectedCollege || '当前学院' }}</strong>
+          。默认只追加，不会覆盖当前学院已有指标。
+        </p>
+
+        <el-form label-width="110px">
+          <el-form-item label="来源学院">
+            <el-select v-model="copySourceCollege" placeholder="选择来源学院" style="width: 100%">
+              <el-option
+                v-for="option in copySourceCollegeOptions"
+                :key="option.value"
+                :label="`${option.label}（${option.count} 个子指标）`"
+                :value="option.value"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="复制策略">
+            <el-checkbox v-model="copyClearExisting"> 复制前清空当前学院已有子指标 </el-checkbox>
+          </el-form-item>
+        </el-form>
+      </div>
+
+      <template #footer>
+        <el-button @click="closeCopyIndicatorsDialog">取消</el-button>
+        <el-button type="primary" @click="copyIndicatorsFromCollege">确认复制</el-button>
       </template>
     </el-dialog>
 

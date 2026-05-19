@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   ElCard,
   ElTable,
@@ -95,6 +95,8 @@ const resolveUserListPageData = (response: UserListResponseShape): UserListPageD
 // ============ 状态管理 ============
 const loading = ref(false)
 const users = ref<UserManagementItem[]>([])
+const currentPage = ref(1)
+const pageSize = ref(100)
 
 // 搜索筛选
 const searchKeyword = ref('')
@@ -206,6 +208,13 @@ const filteredUsers = computed(() => {
   }
 
   return result
+})
+
+const paginatedUsers = computed(() => {
+  const page = Math.max(currentPage.value, 1)
+  const size = Math.max(pageSize.value, 1)
+  const start = (page - 1) * size
+  return filteredUsers.value.slice(start, start + size)
 })
 
 const strategicUserCount = computed(
@@ -418,21 +427,47 @@ const passwordFormRules: FormRules = {
 const loadUsers = async () => {
   loading.value = true
   try {
-    // 调用真实API
-    const params = {
-      page: 0,
-      size: 100, // 获取所有用户
+    const baseParams = {
+      size: 100,
       sortBy: 'id',
       sortOrder: 'asc'
     }
-    const response = (await api.get('/auth/users', { params })) as UserListResponseShape
+    const firstResponse = (await api.get('/auth/users', {
+      params: {
+        page: 0,
+        ...baseParams
+      }
+    })) as UserListResponseShape
 
-    const pageData = resolveUserListPageData(response)
-    if (!pageData || !pageData.content) {
+    const firstPageData = resolveUserListPageData(firstResponse)
+    if (!firstPageData || !firstPageData.content) {
       throw new Error('响应数据格式错误')
     }
 
-    users.value = pageData.content.map((user: Record<string, unknown>) => ({
+    const totalPages = Math.max(Number(firstPageData.totalPages ?? 1), 1)
+    const allContent = [...firstPageData.content]
+
+    if (totalPages > 1) {
+      const remainingResponses = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+          api.get('/auth/users', {
+            params: {
+              page: index + 1,
+              ...baseParams
+            }
+          })
+        )
+      )
+
+      remainingResponses.forEach(response => {
+        const pageData = resolveUserListPageData(response as UserListResponseShape)
+        if (pageData?.content?.length) {
+          allContent.push(...pageData.content)
+        }
+      })
+    }
+
+    users.value = allContent.map((user: Record<string, unknown>) => ({
       id:
         typeof user.userId === 'string' || typeof user.userId === 'number'
           ? user.userId
@@ -735,6 +770,25 @@ const handleRefresh = async () => {
   ElMessage.success('刷新成功')
 }
 
+const handlePageChange = async (page: number) => {
+  currentPage.value = page
+}
+
+const handlePageSizeChange = async (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1
+}
+
+watch(
+  () => filteredUsers.value.length,
+  total => {
+    const maxPage = Math.max(Math.ceil(total / Math.max(pageSize.value, 1)), 1)
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage
+    }
+  }
+)
+
 // 重置筛选
 const resetFilter = () => {
   searchKeyword.value = ''
@@ -849,7 +903,7 @@ onMounted(() => {
 
     <!-- 用户列表表格 -->
     <ElCard class="table-card" shadow="never">
-      <ElTable v-loading="loading" :data="filteredUsers" stripe class="user-table">
+      <ElTable v-loading="loading" :data="paginatedUsers" stripe class="user-table">
         <ElTableColumn prop="username" label="用户名" width="160">
           <template #default="{ row }">
             <div class="username-cell">
@@ -953,6 +1007,18 @@ onMounted(() => {
             创建第一个用户
           </ElButton>
         </el-empty>
+      </div>
+
+      <div v-if="filteredUsers.length > 0" class="pagination-wrapper">
+        <el-pagination
+          :current-page="currentPage"
+          :page-size="pageSize"
+          :page-sizes="[50, 100, 200]"
+          :total="filteredUsers.length"
+          layout="total, sizes, prev, pager, next, jumper"
+          @current-change="handlePageChange"
+          @size-change="handlePageSizeChange"
+        />
       </div>
     </ElCard>
 
@@ -1305,6 +1371,12 @@ onMounted(() => {
 
 .empty-state {
   padding: 40px 20px;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
 }
 
 .empty-text {

@@ -46,10 +46,7 @@ export default defineConfig(({ mode }) => {
   })
 
   if (!useMock) {
-    console.log(
-      '🔗 [Proxy Enabled] API requests will be forwarded to:',
-      apiTarget
-    )
+    console.log('🔗 [Proxy Enabled] API requests will be forwarded to:', apiTarget)
   } else {
     console.log('🎭 [Mock Mode] Using local mock data')
   }
@@ -77,11 +74,26 @@ export default defineConfig(({ mode }) => {
     ],
     resolve: {
       alias: [
-        { find: /^@\/app\//, replacement: `${fileURLToPath(new URL('./src/1-app', import.meta.url))}/` },
-        { find: /^@\/features\//, replacement: `${fileURLToPath(new URL('./src/3-features', import.meta.url))}/` },
-        { find: /^@\/entities\//, replacement: `${fileURLToPath(new URL('./src/4-entities', import.meta.url))}/` },
-        { find: /^@\/shared\//, replacement: `${fileURLToPath(new URL('./src/5-shared', import.meta.url))}/` },
-        { find: /^@\/processes\//, replacement: `${fileURLToPath(new URL('./src/6-processes', import.meta.url))}/` },
+        {
+          find: /^@\/app\//,
+          replacement: `${fileURLToPath(new URL('./src/1-app', import.meta.url))}/`
+        },
+        {
+          find: /^@\/features\//,
+          replacement: `${fileURLToPath(new URL('./src/3-features', import.meta.url))}/`
+        },
+        {
+          find: /^@\/entities\//,
+          replacement: `${fileURLToPath(new URL('./src/4-entities', import.meta.url))}/`
+        },
+        {
+          find: /^@\/shared\//,
+          replacement: `${fileURLToPath(new URL('./src/5-shared', import.meta.url))}/`
+        },
+        {
+          find: /^@\/processes\//,
+          replacement: `${fileURLToPath(new URL('./src/6-processes', import.meta.url))}/`
+        },
         { find: /^@\//, replacement: `${fileURLToPath(new URL('./src', import.meta.url))}/` }
       ]
     },
@@ -90,6 +102,7 @@ export default defineConfig(({ mode }) => {
       include: prebundleIncludes
     },
     server: {
+      allowedHosts: ['strategic-tasks.blackevil217.com'],
       port: Number(env.VITE_DEV_SERVER_PORT) || 3500,
       open: env.VITE_DEV_AUTO_OPEN === 'true',
       // 只在非 Mock 模式下配置代理

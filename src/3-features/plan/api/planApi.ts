@@ -1139,6 +1139,18 @@ async function loadPlanReportsByPlanId(planId: number): Promise<PlanReportSimple
   }
 }
 
+function invalidatePlanReportsCache(planId: number | string): void {
+  const normalizedPlanId = Number(planId)
+  if (!Number.isFinite(normalizedPlanId) || normalizedPlanId <= 0) {
+    return
+  }
+
+  const cacheKey = String(normalizedPlanId)
+  planReportsByPlanIdCache.delete(cacheKey)
+  planReportsByPlanIdCacheTime.delete(cacheKey)
+  planReportsByPlanIdInFlight.delete(cacheKey)
+}
+
 function cleanupExpiredPlanReportCacheEntries(now = Date.now()): void {
   for (const [key, cachedAt] of planReportsByPlanIdCacheTime.entries()) {
     if (now - cachedAt < PLAN_REPORTS_CACHE_TTL_MS) {
@@ -2451,6 +2463,7 @@ export const indicatorFillApi = {
     reportOrgId: number,
     reportMonth: string = getCurrentReportMonth()
   ): Promise<PlanReportSimpleResponse> {
+    invalidatePlanReportsCache(planId)
     const currentReport = await this.getCurrentMonthPlanReport(planId, reportOrgId, reportMonth)
     if (!currentReport?.id) {
       throw new Error('当前计划下还没有可提交的上报草稿，请先完成指标填报')
@@ -2479,6 +2492,7 @@ export const indicatorFillApi = {
       throw new Error(response.message || '提交上报失败')
     }
 
+    invalidatePlanReportsCache(planId)
     return loadPlanReportById(response.data.id).catch(() => enrichPlanReportWorkflow(response.data))
   },
 
@@ -2487,6 +2501,7 @@ export const indicatorFillApi = {
     reportOrgId: number,
     reportMonth: string = getCurrentReportMonth()
   ): Promise<PlanReportSimpleResponse> {
+    invalidatePlanReportsCache(planId)
     const currentReport = await this.getCurrentMonthPlanReport(planId, reportOrgId, reportMonth)
     if (!currentReport?.id) {
       throw new Error('当前没有可撤回的上报记录')
@@ -2499,7 +2514,27 @@ export const indicatorFillApi = {
     }
 
     await cancelWorkflow(String(currentReport.workflowInstanceId))
-    return loadPlanReportById(currentReport.id)
+    invalidatePlanReportsCache(planId)
+
+    const startedAt = Date.now()
+    while (Date.now() - startedAt < PLAN_WITHDRAW_TIMEOUT_MS) {
+      const refreshedReport = await loadPlanReportById(currentReport.id)
+      const normalizedStatus = getNormalizedReportStatus(refreshedReport.status)
+
+      if (
+        normalizedStatus === 'DRAFT' ||
+        normalizedStatus === 'REJECTED' ||
+        normalizedStatus === 'WITHDRAWN' ||
+        normalizedStatus === 'CANCELLED'
+      ) {
+        invalidatePlanReportsCache(planId)
+        return refreshedReport
+      }
+
+      await new Promise(resolve => window.setTimeout(resolve, 1000))
+    }
+
+    throw new Error('撤回请求已发送，但上报状态尚未完成回退，请稍后重试')
   }
 }
 

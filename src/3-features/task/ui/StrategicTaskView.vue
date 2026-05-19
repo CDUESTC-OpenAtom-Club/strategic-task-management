@@ -253,6 +253,8 @@ const {
   preservePrefilledTaskBindingOnce,
   primaryApprovalWorkflowEntityId,
   primaryApprovalWorkflowEntityType,
+  secondaryApprovalWorkflowEntityId,
+  secondaryApprovalWorkflowEntityType,
   refreshApprovalWorkflowSummaries,
   refreshCurrentDepartmentView,
   refreshIndicatorWorkflowContext,
@@ -333,7 +335,7 @@ const {
           fill="none"
         />
       </svg>
-      <span class="toggle-hint">{{ selectedDepartment || '全部' }}</span>
+      <span class="toggle-hint">{{ selectedDepartment || functionalDepartments[0] || '' }}</span>
     </div>
 
     <!-- 右侧详情区域 - Excel风格 -->
