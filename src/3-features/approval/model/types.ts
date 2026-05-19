@@ -107,6 +107,36 @@ export interface WorkflowHistoryTarget {
   entityId: number
 }
 
+export interface PlanReportAttachmentItem {
+  id?: number | string | null
+  fileName?: string | null
+  fileSize?: number | null
+  fileType?: string | null
+  url?: string | null
+  uploadedBy?: number | string | null
+  uploadedAt?: string | null
+}
+
+export interface PlanReportIndicatorDetailItem {
+  indicatorId: number
+  progress?: number | null
+  comment?: string | null
+  milestoneNote?: string | null
+  attachments?: PlanReportAttachmentItem[] | null
+}
+
+export interface PlanReportSnapshotSummary {
+  id?: number | string
+  content?: string | null
+  summary?: string | null
+  workflowStatus?: string | null
+  status?: string | null
+  workflowInstanceId?: number | string | null
+  currentTaskId?: number | string | null
+  currentStepName?: string | null
+  indicatorDetails?: PlanReportIndicatorDetailItem[] | null
+}
+
 export interface DistributionApprovalProgressDrawerProps {
   modelValue: boolean
   indicators?: StrategicIndicator[]

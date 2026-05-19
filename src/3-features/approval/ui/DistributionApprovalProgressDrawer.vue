@@ -61,6 +61,16 @@ const {
   currentUserPermissionCodes,
   currentUserRoleCodes,
   detailDialogStatusTag,
+  displayedBusinessAttachmentLabel,
+  displayedBusinessCommentLabel,
+  displayedBusinessEmptyAttachmentText,
+  displayedBusinessEmptyCommentText,
+  displayedBusinessProgressLabel,
+  displayedBusinessSectionSubtitle,
+  displayedBusinessSectionTitle,
+  displayedDistributionIndicatorItems,
+  displayedPlanReportIndicatorItems,
+  displayedPlanReportSummaryComment,
   ensureSubmitterNameLoaded,
   ensureWorkflowRelatedAvatarsLoaded,
   ensureWorkflowUserAvatarLoaded,
@@ -73,6 +83,7 @@ const {
   handleApplyTemplate,
   handleApprovePlanBatch,
   handleClose,
+  handlePlanReportAttachmentOpen,
   handleRejectPlanBatch,
   handleSaveTemplate,
   handleUpdateApprover,
@@ -111,6 +122,7 @@ const {
   pendingPlanApprovals,
   permissionUtil,
   planApprovalsLoading,
+  planDetailContentLoading,
   planDetailDialogVisible,
   planStore,
   planSubmitterName,
@@ -443,7 +455,7 @@ const {
       width="680px"
       class="plan-detail-dialog"
     >
-      <div v-loading="selectedHistoryInstanceDetailLoading" class="plan-detail-content">
+      <div v-loading="planDetailContentLoading" class="plan-detail-content">
         <div class="plan-detail-summary">
           <div class="summary-title">
             {{
@@ -527,6 +539,88 @@ const {
           </div>
         </div>
         <el-empty v-else description="暂无审批实例详情" :image-size="100" />
+
+        <div
+          v-if="
+            displayedPlanReportIndicatorItems.length > 0 ||
+            displayedDistributionIndicatorItems.length > 0 ||
+            displayedPlanReportSummaryComment
+          "
+          class="plan-detail-snapshot"
+        >
+          <div class="summary-title">{{ displayedBusinessSectionTitle }}</div>
+          <div class="summary-subtitle">{{ displayedBusinessSectionSubtitle }}</div>
+
+          <div v-if="displayedPlanReportSummaryComment" class="snapshot-summary-card">
+            <div class="snapshot-section-title">整单说明</div>
+            <div class="snapshot-summary-text">{{ displayedPlanReportSummaryComment }}</div>
+          </div>
+
+          <div class="snapshot-indicator-list">
+            <div
+              v-for="indicator in displayedPlanReportIndicatorItems.length > 0
+                ? displayedPlanReportIndicatorItems
+                : displayedDistributionIndicatorItems"
+              :key="`${indicator.indicatorId || indicator.indicatorName}`"
+              class="snapshot-indicator-card"
+            >
+              <div class="snapshot-indicator-header">
+                <div class="snapshot-indicator-name">{{ indicator.indicatorName }}</div>
+                <el-tag size="small" effect="light">{{ indicator.indicatorType }}</el-tag>
+              </div>
+
+              <div class="snapshot-indicator-grid">
+                <div class="snapshot-field">
+                  <span class="snapshot-field-label">责任部门</span>
+                  <span class="snapshot-field-value">{{ indicator.responsibleDept }}</span>
+                </div>
+                <div class="snapshot-field">
+                  <span class="snapshot-field-label">当前实际进度</span>
+                  <span class="snapshot-field-value">{{ indicator.currentProgress }}</span>
+                </div>
+                <div class="snapshot-field">
+                  <span class="snapshot-field-label">{{ displayedBusinessProgressLabel }}</span>
+                  <span class="snapshot-field-value snapshot-field-value--strong">{{
+                    indicator.submittedProgress
+                  }}</span>
+                </div>
+                <div class="snapshot-field">
+                  <span class="snapshot-field-label">目标值 / 实际值 / 单位</span>
+                  <span class="snapshot-field-value"
+                    >{{ indicator.targetValue }} / {{ indicator.actualValue }} /
+                    {{ indicator.unit }}</span
+                  >
+                </div>
+              </div>
+
+              <div class="snapshot-section">
+                <div class="snapshot-section-title">{{ displayedBusinessCommentLabel }}</div>
+                <div class="snapshot-section-content">
+                  {{ indicator.submittedComment || displayedBusinessEmptyCommentText }}
+                </div>
+              </div>
+
+              <div class="snapshot-section">
+                <div class="snapshot-section-title">{{ displayedBusinessAttachmentLabel }}</div>
+                <div v-if="indicator.attachments.length > 0" class="snapshot-attachment-list">
+                  <el-button
+                    v-for="attachment in indicator.attachments"
+                    :key="`${indicator.indicatorId || indicator.indicatorName}-${attachment.attachmentId || attachment.url}`"
+                    link
+                    type="primary"
+                    class="snapshot-attachment-link"
+                    @click="handlePlanReportAttachmentOpen(attachment)"
+                  >
+                    {{ attachment.name }}
+                  </el-button>
+                </div>
+                <div v-else class="snapshot-section-empty">
+                  {{ displayedBusinessEmptyAttachmentText }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div
           v-if="(selectedHistoryInstanceDetail?.history?.length || planWorkflowHistory.length) > 0"

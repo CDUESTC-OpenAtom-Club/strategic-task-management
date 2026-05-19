@@ -4,6 +4,8 @@ import { approvalApi } from '@/features/task/api/strategicApi'
 import { indicatorFillApi } from '@/features/plan/api/planApi'
 import { tryGetUserById } from '@/features/user/api/query'
 import { notifyApprovalStateRefresh } from '@/features/approval/lib'
+import { apiClient } from '@/shared/api'
+import type { ApiResponse } from '@/shared/types'
 import { logger } from '@/shared/lib/utils/logger'
 import {
   getWorkflowDefinitionPreviewByCode,
@@ -14,7 +16,8 @@ import {
 import type {
   DistributionApprovalProgressDrawerEmit,
   DistributionApprovalProgressDrawerProps,
-  PlanApprovalDetailItem
+  PlanApprovalDetailItem,
+  PlanReportSnapshotSummary
 } from '@/features/approval/model/types'
 import type { ApprovalProgressState } from './useApprovalProgressState'
 
@@ -671,12 +674,46 @@ export function useApprovalProgressWorkflow({
     })
   }
 
+  async function loadPlanReportSnapshotById(reportId?: number | string | null) {
+    const normalizedReportId = Number(reportId ?? NaN)
+    if (!Number.isFinite(normalizedReportId) || normalizedReportId <= 0) {
+      state.selectedPlanReportSnapshot.value = null
+      state.selectedPlanReportSnapshotLoading.value = false
+      return
+    }
+
+    state.selectedPlanReportSnapshot.value = null
+    state.selectedPlanReportSnapshotLoading.value = true
+    try {
+      const response = await apiClient.get<ApiResponse<PlanReportSnapshotSummary>>(
+        `/reports/${normalizedReportId}`
+      )
+
+      if (response.code === 200 && response.data) {
+        state.selectedPlanReportSnapshot.value = response.data
+        return
+      }
+
+      state.selectedPlanReportSnapshot.value = null
+    } catch (error) {
+      state.selectedPlanReportSnapshot.value = null
+      logger.warn('[DistributionApprovalProgressDrawer] 加载审批业务快照失败:', {
+        reportId: normalizedReportId,
+        error
+      })
+    } finally {
+      state.selectedPlanReportSnapshotLoading.value = false
+    }
+  }
+
   async function loadSelectedHistoryInstanceDetail(instanceId?: number | string | null) {
     const normalizedInstanceId = String(instanceId || '').trim()
     if (!normalizedInstanceId) {
       state.selectedHistoryInstanceId.value = null
       state.selectedHistoryInstanceDetail.value = null
       state.selectedHistoryInstanceDetailLoading.value = false
+      state.selectedPlanReportSnapshot.value = null
+      state.selectedPlanReportSnapshotLoading.value = false
       return
     }
 
@@ -685,6 +722,12 @@ export function useApprovalProgressWorkflow({
     if (cachedDetail) {
       state.selectedHistoryInstanceDetail.value = cachedDetail
       state.selectedHistoryInstanceDetailLoading.value = false
+      if (cachedDetail.businessEntityType === 'PLAN_REPORT') {
+        void loadPlanReportSnapshotById(cachedDetail.businessEntityId)
+      } else {
+        state.selectedPlanReportSnapshot.value = null
+        state.selectedPlanReportSnapshotLoading.value = false
+      }
       return
     }
 
@@ -698,6 +741,11 @@ export function useApprovalProgressWorkflow({
         state.historyInstanceDetailCache.value = {
           ...state.historyInstanceDetailCache.value,
           [normalizedInstanceId]: response.data
+        }
+        if (response.data.businessEntityType === 'PLAN_REPORT') {
+          void loadPlanReportSnapshotById(response.data.businessEntityId)
+        } else {
+          state.selectedPlanReportSnapshot.value = null
         }
       }
     } catch (error) {
@@ -731,6 +779,15 @@ export function useApprovalProgressWorkflow({
     state.selectedHistoryInstanceId.value = null
     state.selectedHistoryInstanceDetail.value = null
     state.selectedHistoryInstanceDetailLoading.value = false
+    if (
+      state.hasRelatedPlanReportActiveWorkflow.value &&
+      state.relatedPlanReportSummary.value?.id
+    ) {
+      void loadPlanReportSnapshotById(state.relatedPlanReportSummary.value.id)
+      return
+    }
+    state.selectedPlanReportSnapshot.value = null
+    state.selectedPlanReportSnapshotLoading.value = false
   }
 
   watch(
@@ -758,6 +815,8 @@ export function useApprovalProgressWorkflow({
       } else {
         state.selectedHistoryInstanceId.value = null
         state.selectedHistoryInstanceDetail.value = null
+        state.selectedPlanReportSnapshot.value = null
+        state.selectedPlanReportSnapshotLoading.value = false
       }
     }
   )

@@ -130,6 +130,10 @@
   background: #f8fafc;
 }
 
+.plan-detail-snapshot {
+  margin-top: 16px;
+}
+
 .detail-item-header {
   display: flex;
   justify-content: space-between;
@@ -166,6 +170,113 @@
 .detail-value {
   color: var(--el-text-color-primary);
   word-break: break-all;
+}
+
+.snapshot-summary-card,
+.snapshot-indicator-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.snapshot-summary-card {
+  padding: 14px 16px;
+  margin-top: 12px;
+}
+
+.snapshot-summary-text {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--el-text-color-primary);
+  white-space: pre-wrap;
+}
+
+.snapshot-indicator-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.snapshot-indicator-card {
+  padding: 16px;
+}
+
+.snapshot-indicator-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.snapshot-indicator-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.snapshot-indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin-top: 14px;
+}
+
+.snapshot-field,
+.snapshot-section {
+  min-width: 0;
+}
+
+.snapshot-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.snapshot-field-label,
+.snapshot-section-title {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.snapshot-field-value,
+.snapshot-section-content,
+.snapshot-section-empty {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.snapshot-field-value--strong {
+  font-weight: 600;
+  color: var(--el-color-primary);
+}
+
+.snapshot-section {
+  margin-top: 14px;
+}
+
+.snapshot-section-content {
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+.snapshot-section-empty {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+}
+
+.snapshot-attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+}
+
+.snapshot-attachment-link {
+  padding: 0;
 }
 
 .current-indicator {
@@ -221,6 +332,10 @@
 
 @media (max-width: 768px) {
   .detail-item-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .snapshot-indicator-grid {
     grid-template-columns: 1fr;
   }
 

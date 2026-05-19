@@ -37,10 +37,14 @@ import { usePlanStore } from '@/features/plan/model/store'
 import type {
   DistributionApprovalProgressDrawerEmit,
   DistributionApprovalProgressDrawerProps,
+  PlanReportAttachmentItem,
   PlanApprovalDetailItem,
+  PlanReportIndicatorDetailItem,
+  PlanReportSnapshotSummary,
   WorkflowHistoryTarget
 } from '@/features/approval/model/types'
 import { usePermission } from '@/shared/lib/permissions'
+import { apiClient } from '@/shared/api'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
 import {
@@ -103,14 +107,22 @@ export function useApprovalProgressState(
   const submitterNameCache = ref<Record<string, string>>({})
   const workflowUserAvatarCache = ref<Record<string, string>>({})
   const workflowOrgRoleCandidateCache = ref<Record<string, ApproverCandidateResponse[]>>({})
-  const relatedPlanReportSummary = ref<{
-    id?: number | string
-    workflowStatus?: string | null
-    status?: string | null
-    workflowInstanceId?: number | string | null
-    currentTaskId?: number | string | null
-    currentStepName?: string | null
-  } | null>(null)
+  const previewableAttachmentExtensions = new Set([
+    'pdf',
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'bmp',
+    'webp',
+    'svg',
+    'txt',
+    'md',
+    'json'
+  ])
+  const relatedPlanReportSummary = ref<PlanReportSnapshotSummary | null>(null)
+  const selectedPlanReportSnapshot = ref<PlanReportSnapshotSummary | null>(null)
+  const selectedPlanReportSnapshotLoading = ref(false)
 
   const expectedWorkflowCodes = computed(() => {
     const rawCodes = Array.isArray(props.workflowCode) ? props.workflowCode : [props.workflowCode]
@@ -178,6 +190,59 @@ export function useApprovalProgressState(
       cacheWorkflowUserAvatar(userId, (user as { avatarUrl?: unknown }).avatarUrl)
     } catch (error) {
       logger.warn('[DistributionApprovalProgressDrawer] 用户头像解析失败:', { userId, error })
+    }
+  }
+
+  function getAttachmentExtension(name?: string, url?: string): string {
+    const candidate = String(name || url || '')
+      .split('?')[0]
+      .split('#')[0]
+    const segments = candidate.split('.')
+    return segments.length > 1 ? segments.pop()?.toLowerCase() || '' : ''
+  }
+
+  function openBlobInNewTab(blob: Blob): void {
+    const objectUrl = window.URL.createObjectURL(blob)
+    window.open(objectUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  function triggerBlobDownload(blob: Blob, filename: string): void {
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+  }
+
+  async function handlePlanReportAttachmentOpen(attachment: {
+    name: string
+    url: string
+  }): Promise<void> {
+    try {
+      const targetUrl = normalizeDisplayName(attachment.url)
+      if (!targetUrl) {
+        ElMessage.warning('当前附件暂时无法打开')
+        return
+      }
+
+      const response = await apiClient.getAxiosInstance().get(targetUrl, {
+        responseType: 'blob'
+      })
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+      const extension = getAttachmentExtension(attachment.name, targetUrl)
+
+      if (previewableAttachmentExtensions.has(extension)) {
+        openBlobInNewTab(blob)
+        return
+      }
+
+      triggerBlobDownload(blob, attachment.name || 'download')
+    } catch (error) {
+      logger.error('[DistributionApprovalProgressDrawer] 打开审批附件失败:', error)
+      ElMessage.error('打开附件失败，请稍后重试')
     }
   }
 
@@ -496,17 +561,7 @@ export function useApprovalProgressState(
   })
 
   function hasPlanReportWorkflowContext(
-    summary:
-      | {
-          id?: number | string
-          status?: string | null
-          workflowStatus?: string | null
-          workflowInstanceId?: number | string | null
-          currentTaskId?: number | string | null
-          currentStepName?: string | null
-        }
-      | null
-      | undefined
+    summary: PlanReportSnapshotSummary | null | undefined
   ): boolean {
     if (!summary?.id) {
       return false
@@ -566,6 +621,230 @@ export function useApprovalProgressState(
   const currentDetailWorkflow = computed(
     () => selectedHistoryInstanceDetail.value || planWorkflowDetail.value
   )
+
+  const displayedPlanReportSnapshot = computed<PlanReportSnapshotSummary | null>(() => {
+    if (selectedHistoryInstanceId.value) {
+      return selectedPlanReportSnapshot.value
+    }
+
+    if (hasRelatedPlanReportActiveWorkflow.value && relatedPlanReportSummary.value?.id) {
+      return selectedPlanReportSnapshot.value || relatedPlanReportSummary.value
+    }
+
+    return null
+  })
+
+  const planDetailContentLoading = computed(() => {
+    return selectedHistoryInstanceDetailLoading.value || selectedPlanReportSnapshotLoading.value
+  })
+
+  function formatIndicatorMetricValue(value: unknown): string {
+    if (value === null || value === undefined || value === '') {
+      return '--'
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value)
+    }
+
+    const normalized = String(value).trim()
+    return normalized || '--'
+  }
+
+  function toDisplayAttachmentItems(
+    attachments: PlanReportAttachmentItem[] | null | undefined
+  ): Array<{ name: string; url: string; attachmentId?: number }> {
+    if (!Array.isArray(attachments)) {
+      return []
+    }
+
+    return attachments
+      .map((attachment, index) => {
+        const url = normalizeDisplayName(attachment?.url)
+        if (!url) {
+          return null
+        }
+
+        const attachmentId = Number(attachment?.id ?? NaN)
+        return {
+          name: normalizeDisplayName(attachment?.fileName) || `附件${index + 1}`,
+          url,
+          attachmentId: Number.isFinite(attachmentId) ? attachmentId : undefined
+        }
+      })
+      .filter(
+        (
+          attachment
+        ): attachment is {
+          name: string
+          url: string
+          attachmentId?: number
+        } => Boolean(attachment)
+      )
+  }
+
+  const displayedPlanReportSummaryComment = computed(() => {
+    const snapshot = displayedPlanReportSnapshot.value
+    if (!snapshot) {
+      return ''
+    }
+
+    return normalizeDisplayName(snapshot.content) || normalizeDisplayName(snapshot.summary) || ''
+  })
+
+  const currentDetailFlowCode = computed(() => {
+    return normalizeWorkflowCode(
+      currentDetailWorkflow.value?.flowCode ||
+        currentDetailWorkflow.value?.definitionId ||
+        currentDetailWorkflow.value?.flowName
+    )
+  })
+
+  const displayedBusinessSectionMode = computed<'report' | 'distribution' | 'generic'>(() => {
+    if (selectedHistoryInstanceId.value) {
+      if (displayedPlanReportIndicatorItems.value.length > 0) {
+        return 'report'
+      }
+
+      if (isDistributionFlow(currentDetailFlowCode.value)) {
+        return 'distribution'
+      }
+
+      return 'generic'
+    }
+
+    if (
+      displayedPlanReportIndicatorItems.value.length > 0 ||
+      hasRelatedPlanReportActiveWorkflow.value
+    ) {
+      return 'report'
+    }
+
+    if (isDistributionFlow(currentDetailFlowCode.value) || props.approvalType === 'distribution') {
+      return 'distribution'
+    }
+
+    return 'generic'
+  })
+
+  const displayedBusinessSectionTitle = computed(() => {
+    if (displayedBusinessSectionMode.value === 'report') {
+      return '本次上报内容'
+    }
+
+    if (displayedBusinessSectionMode.value === 'distribution') {
+      return '本次下发内容'
+    }
+
+    return '本次业务内容'
+  })
+
+  const displayedBusinessSectionSubtitle = computed(() => {
+    if (displayedBusinessSectionMode.value === 'report') {
+      return '以下内容为发起审批时提交的业务明细'
+    }
+
+    if (displayedBusinessSectionMode.value === 'distribution') {
+      return '以下内容为本次下发审批对应的指标明细'
+    }
+
+    return '以下内容为本次审批关联的业务明细'
+  })
+
+  const displayedBusinessProgressLabel = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '本次填报进度' : '下发目标进度'
+  })
+
+  const displayedBusinessCommentLabel = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '填报说明' : '下发说明'
+  })
+
+  const displayedBusinessAttachmentLabel = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '提交材料' : '下发材料'
+  })
+
+  const displayedBusinessEmptyCommentText = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '未填写说明' : '本次下发未附带额外说明'
+  })
+
+  const displayedBusinessEmptyAttachmentText = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '未提交附件' : '本次下发未附带额外材料'
+  })
+
+  const displayedDistributionIndicatorItems = computed(() => {
+    if (displayedPlanReportIndicatorItems.value.length > 0) {
+      return []
+    }
+
+    if (
+      !(isDistributionFlow(currentDetailFlowCode.value) || props.approvalType === 'distribution')
+    ) {
+      return []
+    }
+
+    return props.indicators.map((indicator, index) => {
+      const type1 = normalizeDisplayName(indicator.type1)
+      const type2 = normalizeDisplayName(indicator.type2)
+      return {
+        indicatorId: Number(indicator.id ?? NaN) || index,
+        indicatorName: normalizeDisplayName(indicator.name) || `指标${index + 1}`,
+        indicatorType: [type1, type2].filter(Boolean).join(' / ') || '--',
+        responsibleDept:
+          normalizeDisplayName(indicator.responsibleDept) ||
+          normalizeDisplayName(indicator.ownerDept) ||
+          '--',
+        currentProgress: Number.isFinite(Number(indicator.progress))
+          ? `${Number(indicator.progress)}%`
+          : '--',
+        submittedProgress: '--',
+        submittedComment: '',
+        targetValue: formatIndicatorMetricValue(indicator.targetValue),
+        actualValue: formatIndicatorMetricValue(indicator.actualValue),
+        unit: normalizeDisplayName(indicator.unit) || '--',
+        attachments: []
+      }
+    })
+  })
+
+  const displayedPlanReportIndicatorItems = computed(() => {
+    const snapshot = displayedPlanReportSnapshot.value
+    const indicatorDetails = Array.isArray(snapshot?.indicatorDetails)
+      ? snapshot.indicatorDetails
+      : []
+
+    return indicatorDetails.map((detail: PlanReportIndicatorDetailItem, index: number) => {
+      const indicatorId = Number(detail?.indicatorId ?? NaN)
+      const matchedIndicator = props.indicators.find(
+        indicator => Number(indicator.id) === indicatorId
+      )
+      const indicatorName =
+        normalizeDisplayName(matchedIndicator?.name) ||
+        `指标${Number.isFinite(indicatorId) ? ` #${indicatorId}` : index + 1}`
+      const type1 = normalizeDisplayName(matchedIndicator?.type1)
+      const type2 = normalizeDisplayName(matchedIndicator?.type2)
+
+      return {
+        indicatorId: Number.isFinite(indicatorId) ? indicatorId : null,
+        indicatorName,
+        indicatorType: [type1, type2].filter(Boolean).join(' / ') || '--',
+        responsibleDept:
+          normalizeDisplayName(matchedIndicator?.responsibleDept) ||
+          normalizeDisplayName(matchedIndicator?.ownerDept) ||
+          '--',
+        currentProgress: Number.isFinite(Number(matchedIndicator?.progress))
+          ? `${Number(matchedIndicator?.progress)}%`
+          : '--',
+        submittedProgress: Number.isFinite(Number(detail?.progress))
+          ? `${Number(detail?.progress)}%`
+          : '--',
+        submittedComment: normalizeDisplayName(detail?.comment) || '--',
+        targetValue: formatIndicatorMetricValue(matchedIndicator?.targetValue),
+        actualValue: formatIndicatorMetricValue(matchedIndicator?.actualValue),
+        unit: normalizeDisplayName(matchedIndicator?.unit) || '--',
+        attachments: toDisplayAttachmentItems(detail?.attachments)
+      }
+    })
+  })
 
   const hasPlanWorkflowData = computed(() => {
     const workflowInstanceId = Number(
@@ -2440,9 +2719,22 @@ export function useApprovalProgressState(
     detailDialogStatusTag,
     ensureWorkflowTaskScopedCandidatesLoaded,
     expectedWorkflowCodes,
+    displayedPlanReportIndicatorItems,
+    displayedDistributionIndicatorItems,
+    displayedBusinessAttachmentLabel,
+    displayedBusinessCommentLabel,
+    displayedBusinessEmptyAttachmentText,
+    displayedBusinessEmptyCommentText,
+    displayedBusinessProgressLabel,
+    displayedBusinessSectionSubtitle,
+    displayedBusinessSectionTitle,
+    displayedPlanReportSnapshot,
+    displayedPlanReportSummaryComment,
+    formatIndicatorMetricValue,
     getFallbackSubmitterValue,
     getFunctionalStatus,
     getStrategicStatus,
+    handlePlanReportAttachmentOpen,
     handleAddNode,
     handleApplyTemplate,
     handleClose,
@@ -2479,6 +2771,7 @@ export function useApprovalProgressState(
     permissionUtil,
     planApprovalsLoading,
     planDetailDialogVisible,
+    planDetailContentLoading,
     planStore,
     planSubmitterName,
     planWorkflowDetail,
@@ -2510,6 +2803,8 @@ export function useApprovalProgressState(
     selectedHistoryInstanceDetail,
     selectedHistoryInstanceDetailLoading,
     selectedHistoryInstanceId,
+    selectedPlanReportSnapshot,
+    selectedPlanReportSnapshotLoading,
     shouldDisplayWorkflowHistoryItem,
     showArchivedPlanWorkflowEmptyState,
     showCardHistoryEmptyState,
