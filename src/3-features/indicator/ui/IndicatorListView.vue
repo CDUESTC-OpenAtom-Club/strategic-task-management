@@ -1008,6 +1008,8 @@ const {
       :workflow-entity-id="primaryApprovalWorkflowEntityId"
       :secondary-workflow-entity-type="secondaryApprovalWorkflowEntityType"
       :secondary-workflow-entity-id="secondaryApprovalWorkflowEntityId"
+      :plan-report-summary="currentPlanReportSummary"
+      :show-route-button="false"
       history-view-mode="card-only"
       approval-type="submission"
       @refresh="refreshIndicatorListAfterMutation"

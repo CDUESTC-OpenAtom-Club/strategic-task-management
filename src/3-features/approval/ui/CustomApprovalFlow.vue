@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { ElCard, ElSelect, ElOption, ElIcon, ElEmpty, ElMessage } from 'element-plus'
 import { Check, Close, Loading, Clock, Edit } from '@element-plus/icons-vue'
-import type { WorkflowNode } from '@/shared/types'
+import type { WorkflowNode, WorkflowNodeAttachment } from '@/shared/types'
 import AppAvatar from '@/shared/ui/avatar/AppAvatar.vue'
 
 /**
@@ -49,6 +49,8 @@ const emit = defineEmits<{
   (e: 'saveTemplate', templateName: string, steps: ApprovalTemplateStep[]): void
   // 应用模板
   (e: 'applyTemplate', templateId: string): void
+  // 打开提交材料
+  (e: 'openAttachment', attachment: WorkflowNodeAttachment): void
 }>()
 
 // ============ 状态 ============
@@ -327,6 +329,22 @@ const getCandidateSummary = (node: WorkflowNode) => {
               <div v-if="node.comment" class="node-comment">
                 <div class="comment-label">审批意见：</div>
                 <div class="comment-text">{{ node.comment }}</div>
+              </div>
+
+              <div v-if="node.attachments?.length" class="node-comment">
+                <div class="comment-label">提交材料：</div>
+                <div class="attachment-list">
+                  <ElButton
+                    v-for="attachment in node.attachments"
+                    :key="`${node.id}-${attachment.attachmentId || attachment.url}`"
+                    link
+                    type="primary"
+                    class="attachment-link"
+                    @click="emit('openAttachment', attachment)"
+                  >
+                    {{ attachment.name }}
+                  </ElButton>
+                </div>
               </div>
 
               <!-- 编辑审批人选择器 -->
@@ -696,6 +714,17 @@ const getCandidateSummary = (node: WorkflowNode) => {
   font-size: 13px;
   color: var(--el-text-color-regular);
   line-height: 1.5;
+}
+
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.attachment-link {
+  padding: 0;
 }
 
 /* 审批人选择器 */

@@ -26,7 +26,9 @@ const props = withDefaults(defineProps<ApprovalProgressDrawerProps>(), {
   workflowEntityId: undefined,
   secondaryWorkflowEntityType: undefined,
   secondaryWorkflowEntityId: undefined,
-  routeTarget: ''
+  routeTarget: '',
+  showRouteButton: true,
+  planReportSummary: null
 })
 
 const emit = defineEmits<ApprovalProgressDrawerEmit>()
@@ -77,6 +79,7 @@ const {
   handleApplyTemplate,
   handleApprovePlanBatch,
   handleClose,
+  handleWorkflowNodeAttachmentOpen,
   handleRejectPlanBatch,
   handleSaveTemplate,
   handleUpdateApprover,
@@ -182,7 +185,7 @@ const {
         <div class="drawer-title-group">
           <h3 class="drawer-title">{{ showPlanApprovals ? '审批中心' : '审批进度' }}</h3>
           <ElButton
-            v-if="normalizedRouteTarget"
+            v-if="props.showRouteButton && normalizedRouteTarget"
             size="small"
             text
             type="primary"
@@ -373,6 +376,7 @@ const {
               :rejection-reason="rejectionReason"
               :readonly="readonly || hasPlanWorkflowData"
               :approval-type="approvalType"
+              @open-attachment="handleWorkflowNodeAttachmentOpen"
               @add-node="handleAddNode"
               @update-approver="handleUpdateApprover"
               @save-template="handleSaveTemplate"

@@ -14,12 +14,18 @@ import {
   ElLoading
 } from 'element-plus'
 import { Document, User, Timer, Right } from '@element-plus/icons-vue'
-import type { StrategicIndicator, Plan } from '@/shared/types'
-import type { WorkflowNode, ApprovalHistoryItem } from '@/shared/types'
+import type {
+  StrategicIndicator,
+  Plan,
+  WorkflowNode,
+  ApprovalHistoryItem,
+  WorkflowNodeAttachment
+} from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
 import { getUserById, tryGetUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
 import { APPROVAL_STATE_REFRESH_EVENT, notifyApprovalStateRefresh } from '@/features/approval/lib'
+import { resolveApprovalRoute } from '@/features/approval/lib/approvalNotifications'
 import { usePlanStore } from '@/features/plan/model/store'
 import { useTimeContextStore } from '@/shared/lib/timeContext'
 import { logger } from '@/shared/lib/utils/logger'
@@ -30,6 +36,7 @@ import {
   getWorkflowInstanceHistoryByBusiness
 } from '@/features/workflow/api/queries'
 import { canCurrentUserHandleWorkflowApproval } from '@/features/approval/lib'
+import { apiClient } from '@/shared/api'
 import type {
   ApproverCandidateResponse,
   WorkflowDefinitionPreviewResponse,
@@ -68,6 +75,19 @@ interface Props {
   secondaryWorkflowEntityType?: 'PLAN' | 'PLAN_REPORT'
   secondaryWorkflowEntityId?: number | string
   routeTarget?: string
+  showRouteButton?: boolean
+  planReportSummary?: {
+    content?: string | null
+    summary?: string | null
+    indicatorDetails?: Array<{
+      comment?: string | null
+      attachments?: Array<{
+        id?: number | string | null
+        fileName?: string | null
+        url?: string | null
+      }> | null
+    }> | null
+  } | null
 }
 
 export interface ApprovalProgressDrawerEmit {
@@ -96,7 +116,7 @@ export function useApprovalProgressDrawer(
   const INDICATOR_REPORT_APPROVE_PERMISSION = 'BTN_INDICATOR_REPORT_APPROVE'
   const currentUserId = computed(() => Number(authStore.user?.userId ?? authStore.user?.id ?? 0))
   const currentUserOrgId = computed(() => Number(authStore.user?.orgId ?? 0))
-  const normalizedRouteTarget = computed(() => {
+  const routeTargetSeed = computed(() => {
     const value = typeof props.routeTarget === 'string' ? props.routeTarget.trim() : ''
     return value || ''
   })
@@ -119,6 +139,71 @@ export function useApprovalProgressDrawer(
   })
   const submitterNameCache = ref<Record<string, string>>({})
   const workflowUserAvatarCache = ref<Record<string, string>>({})
+  const previewableAttachmentExtensions = new Set([
+    'pdf',
+    'png',
+    'jpg',
+    'jpeg',
+    'gif',
+    'bmp',
+    'webp',
+    'svg',
+    'txt',
+    'md',
+    'json'
+  ])
+
+  function getAttachmentExtension(name?: string, url?: string): string {
+    const candidate = String(name || url || '')
+      .split('?')[0]
+      .split('#')[0]
+    const segments = candidate.split('.')
+    return segments.length > 1 ? segments.pop()?.toLowerCase() || '' : ''
+  }
+
+  function openBlobInNewTab(blob: Blob): void {
+    const objectUrl = window.URL.createObjectURL(blob)
+    window.open(objectUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  function triggerBlobDownload(blob: Blob, filename: string): void {
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
+  }
+
+  async function handleWorkflowNodeAttachmentOpen(
+    attachment: WorkflowNodeAttachment
+  ): Promise<void> {
+    try {
+      const targetUrl = String(attachment.url || '').trim()
+      if (!targetUrl) {
+        ElMessage.warning('当前附件暂时无法打开')
+        return
+      }
+
+      const response = await apiClient.getAxiosInstance().get(targetUrl, {
+        responseType: 'blob'
+      })
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data])
+      const extension = getAttachmentExtension(attachment.name, targetUrl)
+
+      if (previewableAttachmentExtensions.has(extension)) {
+        openBlobInNewTab(blob)
+        return
+      }
+
+      triggerBlobDownload(blob, attachment.name || 'download')
+    } catch (error) {
+      logger.error('[ApprovalProgressDrawer] 打开审批材料失败:', error)
+      ElMessage.error('打开附件失败，请稍后重试')
+    }
+  }
 
   function normalizeDisplayName(value: unknown): string {
     return typeof value === 'string' ? value.trim() : ''
@@ -187,6 +272,63 @@ export function useApprovalProgressDrawer(
     }
     return numericValue
   }
+
+  const routeContextWorkflowDetail = computed<WorkflowInstanceDetailResponse | null>(() => {
+    return selectedHistoryInstanceDetail.value || planWorkflowDetail.value || null
+  })
+
+  const routeContextDepartmentName = computed(() => {
+    const detail = routeContextWorkflowDetail.value
+    const entityType = normalizeWorkflowEntityType(
+      detail?.businessEntityType ??
+        (detail as { entityType?: unknown } | null)?.entityType ??
+        props.workflowEntityType
+    )
+    const sourceOrgName = normalizeDisplayName(detail?.sourceOrgName)
+    const targetOrgName = normalizeDisplayName(detail?.targetOrgName)
+
+    if (entityType === 'PLAN') {
+      return targetOrgName || props.departmentName || sourceOrgName || ''
+    }
+
+    if (entityType === 'PLAN_REPORT') {
+      return sourceOrgName || targetOrgName || props.departmentName || ''
+    }
+
+    return targetOrgName || sourceOrgName || props.departmentName || ''
+  })
+
+  const normalizedRouteTarget = computed(() => {
+    const detail = routeContextWorkflowDetail.value
+    const entityType =
+      normalizeWorkflowEntityType(
+        detail?.businessEntityType ??
+          (detail as { entityType?: unknown } | null)?.entityType ??
+          props.workflowEntityType
+      ) || undefined
+    const entityId =
+      parsePositiveEntityId(
+        detail?.businessEntityId ??
+          (detail as { entityId?: unknown } | null)?.entityId ??
+          detail?.planId ??
+          props.workflowEntityId ??
+          props.plan?.id
+      ) ?? undefined
+    const approvalInstanceId =
+      parsePositiveEntityId(detail?.instanceId ?? props.initialPlanWorkflowDetail?.instanceId) ??
+      undefined
+
+    const resolvedRoute = resolveApprovalRoute({
+      actionUrl: routeTargetSeed.value || null,
+      entityType,
+      entityId,
+      approvalInstanceId,
+      viewerRole: authStore.effectiveRole || authStore.userRole,
+      departmentName: routeContextDepartmentName.value || null
+    })
+
+    return resolvedRoute || routeTargetSeed.value
+  })
 
   function isRetainableWorkflowDetail(
     detail: WorkflowInstanceDetailResponse | null | undefined
@@ -1523,8 +1665,67 @@ export function useApprovalProgressDrawer(
       return []
     }
 
+    const submittedMaterialAttachments = (() => {
+      if (props.workflowEntityType !== 'PLAN_REPORT') {
+        return undefined
+      }
+
+      const detailItems = Array.isArray(props.planReportSummary?.indicatorDetails)
+        ? props.planReportSummary.indicatorDetails
+        : []
+      const deduped = new Map<string, WorkflowNodeAttachment>()
+
+      detailItems.forEach(detail => {
+        if (!Array.isArray(detail.attachments)) {
+          return
+        }
+
+        detail.attachments.forEach((attachment, index) => {
+          const url = String(attachment?.url || '').trim()
+          if (!url) {
+            return
+          }
+
+          const name = String(attachment?.fileName || '').trim() || `附件${index + 1}`
+          const attachmentId = Number(attachment?.id ?? NaN)
+          const dedupeKey = Number.isFinite(attachmentId) ? `id:${attachmentId}` : `url:${url}`
+
+          if (!deduped.has(dedupeKey)) {
+            deduped.set(dedupeKey, {
+              name,
+              url,
+              attachmentId: Number.isFinite(attachmentId) ? attachmentId : undefined
+            })
+          }
+        })
+      })
+
+      return deduped.size > 0 ? Array.from(deduped.values()) : undefined
+    })()
+
+    const submittedReportComment = (() => {
+      const rootComment = normalizeDisplayName(props.planReportSummary?.content)
+      if (rootComment) {
+        return rootComment
+      }
+
+      const summaryComment = normalizeDisplayName(props.planReportSummary?.summary)
+      if (summaryComment) {
+        return summaryComment
+      }
+
+      const detailItems = Array.isArray(props.planReportSummary?.indicatorDetails)
+        ? props.planReportSummary.indicatorDetails
+        : []
+      return (
+        detailItems
+          .map(detail => normalizeDisplayName(detail.comment))
+          .find(comment => Boolean(comment)) || undefined
+      )
+    })()
+
     if (hasPlanWorkflowData.value && props.plan) {
-      return planWorkflowTasks.value.map(task => ({
+      return planWorkflowTasks.value.map((task, index) => ({
         id: String(task.taskId || task.taskKey || task.currentStepName || task.taskName),
         name: resolveWorkflowTaskDisplayName(task),
         status: mapWorkflowTaskStatusToNodeStatus(task),
@@ -1539,12 +1740,22 @@ export function useApprovalProgressDrawer(
             ? new Date(task.createdTime)
             : undefined,
         comment:
-          typeof task.comment === 'string' && task.comment.trim()
-            ? task.comment
-            : String(task.taskId || '') === String(currentPlanTaskId.value || '') &&
-                activePlanWorkflow.value?.canWithdraw
-              ? '当前仍可撤回'
-              : undefined
+          submittedReportComment &&
+          index === 0 &&
+          resolveWorkflowTaskDisplayName(task).includes('提交')
+            ? submittedReportComment
+            : typeof task.comment === 'string' && task.comment.trim()
+              ? task.comment
+              : String(task.taskId || '') === String(currentPlanTaskId.value || '') &&
+                  activePlanWorkflow.value?.canWithdraw
+                ? '当前仍可撤回'
+                : undefined,
+        attachments:
+          submittedMaterialAttachments &&
+          index === 0 &&
+          resolveWorkflowTaskDisplayName(task).includes('提交')
+            ? submittedMaterialAttachments
+            : undefined
       }))
     }
 
@@ -2519,6 +2730,7 @@ export function useApprovalProgressDrawer(
     handleApplyTemplate,
     handleApprovePlanBatch,
     handleClose,
+    handleWorkflowNodeAttachmentOpen,
     handleRejectPlanBatch,
     handleSaveTemplate,
     handleUpdateApprover,

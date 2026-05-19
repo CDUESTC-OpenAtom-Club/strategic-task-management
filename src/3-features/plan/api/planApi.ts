@@ -40,6 +40,7 @@ import { useAuthStore } from '@/features/auth/model/store'
 
 export interface SubmitPlanApprovalPayload {
   workflowCode: string
+  comment?: string
 }
 
 const PLAN_WITHDRAW_TIMEOUT_MS = 90000

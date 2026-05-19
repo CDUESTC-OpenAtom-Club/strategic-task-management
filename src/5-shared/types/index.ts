@@ -425,6 +425,12 @@ export interface AuditLogFilters {
 }
 
 // 审批流程节点
+export interface WorkflowNodeAttachment {
+  name: string
+  url: string
+  attachmentId?: number
+}
+
 export interface WorkflowNode {
   id: string
   name: string
@@ -434,6 +440,7 @@ export interface WorkflowNode {
   operatorAvatar?: string
   operateTime?: Date
   comment?: string
+  attachments?: WorkflowNodeAttachment[]
   approverCandidates?: Array<{
     userId?: number
     username?: string

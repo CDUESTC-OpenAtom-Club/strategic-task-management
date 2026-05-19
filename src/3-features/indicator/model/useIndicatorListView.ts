@@ -1054,6 +1054,8 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
   const approvalWorkflowPreview = ref<WorkflowDefinitionPreviewResponse | null>(null)
   const currentPlanReportSummary = ref<{
     id: number
+    content?: string | null
+    summary?: string | null
     workflowInstanceId?: number | null
     currentTaskId?: number | null
     workflowStatus?: string | null
