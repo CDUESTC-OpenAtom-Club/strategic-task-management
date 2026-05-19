@@ -1171,17 +1171,36 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       return false
     }
 
-    const currentApproverId = Number(
-      currentCollegePlanReportSummary.value?.currentApproverId ??
-        currentActiveCollegePlan.value?.currentApproverId ??
-        0
-    )
-    const currentUserId = Number(authStore.user?.userId ?? authStore.user?.id ?? 0)
-    if (currentApproverId > 0 && currentUserId > 0) {
-      return currentApproverId === currentUserId
-    }
+    const currentStepName = String(
+      currentCollegeWorkflowDetail.value?.currentStepName ||
+        currentCollegePlanReportSummary.value?.currentStepName ||
+        currentActiveCollegePlan.value?.currentStepName ||
+        ''
+    ).trim()
 
-    const expectedRoles = resolveCurrentStepExpectedRoleCodes()
+    const expectedRoles = (() => {
+      if (!currentStepName) {
+        return []
+      }
+
+      if (
+        currentStepName.includes('职能部门审批') ||
+        currentStepName.includes('职能部门终审') ||
+        currentStepName.includes('二级学院审批')
+      ) {
+        return ['ROLE_APPROVER']
+      }
+
+      if (currentStepName.includes('战略发展部')) {
+        return ['ROLE_STRATEGY_DEPT_HEAD']
+      }
+
+      if (currentStepName.includes('分管校领导') || currentStepName.includes('学院院长')) {
+        return ['ROLE_VICE_PRESIDENT']
+      }
+
+      return []
+    })()
     if (expectedRoles.length > 0) {
       const hasExpectedRole = expectedRoles.some(role => currentUserRoleCodes.value.includes(role))
       if (!hasExpectedRole) {
@@ -1189,7 +1208,22 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       }
     }
 
-    const currentOrgId = currentDepartmentOrgId.value
+    const currentTaskId = Number(
+      currentCollegeWorkflowDetail.value?.currentTaskId ??
+        currentCollegePlanReportSummary.value?.currentTaskId ??
+        currentActiveCollegePlan.value?.currentTaskId ??
+        NaN
+    )
+    const currentTask = Array.isArray(currentCollegeWorkflowDetail.value?.tasks)
+      ? currentCollegeWorkflowDetail.value.tasks.find(
+          task => Number(task.taskId ?? NaN) === currentTaskId
+        )
+      : null
+
+    const currentOrgId =
+      Number(currentTask?.approverOrgId ?? NaN) > 0
+        ? Number(currentTask?.approverOrgId)
+        : currentDepartmentOrgId.value
     if (
       currentOrgId != null &&
       Number.isFinite(currentUserOrgId.value) &&
@@ -1483,6 +1517,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       await loadCurrentDepartmentPlanDetails(true)
       await loadCurrentSelectedCollegePlanDetails(true)
       await loadCurrentCollegePlanReportSummary()
+      await preloadCurrentCollegeWorkflowDetail()
       lastEditTime.value = new Date().toLocaleString()
     })()
 

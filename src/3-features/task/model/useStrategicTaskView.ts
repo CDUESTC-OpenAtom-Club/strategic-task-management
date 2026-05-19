@@ -1074,12 +1074,42 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     )
   )
 
+  const shouldPreferCurrentReportWorkflow = computed(() => {
+    const reportWorkflowStatus = String(
+      approvalWorkflowReportSummary.value?.workflowStatus ||
+        approvalWorkflowReportSummary.value?.status ||
+        ''
+    )
+      .trim()
+      .toUpperCase()
+
+    return (
+      hasApprovalWorkflowReportBinding.value &&
+      (['PENDING', 'IN_REVIEW', 'SUBMITTED'].includes(reportWorkflowStatus) ||
+        Boolean(approvalWorkflowReportSummary.value?.currentTaskId) ||
+        Boolean(String(approvalWorkflowReportSummary.value?.currentStepName || '').trim()))
+    )
+  })
+
   // 获取当前选中部门对应的 Plan 状态
   const currentPlanStatus = computed(() => {
     return normalizePlanStatus(currentPlan.value?.status)
   })
 
   const currentApprovalWorkflowStatus = computed(() => {
+    if (shouldPreferCurrentReportWorkflow.value) {
+      return String(
+        approvalWorkflowReportSummary.value?.workflowStatus ||
+          approvalWorkflowReportSummary.value?.status ||
+          preloadedPlanWorkflowDetail.value?.status ||
+          currentPlan.value?.workflowStatus ||
+          currentPlan.value?.status ||
+          ''
+      )
+        .trim()
+        .toUpperCase()
+    }
+
     return String(
       preloadedPlanWorkflowDetail.value?.status ||
         currentPlan.value?.workflowStatus ||
@@ -1093,6 +1123,15 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   })
 
   const currentApprovalStepName = computed(() => {
+    if (shouldPreferCurrentReportWorkflow.value) {
+      return String(
+        approvalWorkflowReportSummary.value?.currentStepName ||
+          preloadedPlanWorkflowDetail.value?.currentStepName ||
+          (currentPlan.value as { currentStepName?: string } | null)?.currentStepName ||
+          ''
+      ).trim()
+    }
+
     return String(
       preloadedPlanWorkflowDetail.value?.currentStepName ||
         (currentPlan.value as { currentStepName?: string } | null)?.currentStepName ||
@@ -1102,6 +1141,17 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   })
 
   const currentApprovalApproverName = computed(() => {
+    if (shouldPreferCurrentReportWorkflow.value) {
+      return String(
+        (approvalWorkflowReportSummary.value as { currentApproverName?: string | null } | null)
+          ?.currentApproverName ||
+          preloadedPlanWorkflowDetail.value?.currentApproverName ||
+          ((currentPlan.value as { currentApproverName?: string } | null)?.currentApproverName ??
+            '') ||
+          ''
+      ).trim()
+    }
+
     return String(
       preloadedPlanWorkflowDetail.value?.currentApproverName ||
         ((currentPlan.value as { currentApproverName?: string } | null)?.currentApproverName ??
@@ -1154,8 +1204,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     if (
       workflowStatus === 'APPROVED' ||
       workflowStatus === 'COMPLETED' ||
-      workflowStatus === 'FINISHED' ||
-      currentPlanStatus.value === 'DISTRIBUTED'
+      workflowStatus === 'FINISHED'
     ) {
       return {
         label: '已完成审批',
@@ -1882,6 +1931,10 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   const primaryApprovalWorkflowEntityType = computed<'PLAN' | 'PLAN_REPORT'>(() => {
     if (routeApprovalEntityType.value) {
       return routeApprovalEntityType.value
+    }
+
+    if (shouldPreferCurrentReportWorkflow.value) {
+      return 'PLAN_REPORT'
     }
 
     const planWorkflowStatus = String(
@@ -3920,13 +3973,28 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   async function preloadApprovalWorkflowDetail(): Promise<void> {
     preloadedPlanWorkflowDetail.value = null
 
+    const reportId = Number(
+      hasApprovalWorkflowReportBinding.value
+        ? (approvalWorkflowReportSummary.value?.id ?? NaN)
+        : NaN
+    )
+    if (shouldPreferCurrentReportWorkflow.value && Number.isFinite(reportId) && reportId > 0) {
+      try {
+        const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
+        if (response.success && response.data) {
+          preloadedPlanWorkflowDetail.value = response.data
+          return
+        }
+      } catch (error) {
+        logger.warn('[StrategicTaskView] 优先预加载 PlanReport 审批详情失败，回退 PLAN:', {
+          reportId,
+          error
+        })
+      }
+    }
+
     const planId = currentPlan.value?.id
     if (planId === undefined || planId === null || planId === '') {
-      const reportId = Number(
-        hasApprovalWorkflowReportBinding.value
-          ? (approvalWorkflowReportSummary.value?.id ?? NaN)
-          : NaN
-      )
       if (Number.isFinite(reportId) && reportId > 0) {
         try {
           const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)
@@ -3974,11 +4042,6 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
       })
     }
 
-    const reportId = Number(
-      hasApprovalWorkflowReportBinding.value
-        ? (approvalWorkflowReportSummary.value?.id ?? NaN)
-        : NaN
-    )
     if (Number.isFinite(reportId) && reportId > 0) {
       try {
         const response = await getWorkflowInstanceDetailByBusiness('PLAN_REPORT', reportId)

@@ -2600,7 +2600,8 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
       showPlanBatchActions.value &&
       (!usePlanReportFlow.value
         ? canWithdrawAny.value
-        : currentPlanReportActionState.value === 'pending_withdrawable')
+        : currentPlanReportActionState.value === 'pending_withdrawable' ||
+          currentPlanReportActionState.value === 'pending_locked')
     )
   })
 
@@ -4427,12 +4428,29 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
         return false
       }
 
-      if (pendingPlanReportUiState.value === 'submitted') {
+      const currentStepName = String(
+        currentPlanWorkflowDetail.value?.currentStepName ||
+          currentPlanReportSummary.value?.currentStepName ||
+          currentPlanDetails.value?.currentStepName ||
+          ''
+      ).trim()
+
+      const isPastSubmitterWithdrawWindow =
+        currentStepName.includes('终审') ||
+        currentStepName.includes('校领导') ||
+        currentStepName.includes('院长') ||
+        currentStepName.includes('战略发展部')
+
+      if (pendingPlanReportUiState.value === 'submitted' && !isPastSubmitterWithdrawWindow) {
         return true
       }
 
       if (typeof currentPlanReportSummary.value?.canWithdraw === 'boolean') {
         return currentPlanReportSummary.value.canWithdraw
+      }
+
+      if (typeof currentPlanWorkflowDetail.value?.canWithdraw === 'boolean') {
+        return currentPlanWorkflowDetail.value.canWithdraw
       }
 
       return ['SUBMITTED', 'PENDING'].includes(currentPlanReportUiStatus.value)
@@ -4475,6 +4493,9 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
     }
     if (!isCurrentUserReporter.value) {
       return '当前登录身份不是填报人，不能撤回'
+    }
+    if (usePlanReportFlow.value && currentPlanReportActionState.value === 'pending_locked') {
+      return '当前流程已进入下一审批节点，填报人不能再撤回'
     }
     return '当前审批进度不支持撤回' // 如果不可撤回，提供原因
   })
