@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import {
   Plus,
   View,
@@ -1989,7 +1989,15 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
 
   const { routeApprovalEntityType, routeApprovalEntityId } = useApprovalRouteAutopen({
     supportedEntityTypes: ['PLAN', 'PLAN_REPORT'] as const,
-    onAutoOpen: () => handleOpenApproval(),
+    onAutoOpen: async () => {
+      await nextTick()
+      const planId = Number(getCurrentPlanId() ?? NaN)
+      if (Number.isFinite(planId) && planId > 0) {
+        await loadCurrentPlanReportSummary(planId)
+        await loadCurrentPlanWorkflowDetail(planId)
+      }
+      approvalDrawerVisible.value = true
+    },
     onClearFailure: error => {
       logger.warn('[IndicatorListView] 清理审批自动打开参数失败:', error)
     }
@@ -2507,6 +2515,7 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
 
   const currentApprovalRuntimeCandidateNames = ref<string[]>([])
   const approvalCandidateCache = new Map<string, string[]>()
+  const canLookupWorkflowUsers = computed(() => authStore.userRole === 'strategic_dept')
 
   const normalizeOrgRoleUserDisplayName = (user: {
     realName?: unknown
@@ -2519,7 +2528,7 @@ export function useIndicatorListView(props: IndicatorListViewProps) {
   async function loadCurrentApprovalRuntimeCandidateNames(): Promise<void> {
     const orgId = resolveExpectedApproverOrgIdForPage()
     const roleCodes = resolveExpectedApproverRoleCodesForPage()
-    if (!orgId || roleCodes.length === 0) {
+    if (!canLookupWorkflowUsers.value || !orgId || roleCodes.length === 0) {
       currentApprovalRuntimeCandidateNames.value = []
       return
     }

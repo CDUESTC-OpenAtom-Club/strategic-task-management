@@ -27,6 +27,10 @@ export interface ApprovalRoutePayload {
   actionUrl?: string | null
   viewerRole?: UserRole | null
   departmentName?: string | null
+  sourceOrgName?: string | null
+  targetOrgName?: string | null
+  currentDepartmentName?: string | null
+  reportOriginType?: 'self-report-upward' | 'college-report-upward' | null
 }
 
 let approvalNotificationListener: EventListener | null = null
@@ -50,6 +54,10 @@ function normalizeApprovalRoute(path?: string | null): string | null {
     return null
   }
   return normalized
+}
+
+function normalizeDepartmentName(value?: string | null): string {
+  return String(value || '').trim()
 }
 
 function normalizeViewerRole(role?: UserRole | string | null): UserRole | null {
@@ -97,6 +105,61 @@ function replaceRoutePath(path: string, nextPathname: string): string {
   return search ? `${nextPathname}?${search}` : nextPathname
 }
 
+function resolvePlanReportOriginType(
+  payload: ApprovalRoutePayload
+): 'self-report-upward' | 'college-report-upward' | null {
+  if (payload.reportOriginType === 'self-report-upward') {
+    return 'self-report-upward'
+  }
+
+  if (payload.reportOriginType === 'college-report-upward') {
+    return 'college-report-upward'
+  }
+
+  const currentDepartmentName = normalizeDepartmentName(payload.currentDepartmentName)
+  const sourceOrgName = normalizeDepartmentName(payload.sourceOrgName)
+  const targetOrgName = normalizeDepartmentName(payload.targetOrgName)
+
+  if (currentDepartmentName && targetOrgName && currentDepartmentName === targetOrgName) {
+    return 'self-report-upward'
+  }
+
+  if (currentDepartmentName && sourceOrgName && currentDepartmentName === sourceOrgName) {
+    return 'college-report-upward'
+  }
+
+  return null
+}
+
+function resolveApprovalDepartmentName(payload: ApprovalRoutePayload): string | null {
+  const entityType = String(payload.entityType || '')
+    .trim()
+    .toUpperCase()
+  const sourceOrgName = normalizeDepartmentName(payload.sourceOrgName)
+  const targetOrgName = normalizeDepartmentName(payload.targetOrgName)
+  const currentDepartmentName = normalizeDepartmentName(payload.currentDepartmentName)
+  const fallbackDepartmentName = normalizeDepartmentName(payload.departmentName)
+
+  if (entityType === 'PLAN_REPORT') {
+    const originType = resolvePlanReportOriginType(payload)
+    if (originType === 'college-report-upward') {
+      return targetOrgName || fallbackDepartmentName || null
+    }
+
+    if (originType === 'self-report-upward') {
+      return targetOrgName || currentDepartmentName || fallbackDepartmentName || null
+    }
+
+    return targetOrgName || sourceOrgName || currentDepartmentName || fallbackDepartmentName || null
+  }
+
+  if (entityType === 'PLAN') {
+    return targetOrgName || sourceOrgName || fallbackDepartmentName || null
+  }
+
+  return targetOrgName || sourceOrgName || fallbackDepartmentName || null
+}
+
 function resolveApprovalWorkbenchRoute(payload: ApprovalRoutePayload): string | null {
   const entityType = String(payload.entityType || '')
     .trim()
@@ -104,8 +167,26 @@ function resolveApprovalWorkbenchRoute(payload: ApprovalRoutePayload): string | 
   const viewerRole = normalizeViewerRole(payload.viewerRole) || resolveCurrentViewerRole()
 
   switch (entityType) {
-    case 'PLAN':
     case 'PLAN_REPORT':
+      if (viewerRole === 'strategic_dept') {
+        return '/strategic-tasks'
+      }
+
+      if (viewerRole === 'secondary_college') {
+        return '/indicators'
+      }
+
+      if (viewerRole === 'functional_dept') {
+        const originType = resolvePlanReportOriginType(payload)
+        if (originType === 'college-report-upward') {
+          return '/distribution'
+        }
+
+        return '/indicators'
+      }
+
+      return '/strategic-tasks'
+    case 'PLAN':
       if (viewerRole === 'functional_dept') {
         return '/distribution'
       }
@@ -135,7 +216,7 @@ function appendApprovalContext(path: string, payload: ApprovalRoutePayload): str
   const entityType = normalizeApprovalQueryValue(payload.entityType)?.toUpperCase()
   const entityId = normalizeApprovalQueryValue(payload.entityId)
   const approvalInstanceId = normalizeApprovalQueryValue(payload.approvalInstanceId)
-  const departmentName = normalizeApprovalQueryValue(payload.departmentName)
+  const departmentName = normalizeApprovalQueryValue(resolveApprovalDepartmentName(payload))
 
   if (entityType) {
     params.set('approvalEntityType', entityType)

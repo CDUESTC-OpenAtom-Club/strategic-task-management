@@ -7,9 +7,11 @@ import { APPROVAL_STATE_REFRESH_EVENT } from '@/features/approval/lib'
 import { hasAdminConsoleAccess } from '@/shared/lib/permissions/adminConsoleAccess'
 import { requestGlobalDataRefresh } from '@/5-shared/lib/dataFreshness'
 
-const GLOBAL_DATA_REFRESH_INTERVAL_MS = 60 * 1000
+const GLOBAL_DATA_REFRESH_INTERVAL_MS = 3 * 60 * 1000
+const ATTENTION_REFRESH_COOLDOWN_MS = 45 * 1000
 let globalDataRefreshTimer: ReturnType<typeof setInterval> | null = null
 let approvalNotificationRefreshListener: EventListener | null = null
+let lastAttentionRefreshAt = 0
 
 export function useAppLayout() {
   const authStore = useAuthStore()
@@ -37,11 +39,21 @@ export function useAppLayout() {
   }
 
   const handleWindowFocus = () => {
+    const now = Date.now()
+    if (now - lastAttentionRefreshAt < ATTENTION_REFRESH_COOLDOWN_MS) {
+      return
+    }
+    lastAttentionRefreshAt = now
     requestGlobalDataRefresh({ source: 'window-focus', silent: true })
   }
 
   const handleVisibilityChange = () => {
     if (typeof document !== 'undefined' && !document.hidden) {
+      const now = Date.now()
+      if (now - lastAttentionRefreshAt < ATTENTION_REFRESH_COOLDOWN_MS) {
+        return
+      }
+      lastAttentionRefreshAt = now
       requestGlobalDataRefresh({ source: 'visibility-return', silent: true })
     }
   }

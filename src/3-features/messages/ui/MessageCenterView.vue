@@ -475,6 +475,35 @@ function resolveApprovalDepartment(message: Message): string {
   return targetOrgName || sourceOrgName || message.senderDisplay || ''
 }
 
+function resolveCurrentViewerDepartment(): string {
+  return String(
+    authStore.effectiveDepartment ||
+      authStore.user?.department ||
+      (authStore.user as { orgName?: string | null } | null)?.orgName ||
+      ''
+  ).trim()
+}
+
+function resolvePlanReportRouteOriginType(
+  sourceOrgName: string,
+  targetOrgName: string
+): 'self-report-upward' | 'college-report-upward' | null {
+  const currentDepartmentName = resolveCurrentViewerDepartment()
+  if (!currentDepartmentName) {
+    return null
+  }
+
+  if (targetOrgName && currentDepartmentName === targetOrgName) {
+    return 'self-report-upward'
+  }
+
+  if (sourceOrgName && currentDepartmentName === sourceOrgName) {
+    return 'college-report-upward'
+  }
+
+  return null
+}
+
 function resolveApprovalRouteDepartment(message: Message): string {
   const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
   const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
@@ -483,7 +512,12 @@ function resolveApprovalRouteDepartment(message: Message): string {
     .toUpperCase()
 
   if (entityType === 'PLAN_REPORT') {
-    return sourceOrgName || targetOrgName || resolvePlanReportCollegeFromBusinessName(message) || ''
+    const originType = resolvePlanReportRouteOriginType(sourceOrgName, targetOrgName)
+    if (originType === 'college-report-upward') {
+      return targetOrgName || resolvePlanReportCollegeFromBusinessName(message) || ''
+    }
+
+    return targetOrgName || sourceOrgName || resolvePlanReportCollegeFromBusinessName(message) || ''
   }
 
   if (entityType === 'PLAN') {
@@ -505,13 +539,24 @@ function resolveApprovalRouteDisplay(message: Message): string {
 }
 
 function buildApprovalPayload(message: Message) {
+  const sourceOrgName = getMessageMetadataValue(message, 'sourceOrgName')
+  const targetOrgName = getMessageMetadataValue(message, 'targetOrgName')
   return {
     approvalInstanceId: message.approvalInstanceId,
     entityType: message.entityType,
     entityId: message.entityId,
     actionUrl: message.actionUrl,
     viewerRole: authStore.effectiveRole || authStore.userRole,
-    departmentName: resolveApprovalRouteDepartment(message)
+    departmentName: resolveApprovalRouteDepartment(message),
+    sourceOrgName: sourceOrgName || null,
+    targetOrgName: targetOrgName || null,
+    currentDepartmentName: resolveCurrentViewerDepartment() || null,
+    reportOriginType:
+      String(message.entityType || '')
+        .trim()
+        .toUpperCase() === 'PLAN_REPORT'
+        ? resolvePlanReportRouteOriginType(sourceOrgName, targetOrgName)
+        : null
   }
 }
 

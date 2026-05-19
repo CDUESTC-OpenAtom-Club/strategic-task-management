@@ -1237,6 +1237,12 @@
   font-size: 14px;
 }
 
+.reported-progress {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  opacity: 0.8;
+}
+
 .progress-suffix {
   font-size: 14px;
   color: var(--text-main);

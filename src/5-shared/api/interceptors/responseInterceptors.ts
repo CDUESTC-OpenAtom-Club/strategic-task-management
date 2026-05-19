@@ -113,15 +113,6 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
       })
     }
 
-    // 调试日志：响应成功
-    logger.debug('✅ [API Response]', {
-      method: response.config.method?.toUpperCase(),
-      url: response.config.url,
-      status: response.status,
-      requestId: response.config.headers['X-Request-ID'],
-      cached: response.status === 304
-    })
-
     // ========================================================================
     // RESPONSE FORMAT NORMALIZATION
     // ========================================================================
@@ -129,8 +120,6 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
 
     // 格式1: { success: true/false, code, data, message }
     if (data && typeof data === 'object' && 'success' in data) {
-      logger.debug('📦 [API Format] 检测到格式1: { success, code, data, message }')
-
       if (data.success) {
         return {
           ...response,
@@ -163,8 +152,6 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
 
     // 格式2: { code, data, message }
     if (data && typeof data === 'object' && 'code' in data) {
-      logger.debug('📦 [API Format] 检测到格式2: { code, data, message }')
-
       const normalizedCode = typeof data.code === 'number' ? data.code : Number(data.code)
       const isBusinessSuccess =
         normalizedCode === 0 ||
@@ -202,7 +189,6 @@ export function createResponseInterceptor(config: ResponseInterceptorConfig = {}
     }
 
     // 格式3: 直接返回数据
-    logger.debug('📦 [API Format] 检测到格式3: 直接返回数据')
     return {
       ...response,
       data: {

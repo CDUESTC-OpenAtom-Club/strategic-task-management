@@ -142,6 +142,10 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   const isDepartmentSwitching = ref(false)
   let departmentSwitchingTimer: ReturnType<typeof setTimeout> | null = null
   let globalDataRefreshPromise: Promise<void> | null = null
+  let lastLightRefreshAt = 0
+  let lightRefreshBackoffUntil = 0
+  const LIGHT_REFRESH_MIN_INTERVAL_MS = 45 * 1000
+  const LIGHT_REFRESH_BACKOFF_MS = 90 * 1000
 
   const isInitialDataLoading = computed(() => {
     return isBootstrappingPage.value || pageTransitionLoading.value
@@ -1201,8 +1205,11 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     )
   })
 
+  const preloadedPlanWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
+  const approvalStatusPopoverLoading = ref(false)
   const currentApprovalRuntimeCandidateNames = ref<string[]>([])
   const approvalCandidateCache = new Map<string, string[]>()
+  const canLookupWorkflowUsers = computed(() => authStore.userRole === 'strategic_dept')
 
   const normalizeOrgRoleUserDisplayName = (user: {
     realName?: unknown
@@ -1215,7 +1222,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
   async function loadCurrentApprovalRuntimeCandidateNames(): Promise<void> {
     const orgId = resolveExpectedApproverOrgIdForCurrentPlan()
     const roleCodes = resolveExpectedApproverRoleCodesForCurrentPlan()
-    if (!orgId || roleCodes.length === 0) {
+    if (!canLookupWorkflowUsers.value || !orgId || roleCodes.length === 0) {
       currentApprovalRuntimeCandidateNames.value = []
       return
     }
@@ -2502,6 +2509,84 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     ])
   }
 
+  const isLightGlobalRefreshSource = (source?: GlobalDataRefreshDetail['source']): boolean => {
+    return source === 'heartbeat' || source === 'window-focus' || source === 'visibility-return'
+  }
+
+  const isApprovalDrivenRefreshSource = (source?: GlobalDataRefreshDetail['source']): boolean => {
+    return source === 'approval-state-refresh' || source === 'approval-notification'
+  }
+
+  const refreshCurrentDepartmentViewLightweight = async (
+    detail: GlobalDataRefreshDetail = {}
+  ): Promise<void> => {
+    const source = detail.source
+    const now = Date.now()
+
+    if (isLightGlobalRefreshSource(source)) {
+      if (now < lightRefreshBackoffUntil) {
+        logger.debug('[StrategicTaskView] skip light refresh during backoff', {
+          source,
+          waitMs: lightRefreshBackoffUntil - now
+        })
+        return
+      }
+
+      if (now - lastLightRefreshAt < LIGHT_REFRESH_MIN_INTERVAL_MS) {
+        logger.debug('[StrategicTaskView] skip duplicated light refresh', {
+          source,
+          elapsedMs: now - lastLightRefreshAt
+        })
+        return
+      }
+    }
+
+    try {
+      await Promise.all([
+        loadPendingPlanApprovalCount(),
+        loadCurrentPlanTaskScope({ force: true }),
+        syncCurrentPlanReportSummaries({ force: true })
+      ])
+
+      if (isApprovalDrivenRefreshSource(source)) {
+        await Promise.allSettled([
+          approvalStore.loadPendingApprovals(),
+          hydrateCurrentPlanWorkflowState({ force: true })
+        ])
+
+        if (
+          currentPlanStatus.value === 'PENDING' ||
+          currentPlanStatus.value === 'DISTRIBUTED' ||
+          hasApprovalWorkflowReportBinding.value
+        ) {
+          await preloadApprovalWorkflowDetail()
+        }
+      }
+
+      if (isLightGlobalRefreshSource(source)) {
+        lastLightRefreshAt = Date.now()
+      }
+    } catch (error) {
+      const errorCode =
+        error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : error && typeof error === 'object' && 'message' in error
+            ? String(error.message)
+            : ''
+
+      if (
+        isLightGlobalRefreshSource(source) &&
+        (errorCode === 'ECONNABORTED' || errorMessage.toLowerCase().includes('timeout'))
+      ) {
+        lightRefreshBackoffUntil = Date.now() + LIGHT_REFRESH_BACKOFF_MS
+      }
+
+      throw error
+    }
+  }
+
   const handleApproveCurrentIndicatorWorkflow = async () => {
     const indicator = currentIndicator.value
     const snapshot = currentIndicatorWorkflow.value
@@ -3536,10 +3621,25 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     const detail = (event as CustomEvent<GlobalDataRefreshDetail>).detail
     globalDataRefreshPromise = (async () => {
       logger.info('[StrategicTaskView] handling global data refresh request', detail)
+      if (
+        isLightGlobalRefreshSource(detail?.source) ||
+        isApprovalDrivenRefreshSource(detail?.source)
+      ) {
+        await refreshCurrentDepartmentViewLightweight(detail)
+        return
+      }
+
       await refreshTaskPageAfterIndicatorMutation()
-    })().finally(() => {
-      globalDataRefreshPromise = null
-    })
+    })()
+      .catch(error => {
+        logger.warn('[StrategicTaskView] global data refresh failed', {
+          detail,
+          error
+        })
+      })()
+      .finally(() => {
+        globalDataRefreshPromise = null
+      })
   }
 
   watch(
@@ -3970,8 +4070,6 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
 
   // 任务审批抽屉状态
   const taskApprovalVisible = ref(false)
-  const preloadedPlanWorkflowDetail = ref<WorkflowInstanceDetailResponse | null>(null)
-  const approvalStatusPopoverLoading = ref(false)
 
   // 专门用于审批抽屉的指标列表（显示当前选中部门的所有指标，一个部门的所有指标状态应该统一）
   const approvalIndicators = computed(() => {
@@ -5090,6 +5188,24 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     return hasPendingProgressValue(indicator) || Boolean(pendingRemark)
   }
 
+  const getDisplayedReportedProgress = (indicator: StrategicIndicator): number | null => {
+    const reportedProgress = Number(
+      (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
+    )
+    if (!Number.isFinite(reportedProgress)) {
+      return null
+    }
+    return reportedProgress
+  }
+
+  const shouldShowReportedProgress = (indicator: StrategicIndicator): boolean => {
+    const reportedProgress = getDisplayedReportedProgress(indicator)
+    if (reportedProgress === null) {
+      return false
+    }
+    return reportedProgress !== Number(indicator.progress || 0)
+  }
+
   return {
     PLAN_APPROVAL_HISTORY_WORKFLOW_CODES,
     PLAN_APPROVAL_SUBMIT_WORKFLOW_CODE,
@@ -5229,6 +5345,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     getPersistedWithdrawableRows,
     getProgressColor,
     getProgressStatus,
+    getDisplayedReportedProgress,
     getPendingProgressDelta,
     getRouteQueryText,
     getSortedMilestones,
@@ -5239,6 +5356,7 @@ export function useStrategicTaskView(props: StrategicTaskViewProps) {
     getTaskTypeForPersistence,
     hasPendingProgressContent,
     hasPendingProgressValue,
+    shouldShowReportedProgress,
     goToNextIndicator,
     goToPrevIndicator,
     groupIndicatorsByTask,

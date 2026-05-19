@@ -118,49 +118,13 @@ export function createRequestInterceptor(config: RequestInterceptorConfig = {}) 
     addRequestId(config)
 
     // 调试日志：请求开始
-    logger.debug('🚀 [API Request]', {
-      method: config.method?.toUpperCase(),
-      url: config.url,
-      params: config.params,
-      data: config.data,
-      requestId: config.headers['X-Request-ID']
-    })
-
     // ========================================================================
     // AUTH TOKEN
     // ========================================================================
     const token = tokenManager.getAccessToken()
 
-    // Debug logging for token checks (development only)
-    if (import.meta.env.DEV) {
-      // eslint-disable-next-line no-console
-      console.log('[RequestInterceptor] Token检查:', {
-        url: config.url,
-        hasStoreToken: false,
-        hasLocalToken: !!token,
-        willUseToken: !!token,
-        tokenPreview: token ? token.substring(0, 20) + '...' : 'null'
-      })
-    }
-
-    logger.debug('🔍 [API Auth] Token检查:', {
-      hasStoreToken: false,
-      hasLocalToken: !!token,
-      willUseToken: !!token,
-      url: config.url
-    })
-
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
-      if (import.meta.env.DEV) {
-        // eslint-disable-next-line no-console
-        console.log('[RequestInterceptor] ✅ Authorization头已添加:', config.url)
-      }
-      logger.debug('🔐 [API Auth] Token已添加', {
-        source: 'tokenManager',
-        tokenPreview: token.substring(0, 20) + '...',
-        url: config.url
-      })
     } else if (!PUBLIC_AUTH_PATHS.some(path => config.url?.includes(path))) {
       logger.warn('[RequestInterceptor] 无Token，未添加Authorization头:', config.url)
       logger.warn('⚠️ [API Auth] 无Token (tokenManager 为空)', {

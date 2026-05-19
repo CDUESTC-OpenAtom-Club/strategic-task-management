@@ -621,6 +621,12 @@
   min-width: 32px;
 }
 
+.reported-progress {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  opacity: 0.8;
+}
+
 /* 目标进度文本 */
 .target-progress-text {
   font-size: 12px;

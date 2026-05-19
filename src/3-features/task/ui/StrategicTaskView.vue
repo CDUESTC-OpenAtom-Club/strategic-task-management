@@ -140,6 +140,7 @@ const {
   generateMonthlyMilestonesInDialog,
   getCategoryColor,
   getCategoryText,
+  getDisplayedReportedProgress,
   getCurrentActorUserId,
   getCurrentCycleId,
   getCurrentScopeIndicatorsForMilestones,
@@ -282,6 +283,7 @@ const {
   selectedDepartment,
   selectedIndicators,
   selectDepartment,
+  shouldShowReportedProgress,
   showAssignmentDialog,
   syncCurrentPlanReportSummaries,
   syncSelectedDepartmentFromRoute,
@@ -743,7 +745,18 @@ const {
                       保存中...
                     </span>
                     <!-- 始终显示已审批通过的进度（progress），不显示待审批进度 -->
-                    <span v-else class="progress-number">{{ row.progress || 0 }}%</span>
+                    <template v-else>
+                      <span class="progress-number">{{ row.progress || 0 }}%</span>
+                      <el-tooltip
+                        v-if="shouldShowReportedProgress(row)"
+                        content="填报进度"
+                        placement="top"
+                      >
+                        <span class="reported-progress"
+                          >({{ getDisplayedReportedProgress(row) }}%)</span
+                        >
+                      </el-tooltip>
+                    </template>
                   </div>
                 </template>
               </el-table-column>

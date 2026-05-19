@@ -144,6 +144,7 @@ const {
   getDeptNameByOrgId,
   getEditingChildName,
   getEditingChildType,
+  getDisplayedReportedProgress,
   getIndicatorTaskId,
   getIndicatorTypeLabel,
   getMilestonesTooltip,
@@ -241,6 +242,7 @@ const {
   selectParentTableData,
   selectedCollege,
   selectedCollegePlanUiStatus,
+  shouldShowReportedProgress,
   sortLocalMilestonesByDate,
   strategicStore,
   syncSelectedCollegeFromApprovalRoute,
@@ -777,6 +779,15 @@ const {
                         >
                           {{ row.child?.progress || 0 }}%
                         </span>
+                        <el-tooltip
+                          v-if="shouldShowReportedProgress(row.child)"
+                          content="填报进度"
+                          placement="top"
+                        >
+                          <span class="reported-progress"
+                            >({{ getDisplayedReportedProgress(row.child) }}%)</span
+                          >
+                        </el-tooltip>
                       </div>
                     </template>
                     <template v-else-if="row.type === 'new-child'">

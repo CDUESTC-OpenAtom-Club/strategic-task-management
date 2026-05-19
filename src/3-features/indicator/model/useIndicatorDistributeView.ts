@@ -1026,6 +1026,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
 
   const currentApprovalRuntimeCandidateNames = ref<string[]>([])
   const approvalCandidateCache = new Map<string, string[]>()
+  const canLookupWorkflowUsers = computed(() => authStore.userRole === 'strategic_dept')
 
   const normalizeOrgRoleUserDisplayName = (user: {
     realName?: unknown
@@ -1077,7 +1078,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
       return []
     })()
 
-    if (!orgId || roleCodes.length === 0) {
+    if (!canLookupWorkflowUsers.value || !orgId || roleCodes.length === 0) {
       currentApprovalRuntimeCandidateNames.value = []
       return
     }
@@ -4173,6 +4174,24 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     return 'draft'
   }
 
+  const getDisplayedReportedProgress = (indicator: StrategicIndicator): number | null => {
+    const reportedProgress = Number(
+      (indicator as StrategicIndicator & { reportProgress?: number | null }).reportProgress
+    )
+    if (!Number.isFinite(reportedProgress)) {
+      return null
+    }
+    return reportedProgress
+  }
+
+  const shouldShowReportedProgress = (indicator: StrategicIndicator): boolean => {
+    const reportedProgress = getDisplayedReportedProgress(indicator)
+    if (reportedProgress === null) {
+      return false
+    }
+    return reportedProgress !== Number(indicator.progress || 0)
+  }
+
   const getChildLifecycleStatus = (child: StrategicIndicator) => {
     const normalizedStatus = String(child.status || '').toUpperCase()
     const statusMap: Record<string, string> = {
@@ -4904,6 +4923,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     getCollegeChildCount,
     getCollegeStatus,
     getDeptNameByOrgId,
+    getDisplayedReportedProgress,
     getEditingChildName,
     getEditingChildType,
     getIndicatorTaskId,
@@ -5005,6 +5025,7 @@ export function useIndicatorDistributeView(props: IndicatorDistributeViewProps) 
     selectedCollegePlanUiStatus,
     sortLocalMilestonesByDate,
     strategicStore,
+    shouldShowReportedProgress,
     syncSelectedCollegeFromApprovalRoute,
     taskApprovalVisible,
     timeContext,

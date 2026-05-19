@@ -55,6 +55,59 @@ export interface ApiClientConfig {
 
 export type RequestOptions = AxiosRequestConfig
 
+function summarizeResponsePayload(payload: unknown): unknown {
+  if (Array.isArray(payload)) {
+    return {
+      kind: 'array',
+      length: payload.length
+    }
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    return payload
+  }
+
+  const record = payload as Record<string, unknown>
+  const summary: Record<string, unknown> = {
+    kind: 'object',
+    keys: Object.keys(record).slice(0, 8)
+  }
+
+  if ('success' in record) {
+    summary.success = record.success
+  }
+  if ('code' in record) {
+    summary.code = record.code
+  }
+  if ('message' in record) {
+    summary.message = record.message
+  }
+  if ('data' in record) {
+    const data = record.data
+    if (Array.isArray(data)) {
+      summary.data = {
+        kind: 'array',
+        length: data.length
+      }
+    } else if (data && typeof data === 'object') {
+      const dataRecord = data as Record<string, unknown>
+      summary.data = {
+        kind: 'object',
+        keys: Object.keys(dataRecord).slice(0, 8),
+        total: dataRecord.total,
+        page: dataRecord.page,
+        pageSize: dataRecord.pageSize,
+        totalPages: dataRecord.totalPages,
+        itemsLength: Array.isArray(dataRecord.items) ? dataRecord.items.length : undefined
+      }
+    } else {
+      summary.data = data
+    }
+  }
+
+  return summary
+}
+
 /**
  * 简化的 API Client 类
  *
@@ -125,8 +178,9 @@ export class ApiClient {
   private setupResponseInterceptor(): void {
     this.client.interceptors.response.use(
       (response: AxiosResponse) => {
-        // 响应日志
-        logger.debug(`[API] Response ${response.status}:`, response.data)
+        logger.debug(`[API] Response ${response.status} ${response.config.url}`, {
+          payload: summarizeResponsePayload(response.data)
+        })
         return response.data
       },
       (error: unknown) => {
