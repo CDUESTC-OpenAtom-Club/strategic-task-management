@@ -43,7 +43,7 @@ jobs:
       - name: Checkout backend OpenAPI baseline
         run: |
           rm -rf ../sism-backend
-          git clone --depth 1 https://github.com/CDUESTC-OpenAtom-Club/sism-backend.git ../sism-backend
+          git clone --depth 1 https://github.com/CDUESTC-OpenAtom-Open-Source-Club/sism-backend.git ../sism-backend
 
       - name: Verify architecture baseline
         run: npm run arch:check
