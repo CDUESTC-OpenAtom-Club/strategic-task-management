@@ -15,6 +15,7 @@ import {
 } from 'element-plus'
 import { Document, User, Timer, Right } from '@element-plus/icons-vue'
 import type {
+  ApiResponse,
   StrategicIndicator,
   Plan,
   WorkflowNode,
@@ -22,6 +23,7 @@ import type {
   WorkflowNodeAttachment
 } from '@/shared/types'
 import { approvalApi } from '@/features/task/api/strategicApi'
+import { getIndicatorById as getIndicatorDetailById } from '@/features/indicator/api/query'
 import { getUserById, getUsersByOrgId, tryGetUserById } from '@/features/user/api/query'
 import { useAuthStore } from '@/features/auth/model/store'
 import { APPROVAL_STATE_REFRESH_EVENT, notifyApprovalStateRefresh } from '@/features/approval/lib'
@@ -90,6 +92,38 @@ interface Props {
   } | null
 }
 
+interface PlanReportAttachmentItem {
+  id?: number | string | null
+  fileName?: string | null
+  fileSize?: number | null
+  fileType?: string | null
+  url?: string | null
+}
+
+interface PlanReportIndicatorDetailItem {
+  indicatorId?: number | string | null
+  progress?: number | string | null
+  comment?: string | null
+  attachments?: PlanReportAttachmentItem[] | null
+}
+
+interface PlanReportSnapshotSummary {
+  id?: number | string
+  content?: string | null
+  summary?: string | null
+  workflowStatus?: string | null
+  status?: string | null
+  workflowInstanceId?: number | string | null
+  currentTaskId?: number | string | null
+  currentStepName?: string | null
+  indicatorDetails?: PlanReportIndicatorDetailItem[] | null
+}
+
+interface HistoricalCardSummary {
+  title: string
+  items: string[]
+}
+
 export interface ApprovalProgressDrawerEmit {
   (e: 'update:modelValue', value: boolean): void
   (e: 'close'): void
@@ -140,6 +174,7 @@ export function useApprovalProgressDrawer(
   const submitterNameCache = ref<Record<string, string>>({})
   const workflowUserAvatarCache = ref<Record<string, string>>({})
   const workflowOrgRoleCandidateCache = ref<Record<string, ApproverCandidateResponse[]>>({})
+  const indicatorDetailCache = ref<Record<string, StrategicIndicator>>({})
   const previewableAttachmentExtensions = new Set([
     'pdf',
     'png',
@@ -547,6 +582,9 @@ export function useApprovalProgressDrawer(
   const selectedHistoryInstanceId = ref<string | null>(null)
   const selectedHistoryInstanceDetail = ref<WorkflowInstanceDetailResponse | null>(null)
   const selectedHistoryInstanceDetailLoading = ref(false)
+  const selectedPlanReportSnapshot = ref<PlanReportSnapshotSummary | null>(null)
+  const selectedPlanReportSnapshotLoading = ref(false)
+  const planReportSnapshotCache = ref<Record<string, PlanReportSnapshotSummary>>({})
   const historyInstanceDetailCache = ref<Record<string, WorkflowInstanceDetailResponse>>({})
 
   function resolvePreferredActiveTab(): 'pending-plans' | 'workflow' | 'history' {
@@ -594,6 +632,60 @@ export function useApprovalProgressDrawer(
           ['pending', 'approved', 'rejected'].includes(i.progressApprovalStatus)
       ) || props.indicators[0]
     )
+  })
+
+  const availablePlanIndicators = computed<StrategicIndicator[]>(() => {
+    const merged = new Map<string, StrategicIndicator>()
+
+    props.indicators.forEach(indicator => {
+      merged.set(String(indicator.id), indicator)
+    })
+
+    const rawPlanIndicators = Array.isArray(
+      (props.plan as { indicators?: unknown[] } | null)?.indicators
+    )
+      ? ((props.plan as { indicators?: unknown[] }).indicators as Record<string, unknown>[])
+      : []
+
+    rawPlanIndicators.forEach((rawIndicator, index) => {
+      if (!rawIndicator || typeof rawIndicator !== 'object') {
+        return
+      }
+
+      const rawId =
+        String(rawIndicator.id ?? rawIndicator.indicatorId ?? '').trim() || `plan-${index + 1}`
+      const existingIndicator = merged.get(rawId)
+
+      merged.set(rawId, {
+        ...(existingIndicator || {}),
+        ...(rawIndicator as unknown as StrategicIndicator),
+        id: rawId,
+        name:
+          normalizeDisplayName(rawIndicator.name ?? rawIndicator.indicatorName) ||
+          normalizeDisplayName(existingIndicator?.name) ||
+          `指标${index + 1}`,
+        type1:
+          normalizeDisplayName(
+            rawIndicator.type1 ?? rawIndicator.indicatorType1 ?? rawIndicator.indicatorType
+          ) || normalizeDisplayName(existingIndicator?.type1),
+        type2:
+          normalizeDisplayName(rawIndicator.type2 ?? rawIndicator.indicatorType2) ||
+          normalizeDisplayName(existingIndicator?.type2),
+        ownerDept:
+          normalizeDisplayName(rawIndicator.ownerDept ?? rawIndicator.ownerOrgName) ||
+          normalizeDisplayName(existingIndicator?.ownerDept),
+        responsibleDept:
+          normalizeDisplayName(
+            rawIndicator.responsibleDept ??
+              rawIndicator.targetOrgName ??
+              rawIndicator.departmentName
+          ) || normalizeDisplayName(existingIndicator?.responsibleDept),
+        unit:
+          normalizeDisplayName(rawIndicator.unit) || normalizeDisplayName(existingIndicator?.unit)
+      } as StrategicIndicator)
+    })
+
+    return Array.from(merged.values())
   })
 
   // 是否有审批数据
@@ -1652,6 +1744,447 @@ export function useApprovalProgressDrawer(
     return latestPlanTask.value ? resolveTaskStatusLabel(latestPlanTask.value) : ''
   })
 
+  const displayedPlanReportSnapshot = computed<PlanReportSnapshotSummary | null>(() => {
+    if (selectedHistoryInstanceId.value) {
+      return selectedPlanReportSnapshot.value
+    }
+
+    if (props.workflowEntityType === 'PLAN_REPORT') {
+      return selectedPlanReportSnapshot.value || props.planReportSummary || null
+    }
+
+    return null
+  })
+
+  const planDetailContentLoading = computed(() => {
+    return selectedHistoryInstanceDetailLoading.value || selectedPlanReportSnapshotLoading.value
+  })
+
+  function formatIndicatorMetricValue(value: unknown): string {
+    if (value === null || value === undefined || value === '') {
+      return '--'
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value)
+    }
+
+    const normalized = String(value).trim()
+    return normalized || '--'
+  }
+
+  function toDisplayAttachmentItems(
+    attachments: PlanReportAttachmentItem[] | null | undefined
+  ): Array<{ name: string; url: string; attachmentId?: number }> {
+    if (!Array.isArray(attachments)) {
+      return []
+    }
+
+    return attachments
+      .map((attachment, index) => {
+        const url = normalizeDisplayName(attachment?.url)
+        if (!url) {
+          return null
+        }
+
+        const attachmentId = Number(attachment?.id ?? NaN)
+        return {
+          name: normalizeDisplayName(attachment?.fileName) || `附件${index + 1}`,
+          url,
+          attachmentId: Number.isFinite(attachmentId) ? attachmentId : undefined
+        }
+      })
+      .filter(
+        (
+          attachment
+        ): attachment is {
+          name: string
+          url: string
+          attachmentId?: number
+        } => Boolean(attachment)
+      )
+  }
+
+  async function ensureIndicatorDetailLoaded(indicatorIdValue: unknown): Promise<void> {
+    const indicatorId = Number(indicatorIdValue ?? NaN)
+    if (!Number.isFinite(indicatorId) || indicatorId <= 0) {
+      return
+    }
+
+    const cacheKey = String(indicatorId)
+    if (indicatorDetailCache.value[cacheKey]) {
+      return
+    }
+
+    try {
+      const indicator = await getIndicatorDetailById(indicatorId)
+      const normalizedIndicator = {
+        ...(indicator as unknown as Record<string, unknown>),
+        id: String(
+          (indicator as { id?: unknown; indicatorId?: unknown }).id ??
+            (indicator as { indicatorId?: unknown }).indicatorId ??
+            indicatorId
+        ),
+        name:
+          normalizeDisplayName(
+            (indicator as { name?: unknown; indicatorName?: unknown }).name ??
+              (indicator as { indicatorName?: unknown }).indicatorName
+          ) || `指标 #${indicatorId}`,
+        type1: normalizeDisplayName(
+          (indicator as { type1?: unknown; indicatorType1?: unknown; indicatorType?: unknown })
+            .type1 ??
+            (indicator as { indicatorType1?: unknown; indicatorType?: unknown }).indicatorType1 ??
+            (indicator as { indicatorType?: unknown }).indicatorType
+        ),
+        type2: normalizeDisplayName(
+          (indicator as { type2?: unknown; indicatorType2?: unknown }).type2 ??
+            (indicator as { indicatorType2?: unknown }).indicatorType2
+        ),
+        responsibleDept: normalizeDisplayName(
+          (
+            indicator as {
+              responsibleDept?: unknown
+              targetOrgName?: unknown
+              ownerOrgName?: unknown
+              departmentName?: unknown
+            }
+          ).responsibleDept ??
+            (indicator as { targetOrgName?: unknown }).targetOrgName ??
+            (indicator as { ownerOrgName?: unknown }).ownerOrgName ??
+            (indicator as { departmentName?: unknown }).departmentName
+        ),
+        ownerDept: normalizeDisplayName(
+          (
+            indicator as {
+              ownerDept?: unknown
+              ownerOrgName?: unknown
+              targetOrgName?: unknown
+            }
+          ).ownerDept ??
+            (indicator as { ownerOrgName?: unknown }).ownerOrgName ??
+            (indicator as { targetOrgName?: unknown }).targetOrgName
+        ),
+        unit: normalizeDisplayName((indicator as { unit?: unknown }).unit)
+      } as StrategicIndicator
+
+      indicatorDetailCache.value = {
+        ...indicatorDetailCache.value,
+        [cacheKey]: normalizedIndicator
+      }
+    } catch (error) {
+      logger.warn('[ApprovalProgressDrawer] 加载历史指标详情失败:', {
+        indicatorId,
+        error
+      })
+    }
+  }
+
+  const currentDetailFlowCode = computed(() => {
+    return normalizeWorkflowCode(
+      currentDetailWorkflow.value?.flowCode ||
+        currentDetailWorkflow.value?.definitionId ||
+        currentDetailWorkflow.value?.flowName
+    )
+  })
+
+  const displayedBusinessSectionMode = computed<'report' | 'distribution' | 'generic'>(() => {
+    if (selectedHistoryInstanceId.value) {
+      if (displayedPlanReportSnapshot.value) {
+        return 'report'
+      }
+
+      if (isDistributionFlow(currentDetailFlowCode.value)) {
+        return 'distribution'
+      }
+
+      return 'generic'
+    }
+
+    if (displayedPlanReportSnapshot.value) {
+      return 'report'
+    }
+
+    if (isDistributionFlow(currentDetailFlowCode.value) || props.approvalType === 'distribution') {
+      return 'distribution'
+    }
+
+    return 'generic'
+  })
+
+  const displayedBusinessSectionTitle = computed(() => {
+    if (displayedBusinessSectionMode.value === 'report') {
+      return '本次上报内容'
+    }
+
+    if (displayedBusinessSectionMode.value === 'distribution') {
+      return '本次下发内容'
+    }
+
+    return '本次业务内容'
+  })
+
+  const displayedBusinessSectionSubtitle = computed(() => {
+    if (displayedBusinessSectionMode.value === 'report') {
+      return '以下内容为发起审批时提交的业务明细'
+    }
+
+    if (displayedBusinessSectionMode.value === 'distribution') {
+      return '以下内容为本次下发审批对应的指标明细'
+    }
+
+    return '以下内容为本次审批关联的业务明细'
+  })
+
+  const displayedBusinessSummaryComment = computed(() => {
+    const snapshot = displayedPlanReportSnapshot.value
+    if (!snapshot) {
+      return ''
+    }
+
+    return normalizeDisplayName(snapshot.content) || normalizeDisplayName(snapshot.summary) || ''
+  })
+
+  const displayedBusinessProgressLabel = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '本次填报进度' : '下发目标进度'
+  })
+
+  const displayedBusinessCommentLabel = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '填报说明' : '下发说明'
+  })
+
+  const displayedBusinessAttachmentLabel = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '提交材料' : '下发材料'
+  })
+
+  const displayedBusinessEmptyCommentText = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '未填写说明' : '本次下发未附带额外说明'
+  })
+
+  const displayedBusinessEmptyAttachmentText = computed(() => {
+    return displayedBusinessSectionMode.value === 'report' ? '未提交附件' : '本次下发未附带额外材料'
+  })
+
+  const displayedDistributionIndicatorItems = computed(() => {
+    if (displayedPlanReportSnapshot.value) {
+      return []
+    }
+
+    if (
+      !(isDistributionFlow(currentDetailFlowCode.value) || props.approvalType === 'distribution')
+    ) {
+      return []
+    }
+
+    return availablePlanIndicators.value.map((indicator, index) => {
+      const cacheKey = String(indicator.id ?? index)
+      const resolvedIndicator = indicatorDetailCache.value[cacheKey] || indicator
+      const type1 =
+        normalizeDisplayName(resolvedIndicator.type1) ||
+        normalizeDisplayName(
+          (resolvedIndicator as { indicatorType?: unknown; indicatorType1?: unknown }).indicatorType
+        ) ||
+        normalizeDisplayName((resolvedIndicator as { indicatorType1?: unknown }).indicatorType1)
+      const type2 = normalizeDisplayName(resolvedIndicator.type2)
+      const currentProgressNumber = Number(resolvedIndicator.progress ?? NaN)
+      const targetValueRaw = (resolvedIndicator as { targetValue?: unknown }).targetValue
+      const actualValueRaw = (resolvedIndicator as { actualValue?: unknown }).actualValue
+      const unitRaw = normalizeDisplayName((resolvedIndicator as { unit?: unknown }).unit)
+      const hasTargetValue =
+        targetValueRaw !== null && targetValueRaw !== undefined && String(targetValueRaw) !== ''
+      const hasActualValue =
+        actualValueRaw !== null && actualValueRaw !== undefined && String(actualValueRaw) !== ''
+      const hasExplicitMetric = hasTargetValue || hasActualValue || Boolean(unitRaw)
+
+      return {
+        indicatorId: Number(resolvedIndicator.id ?? NaN) || index,
+        indicatorName: normalizeDisplayName(resolvedIndicator.name) || `指标${index + 1}`,
+        indicatorType: [type1, type2].filter(Boolean).join(' / ') || '--',
+        responsibleDept:
+          normalizeDisplayName(resolvedIndicator.responsibleDept) ||
+          normalizeDisplayName((resolvedIndicator as { targetOrgName?: unknown }).targetOrgName) ||
+          normalizeDisplayName((resolvedIndicator as { ownerOrgName?: unknown }).ownerOrgName) ||
+          normalizeDisplayName(
+            (resolvedIndicator as { departmentName?: unknown }).departmentName
+          ) ||
+          normalizeDisplayName(resolvedIndicator.ownerDept) ||
+          '--',
+        currentProgress: Number.isFinite(currentProgressNumber)
+          ? `${currentProgressNumber}%`
+          : '--',
+        submittedProgress: '--',
+        submittedComment: '',
+        targetValue: hasExplicitMetric
+          ? formatIndicatorMetricValue(targetValueRaw)
+          : Number.isFinite(currentProgressNumber)
+            ? '100'
+            : '--',
+        actualValue: hasExplicitMetric
+          ? formatIndicatorMetricValue(actualValueRaw)
+          : Number.isFinite(currentProgressNumber)
+            ? String(currentProgressNumber)
+            : '--',
+        unit: hasExplicitMetric
+          ? unitRaw || '--'
+          : Number.isFinite(currentProgressNumber)
+            ? '%'
+            : '--',
+        attachments: []
+      }
+    })
+  })
+
+  const displayedBusinessIndicatorItems = computed(() => {
+    const snapshot = displayedPlanReportSnapshot.value
+    const indicatorDetails = Array.isArray(snapshot?.indicatorDetails)
+      ? snapshot.indicatorDetails
+      : []
+
+    return indicatorDetails.map((detail: PlanReportIndicatorDetailItem, index: number) => {
+      const indicatorId = Number(detail?.indicatorId ?? NaN)
+      const cacheKey = String(indicatorId)
+      const matchedIndicator =
+        indicatorDetailCache.value[cacheKey] ||
+        availablePlanIndicators.value.find(indicator => Number(indicator.id) === indicatorId)
+      const indicatorName =
+        normalizeDisplayName(matchedIndicator?.name) ||
+        `指标${Number.isFinite(indicatorId) ? ` #${indicatorId}` : index + 1}`
+      const type1 = normalizeDisplayName(matchedIndicator?.type1)
+      const type2 = normalizeDisplayName(matchedIndicator?.type2)
+      const currentProgressNumber = Number(matchedIndicator?.progress ?? NaN)
+      const targetValueRaw = (matchedIndicator as { targetValue?: unknown } | undefined)
+        ?.targetValue
+      const actualValueRaw = (matchedIndicator as { actualValue?: unknown } | undefined)
+        ?.actualValue
+      const unitRaw = normalizeDisplayName(
+        (matchedIndicator as { unit?: unknown } | undefined)?.unit
+      )
+      const hasTargetValue =
+        targetValueRaw !== null && targetValueRaw !== undefined && String(targetValueRaw) !== ''
+      const hasActualValue =
+        actualValueRaw !== null && actualValueRaw !== undefined && String(actualValueRaw) !== ''
+      const hasExplicitMetric = hasTargetValue || hasActualValue || Boolean(unitRaw)
+      const inferredTargetValue =
+        Number.isFinite(Number(targetValueRaw)) && hasTargetValue
+          ? formatIndicatorMetricValue(targetValueRaw)
+          : Number.isFinite(currentProgressNumber)
+            ? '100'
+            : '--'
+      const inferredActualValue =
+        Number.isFinite(Number(actualValueRaw)) && hasActualValue
+          ? formatIndicatorMetricValue(actualValueRaw)
+          : Number.isFinite(currentProgressNumber)
+            ? String(currentProgressNumber)
+            : '--'
+      const inferredUnit = unitRaw || (Number.isFinite(currentProgressNumber) ? '%' : '--')
+
+      return {
+        indicatorId: Number.isFinite(indicatorId) ? indicatorId : null,
+        indicatorName,
+        indicatorType: [type1, type2].filter(Boolean).join(' / ') || '--',
+        responsibleDept:
+          normalizeDisplayName(matchedIndicator?.responsibleDept) ||
+          normalizeDisplayName(
+            (
+              matchedIndicator as {
+                ownerDept?: unknown
+                targetOrgName?: unknown
+                ownerOrgName?: unknown
+                departmentName?: unknown
+              } | null
+            )?.targetOrgName
+          ) ||
+          normalizeDisplayName(
+            (
+              matchedIndicator as {
+                ownerDept?: unknown
+                ownerOrgName?: unknown
+                departmentName?: unknown
+              } | null
+            )?.ownerOrgName
+          ) ||
+          normalizeDisplayName(
+            (
+              matchedIndicator as {
+                ownerDept?: unknown
+                departmentName?: unknown
+              } | null
+            )?.departmentName
+          ) ||
+          normalizeDisplayName(matchedIndicator?.ownerDept) ||
+          '--',
+        currentProgress: Number.isFinite(currentProgressNumber)
+          ? `${currentProgressNumber}%`
+          : '--',
+        submittedProgress: Number.isFinite(Number(detail?.progress))
+          ? `${Number(detail?.progress)}%`
+          : '--',
+        submittedComment: normalizeDisplayName(detail?.comment) || '未填写说明',
+        targetValue: hasExplicitMetric
+          ? formatIndicatorMetricValue(targetValueRaw)
+          : inferredTargetValue,
+        actualValue: hasExplicitMetric
+          ? formatIndicatorMetricValue(actualValueRaw)
+          : inferredActualValue,
+        unit: hasExplicitMetric ? unitRaw || '--' : inferredUnit,
+        attachments: toDisplayAttachmentItems(detail?.attachments)
+      }
+    })
+  })
+
+  function resolveHistoricalCardSummary(item: {
+    flowCode?: string
+    entityId?: string | number
+  }): HistoricalCardSummary | null {
+    if (isDistributionFlow(item.flowCode)) {
+      const indicatorNames = props.indicators
+        .map(indicator => normalizeDisplayName(indicator.name))
+        .filter(Boolean)
+
+      if (indicatorNames.length === 0) {
+        return null
+      }
+
+      return {
+        title: '本次下发内容摘要',
+        items: indicatorNames.slice(0, 3)
+      }
+    }
+
+    if (isSubmissionFlow(item.flowCode)) {
+      const entityKey = String(item.entityId || '').trim()
+      const snapshot =
+        (displayedPlanReportSnapshot.value &&
+        entityKey === String(displayedPlanReportSnapshot.value.id || '')
+          ? displayedPlanReportSnapshot.value
+          : null) ||
+        planReportSnapshotCache.value[entityKey] ||
+        null
+
+      const indicatorNames = Array.isArray(snapshot?.indicatorDetails)
+        ? snapshot.indicatorDetails
+            .map(detail => Number(detail?.indicatorId ?? NaN))
+            .map(indicatorId => {
+              const matchedIndicator = props.indicators.find(
+                indicator => Number(indicator.id) === indicatorId
+              )
+              return normalizeDisplayName(matchedIndicator?.name)
+            })
+            .filter(Boolean)
+        : []
+
+      if (indicatorNames.length === 0) {
+        return null
+      }
+
+      return {
+        title: '本次上报内容摘要',
+        items: indicatorNames.slice(0, 3)
+      }
+    }
+
+    return null
+  }
+
   const currentPlanStepDisplay = computed(() => {
     if (
       currentPlanInstanceStatus.value === 'WITHDRAWN' ||
@@ -2622,6 +3155,8 @@ export function useApprovalProgressDrawer(
       selectedHistoryInstanceId.value = null
       selectedHistoryInstanceDetail.value = null
       selectedHistoryInstanceDetailLoading.value = false
+      selectedPlanReportSnapshot.value = null
+      selectedPlanReportSnapshotLoading.value = false
       return
     }
 
@@ -2630,6 +3165,21 @@ export function useApprovalProgressDrawer(
     if (cachedDetail) {
       selectedHistoryInstanceDetail.value = cachedDetail
       selectedHistoryInstanceDetailLoading.value = false
+      const cachedEntityType = String(
+        cachedDetail.businessEntityType ??
+          (cachedDetail as { entityType?: unknown }).entityType ??
+          ''
+      )
+        .trim()
+        .toUpperCase()
+      if (cachedEntityType === 'PLAN_REPORT') {
+        void loadPlanReportSnapshotById(
+          cachedDetail.businessEntityId ?? (cachedDetail as { entityId?: unknown }).entityId
+        )
+      } else {
+        selectedPlanReportSnapshot.value = null
+        selectedPlanReportSnapshotLoading.value = false
+      }
       return
     }
 
@@ -2644,6 +3194,20 @@ export function useApprovalProgressDrawer(
           ...historyInstanceDetailCache.value,
           [normalizedInstanceId]: response.data
         }
+        const responseEntityType = String(
+          response.data.businessEntityType ??
+            (response.data as { entityType?: unknown }).entityType ??
+            ''
+        )
+          .trim()
+          .toUpperCase()
+        if (responseEntityType === 'PLAN_REPORT') {
+          void loadPlanReportSnapshotById(
+            response.data.businessEntityId ?? (response.data as { entityId?: unknown }).entityId
+          )
+        } else {
+          selectedPlanReportSnapshot.value = null
+        }
       }
     } catch (error) {
       selectedHistoryInstanceDetail.value = null
@@ -2653,6 +3217,78 @@ export function useApprovalProgressDrawer(
       })
     } finally {
       selectedHistoryInstanceDetailLoading.value = false
+    }
+  }
+
+  async function loadPlanReportSnapshotById(reportId?: number | string | null) {
+    const normalizedReportId = Number(reportId ?? NaN)
+    if (!Number.isFinite(normalizedReportId) || normalizedReportId <= 0) {
+      selectedPlanReportSnapshot.value = null
+      selectedPlanReportSnapshotLoading.value = false
+      return
+    }
+
+    selectedPlanReportSnapshot.value = null
+    selectedPlanReportSnapshotLoading.value = true
+    try {
+      const response = await apiClient.get<ApiResponse<PlanReportSnapshotSummary>>(
+        `/reports/${normalizedReportId}`
+      )
+
+      if (response.code === 200 && response.data) {
+        selectedPlanReportSnapshot.value = response.data
+        planReportSnapshotCache.value = {
+          ...planReportSnapshotCache.value,
+          [String(normalizedReportId)]: response.data
+        }
+        const indicatorIds = (response.data.indicatorDetails || [])
+          .map(detail => Number(detail?.indicatorId ?? NaN))
+          .filter(indicatorId => Number.isFinite(indicatorId) && indicatorId > 0)
+        indicatorIds.forEach(indicatorId => {
+          void ensureIndicatorDetailLoaded(indicatorId)
+        })
+        return
+      }
+
+      selectedPlanReportSnapshot.value = null
+    } catch (error) {
+      selectedPlanReportSnapshot.value = null
+      logger.warn('[ApprovalProgressDrawer] 加载审批业务快照失败:', {
+        reportId: normalizedReportId,
+        error
+      })
+    } finally {
+      selectedPlanReportSnapshotLoading.value = false
+    }
+  }
+
+  async function prefetchPlanReportSnapshot(reportId?: number | string | null): Promise<void> {
+    const normalizedReportId = Number(reportId ?? NaN)
+    if (!Number.isFinite(normalizedReportId) || normalizedReportId <= 0) {
+      return
+    }
+
+    const cacheKey = String(normalizedReportId)
+    if (planReportSnapshotCache.value[cacheKey]) {
+      return
+    }
+
+    try {
+      const response = await apiClient.get<ApiResponse<PlanReportSnapshotSummary>>(
+        `/reports/${normalizedReportId}`
+      )
+
+      if (response.code === 200 && response.data) {
+        planReportSnapshotCache.value = {
+          ...planReportSnapshotCache.value,
+          [cacheKey]: response.data
+        }
+      }
+    } catch (error) {
+      logger.warn('[ApprovalProgressDrawer] 预取历史审批摘要失败:', {
+        reportId: normalizedReportId,
+        error
+      })
     }
   }
 
@@ -2676,6 +3312,12 @@ export function useApprovalProgressDrawer(
     selectedHistoryInstanceId.value = null
     selectedHistoryInstanceDetail.value = null
     selectedHistoryInstanceDetailLoading.value = false
+    if (props.workflowEntityType === 'PLAN_REPORT' && props.workflowEntityId) {
+      void loadPlanReportSnapshotById(props.workflowEntityId)
+      return
+    }
+    selectedPlanReportSnapshot.value = null
+    selectedPlanReportSnapshotLoading.value = false
   }
 
   async function navigateToRouteTarget() {
@@ -2833,6 +3475,8 @@ export function useApprovalProgressDrawer(
       } else {
         selectedHistoryInstanceId.value = null
         selectedHistoryInstanceDetail.value = null
+        selectedPlanReportSnapshot.value = null
+        selectedPlanReportSnapshotLoading.value = false
       }
     }
   )
@@ -2895,6 +3539,78 @@ export function useApprovalProgressDrawer(
         return
       }
       void ensureWorkflowRelatedAvatarsLoaded()
+    },
+    { immediate: true }
+  )
+
+  watch(
+    () =>
+      (displayedPlanReportSnapshot.value?.indicatorDetails || [])
+        .map(detail => Number(detail?.indicatorId ?? NaN))
+        .filter(indicatorId => Number.isFinite(indicatorId) && indicatorId > 0)
+        .join('|'),
+    indicatorIdsKey => {
+      if (!props.modelValue || !indicatorIdsKey) {
+        return
+      }
+
+      const indicatorIds = indicatorIdsKey
+        .split('|')
+        .map(value => Number(value))
+        .filter(indicatorId => Number.isFinite(indicatorId) && indicatorId > 0)
+
+      indicatorIds.forEach(indicatorId => {
+        void ensureIndicatorDetailLoaded(indicatorId)
+      })
+    },
+    { immediate: true }
+  )
+
+  watch(
+    () =>
+      displayedBusinessSectionMode.value === 'distribution'
+        ? availablePlanIndicators.value
+            .map(indicator => Number(indicator.id ?? NaN))
+            .filter(indicatorId => Number.isFinite(indicatorId) && indicatorId > 0)
+            .join('|')
+        : '',
+    indicatorIdsKey => {
+      if (!props.modelValue || !indicatorIdsKey) {
+        return
+      }
+
+      const indicatorIds = indicatorIdsKey
+        .split('|')
+        .map(value => Number(value))
+        .filter(indicatorId => Number.isFinite(indicatorId) && indicatorId > 0)
+
+      indicatorIds.forEach(indicatorId => {
+        void ensureIndicatorDetailLoaded(indicatorId)
+      })
+    },
+    { immediate: true }
+  )
+
+  watch(
+    () =>
+      historicalPlanApprovalItems.value
+        .filter(item => isSubmissionFlow(item.flowCode))
+        .map(item => Number(item.entityId ?? NaN))
+        .filter(reportId => Number.isFinite(reportId) && reportId > 0)
+        .join('|'),
+    reportIdsKey => {
+      if (!props.modelValue || !reportIdsKey) {
+        return
+      }
+
+      const reportIds = reportIdsKey
+        .split('|')
+        .map(value => Number(value))
+        .filter(reportId => Number.isFinite(reportId) && reportId > 0)
+
+      reportIds.forEach(reportId => {
+        void prefetchPlanReportSnapshot(reportId)
+      })
     },
     { immediate: true }
   )
@@ -3007,6 +3723,16 @@ export function useApprovalProgressDrawer(
     ensureWorkflowRelatedAvatarsLoaded,
     ensureWorkflowUserAvatarLoaded,
     expectedWorkflowCodes,
+    displayedBusinessAttachmentLabel,
+    displayedBusinessCommentLabel,
+    displayedBusinessEmptyAttachmentText,
+    displayedBusinessEmptyCommentText,
+    displayedBusinessIndicatorItems,
+    displayedBusinessProgressLabel,
+    displayedBusinessSectionSubtitle,
+    displayedBusinessSectionTitle,
+    displayedBusinessSummaryComment,
+    displayedDistributionIndicatorItems,
     formatTime,
     getFallbackSubmitterValue,
     getFunctionalStatus,
@@ -3059,6 +3785,7 @@ export function useApprovalProgressDrawer(
     parsePositiveUserId,
     pendingCount,
     pendingPlanApprovals,
+    planDetailContentLoading,
     planApprovalsLoading,
     planDetailDialogVisible,
     planStore,
@@ -3078,6 +3805,7 @@ export function useApprovalProgressDrawer(
     resolveCandidateDisplayName,
     resolveExpectedApproverOrgId,
     resolveExpectedApproverRoleCodes,
+    resolveHistoricalCardSummary,
     resolveHistoryStatusTag,
     resolvePreferredActiveTab,
     resolveSourceDepartmentDisplayName,
@@ -3094,6 +3822,8 @@ export function useApprovalProgressDrawer(
     selectedHistoryInstanceDetail,
     selectedHistoryInstanceDetailLoading,
     selectedHistoryInstanceId,
+    selectedPlanReportSnapshot,
+    selectedPlanReportSnapshotLoading,
     shouldDisplayWorkflowHistoryItem,
     showArchivedPlanWorkflowEmptyState,
     showCardHistoryEmptyState,

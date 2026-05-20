@@ -722,8 +722,17 @@ export function useApprovalProgressWorkflow({
     if (cachedDetail) {
       state.selectedHistoryInstanceDetail.value = cachedDetail
       state.selectedHistoryInstanceDetailLoading.value = false
-      if (cachedDetail.businessEntityType === 'PLAN_REPORT') {
-        void loadPlanReportSnapshotById(cachedDetail.businessEntityId)
+      const cachedEntityType = String(
+        cachedDetail.businessEntityType ??
+          (cachedDetail as { entityType?: unknown }).entityType ??
+          ''
+      )
+        .trim()
+        .toUpperCase()
+      if (cachedEntityType === 'PLAN_REPORT') {
+        void loadPlanReportSnapshotById(
+          cachedDetail.businessEntityId ?? (cachedDetail as { entityId?: unknown }).entityId
+        )
       } else {
         state.selectedPlanReportSnapshot.value = null
         state.selectedPlanReportSnapshotLoading.value = false
@@ -742,8 +751,17 @@ export function useApprovalProgressWorkflow({
           ...state.historyInstanceDetailCache.value,
           [normalizedInstanceId]: response.data
         }
-        if (response.data.businessEntityType === 'PLAN_REPORT') {
-          void loadPlanReportSnapshotById(response.data.businessEntityId)
+        const responseEntityType = String(
+          response.data.businessEntityType ??
+            (response.data as { entityType?: unknown }).entityType ??
+            ''
+        )
+          .trim()
+          .toUpperCase()
+        if (responseEntityType === 'PLAN_REPORT') {
+          void loadPlanReportSnapshotById(
+            response.data.businessEntityId ?? (response.data as { entityId?: unknown }).entityId
+          )
         } else {
           state.selectedPlanReportSnapshot.value = null
         }
